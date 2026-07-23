@@ -1,0 +1,9 @@
+{
+  "scannedAt": "2026-07-23",
+  "framework": "vanilla HTML with a minimal Express static server",
+  "fontStack": "Helvetica, Arial, sans-serif",
+  "palette": "powder blue canvas with black, orange, pink, grey, red, green, and blue gameplay colors",
+  "motion": "motion-cut",
+  "spacing": "inline pixel values without a shared scale",
+  "decision": "visual overhaul approved by the user's open-ended surprise brief; original repository remains untouched"
+}
