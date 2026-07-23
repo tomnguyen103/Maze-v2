@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Echo Maze architecture recon</title>
+    <style>
+      body { max-width: 72rem; margin: 3rem auto; padding: 0 1rem; background: #101312; color: #f2eee5; font: 16px/1.6 system-ui, sans-serif; }
+      h1, h2 { line-height: 1; } code { color: #efaa65; } article { padding: 1.5rem 0; border-top: 1px solid #3b403c; }
+      ol { padding-left: 1.25rem; } .flow { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+      .node { padding: .7rem 1rem; border: 1px solid #58615a; } .arrow { color: #efaa65; }
+    </style>
+  </head>
+  <body>
+    <p>Architecture recon · 2026-07-23</p>
+    <h1>One deep seam replaces duplicated game logic.</h1>
+    <article>
+      <h2>Original pressure points</h2>
+      <ol>
+        <li>Global state, rendering, prompts, and rules share one inline script.</li>
+        <li>Keyboard and button movement implement competing versions of the same rules.</li>
+        <li>Win conditions disagree, and browser dialogs interrupt the game loop.</li>
+      </ol>
+    </article>
+    <article>
+      <h2>Chosen architecture</h2>
+      <div class="flow">
+        <span class="node">Keyboard · touch · swipe</span><span class="arrow">→</span>
+        <span class="node"><code>GameSession</code><br />pure deterministic rules</span><span class="arrow">→</span>
+        <span class="node">Canvas · HUD · audio · storage</span>
+      </div>
+      <p>
+        The seam sits between player intent and resulting state. The same action
+        drives every input mode, while presentation remains replaceable and testable.
+      </p>
+    </article>
+    <article>
+      <h2>Boundaries</h2>
+      <ul>
+        <li><code>game-session.js</code>: generation, movement, encounters, outcomes.</li>
+        <li><code>canvas-renderer.js</code>: visual projection only.</li>
+        <li><code>main.js</code>: browser events and state orchestration.</li>
+        <li><code>audio.js</code> and <code>storage.js</code>: optional browser capabilities.</li>
+      </ul>
+    </article>
+  </body>
+</html>

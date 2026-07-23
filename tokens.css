@@ -1,0 +1,63 @@
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R4 V5 · genre: atmospheric · macrostructure: Map / Diagram · theme: Midnight · anchor: signal orange · nav: N5 · footer: Ft5 · slop: pass (42–45) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+:root {
+  color-scheme: dark;
+
+  --font-display: "Bricolage Grotesque Variable", "Arial Narrow", sans-serif;
+  --font-body: "Geist Variable", Arial, sans-serif;
+  --font-utility: "Geist Mono Variable", "Courier New", monospace;
+
+  --color-ink: oklch(96% 0.014 82);
+  --color-ink-muted: oklch(72% 0.018 74);
+  --color-ink-faint: oklch(62% 0.016 74);
+  --color-night: oklch(12% 0.012 150);
+  --color-night-deep: oklch(8% 0.01 150);
+  --color-stone: oklch(18% 0.014 112);
+  --color-stone-raised: oklch(23% 0.018 102);
+  --color-line: oklch(33% 0.02 90);
+  --color-line-soft: oklch(27% 0.016 100);
+  --color-signal: oklch(72% 0.17 50);
+  --color-signal-bright: oklch(82% 0.14 66);
+  --color-signal-deep: oklch(44% 0.14 38);
+  --color-signal-glow: oklch(72% 0.17 50 / 38%);
+  --color-accent-ink: oklch(8% 0.01 150);
+  --color-echo: oklch(82% 0.105 195);
+  --color-warden: oklch(66% 0.17 20);
+  --color-gate: oklch(78% 0.09 102);
+  --color-focus: oklch(85% 0.13 70);
+  --color-shadow: oklch(3% 0.005 150 / 72%);
+  --color-overlay: oklch(7% 0.01 150 / 84%);
+  --color-panel: oklch(15% 0.014 130 / 92%);
+  --color-nav: oklch(13% 0.012 140 / 80%);
+  --color-fog: oklch(8% 0.012 145);
+  --color-fog-soft: oklch(11% 0.014 135);
+  --color-passage: oklch(20% 0.017 98);
+  --color-wall: oklch(11% 0.012 135);
+  --color-grid: oklch(31% 0.02 96 / 44%);
+  --color-pulse: oklch(82% 0.105 195 / 24%);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  --radius-sm: 0.35rem;
+  --radius-md: 0.7rem;
+  --radius-lg: 1.15rem;
+  --radius-pill: 999px;
+
+  --shadow-panel: 0 1.5rem 5rem var(--color-shadow);
+  --shadow-signal: 0 0 2rem oklch(72% 0.17 50 / 18%);
+
+  --duration-press: 120ms;
+  --duration-reveal: 360ms;
+  --duration-recoil: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

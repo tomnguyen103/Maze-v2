@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Echo Maze is a tactile, ever-changing browser labyrinth."
+    />
+    <meta name="theme-color" content="#0b0d0c" />
+    <title>Echo Maze</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#labyrinth">Skip to the Labyrinth</a>
+
+    <nav class="game-nav" aria-label="Game controls">
+      <a class="wordmark" href="#" aria-label="Echo Maze home">
+        <span class="wordmark__mark" aria-hidden="true"></span>
+        <span>Echo Maze</span>
+      </a>
+      <div class="game-nav__actions">
+        <button class="quiet-button" id="sound-toggle" type="button" aria-pressed="false">
+          Sound off
+        </button>
+        <button class="signal-button signal-button--compact" id="new-run" type="button">
+          New maze
+        </button>
+      </div>
+    </nav>
+
+    <main class="page-shell">
+      <header class="mission">
+        <p class="eyebrow">A maze that remembers your footsteps</p>
+        <h1>Recover the echoes.<br />Find the way out.</h1>
+        <p class="mission__brief">
+          The stone shifts with every seed. Find all three Echoes, evade the
+          Wardens, then return their light to the Gate.
+        </p>
+      </header>
+
+      <section class="game-layout" aria-label="Echo Maze game">
+        <article class="labyrinth-panel" id="labyrinth">
+          <div class="labyrinth-panel__meta">
+            <div>
+              <span class="utility-label">Current seed</span>
+              <button class="seed-copy" id="seed-copy" type="button">
+                <span id="seed-value"></span>
+                <span class="seed-copy__hint">Copy</span>
+              </button>
+            </div>
+            <p class="run-state" id="run-state">Exploring</p>
+          </div>
+
+          <div class="canvas-frame" id="canvas-frame">
+            <canvas
+              id="maze-canvas"
+              width="720"
+              height="720"
+              tabindex="0"
+              aria-label="Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+            ></canvas>
+            <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
+              The Labyrinth is listening.
+            </div>
+          </div>
+
+          <div class="touch-controls" aria-label="Touch movement controls">
+            <button class="direction-button direction-button--up" data-move="up" type="button">
+              <span aria-hidden="true">↑</span><span class="sr-only">Move up</span>
+            </button>
+            <button class="direction-button direction-button--left" data-move="left" type="button">
+              <span aria-hidden="true">←</span><span class="sr-only">Move left</span>
+            </button>
+            <button class="direction-button direction-button--down" data-move="down" type="button">
+              <span aria-hidden="true">↓</span><span class="sr-only">Move down</span>
+            </button>
+            <button class="direction-button direction-button--right" data-move="right" type="button">
+              <span aria-hidden="true">→</span><span class="sr-only">Move right</span>
+            </button>
+          </div>
+        </article>
+
+        <aside class="field-kit" aria-label="Run information">
+          <div class="field-kit__heading">
+            <p class="eyebrow">Field kit</p>
+            <button class="icon-button" id="pause-run" type="button" aria-pressed="false">
+              Pause
+            </button>
+          </div>
+
+          <dl class="run-metrics">
+            <div>
+              <dt>Time</dt>
+              <dd id="time-value">00:00</dd>
+            </div>
+            <div>
+              <dt>Moves</dt>
+              <dd id="moves-value">000</dd>
+            </div>
+          </dl>
+
+          <section class="meter-block" aria-labelledby="echo-heading">
+            <div class="meter-block__top">
+              <h2 id="echo-heading">Echoes</h2>
+              <span id="echo-count">0 / 3</span>
+            </div>
+            <div class="echo-meter" id="echo-meter" aria-hidden="true"></div>
+          </section>
+
+          <section class="meter-block" aria-labelledby="vitality-heading">
+            <div class="meter-block__top">
+              <h2 id="vitality-heading">Vitality</h2>
+              <span id="vitality-count">3 / 3</span>
+            </div>
+            <div class="vitality-meter" id="vitality-meter" aria-hidden="true"></div>
+          </section>
+
+          <button class="pulse-button" id="pulse-action" type="button">
+            <span>
+              <strong>Release Pulse</strong>
+              <small>Reveal nearby stone</small>
+            </span>
+            <kbd>Q</kbd>
+            <span class="pulse-button__count" id="pulse-count">2</span>
+          </button>
+
+          <div class="legend" aria-label="Labyrinth legend">
+            <p class="utility-label">Marks in the dark</p>
+            <ul>
+              <li><span class="legend-mark legend-mark--explorer"></span>Explorer</li>
+              <li><span class="legend-mark legend-mark--echo"></span>Echo</li>
+              <li><span class="legend-mark legend-mark--gate"></span>Gate</li>
+              <li><span class="legend-mark legend-mark--warden"></span>Warden</li>
+            </ul>
+          </div>
+
+          <p class="field-note" id="field-note">
+            Move with arrows or WASD. On touch, use the compass or swipe across
+            the Labyrinth.
+          </p>
+          <p class="best-run" id="best-run">No completed passage recorded.</p>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="statement-footer">
+      <p>The dark is not empty.</p>
+      <span>It is waiting to be mapped.</span>
+    </footer>
+
+    <p class="sr-only" id="live-region" aria-live="polite"></p>
+
+    <dialog
+      class="result-dialog"
+      id="result-dialog"
+      aria-labelledby="result-title"
+      aria-describedby="result-summary"
+    >
+      <div class="result-dialog__mark" aria-hidden="true"></div>
+      <p class="eyebrow" id="result-kicker">Passage complete</p>
+      <h2 id="result-title">You carried the Echoes out.</h2>
+      <p id="result-summary"></p>
+      <div class="result-dialog__stats">
+        <span><strong id="result-time">00:00</strong> time</span>
+        <span><strong id="result-moves">000</strong> moves</span>
+        <span><strong id="result-seed">SEED</strong> seed</span>
+        <span><strong id="result-rank">WAYFINDER</strong> rank</span>
+      </div>
+      <div class="result-dialog__actions">
+        <button class="signal-button" id="replay-run" type="button">Replay seed</button>
+        <button class="quiet-button" id="fresh-run" type="button">New maze</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
