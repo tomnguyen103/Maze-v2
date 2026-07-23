@@ -4,6 +4,15 @@ const RUN_RECORD_LIMIT = 5;
 
 /**
  * @typedef {{ elapsedMs: number, moves: number, seed: string }} BestRun
+ * @typedef {"escaped" | "defeated"} RunOutcome
+ * @typedef {BestRun & {
+ *   outcome: RunOutcome,
+ *   echoesCollected: number
+ * }} RunRecord
+ * @typedef {BestRun & {
+ *   outcome?: RunOutcome,
+ *   echoesCollected?: number
+ * }} RunRecordCandidate
  * @typedef {{
  *   getItem: (key: string) => string | null,
  *   setItem: (key: string, value: string) => unknown
@@ -21,7 +30,7 @@ export function loadBestRun(storage = globalThis.localStorage) {
 
   try {
     const parsed = JSON.parse(storage.getItem(BEST_RUN_KEY) ?? "null");
-    if (!isRunRecord(parsed)) {
+    if (!isBestRun(parsed)) {
       return null;
     }
     return parsed;
@@ -54,7 +63,7 @@ export function saveBestRun(candidate, storage = globalThis.localStorage) {
 
 /**
  * @param {StorageLike | undefined} [storage]
- * @returns {BestRun[]}
+ * @returns {RunRecord[]}
  */
 export function loadRunRecords(storage = globalThis.localStorage) {
   if (!storage) {
@@ -66,7 +75,11 @@ export function loadRunRecords(storage = globalThis.localStorage) {
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        return rankRunRecords(parsed.filter(isRunRecord));
+        return rankRunRecords(
+          parsed
+            .map(normalizeRunRecord)
+            .filter((record) => record !== null)
+        );
       }
     }
   } catch {
@@ -74,16 +87,21 @@ export function loadRunRecords(storage = globalThis.localStorage) {
   }
 
   const bestRun = loadBestRun(storage);
-  return bestRun ? [bestRun] : [];
+  const migrated = normalizeRunRecord(bestRun);
+  return migrated ? [migrated] : [];
 }
 
 /**
- * @param {BestRun} candidate
+ * @param {RunRecordCandidate} candidate
  * @param {StorageLike | undefined} [storage]
- * @returns {BestRun[]}
+ * @returns {RunRecord[]}
  */
 export function saveRunRecord(candidate, storage = globalThis.localStorage) {
-  const records = rankRunRecords([...loadRunRecords(storage), candidate]);
+  const normalized = normalizeRunRecord(candidate);
+  const records = rankRunRecords([
+    ...loadRunRecords(storage),
+    ...(normalized ? [normalized] : [])
+  ]);
 
   try {
     storage?.setItem(RUN_RECORDS_KEY, JSON.stringify(records));
@@ -91,7 +109,10 @@ export function saveRunRecord(candidate, storage = globalThis.localStorage) {
     return records;
   }
 
-  saveBestRun(records[0], storage);
+  const bestEscape = records.find((record) => record.outcome === "escaped");
+  if (bestEscape) {
+    saveBestRun(bestEscape, storage);
+  }
   return records;
 }
 
@@ -99,7 +120,7 @@ export function saveRunRecord(candidate, storage = globalThis.localStorage) {
  * @param {unknown} value
  * @returns {value is BestRun}
  */
-function isRunRecord(value) {
+function isBestRun(value) {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -115,17 +136,53 @@ function isRunRecord(value) {
 }
 
 /**
- * @param {BestRun[]} records
- * @returns {BestRun[]}
+ * @param {unknown} value
+ * @returns {RunRecord | null}
+ */
+function normalizeRunRecord(value) {
+  if (!isBestRun(value)) {
+    return null;
+  }
+  const candidate = /** @type {Partial<RunRecord>} */ (value);
+  if (
+    candidate.outcome !== undefined &&
+    candidate.outcome !== "escaped" &&
+    candidate.outcome !== "defeated"
+  ) {
+    return null;
+  }
+  const outcome = candidate.outcome ?? "escaped";
+  const echoesCollected =
+    outcome === "escaped"
+      ? 3
+      : candidate.echoesCollected === undefined
+        ? 0
+      : candidate.echoesCollected;
+  if (
+    !Number.isInteger(echoesCollected) ||
+    echoesCollected < 0 ||
+    echoesCollected > 3
+  ) {
+    return null;
+  }
+  return {
+    elapsedMs: value.elapsedMs,
+    moves: value.moves,
+    seed: value.seed,
+    outcome,
+    echoesCollected
+  };
+}
+
+/**
+ * @param {RunRecord[]} records
+ * @returns {RunRecord[]}
  */
 function rankRunRecords(records) {
-  /** @type {Map<string, BestRun>} */
+  /** @type {Map<string, RunRecord>} */
   const bestBySeed = new Map();
 
   for (const record of records) {
-    if (!isRunRecord(record)) {
-      continue;
-    }
     const current = bestBySeed.get(record.seed);
     if (!current || compareRuns(record, current) < 0) {
       bestBySeed.set(record.seed, record);
@@ -138,10 +195,20 @@ function rankRunRecords(records) {
 }
 
 /**
- * @param {BestRun} left
- * @param {BestRun} right
+ * @param {RunRecord} left
+ * @param {RunRecord} right
  * @returns {number}
  */
 function compareRuns(left, right) {
+  if (left.outcome !== right.outcome) {
+    return left.outcome === "escaped" ? -1 : 1;
+  }
+  if (left.outcome === "defeated") {
+    return (
+      right.echoesCollected - left.echoesCollected ||
+      left.elapsedMs - right.elapsedMs ||
+      left.moves - right.moves
+    );
+  }
   return left.elapsedMs - right.elapsedMs || left.moves - right.moves;
 }

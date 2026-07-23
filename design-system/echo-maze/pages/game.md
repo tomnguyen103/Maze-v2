@@ -12,7 +12,11 @@ This page override replaces the previous nocturnal direction with a brighter, ga
 
 ## Color
 
-Use warm paper, electric pear, sky cyan, and coral against deep blue ink. Keep pear to actions and small status surfaces. Wardens, Echoes, the Gate, Fog, and passages require distinct shapes so color is never the only signal.
+Use warm paper and electric pear around the Workbench. Inside the Labyrinth,
+use calm sea-glass Fog, pale mint passages, deep teal walls, and deliberate
+graphite tile edges. Keep pear to actions and small status surfaces. Wardens,
+Echoes, the Gate, Fog, passages, and walls require distinct shapes or values so
+color is never the only signal.
 
 ## Typography
 
@@ -26,7 +30,10 @@ Use warm paper, electric pear, sky cyan, and coral against deep blue ink. Keep p
 - Space or Q triggers Pulse.
 - Touch controls use at least 44 by 44 CSS pixel targets with at least 8 pixels between targets.
 - Swipe on the labyrinth also moves.
-- Run Records retain the five fastest local escapes and can replay a seed.
+- Run Records retain the five strongest terminal attempts, name escape or
+  defeat outcomes, and can replay a seed.
+- New run guarantees a different seed and Labyrinth while Record replay keeps
+  exact seeded determinism.
 - Warden mode is always named in text as Patrol, Hunt, or Intercept.
 - Focus is visible and immediate.
 - Reduced motion keeps every state change functional without spatial animation.

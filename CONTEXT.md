@@ -45,6 +45,7 @@ The unrevealed portion of the labyrinth.
 _Avoid_: Hidden cells, darkness, unexplored map
 
 **Run Record**:
-A completed Run kept on the player's device and ranked by elapsed time, then
-by Moves.
+A terminal Run kept on the player's device with its escape or defeat outcome.
+Escapes rank by elapsed time, then Moves. Defeats rank after escapes by Echo
+progress, then elapsed time and Moves.
 _Avoid_: Score, leaderboard entry, account history

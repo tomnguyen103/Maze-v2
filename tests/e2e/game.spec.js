@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,down,down,left,left,up,left,left,down,down,down,right,right,right,right,right,right,up,up,up,up,right,right,up,up,right,right,down,down,right,right,down,down,down,down,left,left,left,left,down,down,down,up,up,up,right,right,right,right,up,down,left,left,left,left,down,down,down,down,right,right,down,down,left,left,left,left,left,left,up,up,right,right,up,up,left,left,left,left,left,down,down,right,down,down,left,left".split(",");
+const DEFEAT_SEED = "DEFEAT-RECORD";
+const DEFEAT_PATH = "right,right,right,right,down,down,down,down,left,left,down,down,down,down,down,down,down,down,right,right,right,right,right,right,right,right,right,right,up,down,left,left,left,left,left,right,right,right,right".split(",");
 const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   up: "ArrowUp",
   right: "ArrowRight",
@@ -12,7 +14,14 @@ const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
 test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
   /** @type {string[]} */
   const pageErrors = [];
+  /** @type {string[]} */
+  const consoleProblems = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleProblems.push(message.text());
+    }
+  });
   await page.goto("/");
 
   await expect(
@@ -32,6 +41,7 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await page.keyboard.press("q");
   await expect(page.locator("#pulse-count")).toHaveText("1");
   expect(pageErrors).toEqual([]);
+  expect(consoleProblems).toEqual([]);
 });
 
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
@@ -127,8 +137,21 @@ test("preserves native button keyboard behavior and pause timing", async ({
 });
 
 test("supports swipe movement and fresh seeded runs", async ({ page }) => {
-  await page.goto("/?seed=TRIAL-0");
+  await page.addInitScript(() => {
+    Object.defineProperty(window.crypto, "getRandomValues", {
+      configurable: true,
+      /** @param {Uint16Array | Uint32Array} values */
+      value: (values) => {
+        values[0] = 5;
+        values[1] = 0;
+        values[2] = 93;
+        return values;
+      }
+    });
+  });
+  await page.goto("/?seed=RUNE-CHOIR-93");
   const canvas = page.getByLabel(/Interactive maze/);
+  const initialLabyrinth = await canvas.screenshot();
   const box = await canvas.boundingBox();
   if (!box) {
     throw new Error("Expected the maze Canvas.");
@@ -150,8 +173,59 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
   await expect(page.locator("#moves-value")).toHaveText("001");
 
   await page.getByRole("button", { name: "New run" }).click();
-  await expect(page.locator("#seed-value")).not.toHaveText("TRIAL-0");
-  expect(new URL(page.url()).searchParams.get("seed")).not.toBe("TRIAL-0");
+  await expect(page.locator("#seed-value")).not.toHaveText("RUNE-CHOIR-93");
+  expect(new URL(page.url()).searchParams.get("seed")).not.toBe("RUNE-CHOIR-93");
+  const nextLabyrinth = await canvas.screenshot();
+  expect(Buffer.compare(initialLabyrinth, nextLabyrinth)).not.toBe(0);
+});
+
+test("starts fresh from a 24-character seed with repeated random values", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.crypto, "getRandomValues", {
+      configurable: true,
+      /** @param {Uint16Array | Uint32Array} values */
+      value: (values) => {
+        values[0] = 5;
+        values[1] = 0;
+        values[2] = 93;
+        return values;
+      }
+    });
+  });
+  const originalSeed = "ABCDEFGHIJKLMNOPQRSTUVWX";
+  await page.goto(`/?seed=${originalSeed}`);
+  const canvas = page.getByLabel(/Interactive maze/);
+  const initialLabyrinth = await canvas.screenshot();
+
+  await page.getByRole("button", { name: "New run" }).click();
+
+  await expect(page.locator("#seed-value")).not.toHaveText(originalSeed);
+  const nextLabyrinth = await canvas.screenshot();
+  expect(Buffer.compare(initialLabyrinth, nextLabyrinth)).not.toBe(0);
+});
+
+test("saves a defeated Run Record and restores it after reload", async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
+  await page.goto(`/?seed=${DEFEAT_SEED}`);
+
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+
+  const dialog = page.getByRole("dialog", {
+    name: "Warden contact ended the run."
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
+  await page.reload();
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText(DEFEAT_SEED);
+  await expect(records).toContainText("Defeated");
 });
 
 test("completes a seeded passage, records the result, and replays it", async ({
