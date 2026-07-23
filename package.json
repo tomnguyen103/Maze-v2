@@ -2,7 +2,7 @@
   "name": "echo-maze",
   "version": "2.0.0",
   "private": true,
-  "description": "A deterministic, atmospheric browser maze game.",
+  "description": "A bright deterministic browser maze with readable Warden tactics and local run records.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "prepare": "git config core.hooksPath .githooks",

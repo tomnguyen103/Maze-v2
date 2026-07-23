@@ -1,24 +1,24 @@
 # Echo Maze game override
 
-This page override replaces the generated master palette and structure, which did not match the requested nocturnal maze experience.
+This page override replaces the previous nocturnal direction with a brighter, game-first Workbench.
 
 ## Direction
 
-- Genre: atmospheric browser game
-- Macrostructure: Map / Diagram
-- Theme: Midnight
-- Design dials: variance 8, motion 7, density 6
-- Signature: explored darkness physically recedes around the Explorer
+- Genre: playful tactical browser game
+- Macrostructure: Workbench
+- Theme: Hum
+- Design dials: variance 7, motion 4, density 7
+- Signature: the live maze is centered between a Run status deck and a concise objective deck
 
 ## Color
 
-Use one signal-orange accent on a warm-tinted dark canvas. Wardens, Echoes, the Gate, Fog, and passage surfaces each require distinct shape or pattern cues so color is never the only signal.
+Use warm paper, electric pear, sky cyan, and coral against deep blue ink. Keep pear to actions and small status surfaces. Wardens, Echoes, the Gate, Fog, and passages require distinct shapes so color is never the only signal.
 
 ## Typography
 
-- Display: Bricolage Grotesque, weight 700
+- Display: Bricolage Grotesque, limited to the wordmark and dialog headings
 - Body: Geist, weight 400
-- Utility: Geist Mono, limited to seed, timer, moves, and coordinates
+- Utility: Geist Mono, limited to labels, seeds, and run metrics
 
 ## Interaction
 
@@ -26,6 +26,8 @@ Use one signal-orange accent on a warm-tinted dark canvas. Wardens, Echoes, the 
 - Space or Q triggers Pulse.
 - Touch controls use at least 44 by 44 CSS pixel targets with at least 8 pixels between targets.
 - Swipe on the labyrinth also moves.
+- Run Records retain the five fastest local escapes and can replay a seed.
+- Warden mode is always named in text as Patrol, Hunt, or Intercept.
 - Focus is visible and immediate.
 - Reduced motion keeps every state change functional without spatial animation.
 
