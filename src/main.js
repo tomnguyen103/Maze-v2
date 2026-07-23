@@ -1,12 +1,12 @@
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
-import "./styles.css";
+import "./daylight.css";
 
 import { EchoAudio } from "./game/audio.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import { applyAction, createRun } from "./game/game-session.js";
-import { loadBestRun, saveBestRun } from "./game/storage.js";
+import { loadRunRecords, saveRunRecord } from "./game/storage.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "hurt" | "won" | "lost" | "enabled"} AudioCue */
@@ -29,6 +29,9 @@ const elements = {
   pause: requiredElement("pause-run", HTMLButtonElement),
   pulse: requiredElement("pulse-action", HTMLButtonElement),
   pulseCount: requiredElement("pulse-count", HTMLElement),
+  recordsButton: requiredElement("records-button", HTMLButtonElement),
+  recordsClose: requiredElement("records-close", HTMLButtonElement),
+  recordsDialog: requiredElement("records-dialog", HTMLDialogElement),
   replay: requiredElement("replay-run", HTMLButtonElement),
   resultDialog: requiredElement("result-dialog", HTMLDialogElement),
   resultKicker: requiredElement("result-kicker", HTMLElement),
@@ -39,18 +42,23 @@ const elements = {
   resultTime: requiredElement("result-time", HTMLElement),
   resultTitle: requiredElement("result-title", HTMLElement),
   runState: requiredElement("run-state", HTMLElement),
+  runRecords: requiredElement("run-records", HTMLOListElement),
   seedCopy: requiredElement("seed-copy", HTMLButtonElement),
   seedValue: requiredElement("seed-value", HTMLElement),
   sound: requiredElement("sound-toggle", HTMLButtonElement),
   time: requiredElement("time-value", HTMLElement),
   vitalityCount: requiredElement("vitality-count", HTMLElement),
-  vitalityMeter: requiredElement("vitality-meter", HTMLElement)
+  vitalityMeter: requiredElement("vitality-meter", HTMLElement),
+  wardenReadout: requiredElement("warden-readout", HTMLElement),
+  wardenState: requiredElement("warden-state", HTMLElement)
 };
 
 let run = createRun(seedFromLocation() ?? createSeed());
-let bestRun = loadBestRun();
+let runRecords = loadRunRecords();
+let bestRun = runRecords[0] ?? null;
 let lastTick = performance.now();
 let eventTimer = 0;
+let resumeAfterRecords = false;
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
 
@@ -58,7 +66,11 @@ startRun(run.seed);
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
-  if (elements.resultDialog.open || isNativeControl(event.target)) {
+  if (
+    elements.resultDialog.open ||
+    elements.recordsDialog.open ||
+    isNativeControl(event.target)
+  ) {
     return;
   }
   const directions = /** @type {Partial<Record<string, Direction>>} */ ({
@@ -100,6 +112,55 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 elements.pulse.addEventListener("click", usePulse);
 elements.pause.addEventListener("click", togglePause);
 elements.newRun.addEventListener("click", () => startRun(createSeed()));
+elements.recordsButton.addEventListener("click", () => {
+  resumeAfterRecords = run.status === "active";
+  if (resumeAfterRecords) {
+    togglePause();
+  }
+  renderRunRecords();
+  elements.recordsDialog.showModal();
+});
+elements.recordsClose.addEventListener("click", () => {
+  elements.recordsDialog.close();
+});
+elements.recordsDialog.addEventListener("close", () => {
+  if (resumeAfterRecords && run.status === "paused") {
+    togglePause();
+  }
+  resumeAfterRecords = false;
+});
+elements.runRecords.addEventListener("click", async (event) => {
+  const button =
+    event.target instanceof Element
+      ? event.target.closest("button[data-seed]")
+      : null;
+  if (
+    !(button instanceof HTMLButtonElement) ||
+    !button.dataset.seed
+  ) {
+    return;
+  }
+
+  if (button.dataset.recordAction === "replay") {
+    startRun(button.dataset.seed);
+    return;
+  }
+
+  if (button.dataset.recordAction === "copy") {
+    try {
+      await navigator.clipboard.writeText(button.dataset.seed);
+      button.textContent = "Copied";
+      announce(`Seed ${button.dataset.seed} copied.`);
+      window.setTimeout(() => {
+        if (button.isConnected) {
+          button.textContent = "Copy";
+        }
+      }, 1400);
+    } catch {
+      announce(`Copy failed. Seed ${button.dataset.seed}.`);
+    }
+  }
+});
 elements.freshRun.addEventListener("click", () => {
   elements.resultDialog.close();
   startRun(createSeed());
@@ -165,11 +226,16 @@ function startRun(seed) {
   url.searchParams.set("seed", run.seed);
   window.history.replaceState({}, "", url);
   lastTick = performance.now();
-  elements.resultDialog.close();
+  if (elements.resultDialog.open) {
+    elements.resultDialog.close();
+  }
+  if (elements.recordsDialog.open) {
+    elements.recordsDialog.close();
+  }
   updateInterface();
   canvas.focus({ preventScroll: true });
   announce(`New maze ${seed}. Three Echoes remain.`);
-  showEvent("The Labyrinth is listening.");
+  showEvent("Run ready.");
 }
 
 function restartRun() {
@@ -178,7 +244,7 @@ function restartRun() {
   updateInterface();
   canvas.focus({ preventScroll: true });
   announce(`Maze ${run.seed} restarted.`);
-  showEvent("Your footsteps fade. The maze remembers its shape.");
+  showEvent("Seed reset. Same maze, fresh timer.");
 }
 
 /** @param {Direction | undefined} direction */
@@ -206,12 +272,22 @@ function togglePause() {
 /** @param {Parameters<typeof applyAction>[1]} action */
 function transition(action) {
   const previous = run;
+  const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
   const eventType = run.event.type;
+  const wardenMode = summarizeWardenMode(run);
+  const eventChanged =
+    eventType !== previous.event.type || run.moves !== previous.moves;
 
-  if (eventType !== previous.event.type || run.moves !== previous.moves) {
+  if (eventChanged) {
     showEvent(run.event.message);
-    announce(run.event.message);
+  }
+  if (eventChanged || wardenMode !== previousWardenMode) {
+    const modeAnnouncement =
+      wardenMode !== previousWardenMode
+        ? ` Warden mode: ${wardenModeLabel(wardenMode)}.`
+        : "";
+    announce(`${eventChanged ? run.event.message : ""}${modeAnnouncement}`.trim());
   }
   playEventSound(eventType);
   if (eventType === "hurt" || eventType === "defeated") {
@@ -245,6 +321,9 @@ function updateInterface() {
     won: "Escaped",
     lost: "Light lost"
   }[run.status];
+  const wardenMode = summarizeWardenMode();
+  elements.wardenState.textContent = wardenModeLabel(wardenMode);
+  elements.wardenReadout.dataset.mode = wardenMode;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");
   renderPips(
@@ -254,30 +333,32 @@ function updateInterface() {
     "vitality-pip"
   );
   elements.best.textContent = bestRun
-    ? `Best passage ${formatTime(bestRun.elapsedMs)} · ${bestRun.moves} moves · ${bestRun.seed}`
-    : "No completed passage recorded.";
+    ? `Best ${formatTime(bestRun.elapsedMs)} / ${bestRun.moves} moves / ${bestRun.seed}`
+    : "No completed run yet. First escape sets the pace.";
 }
 
 function finishRun() {
   const won = run.status === "won";
   if (won) {
-    bestRun = saveBestRun({
+    runRecords = saveRunRecord({
       elapsedMs: run.elapsedMs,
       moves: run.moves,
       seed: run.seed
     });
+    bestRun = runRecords[0] ?? null;
   }
-  elements.resultKicker.textContent = won ? "Passage complete" : "Final light lost";
+  elements.resultKicker.textContent = won ? "Run complete" : "Run ended";
   elements.resultTitle.textContent = won
-    ? "You carried the Echoes out."
-    : "The Wardens found you.";
+    ? "Gate reached."
+    : "Warden contact ended the run.";
   elements.resultSummary.textContent = won
-    ? "The Gate knows your footsteps now. This exact maze can be crossed again with its seed."
-    : "The map remains. Return with a new route, or ask the stone to shift.";
+    ? "Saved to your local Run Records. Replay the seed to improve your route."
+    : "Retry this seed to learn the route, or start a new maze.";
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
   elements.resultSeed.textContent = run.seed;
-  elements.resultRank.textContent = rankRun();
+  elements.resultRank.textContent = resultStanding();
+  renderRunRecords();
   updateInterface();
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
@@ -360,14 +441,82 @@ function seedFromLocation() {
   return new URL(window.location.href).searchParams.get("seed");
 }
 
-function rankRun() {
-  if (run.explorer.vitality === run.explorer.maxVitality && run.moves <= 90) {
-    return "Lightkeeper";
+/** @param {typeof run} [gameRun] */
+function summarizeWardenMode(gameRun = run) {
+  if (gameRun.wardens.some((warden) => warden.mode === "intercept")) {
+    return "intercept";
   }
-  if (run.explorer.vitality > 1) {
-    return "Wayfinder";
+  if (gameRun.wardens.some((warden) => warden.mode === "hunt")) {
+    return "hunt";
   }
-  return "Survivor";
+  return "patrol";
+}
+
+/** @param {"patrol" | "hunt" | "intercept"} mode */
+function wardenModeLabel(mode) {
+  return {
+    intercept: "Intercept active",
+    hunt: "Hunt active",
+    patrol: "Patrol"
+  }[mode];
+}
+
+function renderRunRecords() {
+  if (runRecords.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "run-records__empty";
+    empty.textContent = "No escapes recorded yet.";
+    elements.runRecords.replaceChildren(empty);
+    return;
+  }
+
+  elements.runRecords.replaceChildren(
+    ...runRecords.map((record, index) => {
+      const item = document.createElement("li");
+      const summary = document.createElement("div");
+      const title = document.createElement("strong");
+      const detail = document.createElement("span");
+      const actions = document.createElement("div");
+      const replay = document.createElement("button");
+      const copy = document.createElement("button");
+
+      title.textContent = `#${index + 1} ${formatTime(record.elapsedMs)}`;
+      detail.textContent = `${record.moves} moves / ${record.seed}`;
+      replay.type = "button";
+      replay.className = "control-button";
+      replay.dataset.seed = record.seed;
+      replay.dataset.recordAction = "replay";
+      replay.textContent = "Replay";
+      replay.setAttribute("aria-label", `Replay seed ${record.seed}`);
+      copy.type = "button";
+      copy.className = "control-button";
+      copy.dataset.seed = record.seed;
+      copy.dataset.recordAction = "copy";
+      copy.textContent = "Copy";
+      copy.setAttribute("aria-label", `Copy seed ${record.seed}`);
+      summary.append(title, detail);
+      actions.className = "run-records__actions";
+      actions.append(copy, replay);
+      item.append(summary, actions);
+      return item;
+    })
+  );
+}
+
+function resultStanding() {
+  if (run.status !== "won") {
+    return "Not recorded";
+  }
+
+  const index = runRecords.findIndex((record) => record.seed === run.seed);
+  if (index === -1) {
+    return "Outside top 5";
+  }
+
+  const record = runRecords[index];
+  return record.elapsedMs === run.elapsedMs && record.moves === run.moves
+    ? `Personal #${index + 1}`
+    : "Seed best kept";
 }
 
 /** @param {EventTarget | null} target */

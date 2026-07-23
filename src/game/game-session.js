@@ -2,7 +2,8 @@
  * @typedef {"up" | "right" | "down" | "left"} Direction
  * @typedef {{ row: number, col: number }} Position
  * @typedef {Position & { collected: boolean }} Echo
- * @typedef {Position & { id: number }} Warden
+ * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
+ * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
  *   size?: number,
  *   echoCount?: number,
@@ -36,6 +37,7 @@
  *   pulseExpiresAt: number | null,
  *   pulses: number,
  *   moves: number,
+ *   lastDirection: Direction | null,
  *   elapsedMs: number,
  *   status: RunStatus,
  *   event: RunEvent
@@ -74,6 +76,10 @@ const DEFAULT_CONFIG = Object.freeze({
   pulses: 2
 });
 
+const HUNT_DISTANCE = 7;
+const INTERCEPT_DISTANCE = 10;
+const INTERCEPT_STEPS = 2;
+
 /**
  * Create one deterministic run.
  *
@@ -104,6 +110,7 @@ export function createRun(requestedSeed, input = {}) {
     Math.max(4, Math.floor(config.size * 0.45))
   ).map((position) => ({ ...position, collected: false }));
 
+  /** @type {Warden[]} */
   const wardens = pickEntities(
     openTiles,
     distances,
@@ -111,7 +118,7 @@ export function createRun(requestedSeed, input = {}) {
     config.wardenCount,
     random,
     Math.max(5, Math.floor(config.size * 0.6))
-  ).map((position, id) => ({ ...position, id }));
+  ).map((position, id) => ({ ...position, id, mode: "patrol" }));
 
   const explorer = {
     ...explorerPosition,
@@ -133,11 +140,12 @@ export function createRun(requestedSeed, input = {}) {
     pulseExpiresAt: null,
     pulses: config.pulses,
     moves: 0,
+    lastDirection: null,
     elapsedMs: 0,
     status: "active",
     event: {
       type: "started",
-      message: "The Labyrinth is listening. Recover every Echo, then reach the Gate."
+      message: "Collect 3 Echoes, then enter the Gate. Wardens move after each valid step."
     }
   };
 }
@@ -226,7 +234,7 @@ function resolveMove(run, directionName) {
   if (!isPassage(run.labyrinth, target)) {
     return {
       ...run,
-      event: { type: "blocked", message: "Stone. Choose another passage." }
+      event: { type: "blocked", message: "Wall. Choose another direction." }
     };
   }
 
@@ -236,6 +244,7 @@ function resolveMove(run, directionName) {
     ...cloneRun(run),
     explorer: { ...run.explorer, ...target },
     moves: nextMoves,
+    lastDirection: directionName,
     event: { type: "moved", message: `Moved ${directionName}.` }
   };
   next = expirePulse(next);
@@ -255,7 +264,7 @@ function resolveMove(run, directionName) {
         status: "won",
         event: {
           type: "escaped",
-          message: "The Gate opens. You carry the Labyrinth's Echoes into the light."
+          message: "Run complete. Gate reached."
         }
       };
     }
@@ -263,7 +272,7 @@ function resolveMove(run, directionName) {
       ...next,
       event: {
         type: "gate-locked",
-        message: `${remainingEchoes(next)} Echoes remain. The Gate is still sealed.`
+        message: `${remainingEchoes(next)} Echoes remain. Gate locked.`
       }
     };
   }
@@ -282,7 +291,7 @@ function resolvePulse(run) {
       ...run,
       event: {
         type: "pulse-empty",
-        message: "No Pulses remain. Trust the passages you have revealed."
+        message: "No Pulses remain."
       }
     };
   }
@@ -297,7 +306,7 @@ function resolvePulse(run) {
     pulseExpiresAt: moves + 2,
     event: {
       type: "pulse",
-      message: "Pulse released. Nearby stone answers for a moment."
+      message: "Pulse reveals nearby tiles briefly."
     }
   };
   next = moveWardens(next);
@@ -389,31 +398,46 @@ function moveWardens(run) {
         !occupiedByWarden.has(positionKey(position))
     );
     /** @type {Position[]} */
-    const legal = candidates.length > 0
+    let legal = candidates.length > 0
       ? candidates
       : [warden];
     const currentDistance = explorerDistances.get(positionKey(warden)) ?? Infinity;
-    const chase = currentDistance <= 7;
+    const intercept =
+      warden.id % 2 === 1 &&
+      run.lastDirection !== null &&
+      currentDistance <= INTERCEPT_DISTANCE;
+    const hunt = !intercept && currentDistance <= HUNT_DISTANCE;
+    const mode = intercept ? "intercept" : hunt ? "hunt" : "patrol";
+    if (mode === "patrol" && candidates.length > 0) {
+      legal = [...candidates, warden];
+    }
+    const target =
+      mode === "intercept"
+        ? predictedExplorerPosition(run)
+        : mode === "hunt"
+          ? run.explorer
+          : patrolTarget(run, warden);
+    const targetDistances = distancesFrom(run.labyrinth, target);
     /** @type {Position[]} */
     const ordered = [...legal].sort((left, right) => {
-      const leftDistance = explorerDistances.get(positionKey(left)) ?? Infinity;
-      const rightDistance = explorerDistances.get(positionKey(right)) ?? Infinity;
-      return chase
-        ? leftDistance - rightDistance
-        : rightDistance - leftDistance;
+      const leftDistance = targetDistances.get(positionKey(left)) ?? Infinity;
+      const rightDistance = targetDistances.get(positionKey(right)) ?? Infinity;
+      return leftDistance - rightDistance;
     });
-    const bestDistance = explorerDistances.get(positionKey(ordered[0])) ?? Infinity;
+    const bestDistance = targetDistances.get(positionKey(ordered[0])) ?? Infinity;
     /** @type {Position[]} */
-    const tied = chase
-      ? ordered.filter(
-          (position) =>
-            (explorerDistances.get(positionKey(position)) ?? Infinity) === bestDistance
-        )
-      : ordered;
+    const tied = ordered.filter(
+      (position) =>
+        (targetDistances.get(positionKey(position)) ?? Infinity) === bestDistance
+    );
     const random = createRandom(`${run.seed}:warden:${warden.id}:turn:${run.moves}`);
     /** @type {Position} */
     const chosen = tied[Math.floor(random() * tied.length)] ?? warden;
-    wardens.push({ ...chosen, id: warden.id });
+    wardens.push({
+      ...chosen,
+      id: warden.id,
+      mode
+    });
   }
 
   return { ...run, wardens };
@@ -439,7 +463,7 @@ function resolveWardenContact(run) {
       status: "lost",
       event: {
         type: "defeated",
-        message: "A Warden extinguished your final light."
+        message: "Warden contact depleted Vitality."
       }
     };
   }
@@ -455,7 +479,7 @@ function resolveWardenContact(run) {
     wardens,
     event: {
       type: "hurt",
-      message: `A Warden found you. ${vitality} Vitality remain.`
+      message: `Warden contact. ${vitality} Vitality remain.`
     }
   };
 }
@@ -490,7 +514,52 @@ function relocateWarden(run, warden, wardenIndex) {
       (candidate) => !occupied.has(positionKey(candidate))
     ) ??
     warden;
-  return { ...position, id: warden.id };
+  return { ...position, id: warden.id, mode: warden.mode };
+}
+
+/**
+ * @param {GameRun} run
+ * @returns {Position}
+ */
+function predictedExplorerPosition(run) {
+  const direction = run.lastDirection
+    ? DIRECTION_BY_NAME.get(run.lastDirection)
+    : undefined;
+  if (!direction) {
+    return run.explorer;
+  }
+
+  let target = { row: run.explorer.row, col: run.explorer.col };
+  for (let step = 0; step < INTERCEPT_STEPS; step += 1) {
+    const next = {
+      row: target.row + direction.row,
+      col: target.col + direction.col
+    };
+    if (!isPassage(run.labyrinth, next)) {
+      break;
+    }
+    target = next;
+  }
+  return target;
+}
+
+/**
+ * @param {GameRun} run
+ * @param {Warden} warden
+ * @returns {Position}
+ */
+function patrolTarget(run, warden) {
+  const targets = run.echoes.filter((echo) => !echo.collected);
+  if (targets.length === 0) {
+    return run.gate;
+  }
+
+  const distances = distancesFrom(run.labyrinth, warden);
+  return [...targets].sort(
+    (left, right) =>
+      (distances.get(positionKey(left)) ?? Infinity) -
+      (distances.get(positionKey(right)) ?? Infinity)
+  )[0];
 }
 
 /**

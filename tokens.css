@@ -1,39 +1,43 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R4 V5 · genre: atmospheric · macrostructure: Map / Diagram · theme: Midnight · anchor: signal orange · nav: N5 · footer: Ft5 · slop: pass (42–45) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful | macrostructure: Workbench | theme: Hum | anchor: electric pear | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   --font-display: "Bricolage Grotesque Variable", "Arial Narrow", sans-serif;
   --font-body: "Geist Variable", Arial, sans-serif;
   --font-utility: "Geist Mono Variable", "Courier New", monospace;
 
-  --color-ink: oklch(96% 0.014 82);
-  --color-ink-muted: oklch(72% 0.018 74);
-  --color-ink-faint: oklch(62% 0.016 74);
-  --color-night: oklch(12% 0.012 150);
-  --color-night-deep: oklch(8% 0.01 150);
-  --color-stone: oklch(18% 0.014 112);
-  --color-stone-raised: oklch(23% 0.018 102);
-  --color-line: oklch(33% 0.02 90);
-  --color-line-soft: oklch(27% 0.016 100);
-  --color-signal: oklch(72% 0.17 50);
-  --color-signal-bright: oklch(82% 0.14 66);
-  --color-signal-deep: oklch(44% 0.14 38);
-  --color-signal-glow: oklch(72% 0.17 50 / 38%);
-  --color-accent-ink: oklch(8% 0.01 150);
-  --color-echo: oklch(82% 0.105 195);
-  --color-warden: oklch(66% 0.17 20);
-  --color-gate: oklch(78% 0.09 102);
-  --color-focus: oklch(85% 0.13 70);
-  --color-shadow: oklch(3% 0.005 150 / 72%);
-  --color-overlay: oklch(7% 0.01 150 / 84%);
-  --color-panel: oklch(15% 0.014 130 / 92%);
-  --color-nav: oklch(13% 0.012 140 / 80%);
-  --color-fog: oklch(8% 0.012 145);
-  --color-fog-soft: oklch(11% 0.014 135);
-  --color-passage: oklch(20% 0.017 98);
-  --color-wall: oklch(11% 0.012 135);
-  --color-grid: oklch(31% 0.02 96 / 44%);
-  --color-pulse: oklch(82% 0.105 195 / 24%);
+  --color-ink: oklch(20% 0.035 255);
+  --color-ink-muted: oklch(40% 0.035 252);
+  --color-ink-faint: oklch(48% 0.028 250);
+  --color-paper: oklch(97% 0.018 96);
+  --color-paper-deep: oklch(92% 0.035 96);
+  --color-stone: oklch(99% 0.008 96);
+  --color-stone-raised: oklch(94% 0.03 96);
+  --color-line: oklch(29% 0.04 252);
+  --color-line-soft: oklch(78% 0.035 250);
+  --color-signal: oklch(84% 0.18 108);
+  --color-signal-bright: oklch(91% 0.16 108);
+  --color-signal-deep: oklch(48% 0.14 112);
+  --color-signal-glow: oklch(84% 0.18 108 / 42%);
+  --color-accent-ink: oklch(18% 0.04 255);
+  --color-echo: oklch(61% 0.17 232);
+  --color-echo-soft: oklch(89% 0.075 226);
+  --color-warden: oklch(58% 0.22 24);
+  --color-warden-soft: oklch(91% 0.06 25);
+  --color-gate: oklch(54% 0.14 155);
+  --color-focus: oklch(42% 0.16 245);
+  --color-shadow: oklch(24% 0.035 255 / 16%);
+  --color-overlay: oklch(18% 0.035 255 / 72%);
+  --color-panel: oklch(99% 0.008 96);
+  --color-nav: oklch(98% 0.016 96 / 94%);
+  --color-night: oklch(24% 0.04 255);
+  --color-night-deep: oklch(18% 0.035 255);
+  --color-fog: oklch(78% 0.08 260);
+  --color-fog-soft: oklch(84% 0.065 255);
+  --color-passage: oklch(96% 0.02 96);
+  --color-wall: oklch(34% 0.065 252);
+  --color-grid: oklch(25% 0.04 255 / 22%);
+  --color-pulse: oklch(65% 0.16 230 / 26%);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -45,19 +49,17 @@
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
-  --space-20: 5rem;
-  --space-24: 6rem;
 
-  --radius-sm: 0.35rem;
-  --radius-md: 0.7rem;
-  --radius-lg: 1.15rem;
+  --radius-sm: 0.3rem;
+  --radius-md: 0.6rem;
+  --radius-lg: 0.9rem;
   --radius-pill: 999px;
 
-  --shadow-panel: 0 1.5rem 5rem var(--color-shadow);
-  --shadow-signal: 0 0 2rem oklch(72% 0.17 50 / 18%);
+  --shadow-panel: 0.55rem 0.65rem 0 var(--color-shadow);
+  --shadow-signal: 0 0 0 0.28rem var(--color-signal-glow);
 
   --duration-press: 120ms;
-  --duration-reveal: 360ms;
-  --duration-recoil: 260ms;
+  --duration-reveal: 280ms;
+  --duration-recoil: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

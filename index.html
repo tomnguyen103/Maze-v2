@@ -5,87 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Echo Maze is a tactile, ever-changing browser labyrinth."
+      content="Echo Maze is a bright tactical browser labyrinth with readable Warden behavior and personal run records."
     />
-    <meta name="theme-color" content="#0b0d0c" />
+    <meta name="theme-color" content="#f8f4df" />
     <title>Echo Maze</title>
   </head>
   <body>
     <a class="skip-link" href="#labyrinth">Skip to the Labyrinth</a>
 
-    <nav class="game-nav" aria-label="Game controls">
-      <a class="wordmark" href="#" aria-label="Echo Maze home">
-        <span class="wordmark__mark" aria-hidden="true"></span>
-        <span>Echo Maze</span>
-      </a>
-      <div class="game-nav__actions">
-        <button class="quiet-button" id="sound-toggle" type="button" aria-pressed="false">
+    <nav class="command-bar" aria-label="Game controls">
+      <a class="wordmark" href="#" aria-label="Echo Maze home">Echo Maze</a>
+      <h1>Find 3 Echoes. Reach the Gate.</h1>
+      <div class="command-bar__actions">
+        <button class="control-button" id="records-button" type="button">
+          Records
+        </button>
+        <button class="control-button" id="sound-toggle" type="button" aria-pressed="false">
           Sound off
         </button>
-        <button class="signal-button signal-button--compact" id="new-run" type="button">
-          New maze
+        <button class="primary-button" id="new-run" type="button">
+          New run
         </button>
       </div>
     </nav>
 
-    <main class="page-shell">
-      <header class="mission">
-        <p class="eyebrow">A maze that remembers your footsteps</p>
-        <h1>Recover the echoes.<br />Find the way out.</h1>
-        <p class="mission__brief">
-          The stone shifts with every seed. Find all three Echoes, evade the
-          Wardens, then return their light to the Gate.
-        </p>
-      </header>
-
-      <section class="game-layout" aria-label="Echo Maze game">
-        <article class="labyrinth-panel" id="labyrinth">
-          <div class="labyrinth-panel__meta">
-            <div>
-              <span class="utility-label">Current seed</span>
-              <button class="seed-copy" id="seed-copy" type="button">
-                <span id="seed-value"></span>
-                <span class="seed-copy__hint">Copy</span>
-              </button>
-            </div>
-            <p class="run-state" id="run-state">Exploring</p>
-          </div>
-
-          <div class="canvas-frame" id="canvas-frame">
-            <canvas
-              id="maze-canvas"
-              width="720"
-              height="720"
-              tabindex="0"
-              aria-label="Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
-            ></canvas>
-            <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
-              The Labyrinth is listening.
-            </div>
-          </div>
-
-          <div class="touch-controls" aria-label="Touch movement controls">
-            <button class="direction-button direction-button--up" data-move="up" type="button">
-              <span aria-hidden="true">↑</span><span class="sr-only">Move up</span>
-            </button>
-            <button class="direction-button direction-button--left" data-move="left" type="button">
-              <span aria-hidden="true">←</span><span class="sr-only">Move left</span>
-            </button>
-            <button class="direction-button direction-button--down" data-move="down" type="button">
-              <span aria-hidden="true">↓</span><span class="sr-only">Move down</span>
-            </button>
-            <button class="direction-button direction-button--right" data-move="right" type="button">
-              <span aria-hidden="true">→</span><span class="sr-only">Move right</span>
-            </button>
-          </div>
-        </article>
-
-        <aside class="field-kit" aria-label="Run information">
-          <div class="field-kit__heading">
-            <p class="eyebrow">Field kit</p>
-            <button class="icon-button" id="pause-run" type="button" aria-pressed="false">
-              Pause
-            </button>
+    <main class="play-workbench">
+      <section class="play-grid" aria-label="Echo Maze game">
+        <aside class="status-deck" aria-label="Run status">
+          <div class="status-deck__heading">
+            <span class="section-label">Live run</span>
+            <span class="run-state" id="run-state">Exploring</span>
           </div>
 
           <dl class="run-metrics">
@@ -97,35 +46,95 @@
               <dt>Moves</dt>
               <dd id="moves-value">000</dd>
             </div>
+            <div>
+              <dt>Echoes</dt>
+              <dd id="echo-count">0 / 3</dd>
+            </div>
+            <div>
+              <dt>Vitality</dt>
+              <dd id="vitality-count">3 / 3</dd>
+            </div>
           </dl>
 
-          <section class="meter-block" aria-labelledby="echo-heading">
-            <div class="meter-block__top">
-              <h2 id="echo-heading">Echoes</h2>
-              <span id="echo-count">0 / 3</span>
-            </div>
+          <div class="meter-row">
+            <span>Echo signal</span>
             <div class="echo-meter" id="echo-meter" aria-hidden="true"></div>
-          </section>
-
-          <section class="meter-block" aria-labelledby="vitality-heading">
-            <div class="meter-block__top">
-              <h2 id="vitality-heading">Vitality</h2>
-              <span id="vitality-count">3 / 3</span>
-            </div>
+          </div>
+          <div class="meter-row">
+            <span>Vitality</span>
             <div class="vitality-meter" id="vitality-meter" aria-hidden="true"></div>
-          </section>
+          </div>
 
-          <button class="pulse-button" id="pulse-action" type="button">
-            <span>
-              <strong>Release Pulse</strong>
-              <small>Reveal nearby stone</small>
-            </span>
-            <kbd>Q</kbd>
-            <span class="pulse-button__count" id="pulse-count">2</span>
-          </button>
+          <div class="warden-readout" id="warden-readout" data-mode="patrol">
+            <span class="section-label">Warden mode</span>
+            <strong id="warden-state">Patrol</strong>
+            <p>Moves once after each valid step.</p>
+          </div>
+        </aside>
 
-          <div class="legend" aria-label="Labyrinth legend">
-            <p class="utility-label">Marks in the dark</p>
+        <article class="labyrinth-panel" id="labyrinth">
+          <div class="arena-bar">
+            <button class="seed-copy" id="seed-copy" type="button">
+              <span class="section-label">Seed</span>
+              <strong id="seed-value"></strong>
+              <span class="seed-copy__hint">Copy</span>
+            </button>
+            <button class="control-button" id="pause-run" type="button" aria-pressed="false">
+              Pause
+            </button>
+          </div>
+
+          <div class="canvas-frame" id="canvas-frame">
+            <canvas
+              id="maze-canvas"
+              width="720"
+              height="720"
+              tabindex="0"
+              aria-label="Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+            ></canvas>
+            <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
+              Run ready.
+            </div>
+          </div>
+
+          <div class="arena-actions">
+            <div class="touch-controls" aria-label="Touch movement controls">
+              <button class="direction-button direction-button--up" data-move="up" type="button">
+                <span aria-hidden="true">&uarr;</span><span class="sr-only">Move up</span>
+              </button>
+              <button class="direction-button direction-button--left" data-move="left" type="button">
+                <span aria-hidden="true">&larr;</span><span class="sr-only">Move left</span>
+              </button>
+              <button class="direction-button direction-button--down" data-move="down" type="button">
+                <span aria-hidden="true">&darr;</span><span class="sr-only">Move down</span>
+              </button>
+              <button class="direction-button direction-button--right" data-move="right" type="button">
+                <span aria-hidden="true">&rarr;</span><span class="sr-only">Move right</span>
+              </button>
+            </div>
+
+            <button class="pulse-button" id="pulse-action" type="button">
+              <span>
+                <strong>Pulse</strong>
+                <small>Reveal nearby tiles</small>
+              </span>
+              <kbd>Q</kbd>
+              <span class="pulse-button__count" id="pulse-count">2</span>
+            </button>
+          </div>
+        </article>
+
+        <aside class="intel-deck" aria-label="How to play">
+          <div>
+            <span class="section-label">Objective</span>
+            <p class="objective-copy">
+              Collect every Echo, then enter the open Gate. Wardens change tactics
+              as they close in.
+            </p>
+          </div>
+
+          <div class="legend" aria-label="Maze legend">
+            <span class="section-label">Map marks</span>
             <ul>
               <li><span class="legend-mark legend-mark--explorer"></span>Explorer</li>
               <li><span class="legend-mark legend-mark--echo"></span>Echo</li>
@@ -135,20 +144,32 @@
           </div>
 
           <p class="field-note" id="field-note">
-            Move with arrows or WASD. On touch, use the compass or swipe across
-            the Labyrinth.
+            Use arrows or WASD. Swipe or use the direction pad on touch screens.
           </p>
-          <p class="best-run" id="best-run">No completed passage recorded.</p>
         </aside>
       </section>
     </main>
 
-    <footer class="statement-footer">
-      <p>The dark is not empty.</p>
-      <span>It is waiting to be mapped.</span>
+    <footer class="record-strip">
+      <span class="record-strip__label">Personal record</span>
+      <p id="best-run">No completed run yet. First escape sets the pace.</p>
     </footer>
 
     <p class="sr-only" id="live-region" aria-live="polite"></p>
+
+    <dialog class="records-dialog" id="records-dialog" aria-labelledby="records-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">Saved locally</span>
+          <h2 id="records-title">Run Records</h2>
+        </div>
+        <button class="control-button" id="records-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro">
+        Your five fastest escapes. Replay any seed or share it with another player.
+      </p>
+      <ol class="run-records" id="run-records"></ol>
+    </dialog>
 
     <dialog
       class="result-dialog"
@@ -156,19 +177,18 @@
       aria-labelledby="result-title"
       aria-describedby="result-summary"
     >
-      <div class="result-dialog__mark" aria-hidden="true"></div>
-      <p class="eyebrow" id="result-kicker">Passage complete</p>
-      <h2 id="result-title">You carried the Echoes out.</h2>
+      <span class="section-label" id="result-kicker">Run complete</span>
+      <h2 id="result-title">Gate reached.</h2>
       <p id="result-summary"></p>
       <div class="result-dialog__stats">
         <span><strong id="result-time">00:00</strong> time</span>
         <span><strong id="result-moves">000</strong> moves</span>
         <span><strong id="result-seed">SEED</strong> seed</span>
-        <span><strong id="result-rank">WAYFINDER</strong> rank</span>
+        <span><strong id="result-rank">PERSONAL #1</strong> standing</span>
       </div>
       <div class="result-dialog__actions">
-        <button class="signal-button" id="replay-run" type="button">Replay seed</button>
-        <button class="quiet-button" id="fresh-run" type="button">New maze</button>
+        <button class="primary-button" id="replay-run" type="button">Replay seed</button>
+        <button class="control-button" id="fresh-run" type="button">New run</button>
       </div>
     </dialog>
 

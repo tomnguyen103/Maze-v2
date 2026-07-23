@@ -3,6 +3,16 @@
     {
       "date": "2026-07-23",
       "project": "Echo Maze",
+      "genre": "playful",
+      "macrostructure": "Workbench",
+      "theme": "Hum",
+      "signature": "Centered live maze between a personal status deck and objective deck",
+      "nav": "N7 Compact Slab",
+      "footer": "Ft8 Static Record Strip"
+    },
+    {
+      "date": "2026-07-23",
+      "project": "Echo Maze",
       "genre": "atmospheric",
       "macrostructure": "Map / Diagram",
       "theme": "Midnight",

@@ -4,7 +4,7 @@
  * @typedef {Position & { vitality: number, maxVitality: number }} Explorer
  * @typedef {Position & { collected: boolean }} Echo
  * @typedef {Position & { open: boolean }} Gate
- * @typedef {Position & { id: number }} Warden
+ * @typedef {Position & { id: number, mode: "patrol" | "hunt" | "intercept" }} Warden
  */
 
 /**
@@ -71,10 +71,10 @@ export function createCanvasRenderer(canvas) {
     if (run.status === "paused") {
       context.fillStyle = palette.overlay;
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.ink;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px "Bricolage Grotesque Variable"`;
+      context.fillStyle = palette.paper;
+      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
-      context.fillText("THE LABYRINTH WAITS", canvas.width / 2, canvas.height / 2);
+      context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
     }
   }
 
@@ -174,9 +174,41 @@ export function createCanvasRenderer(canvas) {
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
+    context.fillStyle = palette.night;
+
+    if (warden.mode === "hunt") {
+      for (const offset of [-0.09, 0.09]) {
+        context.beginPath();
+        context.arc(
+          x + tile * offset,
+          y + tile * 0.04,
+          tile * 0.045,
+          0,
+          Math.PI * 2
+        );
+        context.fill();
+      }
+      return;
+    }
+
+    if (warden.mode === "intercept") {
+      context.fillRect(
+        x - tile * 0.14,
+        y - tile * 0.01,
+        tile * 0.28,
+        Math.max(2, tile * 0.07)
+      );
+      context.fillRect(
+        x - tile * 0.06,
+        y - tile * 0.11,
+        Math.max(2, tile * 0.07),
+        tile * 0.27
+      );
+      return;
+    }
+
     context.beginPath();
     context.arc(x, y + tile * 0.03, tile * 0.055, 0, Math.PI * 2);
-    context.fillStyle = palette.night;
     context.fill();
   }
 
@@ -206,6 +238,7 @@ function readPalette() {
   const color = (name) => styles.getPropertyValue(name).trim();
   return {
     echo: color("--color-echo"),
+    fontBody: color("--font-body"),
     fog: color("--color-fog"),
     fogSoft: color("--color-fog-soft"),
     gate: color("--color-gate"),
@@ -213,6 +246,7 @@ function readPalette() {
     ink: color("--color-ink"),
     night: color("--color-night-deep"),
     overlay: color("--color-overlay"),
+    paper: color("--color-paper"),
     passage: color("--color-passage"),
     pulse: color("--color-pulse"),
     signal: color("--color-signal"),

@@ -28,6 +28,10 @@ _Avoid_: Destination, goal, finish
 A hostile presence that moves through the labyrinth after the Explorer acts.
 _Avoid_: Monster, enemy, ghost
 
+**Warden Mode**:
+The readable tactic a Warden currently follows: Patrol, Hunt, or Intercept.
+_Avoid_: Difficulty level, random behavior, AI state
+
 **Vitality**:
 The Explorer's remaining capacity to survive contact with Wardens.
 _Avoid_: Hit points, health, lives
@@ -39,3 +43,8 @@ _Avoid_: Hint, scan, radar
 **Fog**:
 The unrevealed portion of the labyrinth.
 _Avoid_: Hidden cells, darkness, unexplored map
+
+**Run Record**:
+A completed Run kept on the player's device and ranked by elapsed time, then
+by Moves.
+_Avoid_: Score, leaderboard entry, account history

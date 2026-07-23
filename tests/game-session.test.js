@@ -117,9 +117,10 @@ describe("GameSession", () => {
       { row: 7, col: 7, collected: false }
     ]);
     expect(first.wardens).toEqual([
-      { row: 5, col: 8, id: 0 },
-      { row: 11, col: 7, id: 1 }
+      { row: 5, col: 8, id: 0, mode: "patrol" },
+      { row: 11, col: 7, id: 1, mode: "patrol" }
     ]);
+    expect(first.lastDirection).toBeNull();
   });
 
   it("places every entity on a unique reachable passage", () => {
@@ -142,7 +143,7 @@ describe("GameSession", () => {
   });
 
   it("rejects a wall without spending a turn", () => {
-    const run = createRun("WALL-11", { wardenCount: 0 });
+    const run = createRun("WALL-11");
     const blocked = MOVES.find(({ row, col }) => {
       const nextRow = run.explorer.row + row;
       const nextCol = run.explorer.col + col;
@@ -155,13 +156,16 @@ describe("GameSession", () => {
     const next = applyAction(run, { type: "move", direction: blocked.name });
 
     expect(next.explorer).toEqual(run.explorer);
+    expect(next.wardens).toEqual(run.wardens);
     expect(next.moves).toBe(0);
+    expect(next.lastDirection).toBeNull();
     expect(next.event.type).toBe("blocked");
   });
 
   it("moves through a passage and advances Wardens once", () => {
     const run = createRun("WARDEN-STEP-1");
     const next = applyAction(run, { type: "move", direction: "right" });
+    const repeated = applyAction(run, { type: "move", direction: "right" });
 
     expect(next.explorer).toEqual({
       row: 1,
@@ -170,9 +174,152 @@ describe("GameSession", () => {
       maxVitality: 3
     });
     expect(next.moves).toBe(1);
+    expect(next.lastDirection).toBe("right");
     expect(next.wardens).toEqual([
-      { row: 9, col: 11, id: 0 },
-      { row: 2, col: 5, id: 1 }
+      { row: 9, col: 11, id: 0, mode: "patrol" },
+      { row: 1, col: 6, id: 1, mode: "patrol" }
+    ]);
+    expect(repeated.wardens).toEqual(next.wardens);
+  });
+
+  it("makes a nearby Warden Hunt along the shortest passage path", () => {
+    const run = createRun("HUNT-1", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    /** @type {ReturnType<typeof createRun>} */
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 2 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 6, id: 0, mode: "patrol" }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.explorer).toMatchObject({ row: 4, col: 3 });
+    expect(next.wardens).toEqual([
+      { row: 4, col: 5, id: 0, mode: "hunt" }
+    ]);
+  });
+
+  it("makes an Intercept Warden anticipate the Explorer's direction", () => {
+    const run = createRun("INTERCEPT-1", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    /** @type {ReturnType<typeof createRun>} */
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 2 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 7, id: 1, mode: "patrol" }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.lastDirection).toBe("right");
+    expect(next.wardens).toEqual([
+      { row: 4, col: 6, id: 1, mode: "intercept" }
+    ]);
+  });
+
+  it("makes a distant Warden Patrol toward an uncollected Echo", () => {
+    const run = createRun("PATROL-1", {
+      echoCount: 1,
+      size: 9,
+      wardenCount: 1
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    /** @type {ReturnType<typeof createRun>} */
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 1, col: 1 },
+      echoes: [{ row: 6, col: 2, collected: false }],
+      gate: { row: 7, col: 7, open: false },
+      wardens: [{ row: 6, col: 6, id: 0, mode: "patrol" }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.wardens).toEqual([
+      { row: 6, col: 5, id: 0, mode: "patrol" }
+    ]);
+  });
+
+  it("keeps a Patrol Warden off a reserved Echo tile", () => {
+    const run = createRun("PATROL-RESERVED", {
+      echoCount: 1,
+      size: 11,
+      wardenCount: 1
+    });
+    const openLabyrinth = Array.from({ length: 11 }, (_, row) =>
+      Array.from({ length: 11 }, (_, col) =>
+        row > 0 && row < 10 && col > 0 && col < 10 ? 1 : 0
+      )
+    );
+    /** @type {ReturnType<typeof createRun>} */
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 1, col: 1 },
+      echoes: [{ row: 8, col: 2, collected: false }],
+      gate: { row: 9, col: 9, open: false },
+      wardens: [{ row: 8, col: 3, id: 0, mode: "patrol" }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.wardens[0].mode).toBe("patrol");
+    expect(next.wardens[0]).toMatchObject({ row: 8, col: 3 });
+    expect(next.wardens[0]).not.toMatchObject({ row: 8, col: 2 });
+    expect(next.wardens[0]).not.toMatchObject({ row: 9, col: 9 });
+  });
+
+  it("keeps a Patrol Warden off the reserved Gate tile", () => {
+    const run = createRun("PATROL-GATE", {
+      echoCount: 0,
+      size: 11,
+      wardenCount: 1
+    });
+    const openLabyrinth = Array.from({ length: 11 }, (_, row) =>
+      Array.from({ length: 11 }, (_, col) =>
+        row > 0 && row < 10 && col > 0 && col < 10 ? 1 : 0
+      )
+    );
+    /** @type {ReturnType<typeof createRun>} */
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 1, col: 1 },
+      echoes: [],
+      gate: { row: 8, col: 2, open: true },
+      wardens: [{ row: 8, col: 3, id: 0, mode: "patrol" }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.wardens).toEqual([
+      { row: 8, col: 3, id: 0, mode: "patrol" }
     ]);
   });
 
