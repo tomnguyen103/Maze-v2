@@ -586,7 +586,7 @@ kbd {
 }
 
 .legend-mark--gate {
-  border: 0.14rem double var(--color-gate);
+  border: 3px double var(--color-gate);
 }
 
 .legend-mark--warden {
