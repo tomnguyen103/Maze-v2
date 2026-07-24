@@ -6,14 +6,19 @@ import { getQuestLevel } from "../src/questions/quest-levels.js";
  *   levelId: string,
  *   seed: string,
  *   wardenId: number,
- *   attempt: number
+ *   attempt: number,
+ *   labyrinthNumber: number,
+ *   questionOrdinal: number
  * }} QuestionRequest
  * @typedef {{
  *   id: string,
  *   prompt: string,
  *   choices: { id: string, label: string }[],
  *   answerId: string,
- *   explanation: string
+ *   hint: string,
+ *   explanation: string,
+ *   difficultyBand: string,
+ *   difficultyRank: number
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
@@ -31,7 +36,8 @@ export const QUESTION_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
   properties: {
-    prompt: { type: "string", maxLength: 180 },
+    id: { type: "string", maxLength: 80 },
+    prompt: { type: "string", maxLength: 240 },
     choices: {
       type: "array",
       minItems: 3,
@@ -47,9 +53,24 @@ export const QUESTION_SCHEMA = Object.freeze({
       }
     },
     answerId: { type: "string", enum: ["a", "b", "c"] },
-    explanation: { type: "string", maxLength: 240 }
+    hint: { type: "string", maxLength: 120 },
+    explanation: { type: "string", maxLength: 240 },
+    difficultyBand: {
+      type: "string",
+      enum: ["foundation", "developing", "capable", "advanced", "mastery"]
+    },
+    difficultyRank: { type: "integer", minimum: 1, maximum: 99 }
   },
-  required: ["prompt", "choices", "answerId", "explanation"]
+  required: [
+    "id",
+    "prompt",
+    "choices",
+    "answerId",
+    "hint",
+    "explanation",
+    "difficultyBand",
+    "difficultyRank"
+  ]
 });
 
 /** @param {unknown} value @param {string} name @param {number} maxLength */
@@ -100,13 +121,35 @@ export function normalizeQuestion(rawQuestion, fallbackId = "generated-question"
   if (!choiceIds.includes(answerId)) {
     throw new Error("Question answer must match a choice.");
   }
-  const prompt = requiredText(raw.prompt, "prompt", 180);
+  const prompt = requiredText(raw.prompt, "prompt", 240);
   if (/(?:^|\n)\s*[abc][).:]\s/iu.test(prompt)) {
     throw new Error("Question prompt must not repeat the answer choices.");
   }
+  const hint = requiredText(raw.hint, "hint", 120);
   const explanation = requiredText(raw.explanation, "explanation", 240);
+  const difficultyBand = requiredText(
+    raw.difficultyBand,
+    "difficulty band",
+    20
+  );
+  if (
+    !["foundation", "developing", "capable", "advanced", "mastery"].includes(
+      difficultyBand
+    )
+  ) {
+    throw new Error("Question difficulty band is not supported.");
+  }
+  const difficultyRank = Number(raw.difficultyRank);
+  if (
+    !Number.isInteger(difficultyRank) ||
+    difficultyRank < 1 ||
+    difficultyRank > 99
+  ) {
+    throw new Error("Question difficulty rank is not valid.");
+  }
   const childFacingText = [
     prompt,
+    hint,
     explanation,
     ...choices.map((choice) => choice.label)
   ].join(" ");
@@ -129,6 +172,9 @@ export function normalizeQuestion(rawQuestion, fallbackId = "generated-question"
     prompt,
     choices,
     answerId,
+    hint,
+    difficultyBand,
+    difficultyRank,
     explanation
   };
 }
@@ -144,24 +190,30 @@ function buildPrompt(request, previousQuestion, reviewedQuestion) {
   return [
     "Prepare one reviewed, age-appropriate multiple-choice learning question for a child playing a maze adventure.",
     `Quest Level: ${level.name}.`,
+    `Labyrinth: ${request.labyrinthNumber} of 20.`,
+    `Difficulty Band: ${reviewedQuestion.difficultyBand}.`,
     `Difficulty guide: ${level.questionGuide}`,
     "Return the reviewed question below exactly. Do not add, remove, reword, or reorder child-facing content.",
     `Reviewed question: ${JSON.stringify({
+      id: reviewedQuestion.id,
       prompt: reviewedQuestion.prompt,
       choices: reviewedQuestion.choices,
       answerId: reviewedQuestion.answerId,
-      explanation: reviewedQuestion.explanation
+      hint: reviewedQuestion.hint,
+      explanation: reviewedQuestion.explanation,
+      difficultyBand: reviewedQuestion.difficultyBand,
+      difficultyRank: reviewedQuestion.difficultyRank
     })}`,
     previousQuestion
       ? `Do not repeat this previous question: ${previousQuestion.prompt} Choices: ${previousQuestion.choices.map((choice) => choice.label).join(", ")}.`
       : "This is the first question for this Warden.",
-    `Variation key: ${request.seed}-${request.wardenId}-${request.attempt}.`
+    `Variation key: ${request.seed}-${request.wardenId}-${request.attempt}-${request.questionOrdinal}.`
   ].join("\n");
 }
 
 /** @param {string} source @param {QuestionRequest} request */
 function generatedId(source, request) {
-  return `${source}-${request.levelId}-${request.seed}-${request.wardenId}-${request.attempt}`;
+  return `${source}-${request.levelId}-${request.seed}-${request.wardenId}-${request.attempt}-${request.questionOrdinal}`;
 }
 
 /**
@@ -430,7 +482,7 @@ export function createQuestionService(options = {}) {
 
 /** @param {QuestionRequest} request */
 function questionKey(request) {
-  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}`;
+  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}`;
 }
 
 /**
@@ -454,9 +506,13 @@ function assertFreshQuestion(question, previousQuestion) {
  */
 function assertReviewedTemplate(question, reviewedQuestion) {
   const contentMatches =
+    question.id === reviewedQuestion.id &&
     question.prompt === reviewedQuestion.prompt &&
     question.answerId === reviewedQuestion.answerId &&
+    question.hint === reviewedQuestion.hint &&
     question.explanation === reviewedQuestion.explanation &&
+    question.difficultyBand === reviewedQuestion.difficultyBand &&
+    question.difficultyRank === reviewedQuestion.difficultyRank &&
     question.choices.length === reviewedQuestion.choices.length &&
     question.choices.every(
       (choice, index) =>

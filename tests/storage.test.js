@@ -67,7 +67,7 @@ describe("run record storage", () => {
     expect(records.map((record) => record.seed)).toEqual(["ESCAPE", "DEFEAT"]);
   });
 
-  it("preserves the Quest Level and total Echoes for new records", () => {
+  it("preserves the Quest Level, Labyrinth Number, and total Echoes", () => {
     const storage = createStorage();
     const records = saveRunRecord(
       {
@@ -77,7 +77,8 @@ describe("run record storage", () => {
         outcome: "escaped",
         echoesCollected: 2,
         echoTotal: 2,
-        questLevelId: "bright-start"
+        questLevelId: "bright-start",
+        labyrinthNumber: 13
       },
       storage
     );
@@ -85,7 +86,8 @@ describe("run record storage", () => {
     expect(records[0]).toMatchObject({
       echoesCollected: 2,
       echoTotal: 2,
-      questLevelId: "bright-start"
+      questLevelId: "bright-start",
+      labyrinthNumber: 13
     });
   });
 
@@ -213,6 +215,35 @@ describe("run record storage", () => {
       "bright-start",
       "maze-master"
     ]);
+  });
+
+  it("keeps the same seed as separate records on different Labyrinths", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 80000,
+        moves: 90,
+        seed: "SHARED-LABYRINTH-SEED",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 5,
+        echoTotal: 4
+      },
+      storage
+    );
+    const records = saveRunRecord(
+      {
+        elapsedMs: 90000,
+        moves: 95,
+        seed: "SHARED-LABYRINTH-SEED",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 13,
+        echoTotal: 5
+      },
+      storage
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.labyrinthNumber)).toEqual([5, 13]);
   });
 
   it("keeps the five best runs", () => {

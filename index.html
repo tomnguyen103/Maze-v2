@@ -28,7 +28,7 @@
           Sound off
         </button>
         <button class="primary-button" id="new-run" type="button">
-          New run
+          New Quest
         </button>
       </div>
     </nav>
@@ -40,6 +40,9 @@
             <span class="section-label" id="quest-level-name">Trail Scout</span>
             <span class="run-state" id="run-state">Exploring</span>
           </div>
+          <p class="quest-stage" id="quest-stage">
+            Labyrinth 1 of 20 · Foundation
+          </p>
 
           <dl class="run-metrics">
             <div>
@@ -174,25 +177,25 @@
       </div>
       <div class="level-cards" id="level-cards">
         <button class="level-card" type="button" data-level="bright-start">
-          <span class="level-card__badge">Gentle</span>
+          <span class="level-card__badge">Quest Level 1</span>
           <strong>Bright Start</strong>
-          <span>Short paths, one Warden, and friendly warm-up questions.</span>
+          <span>Friendly foundations across 20 growing Labyrinths.</span>
           <span class="level-card__topics">Questions: sums to 20 · words · nature</span>
-          <small>2 Echoes · 4 Vitality · 3 Pulses</small>
+          <small>11–15 tiles · 2–4 Echoes · 1–3 Wardens</small>
         </button>
         <button class="level-card level-card--featured" type="button" data-level="trail-scout">
-          <span class="level-card__badge">Balanced</span>
+          <span class="level-card__badge">Quest Level 2</span>
           <strong>Trail Scout</strong>
-          <span>A lively expedition with two clever Wardens.</span>
+          <span>Balanced reasoning across 20 expanding Labyrinths.</span>
           <span class="level-card__topics">Questions: times tables · reading clues · life science</span>
-          <small>3 Echoes · 3 Vitality · 2 Pulses</small>
+          <small>13–19 tiles · 3–6 Echoes · 2–4 Wardens</small>
         </button>
         <button class="level-card" type="button" data-level="maze-master">
-          <span class="level-card__badge">Bold</span>
+          <span class="level-card__badge">Quest Level 3</span>
           <strong>Maze Master</strong>
-          <span>A larger maze, three Wardens, and brainy challenges.</span>
+          <span>Advanced mastery across 20 formidable Labyrinths.</span>
           <span class="level-card__topics">Questions: fractions · logic · earth and space</span>
-          <small>4 Echoes · 3 Vitality · 2 Pulses</small>
+          <small>15–23 tiles · 4–8 Echoes · 3–6 Wardens</small>
         </button>
       </div>
       <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
@@ -218,7 +221,36 @@
         aria-live="polite"
         aria-atomic="true"
       >Preparing your question…</p>
+      <div class="challenge-support">
+        <button
+          class="control-button"
+          id="hint-button"
+          type="button"
+          aria-expanded="false"
+          aria-controls="question-hint"
+        >
+          Show Hint
+        </button>
+        <p class="question-hint" id="question-hint" aria-live="polite" hidden></p>
+      </div>
       <div class="challenge-choices" id="challenge-choices"></div>
+      <div class="challenge-skip">
+        <button class="control-button" id="skip-question" type="button">
+          Skip free
+        </button>
+        <div class="skip-warning" id="skip-warning" role="alert" hidden>
+          <strong>Use Vitality?</strong>
+          <p id="skip-warning-text">Skipping costs 1 Vitality.</p>
+          <div class="skip-warning__actions">
+            <button class="control-button" id="skip-cancel" type="button">
+              Keep question
+            </button>
+            <button class="danger-button" id="skip-confirm" type="button">
+              Use skip
+            </button>
+          </div>
+        </div>
+      </div>
       <p class="challenge-source" id="challenge-source">Opening the question scroll…</p>
     </dialog>
 
@@ -253,8 +285,8 @@
         <span><strong id="result-rank">PERSONAL #1</strong> standing</span>
       </div>
       <div class="result-dialog__actions">
-        <button class="primary-button" id="replay-run" type="button">Replay seed</button>
-        <button class="control-button" id="fresh-run" type="button">New run</button>
+        <button class="primary-button" id="replay-run" type="button">Continue Quest</button>
+        <button class="control-button" id="fresh-run" type="button">New Quest</button>
       </div>
     </dialog>
 

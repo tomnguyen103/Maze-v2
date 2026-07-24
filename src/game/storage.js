@@ -9,12 +9,14 @@ const RUN_RECORD_LIMIT = 5;
  *   outcome: RunOutcome,
  *   echoesCollected: number,
  *   echoTotal?: number,
+ *   labyrinthNumber?: number,
  *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
  * }} RunRecord
  * @typedef {BestRun & {
  *   outcome?: RunOutcome,
  *   echoesCollected?: number,
  *   echoTotal?: number,
+ *   labyrinthNumber?: number,
  *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
  * }} RunRecordCandidate
  * @typedef {{
@@ -183,6 +185,12 @@ function normalizeRunRecord(value) {
     candidate.questLevelId === "maze-master"
       ? candidate.questLevelId
       : undefined;
+  const labyrinthNumber =
+    Number.isInteger(candidate.labyrinthNumber) &&
+    Number(candidate.labyrinthNumber) >= 1 &&
+    Number(candidate.labyrinthNumber) <= 20
+      ? Number(candidate.labyrinthNumber)
+      : undefined;
   return {
     elapsedMs: value.elapsedMs,
     moves: value.moves,
@@ -190,6 +198,7 @@ function normalizeRunRecord(value) {
     outcome,
     echoesCollected,
     ...(candidate.echoTotal === undefined ? {} : { echoTotal }),
+    ...(labyrinthNumber ? { labyrinthNumber } : {}),
     ...(questLevelId ? { questLevelId } : {})
   };
 }
@@ -203,7 +212,8 @@ function rankRunRecords(records) {
   const bestByQuest = new Map();
 
   for (const record of records) {
-    const questKey = `${record.questLevelId ?? "trail-scout"}:${record.seed}`;
+    const questKey =
+      `${record.questLevelId ?? "trail-scout"}:${record.labyrinthNumber ?? 1}:${record.seed}`;
     const current = bestByQuest.get(questKey);
     if (!current || compareRuns(record, current) < 0) {
       bestByQuest.set(questKey, record);
