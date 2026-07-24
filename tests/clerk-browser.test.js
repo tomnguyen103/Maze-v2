@@ -4,17 +4,23 @@ import { createClerkBrowser } from "../src/player/clerk-browser.js";
 describe("Clerk browser initializer", () => {
   it("does not load Clerk or block guest play without a publishable key", async () => {
     let attemptedLoad = false;
+    let attemptedUiLoad = false;
     const clerkBrowser = createClerkBrowser({
       env: {},
       loadClerkModule: async () => {
         attemptedLoad = true;
         throw new Error("Clerk should not load without configuration.");
+      },
+      loadClerkUi: async () => {
+        attemptedUiLoad = true;
+        throw new Error("Clerk UI should not load without configuration.");
       }
     });
 
     await expect(clerkBrowser.initialize()).resolves.toBe(false);
     await expect(clerkBrowser.openSignIn()).resolves.toBe(false);
     expect(attemptedLoad).toBe(false);
+    expect(attemptedUiLoad).toBe(false);
     expect(clerkBrowser.user).toBeNull();
   });
 
@@ -50,16 +56,22 @@ describe("Clerk browser initializer", () => {
     try {
       const clerkBrowser = createClerkBrowser({
         env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
-        loadClerkModule: async () => ({ Clerk: FakeClerk })
+        loadClerkModule: async () => ({ Clerk: FakeClerk }),
+        loadClerkUi: async () => ({ component: "ClerkUI" })
       });
 
       await expect(clerkBrowser.initialize()).resolves.toBe(true);
       await expect(clerkBrowser.openSignIn()).resolves.toBe(true);
       expect(instance?.loadOptions).toMatchObject({
+        ui: { ClerkUI: { component: "ClerkUI" } },
         appearance: {
           variables: {
             colorPrimary: "token:--color-signal-deep",
             colorForeground: "token:--color-ink",
+            colorBorder: "token:--color-ink",
+            colorRing: "token:--color-signal-deep",
+            colorInput: "token:--color-stone",
+            colorInputForeground: "token:--color-ink",
             fontFamily: "token:--font-body"
           }
         }
@@ -69,6 +81,71 @@ describe("Clerk browser initializer", () => {
     } finally {
       globalThis.document = originalDocument;
       globalThis.getComputedStyle = originalGetComputedStyle;
+    }
+  });
+
+  it("loads Clerk's maintained UI before initializing configured Clerk", async () => {
+    const originalDocument = globalThis.document;
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    const events = /** @type {string[]} */ ([]);
+    const clerkUi = { component: "ClerkUI" };
+    class FakeClerk {
+      async load(/** @type {{ ui: { ClerkUI: unknown } }} */ options) {
+        events.push(options.ui.ClerkUI === clerkUi ? "load" : "wrong-ui");
+      }
+
+      addListener() {}
+    }
+    globalThis.document = /** @type {Document} */ ({ documentElement: {} });
+    globalThis.getComputedStyle = /** @type {typeof getComputedStyle} */ (
+      () => /** @type {CSSStyleDeclaration} */ (/** @type {unknown} */ ({
+        getPropertyValue: () => "token"
+      }))
+    );
+
+    try {
+      const clerkBrowser = createClerkBrowser({
+        env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
+        loadClerkModule: async () => {
+          events.push("module");
+          return { Clerk: FakeClerk };
+        },
+        loadClerkUi: async () => {
+          events.push("ui");
+          return clerkUi;
+        }
+      });
+
+      await expect(clerkBrowser.initialize()).resolves.toBe(true);
+      expect(events).toEqual(["module", "ui", "load"]);
+    } finally {
+      globalThis.document = originalDocument;
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    }
+  });
+
+  it("fails closed when Clerk's maintained UI does not load", async () => {
+    let initializationResult;
+    class FakeClerk {
+      addListener() {}
+    }
+    vi.useFakeTimers();
+
+    try {
+      const clerkBrowser = createClerkBrowser({
+        env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
+        loadClerkModule: async () => ({ Clerk: FakeClerk }),
+        loadClerkUi: () => new Promise(() => {})
+      });
+
+      void clerkBrowser.initialize().then((result) => {
+        initializationResult = result;
+      });
+      await vi.advanceTimersByTimeAsync(8000);
+
+      expect(initializationResult).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -100,7 +177,8 @@ describe("Clerk browser initializer", () => {
     try {
       const clerkBrowser = createClerkBrowser({
         env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
-        loadClerkModule: async () => ({ Clerk: SlowClerk })
+        loadClerkModule: async () => ({ Clerk: SlowClerk }),
+        loadClerkUi: async () => ({ component: "ClerkUI" })
       });
       const initialization = clerkBrowser.initialize();
 

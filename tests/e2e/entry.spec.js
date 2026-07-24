@@ -4,7 +4,7 @@ test("keeps root as a non-running Echo Maze introduction", async ({ page }) => {
   /** @type {string[]} */
   const gameEntrypointRequests = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/src/main.js") {
+    if (/^\/(?:assets\/main-[^/]+\.js|src\/main\.js)$/.test(new URL(request.url()).pathname)) {
       gameEntrypointRequests.push(request.url());
     }
   });
@@ -35,7 +35,10 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
 });
 
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
-  await page.route("**/assets/main-*.js", (route) => route.abort());
+  await page.route(
+    /\/(?:src\/main\.js|assets\/main-[^/]+\.js)(?:\?.*)?$/,
+    (route) => route.abort()
+  );
 
   await page.goto("/play?seed=RETRY-KEEP&level=trail-scout&labyrinth=3");
 
