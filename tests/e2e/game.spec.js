@@ -375,13 +375,13 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   await expect(page.locator("#seed-value")).toHaveText("RUNE-CHOIR-93");
 });
 
-test("saves a defeated Run Record and restores it after reload", async ({
+test("saves a defeated Run Record and retries with a fresh Quest map", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
   await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
-  const initialMaze = await page.getByLabel(/Interactive maze/).screenshot();
+  await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -413,16 +413,18 @@ test("saves a defeated Run Record and restores it after reload", async ({
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
   await page.getByRole("button", { name: "Retry Labyrinth" }).click();
-  await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
+  const retrySeed = await page.locator("#seed-value").textContent();
+  expect(retrySeed).not.toBe(DEFEAT_SEED);
   expect(new URL(page.url()).pathname).toBe("/play");
   expect(new URL(page.url()).search).toBe("");
-  expect(
-    Buffer.compare(
-      initialMaze,
-      await page.getByLabel(/Interactive maze/).screenshot()
-    )
-  ).toBe(0);
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored).usedMapFingerprints.length : 0;
+    })
+  ).toBe(2);
   await page.reload();
+  await expect(page.locator("#seed-value")).toHaveText(retrySeed ?? "");
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
   await expect(records).toContainText(DEFEAT_SEED);

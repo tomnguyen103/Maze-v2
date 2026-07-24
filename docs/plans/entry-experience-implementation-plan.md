@@ -160,7 +160,7 @@ Labyrinth attempt rather than resuming an in-progress frame.
 - Save after a valid Run is created.
 - Read when `/play` opens without shared parameters.
 - Replace when starting a fresh Labyrinth or Quest.
-- Keep on defeat so Retry and refresh can reconstruct the attempt.
+- Clear on defeat so Retry and refresh begin a fresh Quest-unique map at the same Labyrinth Number.
 - Replace after a win when Quest Progress advances to the next Labyrinth.
 - Ignore and clear malformed or incompatible locator data.
 - An explicit shared URL takes precedence for that load.
@@ -552,7 +552,7 @@ needed
 | Refresh on `/play` | Same active Labyrinth metadata reconstructs from locator. |
 | New Quest | URL remains `/play`; new Quest behavior is unchanged. |
 | Next Labyrinth | URL remains `/play`; progression and uniqueness remain intact. |
-| Defeat and Retry | URL remains `/play`; Retry behavior remains deterministic. |
+| Defeat and Retry | URL remains `/play`; Retry starts a fresh Quest-unique map at the same Labyrinth Number. |
 | Personal Record replay | Exact recorded difficulty and seed load; URL remains `/play`. |
 | Copy Share Link | Clipboard receives complete parameterized `/play` URL. |
 | Open copied link | Same seed, Quest Level, Labyrinth Number, and Labyrinth load. |

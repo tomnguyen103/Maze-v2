@@ -920,6 +920,9 @@ function finishRun() {
     if (questProgress.complete) {
       clearActiveRunLocator();
     }
+  } else {
+    activeRunLocator = null;
+    clearActiveRunLocator();
   }
   window.history.replaceState({}, "", "/play");
 
@@ -938,7 +941,7 @@ function finishRun() {
     ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
     : won
       ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
-      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Retry Labyrinth ${finishedLabyrinthNumber} with full Vitality.`;
+      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
   elements.replay.dataset.resultAction = questComplete
     ? "new-quest"
     : won
