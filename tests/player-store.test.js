@@ -88,6 +88,9 @@ describe("player store", () => {
     });
     expect(pool.query.mock.calls[0][0]).toContain("ROW_NUMBER()");
     expect(pool.query.mock.calls[0][0]).toContain("player_id");
+    expect(pool.query.mock.calls[0][0]).toContain(
+      "best_runs.created_at ASC\n           ) AS rank"
+    );
     expect(pool.query.mock.calls[0][0]).toContain("LIMIT 10");
   });
 
