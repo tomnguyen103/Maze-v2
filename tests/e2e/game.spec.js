@@ -139,6 +139,9 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
     messageBounds.y < mazeBounds.y + mazeBounds.height &&
     messageBounds.y + messageBounds.height > mazeBounds.y;
   expect(overlapsMaze).toBe(false);
+  expect(messageBounds.y).toBeGreaterThanOrEqual(
+    mazeBounds.y + mazeBounds.height
+  );
 });
 
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
@@ -571,6 +574,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?seed=MOBILE-FOLD&level=trail-scout");
+  await expect(page.locator("#event-ribbon")).toHaveClass(/is-visible/);
   const mobileMaze = await page.locator("#maze-canvas").boundingBox();
   const touchControls = await page.locator(".touch-controls").boundingBox();
   const mobilePulse = await page.locator("#pulse-action").boundingBox();

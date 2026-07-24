@@ -541,17 +541,17 @@ a:active {
 .event-ribbon {
   display: flex;
   z-index: 1;
-  width: fit-content;
+  overflow: hidden;
+  width: min(100%, 35rem);
   max-width: 100%;
-  min-height: 2.75rem;
-  margin-inline: auto;
-  padding: var(--space-2) var(--space-3);
-  grid-column: 2;
-  grid-row: 1;
+  max-height: 0;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 0 var(--space-3);
   align-items: center;
   justify-content: center;
   color: var(--color-paper);
-  border: 2px solid var(--color-paper);
+  border: 0 solid var(--color-paper);
   background: var(--color-night-deep);
   font-size: 0.74rem;
   font-weight: 620;
@@ -565,12 +565,13 @@ a:active {
 }
 
 .event-ribbon.is-visible {
+  max-height: 5rem;
+  min-height: 2.75rem;
+  margin-top: var(--space-2);
+  padding-block: var(--space-2);
+  border-width: 2px;
   opacity: 1;
   transform: translateY(0);
-}
-
-.command-bar:has(.event-ribbon.is-visible) h1 {
-  opacity: 0;
 }
 
 .arena-actions {
@@ -1384,19 +1385,6 @@ kbd {
     background: var(--color-signal);
     font-size: 0.78rem;
     text-align: center;
-  }
-
-  .event-ribbon {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    left: 0;
-    width: 100%;
-    min-height: 1.6rem;
-    margin: 0;
-    padding: var(--space-1) var(--space-2);
-    border: 0;
-    font-size: 0.7rem;
   }
 
   .command-bar__actions {
