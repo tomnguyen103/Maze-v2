@@ -177,6 +177,8 @@ a:active {
 .command-bar h1 {
   min-width: 0;
   margin: 0;
+  grid-column: 2;
+  grid-row: 1;
   color: var(--color-ink-muted);
   font-size: 0.92rem;
   font-weight: 560;
@@ -189,6 +191,11 @@ a:active {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.command-bar__actions {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .control-button {
@@ -532,20 +539,23 @@ a:active {
 }
 
 .event-ribbon {
-  position: absolute;
-  z-index: 3;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  left: var(--space-3);
+  display: flex;
+  z-index: 1;
   width: fit-content;
-  max-width: calc(100% - 1.5rem);
+  max-width: 100%;
+  min-height: 2.75rem;
   margin-inline: auto;
   padding: var(--space-2) var(--space-3);
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+  justify-content: center;
   color: var(--color-paper);
   border: 2px solid var(--color-paper);
   background: var(--color-night-deep);
   font-size: 0.74rem;
   font-weight: 620;
+  text-align: center;
   opacity: 0;
   transform: translateY(0.45rem);
   transition:
@@ -557,6 +567,10 @@ a:active {
 .event-ribbon.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.command-bar:has(.event-ribbon.is-visible) h1 {
+  opacity: 0;
 }
 
 .arena-actions {
@@ -1372,8 +1386,23 @@ kbd {
     text-align: center;
   }
 
+  .event-ribbon {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    width: 100%;
+    min-height: 1.6rem;
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    font-size: 0.7rem;
+  }
+
   .command-bar__actions {
     min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
     justify-self: end;
     flex-wrap: wrap;
   }
