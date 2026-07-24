@@ -92,6 +92,15 @@ const sharedParametersNeedNotice =
   locationSeed !== null && hasInvalidSharedParameters();
 const storedQuestProgress = loadQuestProgress();
 let activeRunLocator = locationSeed === null ? loadActiveRunLocator() : null;
+if (
+  activeRunLocator &&
+  storedQuestProgress &&
+  (activeRunLocator.levelId !== storedQuestProgress.levelId ||
+    activeRunLocator.labyrinthNumber !== storedQuestProgress.labyrinthNumber)
+) {
+  clearActiveRunLocator();
+  activeRunLocator = null;
+}
 const locationLevel = getQuestLevel(
   locationSeed === null
     ? activeRunLocator?.levelId ?? storedQuestProgress?.levelId ?? "trail-scout"

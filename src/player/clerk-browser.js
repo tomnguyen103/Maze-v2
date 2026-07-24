@@ -68,11 +68,7 @@ export function createClerkBrowser({
     try {
       const { Clerk } = await loadClerkModule();
       const nextClerk = new Clerk(publishableKey);
-      await nextClerk.load({
-        appearance: {
-          variables: readAppearanceVariables()
-        }
-      });
+      await loadClerk(nextClerk);
       nextClerk.addListener(onChange);
       clerk = nextClerk;
       onChange();
@@ -81,6 +77,29 @@ export function createClerkBrowser({
       clerk = null;
       return false;
     }
+  }
+}
+
+/** @param {import("@clerk/clerk-js").Clerk} clerk */
+async function loadClerk(clerk) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timeout;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error("Clerk initialization timed out."));
+    }, 8000);
+  });
+  try {
+    await Promise.race([
+      clerk.load({
+        appearance: {
+          variables: readAppearanceVariables()
+        }
+      }),
+      timeoutPromise
+    ]);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

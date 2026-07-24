@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createClerkBrowser } from "../src/player/clerk-browser.js";
 
 describe("Clerk browser initializer", () => {
@@ -67,6 +67,41 @@ describe("Clerk browser initializer", () => {
       expect(instance?.openedSignIn).toBe(true);
       expect(clerkBrowser.user).toEqual({ id: "user_123" });
     } finally {
+      globalThis.document = originalDocument;
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    }
+  });
+
+  it("fails closed when Clerk initialization does not finish", async () => {
+    const originalDocument = globalThis.document;
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    class SlowClerk {
+      load() {
+        return new Promise(() => {});
+      }
+
+      addListener() {}
+    }
+    globalThis.document = /** @type {Document} */ ({ documentElement: {} });
+    globalThis.getComputedStyle = /** @type {typeof getComputedStyle} */ (
+      () => /** @type {CSSStyleDeclaration} */ (/** @type {unknown} */ ({
+        getPropertyValue: () => "token"
+      }))
+    );
+    vi.useFakeTimers();
+
+    try {
+      const clerkBrowser = createClerkBrowser({
+        env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
+        loadClerkModule: async () => ({ Clerk: SlowClerk })
+      });
+      const initialization = clerkBrowser.initialize();
+
+      await vi.advanceTimersByTimeAsync(8000);
+
+      await expect(initialization).resolves.toBe(false);
+    } finally {
+      vi.useRealTimers();
       globalThis.document = originalDocument;
       globalThis.getComputedStyle = originalGetComputedStyle;
     }

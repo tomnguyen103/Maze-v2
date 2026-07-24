@@ -73,7 +73,7 @@ export function renderLanding(root) {
 
   async function openAccount() {
     if (clerkBrowser.user) {
-      window.location.assign("/play");
+      await clerkBrowser.openUserProfile();
       return;
     }
     if (await clerkBrowser.openSignIn()) {

@@ -34,6 +34,17 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
   expect(new URL(page.url()).search).toBe("");
 });
 
+test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
+  await page.route("**/assets/main-*.js", (route) => route.abort());
+
+  await page.goto("/play");
+
+  await expect(
+    page.getByRole("heading", { name: "Echo Maze could not load." })
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Try again" })).toBeVisible();
+});
+
 test("copies an explicit share link without changing normal gameplay URL", async ({
   page
 }) => {
@@ -85,6 +96,50 @@ test("restarts the same active Labyrinth after a clean play-route refresh", asyn
   await expect(page.locator("#quest-stage")).toHaveText(
     /Labyrinth 1 of 20.*Foundation/
   );
+});
+
+test("uses newer Quest Progress instead of a stale active Run locator", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 2,
+        completedLabyrinths: 1,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: false
+      })
+    );
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 1,
+        seed: "STALE-LOCATOR",
+        levelId: "bright-start",
+        labyrinthNumber: 1
+      })
+    );
+  });
+
+  await page.goto("/play");
+
+  await expect(page.locator("#quest-stage")).toContainText("Labyrinth 2 of 20");
+  await expect(page.locator("#seed-value")).not.toHaveText("STALE-LOCATOR");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const locator = JSON.parse(
+          localStorage.getItem("echo-maze:active-run:v1") ?? "null"
+        );
+        return `${locator?.levelId}:${locator?.labyrinthNumber}`;
+      })
+    )
+    .toBe("trail-scout:2");
 });
 
 test("normalizes legacy root shared links to play without changing Labyrinth metadata", async ({ page }) => {
