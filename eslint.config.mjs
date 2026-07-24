@@ -26,6 +26,14 @@ export default [
     }
   },
   {
+    files: ["api/**/*.js", "server.js", "server/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: globals.node
+    }
+  },
+  {
     files: ["*.config.js", "*.config.mjs", "tests/**/*.js"],
     languageOptions: {
       ecmaVersion: "latest",

@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
 import { createQuestionHandler } from "./server/question-route.js";
 import { createQuestionService } from "./server/question-service.js";
+import { createPlayerApi } from "./server/player-api.js";
 
 /** @param {unknown} error */
 function logProviderFallback(error) {
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
       onProviderError: logProviderFallback
     })
   );
+  const playerApi = createPlayerApi(env);
 
   return {
     plugins: [
@@ -29,6 +31,7 @@ export default defineConfig(({ mode }) => {
         name: "question-api",
         configureServer(server) {
           server.middlewares.use(questionHandler);
+          server.middlewares.use(playerApi);
         }
       }
     ],

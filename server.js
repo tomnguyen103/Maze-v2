@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createQuestionHandler } from "./server/question-route.js";
 import { createQuestionService } from "./server/question-service.js";
+import { createPlayerApi } from "./server/player-api.js";
 
 const app = express();
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ const questionService = createQuestionService({
 });
 
 app.use(createQuestionHandler(questionService));
+app.use(createPlayerApi());
 app.use(express.static(path.join(rootDirectory, "dist")));
 app.use((_request, response) => {
   response.sendFile(path.join(rootDirectory, "dist", "index.html"));
