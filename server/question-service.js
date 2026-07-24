@@ -267,7 +267,6 @@ async function requestGemini(
         generationConfig: {
           responseMimeType: "application/json",
           responseJsonSchema: QUESTION_SCHEMA,
-          temperature: 0,
           maxOutputTokens: 320
         }
       }),
@@ -322,6 +321,17 @@ export function createQuestionService(options = {}) {
   const previousQuestions = new Map();
   let providerRetryAt = 0;
 
+  /** @param {string} encounterKey @param {WardenQuestion} question */
+  function rememberPreviousQuestion(encounterKey, question) {
+    previousQuestions.set(encounterKey, question);
+    if (previousQuestions.size > 200) {
+      const oldestEncounterKey = previousQuestions.keys().next().value;
+      if (typeof oldestEncounterKey === "string") {
+        previousQuestions.delete(oldestEncounterKey);
+      }
+    }
+  }
+
   /** @param {QuestionRequest} request @returns {Promise<QuestionResult>} */
   async function generateQuestion(request) {
     const provider = selectProvider(env);
@@ -372,7 +382,7 @@ export function createQuestionService(options = {}) {
       question: getBundledQuestion(request),
       source: /** @type {"bundled"} */ ("bundled")
     };
-    previousQuestions.set(encounterKey, result.question);
+    rememberPreviousQuestion(encounterKey, result.question);
     return result;
   }
 
@@ -384,7 +394,7 @@ export function createQuestionService(options = {}) {
   function rememberGenerated(request, encounterKey, result) {
     const key = questionKey(request);
     generatedCache.set(key, result);
-    previousQuestions.set(encounterKey, result.question);
+    rememberPreviousQuestion(encounterKey, result.question);
     if (generatedCache.size > 200) {
       const oldestKey = generatedCache.keys().next().value;
       if (typeof oldestKey === "string") {

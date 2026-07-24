@@ -3,7 +3,7 @@
 Echo Maze is a kid-friendly text adventure inside a deterministic browser maze.
 Choose a Quest Level, recover its Echoes, and answer learning questions when a
 Warden blocks the path. A correct answer defeats that Warden. A wrong answer
-costs one Vitality and offers a fresh question.
+costs one Vitality and, if the Run remains active, offers a fresh question.
 
 The original project is preserved at
 [tomnguyen103/Maze](https://github.com/tomnguyen103/Maze).
@@ -19,7 +19,7 @@ The original project is preserved at
 - Wardens move after each valid action. They Patrol objectives, Hunt nearby
   Explorers, and Intercept predictable movement.
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
-  incorrectly to lose one Vitality and try a new question.
+  incorrectly to lose one Vitality and, if Vitality remains, try a new question.
 - Use the seed to replay or share the exact same Labyrinth.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress.

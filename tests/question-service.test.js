@@ -167,6 +167,8 @@ describe("Quest Questions", () => {
     expect(
       new globalThis.Headers(geminiCall?.options.headers).get("x-goog-api-key")
     ).toBe("test-key");
+    const geminiBody = JSON.parse(String(geminiCall?.options.body));
+    expect(geminiBody.generationConfig).not.toHaveProperty("temperature");
   });
 
   it("falls back to the bundled deck when a provider is unavailable", async () => {
@@ -215,6 +217,37 @@ describe("Quest Questions", () => {
     expect(retry.source).toBe("bundled");
     expect(retry.question.prompt).not.toBe(first.question.prompt);
     expect(attempts).toBe(2);
+  });
+
+  it("evicts old Warden history instead of growing without a bound", async () => {
+    /** @type {import("../server/question-service.js").QuestionRequest} */
+    let activeRequest = REQUEST;
+    /** @type {string[]} */
+    const prompts = [];
+    const service = createQuestionService({
+      env: { NODE_ENV: "development" },
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(String(options.body));
+        prompts.push(body.messages[0].content);
+        return {
+          ok: true,
+          json: async () => ({
+            message: {
+              content: JSON.stringify(getBundledQuestion(activeRequest))
+            }
+          })
+        };
+      }
+    });
+
+    for (let index = 0; index < 201; index += 1) {
+      activeRequest = { ...REQUEST, seed: `CACHE-${index}` };
+      await service.getQuestion(activeRequest);
+    }
+    activeRequest = { ...REQUEST, seed: "CACHE-0", attempt: 1 };
+    await service.getQuestion(activeRequest);
+
+    expect(prompts.at(-1)).toContain("This is the first question");
   });
 
   it("accepts only bounded Quest Question request parameters", () => {

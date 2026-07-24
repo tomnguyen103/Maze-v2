@@ -35,7 +35,8 @@ _Avoid_: Monster, enemy, ghost
 
 **Warden Challenge**:
 A paused confrontation between the Explorer and one Warden. A correct answer
-defeats that Warden; a wrong answer removes Vitality and continues the Challenge.
+defeats that Warden; a wrong answer removes Vitality and, while Vitality remains,
+continues the Challenge with a fresh Question. Losing the final Vitality ends the Run.
 _Avoid_: Collision, combat screen, quiz
 
 **Warden Question**:

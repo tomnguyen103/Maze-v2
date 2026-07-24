@@ -24,6 +24,7 @@ timed-out, changed, malformed, or unsafe model output.
 ## Consequences
 
 - Movement, Warden tactics, and seeded Labyrinth generation remain deterministic.
-- Replaying a seed reproduces both the Labyrinth and reviewed Question sequence.
+- Replaying a seed reproduces the Labyrinth; provider timing and availability may
+  change which reviewed Question is accepted during a Challenge.
 - Question providers can change without changing the Run interface.
 - Every Warden Challenge remains playable without network access or a model.
