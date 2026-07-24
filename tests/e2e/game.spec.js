@@ -148,6 +148,42 @@ test("never starts audio before the player opts in", async ({ page }) => {
   );
 });
 
+test("shows guest score state and the global top ten without changing Records", async ({
+  page
+}) => {
+  await page.route("**/api/leaderboard", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        globalMaxScore: 900,
+        entries: [
+          {
+            rank: 1,
+            username: "Moss Runner",
+            score: 900,
+            levelId: "trail-scout",
+            labyrinthNumber: 4,
+            moves: 81,
+            elapsedMs: 92000
+          }
+        ]
+      })
+    });
+  });
+  await page.goto("/?seed=GLOBAL-BOARD&level=trail-scout");
+
+  await expect(page.locator("#player-name")).toHaveText("Guest");
+  await expect(page.locator("#player-score")).toHaveText("0");
+  await expect(page.locator("#global-max-score")).toHaveText("900");
+  await page.getByRole("button", { name: "Top 10" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Global Scoreboard" })
+  ).toBeVisible();
+  await expect(page.locator("#scoreboard-list")).toContainText("Moss Runner");
+  await expect(page.locator("#scoreboard-list")).toContainText("900");
+  await expect(page.getByRole("button", { name: "Records", exact: true })).toBeVisible();
+});
+
 test("pauses an active run while Records are open", async ({ page }) => {
   await page.goto("/?seed=RECORDS-PAUSE");
 

@@ -12,7 +12,6 @@ export default [
       "node_modules/**",
       "playwright-report/**",
       "public/**",
-      "server.js",
       "test-results/**"
     ]
   },
@@ -23,6 +22,14 @@ export default [
       ecmaVersion: "latest",
       sourceType: "module",
       globals: globals.browser
+    }
+  },
+  {
+    files: ["api/**/*.js", "server.js", "server/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: globals.node
     }
   },
   {

@@ -22,6 +22,7 @@ import {
   getLabyrinthConfig,
   getQuestLevel
 } from "./questions/quest-levels.js";
+import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
@@ -108,6 +109,9 @@ let run = createRun(
   locationSeed ?? createSeed(),
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
+const playerController = createPlayerController({
+  onPaletteChange: () => renderer.render(run)
+});
 let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
@@ -136,10 +140,7 @@ requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
   if (
-    elements.resultDialog.open ||
-    elements.recordsDialog.open ||
-    elements.levelDialog.open ||
-    elements.challengeDialog.open ||
+    document.querySelector("dialog[open]") ||
     isNativeControl(event.target)
   ) {
     return;
@@ -786,6 +787,7 @@ function updateInterface() {
   elements.vitalityCount.textContent =
     `${run.explorer.vitality} / ${run.explorer.maxVitality}`;
   elements.pulseCount.textContent = String(run.pulses);
+  playerController.updateScore(run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
   elements.recordsButton.disabled = run.status === "challenge";
   elements.pause.textContent = run.status === "paused" ? "Resume" : "Pause";
@@ -834,6 +836,18 @@ function finishRun() {
   });
   bestEscapeRecord = bestEscape(runRecords);
   if (won) {
+    void playerController.submitEscapedRun(
+      {
+        seed: run.seed,
+        moves: run.moves,
+        elapsedMs: run.elapsedMs,
+        score: run.score,
+        wardensDefeated: run.wardensDefeated,
+        echoesCollected
+      },
+      currentLevel.id,
+      finishedLabyrinthNumber
+    );
     questProgress = saveQuestProgress(advanceQuest(questProgress));
   }
   const resumeUrl = new URL(window.location.href);

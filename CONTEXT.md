@@ -88,3 +88,30 @@ A terminal Run kept on the player's device with its Quest Level, Labyrinth
 Number, seed, and escape or defeat outcome. Escapes rank by elapsed time, then
 Moves. Defeats rank after escapes by Echo progress, then elapsed time and Moves.
 _Avoid_: Score, leaderboard entry, account history
+
+**Player Profile**:
+An authenticated Explorer identity linked to Clerk and stored in the shared
+database. It contains one public username and cosmetic color preferences.
+_Avoid_: Account record, Run Record, character
+
+**Run Score**:
+Points earned inside the current Labyrinth: 100 for each defeated Warden, 50
+for each recovered Echo, and 500 for escaping through the Gate. It resets when
+a new Labyrinth begins.
+_Avoid_: Run Record rank, Quest progress, lifetime points
+
+**Score Entry**:
+One authenticated escaped Run submitted to the shared database. The server
+recalculates its Run Score from bounded Run facts and accepts a submission only
+once.
+_Avoid_: Run Record, raw client score, account history
+
+**Global Scoreboard**:
+The public ranking of each Player Profile's best Score Entry. Higher Run Score
+ranks first, followed by later Labyrinth Number, fewer Moves, shorter elapsed
+time, and earlier submission.
+_Avoid_: Personal Records, lifetime leaderboard, live multiplayer
+
+**Global Max Score**:
+The highest Run Score currently present on the Global Scoreboard.
+_Avoid_: maximum possible score, personal best

@@ -1,6 +1,16 @@
 {
   "entries": [
     {
+      "date": "2026-07-24",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "macrostructure": "Workbench",
+      "theme": "Hum",
+      "signature": "Player console joins the live maze with account colors, current score, and a compact global scoreboard",
+      "nav": "N7 Compact Slab",
+      "footer": "Ft8 Static Record Strip"
+    },
+    {
       "date": "2026-07-23",
       "project": "Echo Maze",
       "genre": "playful",

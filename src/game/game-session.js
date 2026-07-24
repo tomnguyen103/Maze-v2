@@ -57,6 +57,8 @@
  *   pulseVisible: string[],
  *   pulseExpiresAt: number | null,
  *   pulses: number,
+ *   score: number,
+ *   wardensDefeated: number,
  *   freeQuestionSkipAvailable: boolean,
  *   moves: number,
  *   lastDirection: Direction | null,
@@ -172,6 +174,8 @@ export function createRun(requestedSeed, input = {}) {
     pulseVisible: [],
     pulseExpiresAt: null,
     pulses: config.pulses,
+    score: 0,
+    wardensDefeated: 0,
     freeQuestionSkipAvailable: true,
     moves: 0,
     lastDirection: null,
@@ -374,10 +378,13 @@ export function applyAction(run, action) {
         (warden) => warden.id !== run.challenge?.wardenId
       ),
       challenge: null,
+      pulses: run.pulses + 1,
+      score: run.score + 100,
+      wardensDefeated: run.wardensDefeated + 1,
       status: "active",
       event: {
         type: "warden-defeated",
-        message: `Correct! ${question.explanation} The Warden fades from the Labyrinth.`
+        message: `Correct! ${question.explanation} The Warden fades from the Labyrinth. You earned 1 Pulse and 100 score.`
       }
     };
   }
@@ -453,10 +460,11 @@ function resolveMove(run, directionName) {
     if (next.gate.open) {
       return {
         ...next,
+        score: next.score + 500,
         status: "won",
         event: {
           type: "escaped",
-          message: "Run complete. Gate reached."
+          message: "Run complete. Gate reached. You earned 500 score."
         }
       };
     }
@@ -551,12 +559,13 @@ function collectEcho(run) {
   return {
     ...run,
     echoes,
+    score: run.score + 50,
     gate: { ...run.gate, open: allCollected },
     event: {
       type: "echo-collected",
       message: allCollected
-        ? "Final Echo recovered. The Gate is open."
-        : `Echo recovered. ${echoes.filter((echo) => !echo.collected).length} remain.`
+        ? "Final Echo recovered. The Gate is open. You earned 50 score."
+        : `Echo recovered. ${echoes.filter((echo) => !echo.collected).length} remain. You earned 50 score.`
     }
   };
 }
@@ -759,8 +768,8 @@ function normalizeConfig(input) {
   }
   return {
     size,
-    echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 5),
-    wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 5),
+    echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 8),
+    wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 6),
     vitality: clampInteger(input.vitality, DEFAULT_CONFIG.vitality, 1, 9),
     pulses: clampInteger(input.pulses, DEFAULT_CONFIG.pulses, 0, 5)
   };
