@@ -89,13 +89,17 @@ export function createCanvasRenderer(canvas) {
     const y = row * tile;
     context.fillStyle = isPassage ? palette.passage : palette.wall;
     context.fillRect(x, y, tile + 0.5, tile + 0.5);
-    context.strokeStyle = palette.grid;
-    context.lineWidth = Math.max(0.5, tile * 0.018);
+    context.strokeStyle = isPassage ? palette.grid : palette.wallGrid;
+    context.lineWidth = Math.max(0.75, tile * 0.022);
     context.strokeRect(x, y, tile, tile);
     if (!isPassage) {
+      context.strokeStyle = palette.wallMark;
+      context.lineWidth = Math.max(1, tile * 0.035);
       context.beginPath();
       context.moveTo(x + tile * 0.18, y + tile * 0.72);
       context.lineTo(x + tile * 0.72, y + tile * 0.18);
+      context.moveTo(x + tile * 0.28, y + tile * 0.82);
+      context.lineTo(x + tile * 0.82, y + tile * 0.28);
       context.stroke();
     }
   }
@@ -106,8 +110,11 @@ export function createCanvasRenderer(canvas) {
     const y = row * tile;
     context.fillStyle = (row + col) % 3 === 0 ? palette.fogSoft : palette.fog;
     context.fillRect(x, y, tile + 0.5, tile + 0.5);
+    context.strokeStyle = palette.fogGrid;
+    context.lineWidth = Math.max(0.75, tile * 0.018);
+    context.strokeRect(x, y, tile, tile);
     if ((row * 17 + col * 11) % 7 === 0) {
-      context.fillStyle = palette.grid;
+      context.fillStyle = palette.fogGrid;
       context.fillRect(x + tile * 0.48, y + tile * 0.48, Math.max(1, tile * 0.04), Math.max(1, tile * 0.04));
     }
   }
@@ -240,6 +247,7 @@ function readPalette() {
     echo: color("--color-echo"),
     fontBody: color("--font-body"),
     fog: color("--color-fog"),
+    fogGrid: color("--color-fog-grid"),
     fogSoft: color("--color-fog-soft"),
     gate: color("--color-gate"),
     grid: color("--color-grid"),
@@ -254,6 +262,8 @@ function readPalette() {
     signalGlow: color("--color-signal-glow"),
     transparent: "transparent",
     wall: color("--color-wall"),
+    wallGrid: color("--color-wall-grid"),
+    wallMark: color("--color-wall-mark"),
     warden: color("--color-warden")
   };
 }

@@ -18,7 +18,9 @@ new experience is an additive Vite application at the repository root.
 - Wardens move after each valid action. They Patrol objectives, Hunt nearby
   Explorers, and Intercept predictable movement.
 - Use the seed to replay or share the exact same Labyrinth.
-- Completed escapes are ranked in local Run Records by time, then moves.
+- Escapes and defeats persist in local Run Records. Escapes rank first by time,
+  then moves; defeats rank by Echo progress.
+- New run guarantees a different seed and Labyrinth layout.
 - Sound is optional and never starts without player input.
 
 ## Run locally

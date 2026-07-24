@@ -123,6 +123,16 @@ describe("GameSession", () => {
     expect(first.lastDirection).toBeNull();
   });
 
+  it("creates different labyrinths from distinct known seeds", () => {
+    const first = createRun("EMBER-17");
+    const second = createRun("EMBER-18");
+    /** @param {TestRun} run */
+    const fingerprint = (run) =>
+      run.labyrinth.map((row) => row.join("")).join("/");
+
+    expect(fingerprint(first)).not.toBe(fingerprint(second));
+  });
+
   it("places every entity on a unique reachable passage", () => {
     const run = createRun("REACHABLE-31");
     const reachable = new Set(

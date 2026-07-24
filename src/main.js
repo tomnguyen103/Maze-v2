@@ -55,7 +55,7 @@ const elements = {
 
 let run = createRun(seedFromLocation() ?? createSeed());
 let runRecords = loadRunRecords();
-let bestRun = runRecords[0] ?? null;
+let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterRecords = false;
@@ -111,7 +111,7 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 
 elements.pulse.addEventListener("click", usePulse);
 elements.pause.addEventListener("click", togglePause);
-elements.newRun.addEventListener("click", () => startRun(createSeed()));
+elements.newRun.addEventListener("click", startFreshRun);
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
   if (resumeAfterRecords) {
@@ -163,7 +163,7 @@ elements.runRecords.addEventListener("click", async (event) => {
 });
 elements.freshRun.addEventListener("click", () => {
   elements.resultDialog.close();
-  startRun(createSeed());
+  startFreshRun();
 });
 elements.replay.addEventListener("click", () => {
   elements.resultDialog.close();
@@ -245,6 +245,28 @@ function restartRun() {
   canvas.focus({ preventScroll: true });
   announce(`Maze ${run.seed} restarted.`);
   showEvent("Seed reset. Same maze, fresh timer.");
+}
+
+function startFreshRun() {
+  const currentFingerprint = labyrinthFingerprint(run);
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const seed = createSeed();
+    if (seed === run.seed) {
+      continue;
+    }
+    const candidate = createRun(seed);
+    if (labyrinthFingerprint(candidate) !== currentFingerprint) {
+      startRun(seed);
+      return;
+    }
+  }
+
+  const firstFallback = createRun("EMBER-17");
+  const fallbackSeed =
+    labyrinthFingerprint(firstFallback) !== currentFingerprint
+      ? firstFallback.seed
+      : "EMBER-18";
+  startRun(fallbackSeed);
 }
 
 /** @param {Direction | undefined} direction */
@@ -332,28 +354,31 @@ function updateInterface() {
     run.explorer.vitality,
     "vitality-pip"
   );
-  elements.best.textContent = bestRun
-    ? `Best ${formatTime(bestRun.elapsedMs)} / ${bestRun.moves} moves / ${bestRun.seed}`
-    : "No completed run yet. First escape sets the pace.";
+  elements.best.textContent = bestEscapeRecord
+    ? `Best ${formatTime(bestEscapeRecord.elapsedMs)} / ${bestEscapeRecord.moves} moves / ${bestEscapeRecord.seed}`
+    : runRecords.length > 0
+      ? `${runRecords.length} ${runRecords.length === 1 ? "attempt" : "attempts"} saved. First escape sets the pace.`
+      : "No finished run yet. Escape or defeat saves an attempt.";
 }
 
 function finishRun() {
   const won = run.status === "won";
-  if (won) {
-    runRecords = saveRunRecord({
-      elapsedMs: run.elapsedMs,
-      moves: run.moves,
-      seed: run.seed
-    });
-    bestRun = runRecords[0] ?? null;
-  }
+  const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
+  runRecords = saveRunRecord({
+    elapsedMs: run.elapsedMs,
+    moves: run.moves,
+    seed: run.seed,
+    outcome: won ? "escaped" : "defeated",
+    echoesCollected
+  });
+  bestEscapeRecord = bestEscape(runRecords);
   elements.resultKicker.textContent = won ? "Run complete" : "Run ended";
   elements.resultTitle.textContent = won
     ? "Gate reached."
     : "Warden contact ended the run.";
   elements.resultSummary.textContent = won
     ? "Saved to your local Run Records. Replay the seed to improve your route."
-    : "Retry this seed to learn the route, or start a new maze.";
+    : `Saved with ${echoesCollected} of ${run.echoes.length} Echoes. Retry this seed or start a new Labyrinth.`;
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
   elements.resultSeed.textContent = run.seed;
@@ -437,6 +462,11 @@ function createSeed() {
   return `${first[bytes[0] % first.length]}-${second[bytes[1] % second.length]}-${String(bytes[2] % 100).padStart(2, "0")}`;
 }
 
+/** @param {typeof run} gameRun */
+function labyrinthFingerprint(gameRun) {
+  return gameRun.labyrinth.map((row) => row.join("")).join("/");
+}
+
 function seedFromLocation() {
   return new URL(window.location.href).searchParams.get("seed");
 }
@@ -465,7 +495,7 @@ function renderRunRecords() {
   if (runRecords.length === 0) {
     const empty = document.createElement("li");
     empty.className = "run-records__empty";
-    empty.textContent = "No escapes recorded yet.";
+    empty.textContent = "No finished Runs recorded yet.";
     elements.runRecords.replaceChildren(empty);
     return;
   }
@@ -480,8 +510,10 @@ function renderRunRecords() {
       const replay = document.createElement("button");
       const copy = document.createElement("button");
 
-      title.textContent = `#${index + 1} ${formatTime(record.elapsedMs)}`;
-      detail.textContent = `${record.moves} moves / ${record.seed}`;
+      const outcome = record.outcome === "escaped" ? "Escaped" : "Defeated";
+      title.textContent = `#${index + 1} ${outcome} / ${formatTime(record.elapsedMs)}`;
+      detail.textContent =
+        `${record.echoesCollected} / 3 Echoes / ${record.moves} moves / ${record.seed}`;
       replay.type = "button";
       replay.className = "control-button";
       replay.dataset.seed = record.seed;
@@ -504,19 +536,27 @@ function renderRunRecords() {
 }
 
 function resultStanding() {
-  if (run.status !== "won") {
-    return "Not recorded";
-  }
-
   const index = runRecords.findIndex((record) => record.seed === run.seed);
   if (index === -1) {
     return "Outside top 5";
   }
 
   const record = runRecords[index];
-  return record.elapsedMs === run.elapsedMs && record.moves === run.moves
-    ? `Personal #${index + 1}`
+  const outcome = run.status === "won" ? "escaped" : "defeated";
+  return (
+    record.elapsedMs === run.elapsedMs &&
+    record.moves === run.moves &&
+    record.outcome === outcome
+  )
+    ? run.status === "won"
+      ? `Personal #${index + 1}`
+      : `Attempt #${index + 1}`
     : "Seed best kept";
+}
+
+/** @param {ReturnType<typeof loadRunRecords>} records */
+function bestEscape(records) {
+  return records.find((record) => record.outcome === "escaped") ?? null;
 }
 
 /** @param {EventTarget | null} target */

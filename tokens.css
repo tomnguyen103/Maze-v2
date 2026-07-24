@@ -1,4 +1,4 @@
-/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful | macrostructure: Workbench | theme: Hum | anchor: electric pear | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
+/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful | macrostructure: Workbench | theme: Hum | anchor: electric pear | playfield: sea glass | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
 :root {
   color-scheme: light;
 
@@ -32,12 +32,15 @@
   --color-nav: oklch(98% 0.016 96 / 94%);
   --color-night: oklch(24% 0.04 255);
   --color-night-deep: oklch(18% 0.035 255);
-  --color-fog: oklch(78% 0.08 260);
-  --color-fog-soft: oklch(84% 0.065 255);
-  --color-passage: oklch(96% 0.02 96);
-  --color-wall: oklch(34% 0.065 252);
-  --color-grid: oklch(25% 0.04 255 / 22%);
-  --color-pulse: oklch(65% 0.16 230 / 26%);
+  --color-fog: oklch(82% 0.04 205);
+  --color-fog-soft: oklch(88% 0.03 202);
+  --color-fog-grid: oklch(47% 0.045 210 / 34%);
+  --color-passage: oklch(96% 0.025 165);
+  --color-wall: oklch(33% 0.055 215);
+  --color-wall-grid: oklch(76% 0.03 198 / 34%);
+  --color-wall-mark: oklch(84% 0.025 190 / 68%);
+  --color-grid: oklch(25% 0.035 215 / 48%);
+  --color-pulse: oklch(68% 0.13 205 / 32%);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;

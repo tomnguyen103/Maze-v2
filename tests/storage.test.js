@@ -41,6 +41,95 @@ describe("best run storage", () => {
 });
 
 describe("run record storage", () => {
+  it("ranks an escape ahead of a faster defeat", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 12000,
+        moves: 18,
+        seed: "DEFEAT",
+        outcome: "defeated",
+        echoesCollected: 2
+      },
+      storage
+    );
+    const records = saveRunRecord(
+      {
+        elapsedMs: 70000,
+        moves: 90,
+        seed: "ESCAPE",
+        outcome: "escaped",
+        echoesCollected: 3
+      },
+      storage
+    );
+
+    expect(records.map((record) => record.seed)).toEqual(["ESCAPE", "DEFEAT"]);
+  });
+
+  it("ranks defeated attempts by Echo progress", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 30000,
+        moves: 30,
+        seed: "ONE-ECHO",
+        outcome: "defeated",
+        echoesCollected: 1
+      },
+      storage
+    );
+    const records = saveRunRecord(
+      {
+        elapsedMs: 50000,
+        moves: 50,
+        seed: "TWO-ECHO",
+        outcome: "defeated",
+        echoesCollected: 2
+      },
+      storage
+    );
+
+    expect(records.map((record) => record.seed)).toEqual([
+      "TWO-ECHO",
+      "ONE-ECHO"
+    ]);
+  });
+
+  it("replaces a defeated seed with its later escape", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 30000,
+        moves: 30,
+        seed: "COMEBACK",
+        outcome: "defeated",
+        echoesCollected: 2
+      },
+      storage
+    );
+    saveRunRecord(
+      {
+        elapsedMs: 90000,
+        moves: 90,
+        seed: "COMEBACK",
+        outcome: "escaped",
+        echoesCollected: 3
+      },
+      storage
+    );
+
+    expect(loadRunRecords(storage)).toEqual([
+      {
+        elapsedMs: 90000,
+        moves: 90,
+        seed: "COMEBACK",
+        outcome: "escaped",
+        echoesCollected: 3
+      }
+    ]);
+  });
+
   it("ranks completed runs by time, then moves", () => {
     const storage = createStorage();
     saveRunRecord({ elapsedMs: 70000, moves: 90, seed: "SECOND" }, storage);
@@ -64,7 +153,13 @@ describe("run record storage", () => {
     saveRunRecord({ elapsedMs: 80000, moves: 75, seed: "REPLAY" }, storage);
 
     expect(loadRunRecords(storage)).toEqual([
-      { elapsedMs: 80000, moves: 75, seed: "REPLAY" }
+      {
+        elapsedMs: 80000,
+        moves: 75,
+        seed: "REPLAY",
+        outcome: "escaped",
+        echoesCollected: 3
+      }
     ]);
   });
 
@@ -95,7 +190,39 @@ describe("run record storage", () => {
     saveBestRun({ elapsedMs: 70000, moves: 70, seed: "LEGACY" }, storage);
 
     expect(loadRunRecords(storage)).toEqual([
-      { elapsedMs: 70000, moves: 70, seed: "LEGACY" }
+      {
+        elapsedMs: 70000,
+        moves: 70,
+        seed: "LEGACY",
+        outcome: "escaped",
+        echoesCollected: 3
+      }
+    ]);
+  });
+
+  it("normalizes escaped records to all three Echoes", () => {
+    const storage = createStorage();
+    storage.setItem(
+      "echo-maze:run-records:v1",
+      JSON.stringify([
+        {
+          elapsedMs: 50000,
+          moves: 60,
+          seed: "IMPOSSIBLE-ESCAPE",
+          outcome: "escaped",
+          echoesCollected: 0
+        }
+      ])
+    );
+
+    expect(loadRunRecords(storage)).toEqual([
+      {
+        elapsedMs: 50000,
+        moves: 60,
+        seed: "IMPOSSIBLE-ESCAPE",
+        outcome: "escaped",
+        echoesCollected: 3
+      }
     ]);
   });
 
@@ -117,6 +244,12 @@ describe("run record storage", () => {
     };
     const candidate = { elapsedMs: 65000, moves: 70, seed: "OFFLINE" };
 
-    expect(saveRunRecord(candidate, storage)).toEqual([candidate]);
+    expect(saveRunRecord(candidate, storage)).toEqual([
+      {
+        ...candidate,
+        outcome: "escaped",
+        echoesCollected: 3
+      }
+    ]);
   });
 });
