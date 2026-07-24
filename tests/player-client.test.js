@@ -90,6 +90,50 @@ describe("player client", () => {
     }
   });
 
+  it("times out while waiting for a Clerk token", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn();
+      const client = createPlayerApiClient({
+        fetchImpl,
+        getToken: () => new Promise(() => {}),
+        timeoutMs: 10
+      });
+
+      const assertion = expect(client.getProfile()).rejects.toMatchObject({
+        name: "AbortError"
+      });
+      await vi.advanceTimersByTimeAsync(10);
+      await assertion;
+      expect(fetchImpl).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out while reading a response body", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = createPlayerApiClient({
+        fetchImpl: async () =>
+          /** @type {Response} */ ({
+            ok: true,
+            status: 200,
+            json: () => new Promise(() => {})
+          }),
+        timeoutMs: 10
+      });
+
+      const assertion = expect(client.getLeaderboard()).rejects.toMatchObject({
+        name: "AbortError"
+      });
+      await vi.advanceTimersByTimeAsync(10);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("builds a stable idempotency key from final run facts", () => {
     const run = {
       seed: "MOSS-WATCH-11",

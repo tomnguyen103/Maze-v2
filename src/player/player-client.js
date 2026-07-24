@@ -24,38 +24,49 @@ export function createPlayerApiClient({
    * @param {RequestInit} [options]
    */
   async function request(path, options = {}) {
-    const token = await getToken();
-    const headers = new Headers(options.headers);
-    headers.set("accept", "application/json");
-    if (options.body) {
-      headers.set("content-type", "application/json");
-    }
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
-    }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    let response;
+    /** @type {(reason?: unknown) => void} */
+    let rejectTimeout = () => {};
+    const timeoutPromise = new Promise((_, reject) => {
+      rejectTimeout = reject;
+    });
+    const timeout = setTimeout(() => {
+      controller.abort();
+      rejectTimeout(new DOMException("Player request timed out.", "AbortError"));
+    }, timeoutMs);
     try {
-      response = await fetchImpl(path, {
+      return await Promise.race([performRequest(), timeoutPromise]);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    async function performRequest() {
+      const token = await getToken();
+      const headers = new Headers(options.headers);
+      headers.set("accept", "application/json");
+      if (options.body) {
+        headers.set("content-type", "application/json");
+      }
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
+      const response = await fetchImpl(path, {
         ...options,
         credentials: "same-origin",
         headers,
         signal: controller.signal
       });
-    } finally {
-      clearTimeout(timeout);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new PlayerApiError(
+          typeof body.error === "string"
+            ? body.error
+            : "Player services are unavailable. Guest play still works.",
+          response.status
+        );
+      }
+      return body;
     }
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new PlayerApiError(
-        typeof body.error === "string"
-          ? body.error
-          : "Player services are unavailable. Guest play still works.",
-        response.status
-      );
-    }
-    return body;
   }
 
   return {
