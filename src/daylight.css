@@ -461,7 +461,7 @@ kbd {
 .objective-copy {
   margin: var(--space-2) 0 0;
   color: var(--color-ink);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
 .legend {
@@ -484,7 +484,7 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-ink-muted);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
 }
 
 .legend-mark {
@@ -519,7 +519,7 @@ kbd {
 .field-note {
   margin: var(--space-5) 0 0;
   color: var(--color-ink-muted);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
 }
 
 .record-strip {
@@ -541,18 +541,20 @@ kbd {
 .record-strip p {
   margin: 0;
   font-family: var(--font-utility);
-  font-size: 0.72rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
+.level-dialog,
+.challenge-dialog,
 .records-dialog,
 .result-dialog {
   width: min(36rem, calc(100% - 2rem));
   max-height: calc(100dvh - 2rem);
   margin: auto;
   padding: var(--space-6);
+  overflow-y: auto;
   color: var(--color-ink);
   border: 2px solid var(--color-line);
   border-radius: var(--radius-md);
@@ -560,6 +562,8 @@ kbd {
   box-shadow: 0.65rem 0.7rem 0 var(--color-shadow);
 }
 
+.level-dialog::backdrop,
+.challenge-dialog::backdrop,
 .records-dialog::backdrop,
 .result-dialog::backdrop {
   background: var(--color-overlay);
@@ -645,6 +649,242 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+.story-panel {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.story-log {
+  display: grid;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.story-log li {
+  position: relative;
+  padding-left: var(--space-4);
+  color: var(--color-ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.story-log li::before {
+  position: absolute;
+  top: 0.38rem;
+  left: 0;
+  width: 0.42rem;
+  height: 0.42rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-echo);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.story-log li[data-kind="wrong-answer"]::before,
+.story-log li[data-kind="defeated"]::before {
+  background: var(--color-warden);
+}
+
+.story-log li[data-kind="warden-defeated"]::before,
+.story-log li[data-kind="escaped"]::before {
+  background: var(--color-signal);
+}
+
+.level-dialog {
+  width: min(62rem, calc(100% - 2rem));
+  padding: var(--space-8);
+}
+
+.level-dialog__intro {
+  max-width: 38rem;
+}
+
+.level-dialog__intro h2,
+.challenge-dialog h2 {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+}
+
+.level-dialog__intro p,
+.level-dialog__note,
+.challenge-dialog__promise {
+  color: var(--color-ink-muted);
+}
+
+.level-cards {
+  display: grid;
+  margin-top: var(--space-6);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.level-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 15rem;
+  padding: var(--space-5);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  background: var(--color-panel);
+  text-align: left;
+  white-space: normal;
+}
+
+.level-card--featured {
+  background: var(--color-echo-soft);
+  box-shadow: var(--shadow-panel);
+}
+
+.level-card__badge {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  background: var(--color-signal);
+  font-family: var(--font-utility);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.level-card strong {
+  max-width: 9ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.level-card > span:not(.level-card__badge) {
+  color: var(--color-ink-muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.level-card > .level-card__topics {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line-soft);
+  color: var(--color-ink);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.level-card small {
+  margin-top: auto;
+  color: var(--color-ink);
+  font-family: var(--font-utility);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.level-dialog__note {
+  margin: var(--space-5) 0 0;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.challenge-dialog {
+  width: min(40rem, calc(100% - 2rem));
+  padding: var(--space-8);
+  border-width: 3px;
+  box-shadow:
+    0.65rem 0.7rem 0 var(--color-shadow),
+    0 0 0 0.45rem var(--color-signal-glow);
+}
+
+.challenge-dialog__crest {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-bottom: var(--space-4);
+  place-items: center;
+  color: var(--color-accent-ink);
+  border: 2px solid var(--color-line);
+  background: var(--color-signal);
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  transform: rotate(-3deg);
+}
+
+.challenge-dialog__promise {
+  margin: var(--space-3) 0 var(--space-5);
+  font-size: 1rem;
+}
+
+.challenge-feedback {
+  padding: var(--space-3) var(--space-4);
+  border-left: 0.35rem solid var(--color-echo);
+  background: var(--color-echo-soft);
+  font-size: 1rem;
+  font-weight: 620;
+}
+
+.challenge-feedback.is-wrong {
+  border-left-color: var(--color-warden);
+  background: var(--color-warden-soft);
+}
+
+.challenge-question {
+  margin: var(--space-6) 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.challenge-choices {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.challenge-choice {
+  display: grid;
+  width: 100%;
+  min-height: 3.75rem;
+  padding: var(--space-3);
+  grid-template-columns: 2.15rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-panel);
+  text-align: left;
+  white-space: normal;
+}
+
+.challenge-choice:hover:not(:disabled) {
+  background: var(--color-signal-bright);
+  box-shadow: 0.2rem 0.2rem 0 var(--color-line);
+}
+
+.challenge-choice span {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  background: var(--color-paper-deep);
+  font-family: var(--font-utility);
+}
+
+.challenge-choice strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.challenge-source {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink-faint);
+  font-family: var(--font-utility);
+  font-size: 1rem;
+}
+
 .sr-only {
   position: absolute;
   overflow: hidden;
@@ -687,7 +927,7 @@ kbd {
     padding: var(--space-1) var(--space-2);
     color: var(--color-accent-ink);
     background: var(--color-signal);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     text-align: center;
   }
 
@@ -824,6 +1064,14 @@ kbd {
     grid-column: 1 / -1;
     margin-top: 0;
   }
+
+  .level-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .level-card {
+    min-height: 0;
+  }
 }
 
 @media (max-width: 32rem) {
@@ -859,7 +1107,7 @@ kbd {
 
   .section-label,
   .run-metrics dt {
-    font-size: 0.58rem;
+    font-size: 0.64rem;
   }
 
   .status-deck__heading {
@@ -894,6 +1142,7 @@ kbd {
     display: block;
   }
 
+  .story-panel,
   .legend {
     margin-top: var(--space-5);
     padding-top: var(--space-4);
@@ -908,9 +1157,20 @@ kbd {
     display: none;
   }
 
+  .level-dialog,
+  .challenge-dialog,
   .records-dialog,
   .result-dialog {
     padding: var(--space-4);
+  }
+
+  .level-dialog__intro h2,
+  .challenge-dialog h2 {
+    font-size: 2rem;
+  }
+
+  .challenge-question {
+    margin-top: var(--space-5);
   }
 }
 

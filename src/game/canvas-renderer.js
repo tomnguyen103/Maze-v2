@@ -75,6 +75,24 @@ export function createCanvasRenderer(canvas) {
       context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+    } else if (run.status === "challenge") {
+      context.fillStyle = palette.overlay;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = palette.signal;
+      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
+      context.textAlign = "center";
+      context.fillText(
+        "WARDEN CHALLENGE",
+        canvas.width / 2,
+        canvas.height / 2
+      );
+      context.fillStyle = palette.paper;
+      context.font = `500 ${Math.max(14, canvas.width * 0.022)}px ${palette.fontBody}`;
+      context.fillText(
+        "Your knowledge clears the path.",
+        canvas.width / 2,
+        canvas.height / 2 + Math.max(28, canvas.width * 0.055)
+      );
     }
   }
 

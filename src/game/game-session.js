@@ -5,6 +5,24 @@
  * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
  * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
+ *   id: string,
+ *   prompt: string,
+ *   choices: readonly { id: string, label: string }[],
+ *   answerId: string,
+ *   explanation: string
+ * }} WardenQuestion
+ * @typedef {{
+ *   kind: "wrong",
+ *   message: string,
+ *   explanation: string
+ * }} ChallengeFeedback
+ * @typedef {{
+ *   wardenId: number,
+ *   question: WardenQuestion | null,
+ *   attempt: number,
+ *   feedback: ChallengeFeedback | null
+ * }} WardenChallenge
+ * @typedef {{
  *   size?: number,
  *   echoCount?: number,
  *   wardenCount?: number,
@@ -18,7 +36,7 @@
  *   vitality: number,
  *   pulses: number
  * }} RunConfig
- * @typedef {"active" | "paused" | "won" | "lost"} RunStatus
+ * @typedef {"active" | "paused" | "challenge" | "won" | "lost"} RunStatus
  * @typedef {{
  *   type: string,
  *   message: string
@@ -32,6 +50,7 @@
  *   echoes: Echo[],
  *   gate: Position & { open: boolean },
  *   wardens: Warden[],
+ *   challenge: WardenChallenge | null,
  *   revealed: string[],
  *   pulseVisible: string[],
  *   pulseExpiresAt: number | null,
@@ -54,6 +73,12 @@
  * } | {
  *   type: "tick",
  *   deltaMs: number
+ * } | {
+ *   type: "provide-question",
+ *   question: WardenQuestion
+ * } | {
+ *   type: "answer-question",
+ *   answerId: string
  * }} GameAction
  */
 
@@ -135,6 +160,7 @@ export function createRun(requestedSeed, input = {}) {
     echoes,
     gate: { ...gatePosition, open: config.echoCount === 0 },
     wardens,
+    challenge: null,
     revealed: revealKeys(labyrinth, explorer, 2),
     pulseVisible: [],
     pulseExpiresAt: null,
@@ -145,7 +171,8 @@ export function createRun(requestedSeed, input = {}) {
     status: "active",
     event: {
       type: "started",
-      message: "Collect 3 Echoes, then enter the Gate. Wardens move after each valid step."
+      message:
+        `Recover ${config.echoCount} ${config.echoCount === 1 ? "Echo" : "Echoes"}, then reach the Gate. Answer correctly to defeat Wardens.`
     }
   };
 }
@@ -187,6 +214,80 @@ export function applyAction(run, action) {
     return {
       ...run,
       elapsedMs: run.elapsedMs + Math.max(0, action.deltaMs)
+    };
+  }
+
+  if (
+    action.type === "provide-question" &&
+    run.status === "challenge" &&
+    run.challenge
+  ) {
+    return {
+      ...run,
+      challenge: {
+        ...run.challenge,
+        question: {
+          ...action.question,
+          choices: action.question.choices.map((choice) => ({ ...choice }))
+        }
+      },
+      event: {
+        type: "question-ready",
+        message: "The Warden asks its Question."
+      }
+    };
+  }
+
+  if (
+    action.type === "answer-question" &&
+    run.status === "challenge" &&
+    run.challenge?.question
+  ) {
+    const question = run.challenge.question;
+    if (action.answerId !== question.answerId) {
+      const vitality = Math.max(0, run.explorer.vitality - 1);
+      if (vitality === 0) {
+        return {
+          ...run,
+          explorer: { ...run.explorer, vitality },
+          challenge: null,
+          status: "lost",
+          event: {
+            type: "defeated",
+            message: `Not this time. ${question.explanation} The Explorer's Vitality is gone.`
+          }
+        };
+      }
+      return {
+        ...run,
+        explorer: { ...run.explorer, vitality },
+        challenge: {
+          ...run.challenge,
+          question: null,
+          attempt: run.challenge.attempt + 1,
+          feedback: {
+            kind: "wrong",
+            message: `Good try. ${vitality} Vitality ${vitality === 1 ? "remains" : "remain"}.`,
+            explanation: question.explanation
+          }
+        },
+        event: {
+          type: "wrong-answer",
+          message: `Good try. ${question.explanation} The Warden prepares another Question.`
+        }
+      };
+    }
+    return {
+      ...run,
+      wardens: run.wardens.filter(
+        (warden) => warden.id !== run.challenge?.wardenId
+      ),
+      challenge: null,
+      status: "active",
+      event: {
+        type: "warden-defeated",
+        message: `Correct! ${question.explanation} The Warden fades from the Labyrinth.`
+      }
     };
   }
 
@@ -252,7 +353,7 @@ function resolveMove(run, directionName) {
   next = collectEcho(next);
 
   const directContact = resolveWardenContact(next);
-  if (directContact.status === "lost") {
+  if (directContact.status !== "active") {
     return directContact;
   }
   next = directContact;
@@ -455,31 +556,19 @@ function resolveWardenContact(run) {
     return run;
   }
 
-  const vitality = Math.max(0, run.explorer.vitality - 1);
-  if (vitality === 0) {
-    return {
-      ...run,
-      explorer: { ...run.explorer, vitality },
-      status: "lost",
-      event: {
-        type: "defeated",
-        message: "Warden contact depleted Vitality."
-      }
-    };
-  }
-
-  const wardens = run.wardens.map((warden, index) =>
-    index === wardenIndex
-      ? relocateWarden(run, warden, wardenIndex)
-      : warden
-  );
+  const warden = run.wardens[wardenIndex];
   return {
     ...run,
-    explorer: { ...run.explorer, vitality },
-    wardens,
+    status: "challenge",
+    challenge: {
+      wardenId: warden.id,
+      question: null,
+      attempt: 0,
+      feedback: null
+    },
     event: {
-      type: "hurt",
-      message: `Warden contact. ${vitality} Vitality remain.`
+      type: "challenge-started",
+      message: "A Warden blocks the path. Answer its Question to defeat it."
     }
   };
 }
@@ -490,33 +579,6 @@ function resolveWardenContact(run) {
  * @param {number} wardenIndex
  * @returns {Warden}
  */
-function relocateWarden(run, warden, wardenIndex) {
-  const distances = distancesFrom(run.labyrinth, run.explorer);
-  const occupied = new Set([
-    positionKey(run.explorer),
-    positionKey(run.gate),
-    ...run.echoes
-      .filter((echo) => !echo.collected)
-      .map((echo) => positionKey(echo)),
-    ...run.wardens
-      .filter((_, index) => index !== wardenIndex)
-      .map(positionKey)
-  ]);
-  const candidates = getOpenTiles(run.labyrinth).filter(
-    (position) =>
-      !occupied.has(positionKey(position)) &&
-      (distances.get(positionKey(position)) ?? 0) >= Math.floor(run.config.size / 2)
-  );
-  const random = createRandom(`${run.seed}:relocate:${warden.id}:turn:${run.moves}`);
-  const position =
-    candidates[Math.floor(random() * candidates.length)] ??
-    getOpenTiles(run.labyrinth).find(
-      (candidate) => !occupied.has(positionKey(candidate))
-    ) ??
-    warden;
-  return { ...position, id: warden.id, mode: warden.mode };
-}
-
 /**
  * @param {GameRun} run
  * @returns {Position}
@@ -574,6 +636,20 @@ function cloneRun(run) {
     gate: { ...run.gate },
     echoes: run.echoes.map((echo) => ({ ...echo })),
     wardens: run.wardens.map((warden) => ({ ...warden })),
+    challenge: run.challenge
+      ? {
+          ...run.challenge,
+          question: run.challenge.question
+            ? {
+                ...run.challenge.question,
+                choices: run.challenge.question.choices.map((choice) => ({ ...choice }))
+              }
+            : null,
+          feedback: run.challenge.feedback
+            ? { ...run.challenge.feedback }
+            : null
+        }
+      : null,
     revealed: [...run.revealed],
     pulseVisible: [...run.pulseVisible],
     event: { ...run.event }

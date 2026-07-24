@@ -3,7 +3,7 @@
   "framework": "Vite with semantic HTML, modular JavaScript, and Canvas gameplay",
   "fontStack": "Bricolage Grotesque for two identity slots, Geist for UI, Geist Mono for run data",
   "palette": "warm paper, deep blue ink, electric pear, sky cyan, coral, and mint through OKLCH semantic tokens",
-  "motion": "Fog reveal, collision recoil, and tactile press with reduced-motion fallback",
+  "motion": "Fog reveal, answer feedback recoil, tactile press, and focused dialog transitions with reduced-motion fallback",
   "spacing": "4px token scale",
-  "decision": "game-first Workbench selected to keep the complete play loop visible in laptop and mobile folds"
+  "decision": "game-first Workbench with distinct Quest Level and Warden Challenge moments keeps exploration readable while making learning the dramatic center"
 }
