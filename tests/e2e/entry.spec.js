@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { loadEnv } from "vite";
+
+const hasClerkPublishableKey = Boolean(
+  loadEnv("production", process.cwd(), "VITE_CLERK_").VITE_CLERK_PUBLISHABLE_KEY
+);
 
 test("keeps root as a non-running Echo Maze introduction", async ({ page }) => {
   /** @type {string[]} */
@@ -24,6 +29,21 @@ test("keeps guest entry available beside sign in", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: "Sign in", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Enter the Maze" })).toBeEnabled();
+});
+
+test("opens the maintained Clerk SignIn dialog when configured", async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One configured browser check is sufficient.");
+  test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
+  await page.goto("/");
+  const signIn = page.getByRole("button", { name: "Sign in", exact: true }).first();
+
+  await expect(signIn).toBeEnabled();
+  await signIn.click();
+
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByLabel(/Email address/i)).toBeVisible();
 });
 
 test("starts normal gameplay at a clean play route", async ({ page }) => {

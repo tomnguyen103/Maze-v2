@@ -197,9 +197,8 @@ separate marketing template.
 ### 6.2 Page structure
 
 1. **Compact header**
-   - Echo Maze wordmark
-   - `Top 10`
-   - `Sign in` or signed-in Explorer identity
+    - Echo Maze wordmark
+    - `Sign in` or signed-in Explorer identity
 
 2. **Hero threshold**
    - Title: `Echo Maze`
