@@ -134,6 +134,7 @@ describe("GameSession", () => {
       { row: 11, col: 7, id: 1, mode: "patrol" }
     ]);
     expect(first.lastDirection).toBeNull();
+    expect(first.score).toBe(0);
   });
 
   it("creates different labyrinths from distinct known seeds", () => {
@@ -405,10 +406,12 @@ describe("GameSession", () => {
     run = follow(run, pathBetween(run, run.explorer, run.echoes[0]));
     expect(run.echoes[0].collected).toBe(true);
     expect(run.gate.open).toBe(true);
+    expect(run.score).toBe(50);
 
     run = follow(run, pathBetween(run, run.explorer, run.gate));
     expect(run.status).toBe("won");
     expect(run.event.type).toBe("escaped");
+    expect(run.score).toBe(550);
   });
 
   it("freezes elapsed time while paused", () => {
@@ -511,8 +514,12 @@ describe("GameSession", () => {
     expect(answered.challenge).toBeNull();
     expect(answered.wardens).toEqual([]);
     expect(answered.explorer.vitality).toBe(2);
+    expect(answered.pulses).toBe(run.pulses + 1);
+    expect(answered.score).toBe(100);
     expect(answered.event.type).toBe("warden-defeated");
     expect(answered.event.message).toContain(QUESTION.explanation);
+    expect(answered.event.message).toContain("1 Pulse");
+    expect(answered.event.message).toContain("100 score");
   });
 
   it("keeps the Warden Challenge open with a fresh question after a wrong answer", () => {
