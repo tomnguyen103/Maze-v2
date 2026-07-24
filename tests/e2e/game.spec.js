@@ -79,11 +79,17 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   const consoleProblems = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error" || message.type() === "warning") {
+    const isClerkDevelopmentKeyNotice = message
+      .text()
+      .startsWith("Clerk: Clerk has been loaded with development keys.");
+    if (
+      (message.type() === "error" || message.type() === "warning") &&
+      !isClerkDevelopmentKeyNotice
+    ) {
       consoleProblems.push(message.text());
     }
   });
-  await page.goto("/");
+  await page.goto("/play");
 
   await expect(
     page.getByRole("heading", { name: "Choose your Quest Level" })
@@ -129,7 +135,7 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
   const eventRibbon = page.locator("#event-ribbon");
   await expect(eventRibbon).toHaveClass(/is-visible/);
   await expect(eventRibbon).toHaveText(
-    "Seed copied. Send it to another Explorer."
+    "Share link copied. Send it to another Explorer."
   );
 
   const mazeBounds = await page.locator("#maze-canvas").boundingBox();
@@ -253,7 +259,7 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Copy seed NARROW-RECORD" })
+    page.getByRole("button", { name: "Copy share link for seed NARROW-RECORD" })
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Replay seed NARROW-RECORD" })
@@ -339,7 +345,8 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
   await page.getByRole("button", { name: "New Quest" }).click();
   await chooseTrailScout(page);
   await expect(page.locator("#seed-value")).not.toHaveText("RUNE-CHOIR-93");
-  expect(new URL(page.url()).searchParams.get("seed")).not.toBe("RUNE-CHOIR-93");
+  expect(new URL(page.url()).pathname).toBe("/play");
+  expect(new URL(page.url()).search).toBe("");
   const nextLabyrinth = await canvas.screenshot();
   expect(Buffer.compare(initialLabyrinth, nextLabyrinth)).not.toBe(0);
 });
@@ -374,6 +381,7 @@ test("saves a defeated Run Record and restores it after reload", async ({
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
   await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  const initialMaze = await page.getByLabel(/Interactive maze/).screenshot();
 
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -404,6 +412,16 @@ test("saves a defeated Run Record and restores it after reload", async ({
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
+  await page.getByRole("button", { name: "Retry Labyrinth" }).click();
+  await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
+  expect(new URL(page.url()).pathname).toBe("/play");
+  expect(new URL(page.url()).search).toBe("");
+  expect(
+    Buffer.compare(
+      initialMaze,
+      await page.getByLabel(/Interactive maze/).screenshot()
+    )
+  ).toBe(0);
   await page.reload();
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
@@ -480,8 +498,8 @@ test("completes a Labyrinth, persists Quest progress, and replays its Record", a
   await expect(page.locator("#result-seed")).toHaveText(WINNING_SEED);
   await expect(page.locator("#result-rank")).toHaveText("Personal #1");
   await expect(page.locator("#best-run")).toContainText(WINNING_SEED);
-  expect(new URL(page.url()).searchParams.get("seed")).toBeNull();
-  expect(new URL(page.url()).searchParams.get("labyrinth")).toBe("2");
+  expect(new URL(page.url()).pathname).toBe("/play");
+  expect(new URL(page.url()).search).toBe("");
 
   await page.getByRole("button", { name: "Continue Quest" }).click();
   await expect(dialog).not.toBeVisible();
@@ -531,13 +549,13 @@ test("completes a Labyrinth, persists Quest progress, and replays its Record", a
       }
     });
   });
-  await page.getByRole("button", { name: `Copy seed ${WINNING_SEED}` }).click();
+  await page.getByRole("button", { name: `Copy share link for seed ${WINNING_SEED}` }).click();
   await expect(
-    page.getByRole("button", { name: `Copy seed ${WINNING_SEED}` })
+    page.getByRole("button", { name: `Copy share link for seed ${WINNING_SEED}` })
   ).toHaveText("Copied");
   expect(
     await page.evaluate(() => Reflect.get(window, "__copiedSeed"))
-  ).toBe(WINNING_SEED);
+  ).toContain(`/play?seed=${WINNING_SEED}&level=trail-scout&labyrinth=1`);
   await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
   await expect(records).not.toBeVisible();
 

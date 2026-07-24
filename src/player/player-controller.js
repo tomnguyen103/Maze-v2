@@ -10,6 +10,7 @@ import {
   INITIAL_PLAYER_STATE,
   reducePlayerState
 } from "./player-state.js";
+import { createClerkBrowser } from "./clerk-browser.js";
 
 /**
  * @typedef {{
@@ -43,13 +44,17 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
     signOut: requiredElement("player-sign-out", HTMLButtonElement),
     username: requiredElement("player-username", HTMLInputElement)
   };
-  /** @type {import("@clerk/clerk-js").Clerk | null} */
-  let clerk = null;
+  const clerkBrowser = createClerkBrowser({
+    onChange: () => {
+      void syncAuthenticatedPlayer();
+    }
+  });
+  let clerkAvailable = false;
   /** @type {Parameters<typeof reducePlayerState>[0]} */
   let playerState = { ...INITIAL_PLAYER_STATE };
   let score = 0;
   const client = createPlayerApiClient({
-    getToken: async () => clerk?.session?.getToken() ?? null
+    getToken: clerkBrowser.getToken
   });
 
   setPalettes(DEFAULT_PLAYER_PROFILE);
@@ -77,7 +82,7 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
      * @param {number} labyrinthNumber
      */
     async submitEscapedRun(run, levelId, labyrinthNumber) {
-      if (!clerk?.user || !playerState.profile) {
+      if (!clerkBrowser.user || !playerState.profile) {
         return;
       }
       try {
@@ -115,14 +120,14 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
       }
     });
     elements.auth.addEventListener("click", () => {
-      if (clerk?.user) {
-        clerk.openUserProfile();
+      if (clerkBrowser.user) {
+        void clerkBrowser.openUserProfile();
       } else {
-        clerk?.openSignIn();
+        void clerkBrowser.openSignIn();
       }
     });
     elements.signOut.addEventListener("click", async () => {
-      await clerk?.signOut();
+      await clerkBrowser.signOut();
       playerState = reducePlayerState(playerState, {
         type: "auth-changed",
         userId: ""
@@ -145,33 +150,19 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
   }
 
   async function initializeClerk() {
-    const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-    if (!publishableKey) {
-      elements.auth.disabled = true;
-      elements.auth.textContent = "Sign-in setup pending";
-      elements.intro.textContent =
-        "Guest play is ready. Add Clerk keys in Vercel to enable saved profiles and scores.";
-      return;
-    }
-    try {
-      const { Clerk } = await import("@clerk/clerk-js");
-      clerk = new Clerk(publishableKey);
-      await clerk.load();
-      clerk.addListener(() => {
-        void syncAuthenticatedPlayer();
-      });
-      await syncAuthenticatedPlayer();
-    } catch {
-      clerk = null;
+    clerkAvailable = await clerkBrowser.initialize();
+    if (!clerkAvailable) {
       elements.auth.disabled = true;
       elements.auth.textContent = "Sign-in unavailable";
       elements.intro.textContent =
-        "Guest play still works while account services are unavailable.";
+        "Guest play is ready while account services are unavailable.";
+      return;
     }
+    await syncAuthenticatedPlayer();
   }
 
   async function syncAuthenticatedPlayer() {
-    const userId = clerk?.user?.id ?? "";
+    const userId = clerkBrowser.user?.id ?? "";
     if (userId === playerState.userId) {
       renderAuth();
       return;
@@ -219,7 +210,7 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
   /** @param {SubmitEvent} event */
   async function saveProfile(event) {
     event.preventDefault();
-    if (!clerk?.user) {
+    if (!clerkBrowser.user) {
       setFormStatus(
         "Sign in before saving an Explorer profile.",
         "error"
@@ -285,12 +276,12 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
 
   /** @param {boolean} [loading] */
   function renderAuth(loading = false) {
-    const signedIn = Boolean(clerk?.user);
+    const signedIn = Boolean(clerkBrowser.user);
     elements.name.textContent = loading
       ? "Loading…"
       : playerState.profile?.username ?? (signedIn ? "New Explorer" : "Guest");
     elements.auth.hidden = signedIn;
-    elements.auth.disabled = !clerk;
+    elements.auth.disabled = !clerkAvailable;
     elements.auth.textContent = "Sign in";
     elements.signOut.hidden = !signedIn;
     elements.form.hidden = !signedIn;

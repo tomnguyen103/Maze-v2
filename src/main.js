@@ -1,9 +1,9 @@
-import "@fontsource-variable/bricolage-grotesque";
-import "@fontsource-variable/geist";
-import "@fontsource-variable/geist-mono";
-import "./daylight.css";
-
 import { EchoAudio } from "./game/audio.js";
+import {
+  clearActiveRunLocator,
+  loadActiveRunLocator,
+  saveActiveRunLocator
+} from "./game/active-run-locator.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import { applyAction, createRun } from "./game/game-session.js";
 import {
@@ -88,25 +88,32 @@ const elements = {
 };
 
 const locationSeed = seedFromLocation();
-const locationLabyrinthNumber = labyrinthFromLocation();
+const sharedParametersNeedNotice =
+  locationSeed !== null && hasInvalidSharedParameters();
 const storedQuestProgress = loadQuestProgress();
-const locationLevel = getQuestLevel(levelFromLocation());
+let activeRunLocator = locationSeed === null ? loadActiveRunLocator() : null;
+const locationLevel = getQuestLevel(
+  locationSeed === null
+    ? activeRunLocator?.levelId ?? storedQuestProgress?.levelId ?? "trail-scout"
+    : levelFromLocation()
+);
+const locationLabyrinthNumber = locationSeed === null
+  ? activeRunLocator?.labyrinthNumber ?? storedQuestProgress?.labyrinthNumber ?? 1
+  : labyrinthFromLocation() ?? 1;
 const storedLocationMatches =
   storedQuestProgress?.levelId === locationLevel.id &&
-  (locationLabyrinthNumber === null ||
-    storedQuestProgress.labyrinthNumber === locationLabyrinthNumber);
+  storedQuestProgress.labyrinthNumber === locationLabyrinthNumber;
 let questProgress =
-  storedQuestProgress &&
-  (locationSeed === null || storedLocationMatches)
+  storedQuestProgress && storedLocationMatches
     ? storedQuestProgress
     : createQuestProgress(
         locationLevel.id,
-        locationLabyrinthNumber ?? 1
+        locationLabyrinthNumber
       );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
 let run = createRun(
-  locationSeed ?? createSeed(),
+  locationSeed ?? activeRunLocator?.seed ?? createSeed(),
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
 const playerController = createPlayerController({
@@ -119,7 +126,10 @@ let eventTimer = 0;
 let resumeAfterRecords = false;
 let questionRequestKey = "";
 let runFinished = false;
-let mustChooseLevel = locationSeed === null && storedQuestProgress === null;
+let mustChooseLevel =
+  locationSeed === null &&
+  activeRunLocator === null &&
+  storedQuestProgress === null;
 if (!mustChooseLevel) {
   questProgress = saveQuestProgress(questProgress);
 }
@@ -128,10 +138,19 @@ let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
 
-if (locationSeed === null && storedQuestProgress !== null) {
+if (locationSeed !== null || activeRunLocator !== null) {
+  const locator = activeRunLocator;
+  startRun(
+    locationSeed ?? locator?.seed ?? createSeed(),
+    currentLevel.id,
+    currentLabyrinthNumber
+  );
+  if (sharedParametersNeedNotice) {
+    announce("This share link was adjusted to a safe Labyrinth.");
+    showEvent("This share link was adjusted to a safe Labyrinth.");
+  }
+} else if (storedQuestProgress !== null) {
   startFreshRun();
-} else {
-  startRun(run.seed, currentLevel.id, currentLabyrinthNumber);
 }
 if (mustChooseLevel) {
   elements.levelDialog.showModal();
@@ -277,16 +296,22 @@ elements.runRecords.addEventListener("click", async (event) => {
 
   if (button.dataset.recordAction === "copy") {
     try {
-      await navigator.clipboard.writeText(button.dataset.seed);
+      await navigator.clipboard.writeText(
+        createShareLink(
+          button.dataset.seed,
+          button.dataset.level ?? "trail-scout",
+          Number(button.dataset.labyrinth ?? 1)
+        )
+      );
       button.textContent = "Copied";
-      announce(`Seed ${button.dataset.seed} copied.`);
+      announce(`Share link for seed ${button.dataset.seed} copied.`);
       window.setTimeout(() => {
         if (button.isConnected) {
-          button.textContent = "Copy";
+          button.textContent = "Copy Share Link";
         }
       }, 1400);
     } catch {
-      announce(`Copy failed. Seed ${button.dataset.seed}.`);
+      announce(`Copy failed. Seed ${button.dataset.seed} is visible.`);
     }
   }
 });
@@ -310,11 +335,11 @@ elements.sound.addEventListener("click", async () => {
 });
 elements.seedCopy.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(run.seed);
-    announce("Seed copied.");
-    showEvent("Seed copied. Send it to another Explorer.");
+    await navigator.clipboard.writeText(createShareLink());
+    announce("Share link copied.");
+    showEvent("Share link copied. Send it to another Explorer.");
   } catch {
-    announce(`Current seed ${run.seed}`);
+    announce(`Share link copy failed. Current seed ${run.seed}.`);
   }
 });
 
@@ -373,11 +398,12 @@ function startRun(
   if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
     questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
   }
-  const url = new URL(window.location.href);
-  url.searchParams.set("seed", run.seed);
-  url.searchParams.set("level", currentLevel.id);
-  url.searchParams.set("labyrinth", String(currentLabyrinthNumber));
-  window.history.replaceState({}, "", url);
+  activeRunLocator = saveActiveRunLocator({
+    version: 1,
+    seed: run.seed,
+    levelId: currentLevel.id,
+    labyrinthNumber: currentLabyrinthNumber
+  });
   lastTick = performance.now();
   questionRequestKey = "";
   runFinished = false;
@@ -407,6 +433,19 @@ function startRun(
 function startFreshRun() {
   const levelId = questProgress.levelId;
   const labyrinthNumber = questProgress.labyrinthNumber;
+  if (
+    activeRunLocator?.levelId === levelId &&
+    activeRunLocator.labyrinthNumber === labyrinthNumber
+  ) {
+    startRun(activeRunLocator.seed, levelId, labyrinthNumber);
+    return;
+  }
+  const locator = createFreshLocator(levelId, labyrinthNumber);
+  startRun(locator.seed, levelId, labyrinthNumber);
+}
+
+/** @param {string} levelId @param {number} labyrinthNumber */
+function createFreshLocator(levelId, labyrinthNumber) {
   const level = getQuestLevel(levelId);
   const config = getLabyrinthConfig(levelId, labyrinthNumber);
   const usedFingerprints = new Set([
@@ -420,8 +459,12 @@ function startFreshRun() {
     }
     const candidate = createRun(seed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
-      startRun(seed, level.id, labyrinthNumber);
-      return;
+      return {
+        version: 1,
+        seed: candidate.seed,
+        levelId: level.id,
+        labyrinthNumber
+      };
     }
   }
 
@@ -429,8 +472,12 @@ function startFreshRun() {
     const fallbackSeed = `EMBER-${17 + attempt}`;
     const candidate = createRun(fallbackSeed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
-      startRun(candidate.seed, level.id, labyrinthNumber);
-      return;
+      return {
+        version: 1,
+        seed: candidate.seed,
+        levelId: level.id,
+        labyrinthNumber
+      };
     }
   }
 
@@ -441,6 +488,9 @@ function startFreshRun() {
 function startNewQuest(levelId, seed) {
   questProgress = saveQuestProgress(createQuestProgress(levelId));
   currentLabyrinthNumber = questProgress.labyrinthNumber;
+  activeRunLocator = null;
+  clearActiveRunLocator();
+  window.history.replaceState({}, "", "/play");
   if (seed) {
     startRun(seed, questProgress.levelId, currentLabyrinthNumber);
     return;
@@ -457,6 +507,7 @@ function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
   questProgress = saveQuestProgress(
     createQuestProgress(levelId, labyrinthNumber)
   );
+  window.history.replaceState({}, "", "/play");
   startRun(seed, questProgress.levelId, questProgress.labyrinthNumber);
 }
 
@@ -849,15 +900,19 @@ function finishRun() {
       finishedLabyrinthNumber
     );
     questProgress = saveQuestProgress(advanceQuest(questProgress));
+    activeRunLocator = questProgress.complete
+      ? null
+      : saveActiveRunLocator(
+          createFreshLocator(
+            questProgress.levelId,
+            questProgress.labyrinthNumber
+          )
+        );
+    if (questProgress.complete) {
+      clearActiveRunLocator();
+    }
   }
-  const resumeUrl = new URL(window.location.href);
-  resumeUrl.searchParams.delete("seed");
-  resumeUrl.searchParams.set("level", questProgress.levelId);
-  resumeUrl.searchParams.set(
-    "labyrinth",
-    String(questProgress.labyrinthNumber)
-  );
-  window.history.replaceState({}, "", resumeUrl);
+  window.history.replaceState({}, "", "/play");
 
   const questComplete = won && questProgress.complete;
   elements.resultKicker.textContent = questComplete
@@ -874,7 +929,7 @@ function finishRun() {
     ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
     : won
       ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
-      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Retry Labyrinth ${finishedLabyrinthNumber} with a fresh map and full Vitality.`;
+      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Retry Labyrinth ${finishedLabyrinthNumber} with full Vitality.`;
   elements.replay.dataset.resultAction = questComplete
     ? "new-quest"
     : won
@@ -994,8 +1049,40 @@ function labyrinthFingerprint(gameRun) {
   return gameRun.labyrinth.map((row) => row.join("")).join("/");
 }
 
+/**
+ * @param {string} [seed]
+ * @param {string} [levelId]
+ * @param {number} [labyrinthNumber]
+ */
+function createShareLink(
+  seed = run.seed,
+  levelId = currentLevel.id,
+  labyrinthNumber = currentLabyrinthNumber
+) {
+  const url = new URL("/play", window.location.origin);
+  url.searchParams.set("seed", seed);
+  url.searchParams.set("level", levelId);
+  url.searchParams.set("labyrinth", String(labyrinthNumber));
+  return url.toString();
+}
+
 function seedFromLocation() {
   return new URL(window.location.href).searchParams.get("seed");
+}
+
+function hasInvalidSharedParameters() {
+  const url = new URL(window.location.href);
+  const seed = url.searchParams.get("seed");
+  const levelId = url.searchParams.get("level");
+  const labyrinthNumber = Number(url.searchParams.get("labyrinth"));
+  return (
+    !seed ||
+    !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(seed) ||
+    !["bright-start", "trail-scout", "maze-master"].includes(levelId ?? "") ||
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  );
 }
 
 function levelFromLocation() {
@@ -1075,9 +1162,11 @@ function renderRunRecords() {
       copy.type = "button";
       copy.className = "control-button";
       copy.dataset.seed = record.seed;
+      copy.dataset.level = record.questLevelId ?? "trail-scout";
+      copy.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
       copy.dataset.recordAction = "copy";
-      copy.textContent = "Copy";
-      copy.setAttribute("aria-label", `Copy seed ${record.seed}`);
+      copy.textContent = "Copy Share Link";
+      copy.setAttribute("aria-label", `Copy share link for seed ${record.seed}`);
       summary.append(title, detail);
       actions.className = "run-records__actions";
       actions.append(copy, replay);

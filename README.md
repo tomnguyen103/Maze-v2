@@ -10,6 +10,8 @@ The original project is preserved at
 
 ## Play
 
+- Visit `/` for the public introduction. It never starts a Run automatically.
+- Select `Enter the Maze` (or `Continue Quest`) to play at `/play` with a clean URL.
 - Move with Arrow keys or WASD.
 - Press Q or Space to release a limited Pulse and reveal nearby stone.
 - On touch devices, use the direction controls or swipe across the Labyrinth.
@@ -21,11 +23,14 @@ The original project is preserved at
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
   incorrectly to lose one Vitality and, if Vitality remains, try a new question.
   Each defeated Warden awards one Pulse and 100 score.
-- Signed-in Explorers can claim a unique username, choose Explorer and
-  playground colors, and submit escaped runs to the Global Scoreboard.
+- Guest play is always available. Signed-in Explorers can claim a unique
+  username, choose Explorer and playground colors, and submit escaped runs to
+  the Global Scoreboard.
 - Global scores award 100 per Warden, 50 per Echo, and 500 for escaping. Only
   each Explorer’s best escaped run appears in the top ten.
-- Use the seed to replay or share the exact same Labyrinth.
+- Use `Copy Share Link` to copy the exact seed, Quest Level, and Labyrinth
+  Number without changing the normal `/play` URL. Refreshing `/play` restarts
+  the same active Labyrinth from its device-local locator.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress.
 - New run guarantees a different seed and Labyrinth layout.
@@ -75,8 +80,11 @@ GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-The game remains playable in Guest mode when Clerk or Neon is unavailable.
-Guest runs continue to use the unchanged local Records tab.
+The included `vercel.json` serves the Vite entry document for direct `/play`
+visits and refreshes; API functions remain at `/api/*`. The game remains
+playable in Guest mode when Clerk or Neon is unavailable. Guest runs continue
+to use the unchanged local Records tab. Configure all three Clerk variables and
+the database before presenting production sign-in as available.
 
 ## Validate
 
