@@ -583,27 +583,31 @@ export function getBundledQuestion({
   const band = getDifficultyBand(labyrinthNumber);
   const ordinal = Math.max(0, Math.trunc(questionOrdinal));
   const difficultyRank = level.number * 10 + band.index + 1;
-  const question =
-    level.id === "bright-start"
-      ? createBrightQuestion(
-          band.index,
-          ordinal,
-          band.id,
-          difficultyRank
-        )
-      : level.id === "maze-master"
-        ? createMasterQuestion(
-            band.index,
-            ordinal,
-            band.id,
-            difficultyRank
-          )
-        : createScoutQuestion(
-            band.index,
-            ordinal,
-            band.id,
-            difficultyRank
-          );
+  let question;
+  if (level.id === "bright-start") {
+    question = createBrightQuestion(
+      band.index,
+      ordinal,
+      band.id,
+      difficultyRank
+    );
+  } else if (level.id === "trail-scout") {
+    question = createScoutQuestion(
+      band.index,
+      ordinal,
+      band.id,
+      difficultyRank
+    );
+  } else if (level.id === "maze-master") {
+    question = createMasterQuestion(
+      band.index,
+      ordinal,
+      band.id,
+      difficultyRank
+    );
+  } else {
+    throw new Error(`Unsupported Quest Level: ${level.id}`);
+  }
 
   return cloneQuestion(question);
 }

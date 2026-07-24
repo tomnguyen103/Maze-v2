@@ -196,6 +196,17 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
   await expect(page.locator("#echo-count")).toHaveText("0 / 5");
 });
 
+test("hydrates a shared seed at its Labyrinth Number", async ({ page }) => {
+  await page.goto(
+    "/?seed=SHARED-LABYRINTH&level=trail-scout&labyrinth=13"
+  );
+
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Advanced"
+  );
+  await expect(page.locator("#echo-count")).toHaveText("0 / 5");
+});
+
 test("preserves native button keyboard behavior and pause timing", async ({
   page
 }) => {

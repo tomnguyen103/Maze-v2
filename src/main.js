@@ -87,13 +87,21 @@ const elements = {
 };
 
 const locationSeed = seedFromLocation();
+const locationLabyrinthNumber = labyrinthFromLocation();
 const storedQuestProgress = loadQuestProgress();
 const locationLevel = getQuestLevel(levelFromLocation());
+const storedLocationMatches =
+  storedQuestProgress?.levelId === locationLevel.id &&
+  (locationLabyrinthNumber === null ||
+    storedQuestProgress.labyrinthNumber === locationLabyrinthNumber);
 let questProgress =
   storedQuestProgress &&
-  (locationSeed === null || storedQuestProgress.levelId === locationLevel.id)
+  (locationSeed === null || storedLocationMatches)
     ? storedQuestProgress
-    : createQuestProgress(locationLevel.id);
+    : createQuestProgress(
+        locationLevel.id,
+        locationLabyrinthNumber ?? 1
+      );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
 let run = createRun(
@@ -978,6 +986,19 @@ function seedFromLocation() {
 
 function levelFromLocation() {
   return new URL(window.location.href).searchParams.get("level") ?? "trail-scout";
+}
+
+function labyrinthFromLocation() {
+  const rawValue = new URL(window.location.href).searchParams.get("labyrinth");
+  if (rawValue === null) {
+    return null;
+  }
+  const labyrinthNumber = Number(rawValue);
+  return Number.isInteger(labyrinthNumber) &&
+    labyrinthNumber >= 1 &&
+    labyrinthNumber <= QUEST_LABYRINTH_COUNT
+    ? labyrinthNumber
+    : null;
 }
 
 /** @param {typeof run} [gameRun] */
