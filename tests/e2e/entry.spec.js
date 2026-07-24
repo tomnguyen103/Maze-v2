@@ -37,12 +37,21 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
   await page.route("**/assets/main-*.js", (route) => route.abort());
 
-  await page.goto("/play");
+  await page.goto("/play?seed=RETRY-KEEP&level=trail-scout&labyrinth=3");
 
   await expect(
     page.getByRole("heading", { name: "Echo Maze could not load." })
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Try again" })).toBeVisible();
+  const retryLink = page.getByRole("link", { name: "Try again" });
+  await expect(retryLink).toBeVisible();
+  const retryUrl = new URL(
+    (await retryLink.getAttribute("href")) ?? "",
+    page.url()
+  );
+  expect(retryUrl.pathname).toBe("/play");
+  expect(retryUrl.searchParams.get("seed")).toBe("RETRY-KEEP");
+  expect(retryUrl.searchParams.get("level")).toBe("trail-scout");
+  expect(retryUrl.searchParams.get("labyrinth")).toBe("3");
 });
 
 test("copies an explicit share link without changing normal gameplay URL", async ({

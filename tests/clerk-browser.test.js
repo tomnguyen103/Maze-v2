@@ -75,12 +75,19 @@ describe("Clerk browser initializer", () => {
   it("fails closed when Clerk initialization does not finish", async () => {
     const originalDocument = globalThis.document;
     const originalGetComputedStyle = globalThis.getComputedStyle;
+    /** @type {(value: unknown) => void} */
+    let resolveLoad = () => {};
+    let listenerCount = 0;
     class SlowClerk {
       load() {
-        return new Promise(() => {});
+        return new Promise((resolve) => {
+          resolveLoad = resolve;
+        });
       }
 
-      addListener() {}
+      addListener() {
+        listenerCount += 1;
+      }
     }
     globalThis.document = /** @type {Document} */ ({ documentElement: {} });
     globalThis.getComputedStyle = /** @type {typeof getComputedStyle} */ (
@@ -100,6 +107,9 @@ describe("Clerk browser initializer", () => {
       await vi.advanceTimersByTimeAsync(8000);
 
       await expect(initialization).resolves.toBe(false);
+      resolveLoad(undefined);
+      await Promise.resolve();
+      expect(listenerCount).toBe(0);
     } finally {
       vi.useRealTimers();
       globalThis.document = originalDocument;

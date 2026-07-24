@@ -41,5 +41,9 @@ async function startGameplay() {
         <a class="primary-button" href="/play">Try again</a>
       </main>
     `;
+    const retryLink = gameRoot.querySelector(".primary-button");
+    if (retryLink instanceof HTMLAnchorElement) {
+      retryLink.href = window.location.href;
+    }
   }
 }
