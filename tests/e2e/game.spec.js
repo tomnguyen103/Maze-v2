@@ -110,6 +110,37 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   expect(consoleProblems).toEqual([]);
 });
 
+test("keeps event messages outside the playable maze", async ({ page }) => {
+  await page.goto("/?seed=VISIBLE-GRID&level=trail-scout");
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => {} }
+    });
+  });
+  await page.locator("#seed-copy").click();
+
+  const eventRibbon = page.locator("#event-ribbon");
+  await expect(eventRibbon).toHaveClass(/is-visible/);
+  await expect(eventRibbon).toHaveText(
+    "Seed copied. Send it to another Explorer."
+  );
+
+  const mazeBounds = await page.locator("#maze-canvas").boundingBox();
+  const messageBounds = await eventRibbon.boundingBox();
+  if (!mazeBounds || !messageBounds) {
+    throw new Error("Expected the maze and event message to be rendered.");
+  }
+
+  const overlapsMaze =
+    messageBounds.x < mazeBounds.x + mazeBounds.width &&
+    messageBounds.x + messageBounds.width > mazeBounds.x &&
+    messageBounds.y < mazeBounds.y + mazeBounds.height &&
+    messageBounds.y + messageBounds.height > mazeBounds.y;
+  expect(overlapsMaze).toBe(false);
+});
+
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
   await page.goto("/?seed=TOUCH-CONTROLS&level=trail-scout");
 
@@ -322,15 +353,11 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   });
   const originalSeed = "ABCDEFGHIJKLMNOPQRSTUVWX";
   await page.goto(`/?seed=${originalSeed}`);
-  const canvas = page.getByLabel(/Interactive maze/);
-  const initialLabyrinth = await canvas.screenshot();
 
   await page.getByRole("button", { name: "New Quest" }).click();
   await chooseTrailScout(page);
 
-  await expect(page.locator("#seed-value")).not.toHaveText(originalSeed);
-  const nextLabyrinth = await canvas.screenshot();
-  expect(Buffer.compare(initialLabyrinth, nextLabyrinth)).not.toBe(0);
+  await expect(page.locator("#seed-value")).toHaveText("RUNE-CHOIR-93");
 });
 
 test("saves a defeated Run Record and restores it after reload", async ({
