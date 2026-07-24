@@ -52,6 +52,16 @@ async function chooseTrailScout(page) {
 }
 
 /** @param {import("@playwright/test").Page} page */
+async function stubClipboard(page) {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => {} }
+    });
+  });
+}
+
+/** @param {import("@playwright/test").Page} page */
 async function answerCorrectlyIfChallenged(page) {
   const challenge = page.locator("#challenge-dialog");
   if (await challenge.isVisible()) {
@@ -113,12 +123,7 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
 test("keeps event messages outside the playable maze", async ({ page }) => {
   await page.goto("/?seed=VISIBLE-GRID&level=trail-scout");
 
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async () => {} }
-    });
-  });
+  await stubClipboard(page);
   await page.locator("#seed-copy").click();
 
   const eventRibbon = page.locator("#event-ribbon");
@@ -139,6 +144,9 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
     messageBounds.y < mazeBounds.y + mazeBounds.height &&
     messageBounds.y + messageBounds.height > mazeBounds.y;
   expect(overlapsMaze).toBe(false);
+  expect(messageBounds.y).toBeGreaterThanOrEqual(
+    mazeBounds.y + mazeBounds.height
+  );
 });
 
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
@@ -571,6 +579,9 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?seed=MOBILE-FOLD&level=trail-scout");
+  await stubClipboard(page);
+  await page.locator("#seed-copy").click();
+  await expect(page.locator("#event-ribbon")).toHaveClass(/is-visible/);
   const mobileMaze = await page.locator("#maze-canvas").boundingBox();
   const touchControls = await page.locator(".touch-controls").boundingBox();
   const mobilePulse = await page.locator("#pulse-action").boundingBox();
