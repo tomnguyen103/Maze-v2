@@ -34,6 +34,17 @@ export function createClerkBrowser({
         return false;
       }
     },
+    async openSignUp() {
+      if (!(await initialize())) {
+        return false;
+      }
+      try {
+        clerk?.openSignUp();
+        return true;
+      } catch {
+        return false;
+      }
+    },
     async openUserProfile() {
       if (!(await initialize())) {
         return false;

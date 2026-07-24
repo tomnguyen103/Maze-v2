@@ -52,7 +52,7 @@ export function renderLanding(root) {
       </section>
       <section class="landing-account" aria-labelledby="landing-account-title">
         <h2 id="landing-account-title">Play your way</h2>
-        <p>Guest play is always available. Sign in for a public username, saved colors, and Global Scoreboard entries.</p>
+        <p>Try one Labyrinth as a guest. Create an account to continue your Quest, save colors, and join the Global Scoreboard.</p>
       </section>
     </main>
   `;

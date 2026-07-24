@@ -54,6 +54,44 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
   expect(new URL(page.url()).search).toBe("");
 });
 
+test("blocks a completed guest demo on return, reload, and direct links", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:demo-access:v1",
+      JSON.stringify({ version: 1, completed: true })
+    );
+  });
+
+  await page.goto("/play");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("echo-maze:demo-access:v1"))
+    )
+    .toBe(JSON.stringify({ version: 1, completed: true }));
+  await expect(
+    page.getByRole("dialog", { name: "Create an account to continue." })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create account to continue" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Choose your Quest Level" })
+  ).not.toBeVisible();
+
+  await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "Create an account to continue." })
+  ).toBeVisible();
+
+  await page.goto("/play?seed=DEMO-GATE&level=trail-scout&labyrinth=2");
+  await expect(
+    page.getByRole("dialog", { name: "Create an account to continue." })
+  ).toBeVisible();
+});
+
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
   await page.route(
     /\/(?:src\/main\.js|assets\/main-[^/]+\.js)(?:\?.*)?$/,

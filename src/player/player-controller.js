@@ -21,9 +21,12 @@ import { createClerkBrowser } from "./clerk-browser.js";
  */
 
 /**
- * @param {{ onPaletteChange?: () => void }} [options]
+ * @param {{ onPaletteChange?: () => void, onAuthenticationChange?: (signedIn: boolean) => void }} [options]
  */
-export function createPlayerController({ onPaletteChange = () => {} } = {}) {
+export function createPlayerController({
+  onPaletteChange = () => {},
+  onAuthenticationChange = () => {}
+} = {}) {
   const elements = {
     auth: requiredElement("player-auth-button", HTMLButtonElement),
     close: requiredElement("player-close", HTMLButtonElement),
@@ -46,6 +49,7 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
   };
   const clerkBrowser = createClerkBrowser({
     onChange: () => {
+      onAuthenticationChange(Boolean(clerkBrowser.user));
       void syncAuthenticatedPlayer();
     }
   });
@@ -64,6 +68,19 @@ export function createPlayerController({ onPaletteChange = () => {} } = {}) {
   void initializeClerk();
 
   return {
+    hasAuthenticatedUser() {
+      return Boolean(clerkBrowser.user);
+    },
+    async isAuthenticated() {
+      await clerkBrowser.initialize();
+      return Boolean(clerkBrowser.user);
+    },
+    async openAccountCreation() {
+      if (clerkBrowser.user) {
+        return true;
+      }
+      return clerkBrowser.openSignUp();
+    },
     /** @param {number} nextScore */
     updateScore(nextScore) {
       score = nextScore;
