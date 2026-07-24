@@ -119,7 +119,7 @@ export function createPlayerStore(pool) {
                labyrinth_number DESC,
                moves ASC,
                elapsed_ms ASC,
-               created_at ASC
+               best_runs.created_at ASC
            ) AS rank,
            players.username,
            best_runs.score,
