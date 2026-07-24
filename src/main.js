@@ -6,8 +6,10 @@ import {
 } from "./game/active-run-locator.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import {
+  clearPendingGuestDemo,
   hasCompletedGuestDemo,
   markGuestDemoComplete,
+  markGuestDemoPendingAuthentication,
   requiresDemoAccount
 } from "./game/demo-access.js";
 import { applyAction, createRun } from "./game/game-session.js";
@@ -536,8 +538,7 @@ async function startNewQuest(levelId, seed) {
     startRun(seed, questProgress.levelId, currentLabyrinthNumber);
     return true;
   }
-  await startFreshRun();
-  return true;
+  return startFreshRun();
 }
 
 /**
@@ -580,6 +581,7 @@ async function canStartAnotherLabyrinth() {
     return true;
   }
   if (await playerController.isAuthenticated()) {
+    clearPendingGuestDemo();
     demoAccessPending = false;
     return true;
   }
@@ -620,7 +622,7 @@ async function requestDemoAccount() {
 /** @param {boolean} signedIn */
 function syncDemoAccountAction(signedIn) {
   if (!signedIn) {
-    demoAccessPending = requiresDemoAccount(false);
+    demoAccessPending = demoAccessPending || requiresDemoAccount(false);
     return;
   }
   if (elements.replay.dataset.resultAction !== "create-account") {
@@ -991,7 +993,6 @@ function updateInterface() {
 function finishRun() {
   runFinished = true;
   const won = run.status === "won";
-  const completedGuestDemo = !playerController.hasAuthenticatedUser();
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   runRecords = saveRunRecord({
@@ -1063,10 +1064,19 @@ function finishRun() {
       ? "Continue Quest"
       : "Retry Labyrinth";
   elements.freshRun.hidden = questComplete;
-  if (completedGuestDemo) {
-    markGuestDemoComplete();
+  if (!playerController.hasAuthenticatedUser()) {
+    markGuestDemoPendingAuthentication();
     demoAccessPending = true;
     showDemoAccountGate();
+    void playerController.isAuthenticated().then((authenticated) => {
+      if (authenticated) {
+        clearPendingGuestDemo();
+        syncDemoAccountAction(true);
+        return;
+      }
+      markGuestDemoComplete();
+      demoAccessPending = true;
+    });
   }
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
