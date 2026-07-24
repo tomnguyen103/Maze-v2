@@ -16,6 +16,11 @@ _Avoid_: Level, board, map
 One attempt that starts in a new labyrinth and ends in escape, defeat, or restart.
 _Avoid_: Game, session, round
 
+**Quest Level**:
+The learning tier chosen before a Run. It sets the Labyrinth challenge and the
+difficulty range of Warden Questions.
+_Avoid_: Grade, mode, Labyrinth level
+
 **Echo**:
 A collectible fragment required to unlock the Gate.
 _Avoid_: Prize, gem, coin
@@ -27,6 +32,17 @@ _Avoid_: Destination, goal, finish
 **Warden**:
 A hostile presence that moves through the labyrinth after the Explorer acts.
 _Avoid_: Monster, enemy, ghost
+
+**Warden Challenge**:
+A paused confrontation between the Explorer and one Warden. A correct answer
+defeats that Warden; a wrong answer removes Vitality and, while Vitality remains,
+continues the Challenge with a fresh Question. Losing the final Vitality ends the Run.
+_Avoid_: Collision, combat screen, quiz
+
+**Warden Question**:
+One short, age-appropriate multiple-choice problem matched to the Quest Level.
+It has one unambiguous answer and a brief explanation.
+_Avoid_: Riddle, trivia prompt, AI response
 
 **Warden Mode**:
 The readable tactic a Warden currently follows: Patrol, Hunt, or Intercept.

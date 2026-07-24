@@ -7,11 +7,15 @@ const RUN_RECORD_LIMIT = 5;
  * @typedef {"escaped" | "defeated"} RunOutcome
  * @typedef {BestRun & {
  *   outcome: RunOutcome,
- *   echoesCollected: number
+ *   echoesCollected: number,
+ *   echoTotal?: number,
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
  * }} RunRecord
  * @typedef {BestRun & {
  *   outcome?: RunOutcome,
- *   echoesCollected?: number
+ *   echoesCollected?: number,
+ *   echoTotal?: number,
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
  * }} RunRecordCandidate
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -152,25 +156,41 @@ function normalizeRunRecord(value) {
     return null;
   }
   const outcome = candidate.outcome ?? "escaped";
+  const echoTotal = candidate.echoTotal ?? 3;
+  if (
+    !Number.isInteger(echoTotal) ||
+    echoTotal < 1 ||
+    echoTotal > 20
+  ) {
+    return null;
+  }
   const echoesCollected =
     outcome === "escaped"
-      ? 3
+      ? echoTotal
       : candidate.echoesCollected === undefined
         ? 0
       : candidate.echoesCollected;
   if (
     !Number.isInteger(echoesCollected) ||
     echoesCollected < 0 ||
-    echoesCollected > 3
+    echoesCollected > echoTotal
   ) {
     return null;
   }
+  const questLevelId =
+    candidate.questLevelId === "bright-start" ||
+    candidate.questLevelId === "trail-scout" ||
+    candidate.questLevelId === "maze-master"
+      ? candidate.questLevelId
+      : undefined;
   return {
     elapsedMs: value.elapsedMs,
     moves: value.moves,
     seed: value.seed,
     outcome,
-    echoesCollected
+    echoesCollected,
+    ...(candidate.echoTotal === undefined ? {} : { echoTotal }),
+    ...(questLevelId ? { questLevelId } : {})
   };
 }
 
@@ -180,16 +200,17 @@ function normalizeRunRecord(value) {
  */
 function rankRunRecords(records) {
   /** @type {Map<string, RunRecord>} */
-  const bestBySeed = new Map();
+  const bestByQuest = new Map();
 
   for (const record of records) {
-    const current = bestBySeed.get(record.seed);
+    const questKey = `${record.questLevelId ?? "trail-scout"}:${record.seed}`;
+    const current = bestByQuest.get(questKey);
     if (!current || compareRuns(record, current) < 0) {
-      bestBySeed.set(record.seed, record);
+      bestByQuest.set(questKey, record);
     }
   }
 
-  return [...bestBySeed.values()]
+  return [...bestByQuest.values()]
     .sort(compareRuns)
     .slice(0, RUN_RECORD_LIMIT);
 }

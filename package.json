@@ -2,9 +2,11 @@
   "name": "echo-maze",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
   "description": "A bright deterministic browser maze with readable Warden tactics and local run records.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "start": "node server.js",
     "prepare": "git config core.hooksPath .githooks",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Echo Maze is a bright tactical browser labyrinth with readable Warden behavior and personal run records."
+      content="Echo Maze is a kid-friendly text adventure where clever answers defeat Wardens and open the way home."
     />
     <meta name="theme-color" content="#f8f4df" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d9e500'/%3E%3Cpath d='M16 14h32v8H24v8h16v20H16v-8h16v-4H16z' fill='%230d1b2a'/%3E%3C/svg%3E"
+    />
     <title>Echo Maze</title>
   </head>
   <body>
@@ -15,7 +19,7 @@
 
     <nav class="command-bar" aria-label="Game controls">
       <a class="wordmark" href="#" aria-label="Echo Maze home">Echo Maze</a>
-      <h1>Find 3 Echoes. Reach the Gate.</h1>
+      <h1 id="quest-headline">Choose a quest. Outsmart the Wardens.</h1>
       <div class="command-bar__actions">
         <button class="control-button" id="records-button" type="button">
           Records
@@ -33,7 +37,7 @@
       <section class="play-grid" aria-label="Echo Maze game">
         <aside class="status-deck" aria-label="Run status">
           <div class="status-deck__heading">
-            <span class="section-label">Live run</span>
+            <span class="section-label" id="quest-level-name">Trail Scout</span>
             <span class="run-state" id="run-state">Exploring</span>
           </div>
 
@@ -68,7 +72,7 @@
           <div class="warden-readout" id="warden-readout" data-mode="patrol">
             <span class="section-label">Warden mode</span>
             <strong id="warden-state">Patrol</strong>
-            <p>Moves once after each valid step.</p>
+            <p>Answer correctly to defeat it.</p>
           </div>
         </aside>
 
@@ -126,11 +130,16 @@
 
         <aside class="intel-deck" aria-label="How to play">
           <div>
-            <span class="section-label">Objective</span>
+            <span class="section-label">Your quest</span>
             <p class="objective-copy">
-              Collect every Echo, then enter the open Gate. Wardens change tactics
-              as they close in.
+              Recover every Echo. When a Warden finds you, solve its challenge
+              to clear the path. Then reach the open Gate.
             </p>
+          </div>
+
+          <div class="story-panel">
+            <span class="section-label">Adventure log</span>
+            <ol class="story-log" id="story-log"></ol>
           </div>
 
           <div class="legend" aria-label="Maze legend">
@@ -144,7 +153,7 @@
           </div>
 
           <p class="field-note" id="field-note">
-            Use arrows or WASD. Swipe or use the direction pad on touch screens.
+            Explore with arrows or WASD. Your knowledge defeats Wardens.
           </p>
         </aside>
       </section>
@@ -156,6 +165,62 @@
     </footer>
 
     <p class="sr-only" id="live-region" aria-live="polite"></p>
+
+    <dialog class="level-dialog" id="level-dialog" aria-labelledby="level-title">
+      <div class="level-dialog__intro">
+        <span class="section-label">Start an adventure</span>
+        <h2 id="level-title">Choose your Quest Level</h2>
+        <p>Every path has a different maze and learning challenge. You can change levels whenever you start a new quest.</p>
+      </div>
+      <div class="level-cards" id="level-cards">
+        <button class="level-card" type="button" data-level="bright-start">
+          <span class="level-card__badge">Gentle</span>
+          <strong>Bright Start</strong>
+          <span>Short paths, one Warden, and friendly warm-up questions.</span>
+          <span class="level-card__topics">Questions: sums to 20 · words · nature</span>
+          <small>2 Echoes · 4 Vitality · 3 Pulses</small>
+        </button>
+        <button class="level-card level-card--featured" type="button" data-level="trail-scout">
+          <span class="level-card__badge">Balanced</span>
+          <strong>Trail Scout</strong>
+          <span>A lively expedition with two clever Wardens.</span>
+          <span class="level-card__topics">Questions: times tables · reading clues · life science</span>
+          <small>3 Echoes · 3 Vitality · 2 Pulses</small>
+        </button>
+        <button class="level-card" type="button" data-level="maze-master">
+          <span class="level-card__badge">Bold</span>
+          <strong>Maze Master</strong>
+          <span>A larger maze, three Wardens, and brainy challenges.</span>
+          <span class="level-card__topics">Questions: fractions · logic · earth and space</span>
+          <small>4 Echoes · 3 Vitality · 2 Pulses</small>
+        </button>
+      </div>
+      <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
+    </dialog>
+
+    <dialog
+      class="challenge-dialog"
+      id="challenge-dialog"
+      aria-labelledby="challenge-title"
+      aria-describedby="challenge-promise challenge-feedback challenge-question"
+    >
+      <div class="challenge-dialog__crest" aria-hidden="true">?</div>
+      <span class="section-label">Warden challenge</span>
+      <h2 id="challenge-title">A Warden blocks the path.</h2>
+      <p class="challenge-dialog__promise" id="challenge-promise">Answer correctly and the Warden is defeated.</p>
+      <div class="challenge-feedback" id="challenge-feedback" role="status">
+        Think carefully. Your timer is paused.
+      </div>
+      <p
+        class="challenge-question"
+        id="challenge-question"
+        tabindex="-1"
+        aria-live="polite"
+        aria-atomic="true"
+      >Preparing your question…</p>
+      <div class="challenge-choices" id="challenge-choices"></div>
+      <p class="challenge-source" id="challenge-source">Opening the question scroll…</p>
+    </dialog>
 
     <dialog class="records-dialog" id="records-dialog" aria-labelledby="records-title">
       <div class="dialog-heading">

@@ -67,6 +67,28 @@ describe("run record storage", () => {
     expect(records.map((record) => record.seed)).toEqual(["ESCAPE", "DEFEAT"]);
   });
 
+  it("preserves the Quest Level and total Echoes for new records", () => {
+    const storage = createStorage();
+    const records = saveRunRecord(
+      {
+        elapsedMs: 45000,
+        moves: 55,
+        seed: "BRIGHT-RECORD",
+        outcome: "escaped",
+        echoesCollected: 2,
+        echoTotal: 2,
+        questLevelId: "bright-start"
+      },
+      storage
+    );
+
+    expect(records[0]).toMatchObject({
+      echoesCollected: 2,
+      echoTotal: 2,
+      questLevelId: "bright-start"
+    });
+  });
+
   it("ranks defeated attempts by Echo progress", () => {
     const storage = createStorage();
     saveRunRecord(
@@ -160,6 +182,36 @@ describe("run record storage", () => {
         outcome: "escaped",
         echoesCollected: 3
       }
+    ]);
+  });
+
+  it("keeps the same seed as separate records on different Quest Levels", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 80000,
+        moves: 90,
+        seed: "SHARED-SEED",
+        questLevelId: "bright-start",
+        echoTotal: 2
+      },
+      storage
+    );
+    const records = saveRunRecord(
+      {
+        elapsedMs: 90000,
+        moves: 95,
+        seed: "SHARED-SEED",
+        questLevelId: "maze-master",
+        echoTotal: 4
+      },
+      storage
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.questLevelId)).toEqual([
+      "bright-start",
+      "maze-master"
     ]);
   });
 

@@ -11,6 +11,44 @@ const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   left: "ArrowLeft"
 });
 
+const TEST_QUESTION = {
+  id: "browser-math",
+  prompt: "What is 4 + 3?",
+  choices: [
+    { id: "a", label: "6" },
+    { id: "b", label: "7" },
+    { id: "c", label: "8" }
+  ],
+  answerId: "b",
+  explanation: "Four plus three equals seven."
+};
+
+/** @param {import("@playwright/test").Page} page */
+async function mockQuestionApi(page) {
+  await page.route("**/api/question?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ question: TEST_QUESTION, source: "bundled" })
+    });
+  });
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function chooseTrailScout(page) {
+  await page.getByRole("button", { name: /Trail Scout/ }).click();
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function answerCorrectlyIfChallenged(page) {
+  const challenge = page.locator("#challenge-dialog");
+  if (await challenge.isVisible()) {
+    await expect(page.locator("#challenge-question")).toBeFocused();
+    await page.locator('[data-answer="b"]').click();
+    await expect(challenge).not.toBeVisible();
+    await expect(page.locator("#maze-canvas")).toBeFocused();
+  }
+}
+
 test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
   /** @type {string[]} */
   const pageErrors = [];
@@ -25,7 +63,14 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: /Find 3 Echoes/i })
+    page.getByRole("heading", { name: "Choose your Quest Level" })
+  ).toBeVisible();
+  await expect(page.locator('[data-level="trail-scout"]')).toContainText(
+    "times tables"
+  );
+  await chooseTrailScout(page);
+  await expect(
+    page.getByRole("heading", { name: /Find 3 Echoes. Outsmart 2 Wardens/i })
   ).toBeVisible();
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
@@ -45,7 +90,7 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
 });
 
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?seed=TOUCH-CONTROLS&level=trail-scout");
 
   const touchActions = page.locator("button:visible, a:visible");
   for (let index = 0; index < (await touchActions.count()); index += 1) {
@@ -75,7 +120,7 @@ test("keeps touch controls usable without horizontal overflow", async ({ page })
 });
 
 test("never starts audio before the player opts in", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?seed=AUDIO-OFF&level=trail-scout");
   await expect(page.getByRole("button", { name: "Sound off" })).toHaveAttribute(
     "aria-pressed",
     "false"
@@ -101,7 +146,7 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
     );
   });
   await page.setViewportSize({ width: 320, height: 720 });
-  await page.goto("/");
+  await page.goto("/?seed=NARROW-SAVED&level=trail-scout");
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await expect(
@@ -173,6 +218,7 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
   await expect(page.locator("#moves-value")).toHaveText("001");
 
   await page.getByRole("button", { name: "New run" }).click();
+  await chooseTrailScout(page);
   await expect(page.locator("#seed-value")).not.toHaveText("RUNE-CHOIR-93");
   expect(new URL(page.url()).searchParams.get("seed")).not.toBe("RUNE-CHOIR-93");
   const nextLabyrinth = await canvas.screenshot();
@@ -200,6 +246,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   const initialLabyrinth = await canvas.screenshot();
 
   await page.getByRole("button", { name: "New run" }).click();
+  await chooseTrailScout(page);
 
   await expect(page.locator("#seed-value")).not.toHaveText(originalSeed);
   const nextLabyrinth = await canvas.screenshot();
@@ -210,14 +257,35 @@ test("saves a defeated Run Record and restores it after reload", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
-  await page.goto(`/?seed=${DEFEAT_SEED}`);
+  await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
 
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.locator('[data-answer="a"]').click();
+    if (attempt < 2) {
+      await expect(page.locator('[data-answer="a"]')).toBeVisible();
+      await expect(page.locator("#challenge-feedback")).toContainText(
+        "Four plus three equals seven."
+      );
+      await expect(page.locator("#challenge-source")).toContainText(
+        "trusty question card"
+      );
+      const answerBounds = await page
+        .locator('[data-answer="a"]')
+        .boundingBox();
+      expect(answerBounds?.height).toBeGreaterThanOrEqual(44);
+    }
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "Warden contact ended the run."
+    name: "The maze light needs a rest."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
@@ -232,19 +300,17 @@ test("completes a seeded passage, records the result, and replays it", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
-  await page.goto(`/?seed=${WINNING_SEED}`);
+  await mockQuestionApi(page);
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
 
-  for (const [index, direction] of WINNING_PATH.entries()) {
+  for (const direction of WINNING_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
-    if (index === 27) {
-      await expect(page.locator("#warden-state")).toHaveText("Intercept active");
-      await expect(page.locator("#live-region")).toContainText(
-        "Warden mode: Intercept active."
-      );
-    }
+    await answerCorrectlyIfChallenged(page);
   }
 
-  const dialog = page.getByRole("dialog", { name: "Gate reached." });
+  const dialog = page.getByRole("dialog", {
+    name: "You brought the Echoes home."
+  });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-seed")).toHaveText(WINNING_SEED);
   await expect(page.locator("#result-rank")).toHaveText("Personal #1");
@@ -255,6 +321,16 @@ test("completes a seeded passage, records the result, and replays it", async ({
   await expect(page.locator("#seed-value")).toHaveText(WINNING_SEED);
   await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
+
+  for (const direction of WINNING_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator('[data-answer="b"]')).toBeVisible();
+  await page.locator('[data-answer="b"]').click();
+  await expect(page.locator("#challenge-dialog")).not.toBeVisible();
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
@@ -299,7 +375,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
     { width: 1920, height: 1080 }
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/");
+    await page.goto("/?seed=REFLOW-CHECK&level=trail-scout");
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     );
@@ -307,7 +383,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
   }
 
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/");
+  await page.goto("/?seed=LAPTOP-FOLD&level=trail-scout");
   const maze = await page.locator("#maze-canvas").boundingBox();
   const pulse = await page.locator("#pulse-action").boundingBox();
   if (!maze || !pulse) {
@@ -317,7 +393,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
   expect(pulse.y + pulse.height).toBeLessThanOrEqual(800);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/?seed=MOBILE-FOLD&level=trail-scout");
   const mobileMaze = await page.locator("#maze-canvas").boundingBox();
   const touchControls = await page.locator(".touch-controls").boundingBox();
   const mobilePulse = await page.locator("#pulse-action").boundingBox();
@@ -332,7 +408,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
 test("preserves layout with reduced motion and 200 percent text", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/");
+  await page.goto("/?seed=LARGE-TEXT&level=trail-scout");
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "32px";
     document.querySelector("#canvas-frame")?.classList.add("is-hurt");

@@ -13,6 +13,18 @@ const MOVES = [
   { name: "left", row: 0, col: -1 }
 ];
 
+const QUESTION = Object.freeze({
+  id: "math-1",
+  prompt: "What is 4 + 3?",
+  choices: Object.freeze([
+    Object.freeze({ id: "a", label: "6" }),
+    Object.freeze({ id: "b", label: "7" }),
+    Object.freeze({ id: "c", label: "8" })
+  ]),
+  answerId: "b",
+  explanation: "Four plus three equals seven."
+});
+
 /** @param {TestPosition} position */
 function tileKey(position) {
   return `${position.row},${position.col}`;
@@ -419,7 +431,7 @@ describe("GameSession", () => {
     expect(applyAction(changed, { type: "restart" })).toEqual(original);
   });
 
-  it("damages the Explorer and relocates a Warden after nonfatal contact", () => {
+  it("starts a Warden Challenge without immediate damage or relocation", () => {
     const run = createRun("BRUISED-17", {
       vitality: 2,
       wardenCount: 1
@@ -441,15 +453,130 @@ describe("GameSession", () => {
       }
     };
 
-    const hurt = applyAction(staged, {
+    const challenged = applyAction(staged, {
       type: "move",
       direction: direction.name
     });
 
-    expect(hurt.status).toBe("active");
-    expect(hurt.explorer.vitality).toBe(1);
-    expect(tileKey(hurt.wardens[0])).not.toBe(tileKey(warden));
-    expect(hurt.event.type).toBe("hurt");
+    expect(challenged.status).toBe("challenge");
+    expect(challenged.explorer.vitality).toBe(2);
+    expect(challenged.wardens[0]).toEqual(warden);
+    expect(challenged.challenge).toEqual({
+      wardenId: warden.id,
+      question: null,
+      attempt: 0,
+      feedback: null
+    });
+    expect(challenged.event.type).toBe("challenge-started");
+  });
+
+  it("defeats the encountered Warden after a correct answer", () => {
+    const run = createRun("KNOWLEDGE-WINS", {
+      vitality: 2,
+      wardenCount: 1
+    });
+    const warden = run.wardens[0];
+    const approach = openNeighbors(run, warden)[0];
+    const direction = MOVES.find(
+      (move) => move.row === -approach.row && move.col === -approach.col
+    );
+    if (!direction) {
+      throw new Error("Expected an approach direction toward the Warden");
+    }
+    const staged = {
+      ...run,
+      explorer: {
+        ...run.explorer,
+        row: warden.row + approach.row,
+        col: warden.col + approach.col
+      }
+    };
+    let challenged = applyAction(staged, {
+      type: "move",
+      direction: direction.name
+    });
+
+    challenged = applyAction(challenged, {
+      type: "provide-question",
+      question: QUESTION
+    });
+    const answered = applyAction(challenged, {
+      type: "answer-question",
+      answerId: "b"
+    });
+
+    expect(answered.status).toBe("active");
+    expect(answered.challenge).toBeNull();
+    expect(answered.wardens).toEqual([]);
+    expect(answered.explorer.vitality).toBe(2);
+    expect(answered.event.type).toBe("warden-defeated");
+    expect(answered.event.message).toContain(QUESTION.explanation);
+  });
+
+  it("keeps the Warden Challenge open with a fresh question after a wrong answer", () => {
+    const run = createRun("TRY-AGAIN-12", {
+      vitality: 3,
+      wardenCount: 1
+    });
+    /** @type {ReturnType<typeof createRun>} */
+    const challenged = {
+      ...run,
+      status: "challenge",
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null
+      }
+    };
+
+    const answered = applyAction(challenged, {
+      type: "answer-question",
+      answerId: "a"
+    });
+
+    expect(answered.status).toBe("challenge");
+    expect(answered.explorer.vitality).toBe(2);
+    expect(answered.wardens).toEqual(run.wardens);
+    expect(answered.challenge).toMatchObject({
+      wardenId: run.wardens[0].id,
+      question: null,
+      attempt: 1,
+      feedback: {
+        kind: "wrong",
+        explanation: QUESTION.explanation
+      }
+    });
+    expect(answered.event.type).toBe("wrong-answer");
+
+    const retried = applyAction(answered, {
+      type: "provide-question",
+      question: QUESTION
+    });
+    expect(retried.challenge?.feedback).toEqual(answered.challenge?.feedback);
+  });
+
+  it("locks movement, Pulse, and elapsed time during a Warden Challenge", () => {
+    const run = createRun("CHALLENGE-LOCK-4", { wardenCount: 1 });
+    /** @type {ReturnType<typeof createRun>} */
+    const challenged = {
+      ...run,
+      status: "challenge",
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null
+      }
+    };
+
+    expect(
+      applyAction(challenged, { type: "move", direction: "right" })
+    ).toEqual(challenged);
+    expect(applyAction(challenged, { type: "pulse" })).toEqual(challenged);
+    expect(
+      applyAction(challenged, { type: "tick", deltaMs: 1500 })
+    ).toEqual(challenged);
   });
 
   it("never lets Wardens occupy the same tile", () => {
@@ -469,7 +596,7 @@ describe("GameSession", () => {
     }
   });
 
-  it("ends the run when a one-vitality Explorer enters a Warden tile", () => {
+  it("ends the Run after a one-vitality Explorer answers incorrectly", () => {
     const run = createRun("LAST-LIGHT-27", {
       vitality: 1,
       wardenCount: 1
@@ -491,9 +618,17 @@ describe("GameSession", () => {
       throw new Error("Expected an approach direction toward the Warden");
     }
 
-    const lost = applyAction(staged, {
+    let challenged = applyAction(staged, {
       type: "move",
       direction: direction.name
+    });
+    challenged = applyAction(challenged, {
+      type: "provide-question",
+      question: QUESTION
+    });
+    const lost = applyAction(challenged, {
+      type: "answer-question",
+      answerId: "a"
     });
 
     expect(lost.explorer.vitality).toBe(0);
