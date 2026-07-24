@@ -46,9 +46,10 @@ The Ollama CLI may also be installed separately; if Ollama or the model is not
 available, the game automatically uses its bundled question deck. Open
 `http://localhost:3000`.
 
-Copy `.env.example` to `.env.local` to configure Clerk and Neon locally. The
-browser receives only `VITE_CLERK_PUBLISHABLE_KEY`; server secrets and database
-credentials stay server-side.
+For `npm run dev`, copy `.env.example` to `.env.local` to configure Clerk and
+Neon. `npm start` reads environment variables supplied by the shell or hosting
+platform instead. The browser receives only `VITE_CLERK_PUBLISHABLE_KEY`;
+server secrets and database credentials stay server-side.
 
 ## Deploy
 

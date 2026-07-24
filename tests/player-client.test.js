@@ -67,6 +67,29 @@ describe("player client", () => {
     ).rejects.toThrow("That username is already in use.");
   });
 
+  it("aborts a player request after its timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = createPlayerApiClient({
+        fetchImpl: (_path, options) =>
+          new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Timed out", "AbortError"));
+            });
+          }),
+        timeoutMs: 10
+      });
+
+      const assertion = expect(client.getLeaderboard()).rejects.toMatchObject({
+        name: "AbortError"
+      });
+      await vi.advanceTimersByTimeAsync(10);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("builds a stable idempotency key from final run facts", () => {
     const run = {
       seed: "MOSS-WATCH-11",

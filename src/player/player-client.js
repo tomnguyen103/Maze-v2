@@ -10,12 +10,14 @@ export class PlayerApiError extends Error {
 /**
  * @param {{
  *   fetchImpl?: typeof fetch,
- *   getToken?: () => Promise<string | null>
+ *   getToken?: () => Promise<string | null>,
+ *   timeoutMs?: number
  * }} [dependencies]
  */
 export function createPlayerApiClient({
   fetchImpl = fetch,
-  getToken = async () => null
+  getToken = async () => null,
+  timeoutMs = 8000
 } = {}) {
   /**
    * @param {string} path
@@ -31,11 +33,19 @@ export function createPlayerApiClient({
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
-    const response = await fetchImpl(path, {
-      ...options,
-      credentials: "same-origin",
-      headers
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetchImpl(path, {
+        ...options,
+        credentials: "same-origin",
+        headers,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new PlayerApiError(

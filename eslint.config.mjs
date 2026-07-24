@@ -12,7 +12,6 @@ export default [
       "node_modules/**",
       "playwright-report/**",
       "public/**",
-      "server.js",
       "test-results/**"
     ]
   },
