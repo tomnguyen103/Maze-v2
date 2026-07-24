@@ -9,10 +9,11 @@
  *   prompt: string,
  *   choices: readonly { id: string, label: string }[],
  *   answerId: string,
+ *   hint: string,
  *   explanation: string
  * }} WardenQuestion
  * @typedef {{
- *   kind: "wrong",
+ *   kind: "wrong" | "skipped",
  *   message: string,
  *   explanation: string
  * }} ChallengeFeedback
@@ -20,7 +21,8 @@
  *   wardenId: number,
  *   question: WardenQuestion | null,
  *   attempt: number,
- *   feedback: ChallengeFeedback | null
+ *   feedback: ChallengeFeedback | null,
+ *   hintRevealed: boolean
  * }} WardenChallenge
  * @typedef {{
  *   size?: number,
@@ -55,6 +57,7 @@
  *   pulseVisible: string[],
  *   pulseExpiresAt: number | null,
  *   pulses: number,
+ *   freeQuestionSkipAvailable: boolean,
  *   moves: number,
  *   lastDirection: Direction | null,
  *   elapsedMs: number,
@@ -79,6 +82,10 @@
  * } | {
  *   type: "answer-question",
  *   answerId: string
+ * } | {
+ *   type: "reveal-hint"
+ * } | {
+ *   type: "skip-question"
  * }} GameAction
  */
 
@@ -165,6 +172,7 @@ export function createRun(requestedSeed, input = {}) {
     pulseVisible: [],
     pulseExpiresAt: null,
     pulses: config.pulses,
+    freeQuestionSkipAvailable: true,
     moves: 0,
     lastDirection: null,
     elapsedMs: 0,
@@ -229,11 +237,93 @@ export function applyAction(run, action) {
         question: {
           ...action.question,
           choices: action.question.choices.map((choice) => ({ ...choice }))
-        }
+        },
+        hintRevealed: false
       },
       event: {
         type: "question-ready",
         message: "The Warden asks its Question."
+      }
+    };
+  }
+
+  if (
+    action.type === "reveal-hint" &&
+    run.status === "challenge" &&
+    run.challenge?.question &&
+    !run.challenge.hintRevealed
+  ) {
+    return {
+      ...run,
+      challenge: {
+        ...run.challenge,
+        hintRevealed: true
+      },
+      event: {
+        type: "hint-revealed",
+        message: "A Question Hint is revealed."
+      }
+    };
+  }
+
+  if (
+    action.type === "skip-question" &&
+    run.status === "challenge" &&
+    run.challenge?.question
+  ) {
+    if (run.freeQuestionSkipAvailable) {
+      return {
+        ...run,
+        freeQuestionSkipAvailable: false,
+        challenge: {
+          ...run.challenge,
+          question: null,
+          attempt: run.challenge.attempt + 1,
+          feedback: {
+            kind: "skipped",
+            message: "Free Question Skip used.",
+            explanation: "The Warden prepares a different Question."
+          },
+          hintRevealed: false
+        },
+        event: {
+          type: "question-skipped-free",
+          message: "Free Question Skip used. The Warden prepares another Question."
+        }
+      };
+    }
+
+    const vitality = Math.max(0, run.explorer.vitality - 1);
+    if (vitality === 0) {
+      return {
+        ...run,
+        explorer: { ...run.explorer, vitality },
+        challenge: null,
+        status: "lost",
+        event: {
+          type: "defeated",
+          message:
+            "The Question Skip spent the Explorer's final Vitality. This Labyrinth attempt ends."
+        }
+      };
+    }
+    return {
+      ...run,
+      explorer: { ...run.explorer, vitality },
+      challenge: {
+        ...run.challenge,
+        question: null,
+        attempt: run.challenge.attempt + 1,
+        feedback: {
+          kind: "skipped",
+          message: `Question skipped. ${vitality} Vitality ${vitality === 1 ? "remains" : "remain"}.`,
+          explanation: "The Warden prepares a different Question."
+        },
+        hintRevealed: false
+      },
+      event: {
+        type: "question-skipped-paid",
+        message: `Question skipped for 1 Vitality. ${vitality} remain.`
       }
     };
   }
@@ -269,7 +359,8 @@ export function applyAction(run, action) {
             kind: "wrong",
             message: `Good try. ${vitality} Vitality ${vitality === 1 ? "remains" : "remain"}.`,
             explanation: question.explanation
-          }
+          },
+          hintRevealed: false
         },
         event: {
           type: "wrong-answer",
@@ -564,7 +655,8 @@ function resolveWardenContact(run) {
       wardenId: warden.id,
       question: null,
       attempt: 0,
-      feedback: null
+      feedback: null,
+      hintRevealed: false
     },
     event: {
       type: "challenge-started",

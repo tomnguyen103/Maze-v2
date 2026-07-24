@@ -14,6 +14,7 @@ import {
 } from "../server/question-route.js";
 
 const GENERATED_QUESTION = {
+  id: "generated-math",
   prompt: "What is 6 × 4?",
   choices: [
     { id: "a", label: "18" },
@@ -21,6 +22,9 @@ const GENERATED_QUESTION = {
     { id: "c", label: "28" }
   ],
   answerId: "b",
+  hint: "Use equal groups and multiply.",
+  difficultyBand: "foundation",
+  difficultyRank: 21,
   explanation: "Six groups of four make twenty-four."
 };
 
@@ -28,7 +32,9 @@ const REQUEST = {
   levelId: "trail-scout",
   seed: "STORY-17",
   wardenId: 1,
-  attempt: 0
+  attempt: 0,
+  labyrinthNumber: 1,
+  questionOrdinal: 0
 };
 const PROVIDER_QUESTION = getBundledQuestion(REQUEST);
 
@@ -55,7 +61,11 @@ describe("Quest Questions", () => {
   it("returns deterministic bundled Questions without repeating after a wrong answer", () => {
     const first = getBundledQuestion(REQUEST);
     const replay = getBundledQuestion(REQUEST);
-    const retry = getBundledQuestion({ ...REQUEST, attempt: 1 });
+    const retry = getBundledQuestion({
+      ...REQUEST,
+      attempt: 1,
+      questionOrdinal: 1
+    });
 
     expect(replay).toEqual(first);
     expect(retry.id).not.toBe(first.id);
@@ -65,7 +75,8 @@ describe("Quest Questions", () => {
       getBundledQuestion({
         ...REQUEST,
         levelId: "bright-start",
-        attempt
+        attempt,
+        questionOrdinal: attempt
       })
     );
     expect(new Set(brightRetries.map((question) => question.id)).size).toBe(4);
@@ -185,9 +196,17 @@ describe("Quest Questions", () => {
     });
 
     const result = await service.getQuestion(REQUEST);
-    const retry = await service.getQuestion({ ...REQUEST, attempt: 1 });
+    const retry = await service.getQuestion({
+      ...REQUEST,
+      attempt: 1,
+      questionOrdinal: 1
+    });
     now += 30001;
-    await service.getQuestion({ ...REQUEST, attempt: 2 });
+    await service.getQuestion({
+      ...REQUEST,
+      attempt: 2,
+      questionOrdinal: 2
+    });
 
     expect(result.source).toBe("bundled");
     expect(result.question).toEqual(getBundledQuestion(REQUEST));
@@ -211,7 +230,11 @@ describe("Quest Questions", () => {
     });
 
     const first = await service.getQuestion(REQUEST);
-    const retry = await service.getQuestion({ ...REQUEST, attempt: 1 });
+    const retry = await service.getQuestion({
+      ...REQUEST,
+      attempt: 1,
+      questionOrdinal: 1
+    });
 
     expect(first.source).toBe("ollama");
     expect(retry.source).toBe("bundled");
@@ -254,29 +277,38 @@ describe("Quest Questions", () => {
     expect(
       parseQuestionRequest(
         new URL(
-          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1"
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7"
         )
       )
     ).toEqual({
       levelId: "bright-start",
       seed: "STORY-17",
       wardenId: 2,
-      attempt: 1
+      attempt: 1,
+      labyrinthNumber: 5,
+      questionOrdinal: 7
     });
     expect(() =>
       parseQuestionRequest(
         new URL(
-          "http://local/api/question?level=unknown&seed=STORY-17&warden=2&attempt=1"
+          "http://local/api/question?level=unknown&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7"
         )
       )
     ).toThrow(/level/i);
     expect(() =>
       parseQuestionRequest(
         new URL(
-          "http://local/api/question?level=bright-start&seed=bad%20seed&warden=2&attempt=1"
+          "http://local/api/question?level=bright-start&seed=bad%20seed&warden=2&attempt=1&labyrinth=5&question=7"
         )
       )
     ).toThrow(/seed/i);
+    expect(() =>
+      parseQuestionRequest(
+        new URL(
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=21&question=7"
+        )
+      )
+    ).toThrow(/Labyrinth/i);
   });
 
   it("limits public Question generation requests per server window", () => {

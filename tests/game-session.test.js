@@ -22,6 +22,7 @@ const QUESTION = Object.freeze({
     Object.freeze({ id: "c", label: "8" })
   ]),
   answerId: "b",
+  hint: "Count on three steps from four.",
   explanation: "Four plus three equals seven."
 });
 
@@ -465,7 +466,8 @@ describe("GameSession", () => {
       wardenId: warden.id,
       question: null,
       attempt: 0,
-      feedback: null
+      feedback: null,
+      hintRevealed: false
     });
     expect(challenged.event.type).toBe("challenge-started");
   });
@@ -526,7 +528,8 @@ describe("GameSession", () => {
         wardenId: run.wardens[0].id,
         question: QUESTION,
         attempt: 0,
-        feedback: null
+        feedback: null,
+        hintRevealed: false
       }
     };
 
@@ -566,7 +569,8 @@ describe("GameSession", () => {
         wardenId: run.wardens[0].id,
         question: QUESTION,
         attempt: 0,
-        feedback: null
+        feedback: null,
+        hintRevealed: false
       }
     };
 
@@ -633,6 +637,105 @@ describe("GameSession", () => {
 
     expect(lost.explorer.vitality).toBe(0);
     expect(lost.status).toBe("lost");
+    expect(lost.event.type).toBe("defeated");
+  });
+
+  it("reveals one free Hint without changing the Question or Vitality", () => {
+    const run = createRun("HINT-17", { vitality: 3, wardenCount: 1 });
+    const challenged = {
+      ...run,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const revealed = applyAction(challenged, { type: "reveal-hint" });
+
+    expect(revealed.challenge?.hintRevealed).toBe(true);
+    expect(revealed.challenge?.question).toEqual(QUESTION);
+    expect(revealed.explorer.vitality).toBe(3);
+    expect(applyAction(revealed, { type: "reveal-hint" })).toEqual(revealed);
+  });
+
+  it("grants one free Question Skip per Labyrinth", () => {
+    const run = createRun("FREE-SKIP-17", { vitality: 3, wardenCount: 1 });
+    const challenged = {
+      ...run,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const skipped = applyAction(challenged, { type: "skip-question" });
+
+    expect(skipped.explorer.vitality).toBe(3);
+    expect(skipped.freeQuestionSkipAvailable).toBe(false);
+    expect(skipped.challenge).toMatchObject({
+      question: null,
+      attempt: 1,
+      feedback: { kind: "skipped" },
+      hintRevealed: false
+    });
+    expect(skipped.event.type).toBe("question-skipped-free");
+  });
+
+  it("charges Vitality for later Question Skips", () => {
+    const run = createRun("PAID-SKIP-17", { vitality: 3, wardenCount: 1 });
+    const challenged = {
+      ...run,
+      freeQuestionSkipAvailable: false,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 2,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const skipped = applyAction(challenged, { type: "skip-question" });
+
+    expect(skipped.explorer.vitality).toBe(2);
+    expect(skipped.status).toBe("challenge");
+    expect(skipped.challenge).toMatchObject({
+      question: null,
+      attempt: 3,
+      feedback: { kind: "skipped" }
+    });
+    expect(skipped.event.type).toBe("question-skipped-paid");
+  });
+
+  it("loses when a paid Question Skip spends the final Vitality", () => {
+    const run = createRun("FINAL-SKIP-17", { vitality: 1, wardenCount: 1 });
+    const challenged = {
+      ...run,
+      freeQuestionSkipAvailable: false,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: QUESTION,
+        attempt: 3,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const lost = applyAction(challenged, { type: "skip-question" });
+
+    expect(lost.explorer.vitality).toBe(0);
+    expect(lost.status).toBe("lost");
+    expect(lost.challenge).toBeNull();
     expect(lost.event.type).toBe("defeated");
   });
 });

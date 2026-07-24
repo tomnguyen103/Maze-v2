@@ -6,9 +6,22 @@ import "./daylight.css";
 import { EchoAudio } from "./game/audio.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import { applyAction, createRun } from "./game/game-session.js";
+import {
+  advanceQuest,
+  createQuestProgress,
+  loadQuestProgress,
+  rememberMap,
+  rememberQuestion,
+  saveQuestProgress
+} from "./game/quest-progress.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
-import { getQuestLevel } from "./questions/quest-levels.js";
+import {
+  QUEST_LABYRINTH_COUNT,
+  getDifficultyBand,
+  getLabyrinthConfig,
+  getQuestLevel
+} from "./questions/quest-levels.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
@@ -30,6 +43,7 @@ const elements = {
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
   fieldNote: requiredElement("field-note", HTMLElement),
   freshRun: requiredElement("fresh-run", HTMLButtonElement),
+  hintButton: requiredElement("hint-button", HTMLButtonElement),
   liveRegion: requiredElement("live-region", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
@@ -54,8 +68,15 @@ const elements = {
   runRecords: requiredElement("run-records", HTMLOListElement),
   questHeadline: requiredElement("quest-headline", HTMLElement),
   questLevelName: requiredElement("quest-level-name", HTMLElement),
+  questStage: requiredElement("quest-stage", HTMLElement),
+  questionHint: requiredElement("question-hint", HTMLElement),
   seedCopy: requiredElement("seed-copy", HTMLButtonElement),
   seedValue: requiredElement("seed-value", HTMLElement),
+  skipCancel: requiredElement("skip-cancel", HTMLButtonElement),
+  skipConfirm: requiredElement("skip-confirm", HTMLButtonElement),
+  skipQuestion: requiredElement("skip-question", HTMLButtonElement),
+  skipWarning: requiredElement("skip-warning", HTMLElement),
+  skipWarningText: requiredElement("skip-warning-text", HTMLElement),
   sound: requiredElement("sound-toggle", HTMLButtonElement),
   storyLog: requiredElement("story-log", HTMLOListElement),
   time: requiredElement("time-value", HTMLElement),
@@ -66,21 +87,40 @@ const elements = {
 };
 
 const locationSeed = seedFromLocation();
-let currentLevel = getQuestLevel(levelFromLocation());
-let run = createRun(locationSeed ?? createSeed(), currentLevel.config);
+const storedQuestProgress = loadQuestProgress();
+const locationLevel = getQuestLevel(levelFromLocation());
+let questProgress =
+  storedQuestProgress &&
+  (locationSeed === null || storedQuestProgress.levelId === locationLevel.id)
+    ? storedQuestProgress
+    : createQuestProgress(locationLevel.id);
+let currentLevel = getQuestLevel(questProgress.levelId);
+let currentLabyrinthNumber = questProgress.labyrinthNumber;
+let run = createRun(
+  locationSeed ?? createSeed(),
+  getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+);
 let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterRecords = false;
 let questionRequestKey = "";
-let mustChooseLevel = locationSeed === null;
+let runFinished = false;
+let mustChooseLevel = locationSeed === null && storedQuestProgress === null;
+if (!mustChooseLevel) {
+  questProgress = saveQuestProgress(questProgress);
+}
 /** @type {{ message: string, kind: string }[]} */
 let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
 
-startRun(run.seed, currentLevel.id);
+if (locationSeed === null && storedQuestProgress !== null) {
+  startFreshRun();
+} else {
+  startRun(run.seed, currentLevel.id, currentLabyrinthNumber);
+}
 if (mustChooseLevel) {
   elements.levelDialog.showModal();
 }
@@ -146,7 +186,7 @@ elements.levelCards.addEventListener("click", (event) => {
 
   mustChooseLevel = false;
   elements.levelDialog.close();
-  startFreshRun(button.dataset.level);
+  startNewQuest(button.dataset.level);
 });
 elements.levelDialog.addEventListener("cancel", (event) => {
   if (mustChooseLevel) {
@@ -169,6 +209,24 @@ elements.challengeChoices.addEventListener("click", (event) => {
     type: "answer-question",
     answerId: button.dataset.answer
   });
+});
+elements.hintButton.addEventListener("click", () => {
+  transition({ type: "reveal-hint" });
+});
+elements.skipQuestion.addEventListener("click", () => {
+  if (run.freeQuestionSkipAvailable) {
+    transition({ type: "skip-question" });
+    return;
+  }
+  showSkipWarning();
+});
+elements.skipCancel.addEventListener("click", () => {
+  hideSkipWarning();
+  elements.skipQuestion.focus();
+});
+elements.skipConfirm.addEventListener("click", () => {
+  hideSkipWarning();
+  transition({ type: "skip-question" });
 });
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
@@ -200,9 +258,10 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 
   if (button.dataset.recordAction === "replay") {
-    startRun(
-      button.dataset.seed,
-      button.dataset.level ?? "trail-scout"
+    startRecordedLabyrinth(
+      button.dataset.level ?? "trail-scout",
+      Number(button.dataset.labyrinth ?? 1),
+      button.dataset.seed
     );
     return;
   }
@@ -228,7 +287,12 @@ elements.freshRun.addEventListener("click", () => {
 });
 elements.replay.addEventListener("click", () => {
   elements.resultDialog.close();
-  restartRun();
+  const action = elements.replay.dataset.resultAction;
+  if (action === "continue" || action === "retry") {
+    startFreshRun();
+    return;
+  }
+  openLevelPicker();
 });
 elements.sound.addEventListener("click", async () => {
   const enabled = await audio.toggle();
@@ -280,18 +344,40 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-/** @param {string} seed @param {string} [levelId] */
-function startRun(seed, levelId = currentLevel.id) {
+/**
+ * @param {string} seed
+ * @param {string} [levelId]
+ * @param {number} [labyrinthNumber]
+ */
+function startRun(
+  seed,
+  levelId = currentLevel.id,
+  labyrinthNumber = questProgress.labyrinthNumber
+) {
   currentLevel = getQuestLevel(levelId);
-  run = createRun(seed, currentLevel.config);
+  currentLabyrinthNumber = labyrinthNumber;
+  run = createRun(
+    seed,
+    getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+  );
+  const fingerprint = labyrinthFingerprint(run);
+  if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
+    questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
+  }
   const url = new URL(window.location.href);
   url.searchParams.set("seed", run.seed);
   url.searchParams.set("level", currentLevel.id);
+  url.searchParams.set("labyrinth", String(currentLabyrinthNumber));
   window.history.replaceState({}, "", url);
   lastTick = performance.now();
   questionRequestKey = "";
+  runFinished = false;
   storyEntries = [];
-  addStory(`The ${currentLevel.name} quest begins. Recover every Echo.`, "start");
+  hideSkipWarning();
+  addStory(
+    `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
+    "start"
+  );
   if (elements.resultDialog.open) {
     elements.resultDialog.close();
   }
@@ -304,43 +390,65 @@ function startRun(seed, levelId = currentLevel.id) {
   updateInterface();
   canvas.focus({ preventScroll: true });
   announce(
-    `New ${currentLevel.name} maze ${seed}. ${run.echoes.length} Echoes remain.`
+    `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${run.echoes.length} Echoes remain.`
   );
-  showEvent(`${currentLevel.name} ready. Find the Echoes.`);
+  showEvent(`Labyrinth ${currentLabyrinthNumber} ready. Find the Echoes.`);
 }
 
-function restartRun() {
-  run = applyAction(run, { type: "restart" });
-  questionRequestKey = "";
-  lastTick = performance.now();
-  updateInterface();
-  canvas.focus({ preventScroll: true });
-  announce(`Maze ${run.seed} restarted.`);
-  showEvent("Seed reset. Same maze, fresh timer.");
-}
-
-/** @param {string} [levelId] */
-function startFreshRun(levelId = currentLevel.id) {
+function startFreshRun() {
+  const levelId = questProgress.levelId;
+  const labyrinthNumber = questProgress.labyrinthNumber;
   const level = getQuestLevel(levelId);
-  const currentFingerprint = labyrinthFingerprint(run);
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  const config = getLabyrinthConfig(levelId, labyrinthNumber);
+  const usedFingerprints = new Set([
+    ...questProgress.usedMapFingerprints,
+    labyrinthFingerprint(run)
+  ]);
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     const seed = createSeed();
     if (seed === run.seed) {
       continue;
     }
-    const candidate = createRun(seed, level.config);
-    if (labyrinthFingerprint(candidate) !== currentFingerprint) {
-      startRun(seed, level.id);
+    const candidate = createRun(seed, config);
+    if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
+      startRun(seed, level.id, labyrinthNumber);
       return;
     }
   }
 
-  const firstFallback = createRun("EMBER-17", level.config);
-  const fallbackSeed =
-    labyrinthFingerprint(firstFallback) !== currentFingerprint
-      ? firstFallback.seed
-      : "EMBER-18";
-  startRun(fallbackSeed, level.id);
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const fallbackSeed = `EMBER-${17 + attempt}`;
+    const candidate = createRun(fallbackSeed, config);
+    if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
+      startRun(candidate.seed, level.id, labyrinthNumber);
+      return;
+    }
+  }
+
+  throw new Error("Could not create a fresh Labyrinth for this Quest.");
+}
+
+/** @param {string} levelId @param {string} [seed] */
+function startNewQuest(levelId, seed) {
+  questProgress = saveQuestProgress(createQuestProgress(levelId));
+  currentLabyrinthNumber = questProgress.labyrinthNumber;
+  if (seed) {
+    startRun(seed, questProgress.levelId, currentLabyrinthNumber);
+    return;
+  }
+  startFreshRun();
+}
+
+/**
+ * @param {string} levelId
+ * @param {number} labyrinthNumber
+ * @param {string} seed
+ */
+function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
+  questProgress = saveQuestProgress(
+    createQuestProgress(levelId, labyrinthNumber)
+  );
+  startRun(seed, questProgress.levelId, questProgress.labyrinthNumber);
 }
 
 function openLevelPicker() {
@@ -392,6 +500,8 @@ function transition(action) {
         "echo-collected",
         "gate-locked",
         "challenge-started",
+        "question-skipped-free",
+        "question-skipped-paid",
         "wrong-answer",
         "warden-defeated",
         "escaped",
@@ -409,7 +519,11 @@ function transition(action) {
     announce(`${eventChanged ? run.event.message : ""}${modeAnnouncement}`.trim());
   }
   playEventSound(eventType);
-  if (eventType === "wrong-answer" || eventType === "defeated") {
+  if (
+    eventType === "wrong-answer" ||
+    eventType === "question-skipped-paid" ||
+    eventType === "defeated"
+  ) {
     elements.canvasFrame.classList.remove("is-hurt");
     void elements.canvasFrame.offsetWidth;
     elements.canvasFrame.classList.add("is-hurt");
@@ -417,13 +531,14 @@ function transition(action) {
 
   updateInterface();
   syncChallengeDialog();
-  if (run.status === "won" || run.status === "lost") {
+  if (!runFinished && (run.status === "won" || run.status === "lost")) {
     finishRun();
   }
 }
 
 function syncChallengeDialog() {
   if (run.status !== "challenge" || !run.challenge) {
+    hideSkipWarning();
     if (elements.challengeDialog.open) {
       elements.challengeDialog.close();
       canvas.focus({ preventScroll: true });
@@ -440,21 +555,47 @@ function syncChallengeDialog() {
     "is-wrong",
     feedback?.kind === "wrong"
   );
+  elements.challengeFeedback.classList.toggle(
+    "is-skipped",
+    feedback?.kind === "skipped"
+  );
   elements.challengeFeedback.textContent = feedback
     ? `${feedback.message} ${feedback.explanation}`
     : "Think carefully. Your timer is paused.";
 
   if (!question) {
+    hideSkipWarning();
     elements.challengeQuestion.textContent = feedback
       ? "The Warden draws a new question…"
       : "Preparing your question…";
     elements.challengeChoices.replaceChildren();
+    elements.hintButton.disabled = true;
+    elements.hintButton.setAttribute("aria-expanded", "false");
+    elements.questionHint.hidden = true;
+    elements.questionHint.textContent = "";
+    elements.skipQuestion.disabled = true;
     elements.challengeSource.textContent = "Opening the question scroll…";
     void loadChallengeQuestion();
     return;
   }
 
   elements.challengeQuestion.textContent = question.prompt;
+  elements.hintButton.disabled = run.challenge.hintRevealed;
+  elements.hintButton.textContent = run.challenge.hintRevealed
+    ? "Hint shown"
+    : "Show Hint";
+  elements.hintButton.setAttribute(
+    "aria-expanded",
+    String(run.challenge.hintRevealed)
+  );
+  elements.questionHint.hidden = !run.challenge.hintRevealed;
+  elements.questionHint.textContent = run.challenge.hintRevealed
+    ? question.hint
+    : "";
+  elements.skipQuestion.disabled = false;
+  elements.skipQuestion.textContent = run.freeQuestionSkipAvailable
+    ? "Skip free"
+    : "Skip · 1 Vitality";
   elements.challengeChoices.replaceChildren(
     ...question.choices.map((choice) => {
       const button = document.createElement("button");
@@ -475,60 +616,130 @@ function syncChallengeDialog() {
   });
 }
 
+function showSkipWarning() {
+  if (run.status !== "challenge" || !run.challenge?.question) {
+    return;
+  }
+  elements.skipWarningText.textContent =
+    run.explorer.vitality === 1
+      ? "This skip uses your last Vitality and will end this Labyrinth."
+      : "Skipping costs 1 Vitality.";
+  elements.skipWarning.hidden = false;
+  elements.skipConfirm.focus();
+}
+
+function hideSkipWarning() {
+  elements.skipWarning.hidden = true;
+}
+
 async function loadChallengeQuestion() {
   if (run.status !== "challenge" || !run.challenge) {
     return;
   }
-  const request = {
+  const challengeSnapshot = {
     levelId: currentLevel.id,
     seed: run.seed,
     wardenId: run.challenge.wardenId,
-    attempt: run.challenge.attempt
+    attempt: run.challenge.attempt,
+    labyrinthNumber: currentLabyrinthNumber,
+    questionOrdinal: questProgress.nextQuestionOrdinal
   };
-  const key = `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}`;
+  const key = questionRequestIdentifier(challengeSnapshot);
   if (questionRequestKey === key) {
     return;
   }
   questionRequestKey = key;
 
-  let question;
-  let source = "bundled";
-  try {
-    const parameters = new URLSearchParams({
-      level: request.levelId,
-      seed: request.seed,
-      warden: String(request.wardenId),
-      attempt: String(request.attempt)
-    });
-    const response = await fetch(`/api/question?${parameters}`);
-    if (!response.ok) {
-      throw new Error("Question service unavailable.");
+  let acceptedQuestion = null;
+  let acceptedOrdinal = challengeSnapshot.questionOrdinal;
+  let acceptedSource = "bundled";
+  for (let offset = 0; offset < 20; offset += 1) {
+    const request = {
+      ...challengeSnapshot,
+      questionOrdinal: challengeSnapshot.questionOrdinal + offset
+    };
+    let question;
+    let source = "bundled";
+    try {
+      const parameters = new URLSearchParams({
+        level: request.levelId,
+        seed: request.seed,
+        warden: String(request.wardenId),
+        attempt: String(request.attempt),
+        labyrinth: String(request.labyrinthNumber),
+        question: String(request.questionOrdinal)
+      });
+      const response = await fetch(`/api/question?${parameters}`);
+      if (!response.ok) {
+        throw new Error("Question service unavailable.");
+      }
+      const payload = await response.json();
+      if (!isClientQuestion(payload.question)) {
+        throw new Error("Question service returned an invalid card.");
+      }
+      question = payload.question;
+      source = payload.source;
+    } catch {
+      question = getBundledQuestion(request);
     }
-    const payload = await response.json();
-    if (!isClientQuestion(payload.question)) {
-      throw new Error("Question service returned an invalid card.");
+
+    if (!questProgress.usedQuestionIds.includes(question.id)) {
+      acceptedQuestion = question;
+      acceptedOrdinal = request.questionOrdinal;
+      acceptedSource = source;
+      break;
     }
-    question = payload.question;
-    source = payload.source;
-  } catch {
-    question = getBundledQuestion(request);
   }
 
   if (
     run.status !== "challenge" ||
     !run.challenge ||
-    key !==
-      `${currentLevel.id}:${run.seed}:${run.challenge.wardenId}:${run.challenge.attempt}`
+    challengeSnapshot.seed !== run.seed ||
+    challengeSnapshot.levelId !== currentLevel.id ||
+    challengeSnapshot.labyrinthNumber !== currentLabyrinthNumber ||
+    challengeSnapshot.wardenId !== run.challenge.wardenId ||
+    challengeSnapshot.attempt !== run.challenge.attempt ||
+    questionRequestKey !== key
   ) {
     return;
   }
+  if (!acceptedQuestion) {
+    elements.challengeSource.textContent =
+      "No fresh question card was available. Start a new Quest to reset the Question deck.";
+    return;
+  }
+
+  questProgress = saveQuestProgress(
+    rememberQuestion(questProgress, acceptedQuestion.id, acceptedOrdinal)
+  );
 
   elements.challengeSource.textContent = {
     ollama: "A fresh local question is ready.",
     gemini: "A fresh quest question is ready.",
     bundled: "A trusty question card is ready."
-  }[source] ?? "Your question is ready.";
-  transition({ type: "provide-question", question });
+  }[acceptedSource] ?? "Your question is ready.";
+  transition({ type: "provide-question", question: acceptedQuestion });
+}
+
+/**
+ * @param {{
+ *   levelId: string,
+ *   seed: string,
+ *   wardenId: number,
+ *   attempt: number,
+ *   labyrinthNumber: number,
+ *   questionOrdinal: number
+ * }} request
+ */
+function questionRequestIdentifier(request) {
+  return [
+    request.levelId,
+    request.seed,
+    request.wardenId,
+    request.attempt,
+    request.labyrinthNumber,
+    request.questionOrdinal
+  ].join(":");
 }
 
 /** @param {unknown} value */
@@ -541,7 +752,10 @@ function isClientQuestion(value) {
     typeof question.id === "string" &&
     typeof question.prompt === "string" &&
     typeof question.answerId === "string" &&
+    typeof question.hint === "string" &&
     typeof question.explanation === "string" &&
+    typeof question.difficultyBand === "string" &&
+    typeof question.difficultyRank === "number" &&
     Array.isArray(question.choices) &&
     question.choices.length === 3
   );
@@ -550,9 +764,13 @@ function isClientQuestion(value) {
 function updateInterface() {
   renderer.render(run);
   const collected = run.echoes.filter((echo) => echo.collected).length;
-  elements.questLevelName.textContent = currentLevel.name;
+  const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
+  elements.questLevelName.textContent =
+    `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
+  elements.questStage.textContent =
+    `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
   elements.questHeadline.textContent =
-    `Find ${run.echoes.length} Echoes. Outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
+    `Labyrinth ${currentLabyrinthNumber}: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
   elements.seedValue.textContent = run.seed;
   elements.time.textContent = formatTime(run.elapsedMs);
   elements.moves.textContent = String(run.moves).padStart(3, "0");
@@ -592,7 +810,9 @@ function updateInterface() {
 }
 
 function finishRun() {
+  runFinished = true;
   const won = run.status === "won";
+  const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
@@ -601,16 +821,49 @@ function finishRun() {
     outcome: won ? "escaped" : "defeated",
     echoesCollected,
     echoTotal: run.echoes.length,
-    questLevelId: currentLevel.id
+    questLevelId: currentLevel.id,
+    labyrinthNumber: currentLabyrinthNumber
   });
   bestEscapeRecord = bestEscape(runRecords);
-  elements.resultKicker.textContent = won ? "Run complete" : "Run ended";
-  elements.resultTitle.textContent = won
-    ? "You brought the Echoes home."
-    : "The maze light needs a rest.";
-  elements.resultSummary.textContent = won
-    ? "Saved to your local Run Records. Replay the seed to improve your route."
-    : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Every brave try teaches a new path.`;
+  if (won) {
+    questProgress = saveQuestProgress(advanceQuest(questProgress));
+  }
+  const resumeUrl = new URL(window.location.href);
+  resumeUrl.searchParams.delete("seed");
+  resumeUrl.searchParams.set("level", questProgress.levelId);
+  resumeUrl.searchParams.set(
+    "labyrinth",
+    String(questProgress.labyrinthNumber)
+  );
+  window.history.replaceState({}, "", resumeUrl);
+
+  const questComplete = won && questProgress.complete;
+  elements.resultKicker.textContent = questComplete
+    ? "Quest complete"
+    : won
+      ? `Labyrinth ${finishedLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
+      : `Labyrinth ${finishedLabyrinthNumber} ended`;
+  elements.resultTitle.textContent = questComplete
+    ? "You mastered all twenty Labyrinths."
+    : won
+      ? "You brought these Echoes home."
+      : "The maze light needs a rest.";
+  elements.resultSummary.textContent = questComplete
+    ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
+    : won
+      ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
+      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Retry Labyrinth ${finishedLabyrinthNumber} with a fresh map and full Vitality.`;
+  elements.replay.dataset.resultAction = questComplete
+    ? "new-quest"
+    : won
+      ? "continue"
+      : "retry";
+  elements.replay.textContent = questComplete
+    ? "New Quest"
+    : won
+      ? "Continue Quest"
+      : "Retry Labyrinth";
+  elements.freshRun.hidden = questComplete;
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
   elements.resultSeed.textContent = run.seed;
@@ -642,6 +895,8 @@ function playEventSound(type) {
     "echo-collected": "echo",
     pulse: "pulse",
     "challenge-started": "challenge",
+    "question-skipped-free": "pulse",
+    "question-skipped-paid": "wrong",
     "wrong-answer": "wrong",
     "warden-defeated": "correct",
     escaped: "won",
@@ -773,11 +1028,12 @@ function renderRunRecords() {
       title.textContent =
         `#${index + 1} ${outcome} / ${level.name} / ${formatTime(record.elapsedMs)}`;
       detail.textContent =
-        `${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
+        `Labyrinth ${record.labyrinthNumber ?? 1} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
       replay.type = "button";
       replay.className = "control-button";
       replay.dataset.seed = record.seed;
       replay.dataset.level = record.questLevelId ?? "trail-scout";
+      replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
       replay.dataset.recordAction = "replay";
       replay.textContent = "Replay";
       replay.setAttribute("aria-label", `Replay seed ${record.seed}`);
@@ -800,7 +1056,8 @@ function resultStanding() {
   const index = runRecords.findIndex(
     (record) =>
       record.seed === run.seed &&
-      (record.questLevelId ?? "trail-scout") === currentLevel.id
+      (record.questLevelId ?? "trail-scout") === currentLevel.id &&
+      (record.labyrinthNumber ?? 1) === currentLabyrinthNumber
   );
   if (index === -1) {
     return "Outside top 5";

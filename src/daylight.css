@@ -1,5 +1,6 @@
 @import "../tokens.css";
-/* Hallmark | genre: playful | macrostructure: Workbench | theme: Hum | anchor: electric pear | nav: N7 compact slab | footer: Ft8 static record strip */
+/* Hallmark · macrostructure: Workbench · genre: playful · theme: Hum · anchor: electric pear · nav: N7 compact slab · footer: Ft8 static record strip · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · mobile: pass (34, 49, 50–57) */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
 
 * {
   box-sizing: border-box;
@@ -150,6 +151,17 @@ a:active {
   background: var(--color-signal-bright);
 }
 
+.danger-button {
+  color: var(--color-ink);
+  border-color: var(--color-warden);
+  background: var(--color-warden-soft);
+  box-shadow: 0.22rem 0.22rem 0 var(--color-line);
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--color-paper-deep);
+}
+
 .play-workbench {
   display: grid;
   min-height: calc(100dvh - 6.5rem);
@@ -208,6 +220,14 @@ a:active {
   background: var(--color-signal);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.quest-stage {
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink);
+  font-family: var(--font-utility);
+  font-size: 0.74rem;
+  font-weight: 650;
 }
 
 .run-metrics {
@@ -572,11 +592,13 @@ kbd {
 
 .dialog-heading h2,
 .result-dialog h2 {
+  min-width: 0;
   margin: var(--space-1) 0 0;
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 6vw, 2.7rem);
   letter-spacing: -0.055em;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .dialog-intro,
@@ -684,6 +706,7 @@ kbd {
 }
 
 .story-log li[data-kind="wrong-answer"]::before,
+.story-log li[data-kind="question-skipped-paid"]::before,
 .story-log li[data-kind="defeated"]::before {
   background: var(--color-warden);
 }
@@ -704,11 +727,13 @@ kbd {
 
 .level-dialog__intro h2,
 .challenge-dialog h2 {
+  min-width: 0;
   margin: var(--space-2) 0 0;
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.4rem);
   letter-spacing: -0.06em;
   line-height: 0.95;
+  overflow-wrap: anywhere;
 }
 
 .level-dialog__intro p,
@@ -831,6 +856,11 @@ kbd {
   background: var(--color-warden-soft);
 }
 
+.challenge-feedback.is-skipped {
+  border-left-color: var(--color-signal-deep);
+  background: var(--color-signal-glow);
+}
+
 .challenge-question {
   margin: var(--space-6) 0 var(--space-4);
   font-family: var(--font-display);
@@ -838,6 +868,23 @@ kbd {
   font-weight: 720;
   letter-spacing: -0.035em;
   line-height: 1.12;
+}
+
+.challenge-support {
+  display: grid;
+  margin-bottom: var(--space-4);
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.question-hint {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-ink);
+  border-left: 0.35rem solid var(--color-signal-deep);
+  background: var(--color-signal-glow);
+  font-size: 0.9rem;
 }
 
 .challenge-choices {
@@ -876,6 +923,36 @@ kbd {
 .challenge-choice strong {
   font-size: 1rem;
   line-height: 1.25;
+}
+
+.challenge-skip {
+  display: grid;
+  margin-top: var(--space-4);
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.skip-warning {
+  width: 100%;
+  padding: var(--space-4);
+  color: var(--color-ink);
+  border: 2px solid var(--color-warden);
+  background: var(--color-warden-soft);
+}
+
+.skip-warning > strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.skip-warning p {
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.skip-warning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .challenge-source {

@@ -5,11 +5,18 @@ import { URL } from "node:url";
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
 const SEED_PATTERN = /^[a-z0-9-]{1,32}$/i;
 
-/** @param {string | null} value @param {string} name @param {number} maximum */
-function boundedInteger(value, name, maximum) {
+/**
+ * @param {string | null} value
+ * @param {string} name
+ * @param {number} minimum
+ * @param {number} maximum
+ */
+function boundedInteger(value, name, minimum, maximum) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > maximum) {
-    throw new Error(`${name} must be a whole number from 0 to ${maximum}.`);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(
+      `${name} must be a whole number from ${minimum} to ${maximum}.`
+    );
   }
   return parsed;
 }
@@ -29,8 +36,20 @@ export function parseQuestionRequest(url) {
   return {
     levelId,
     seed,
-    wardenId: boundedInteger(url.searchParams.get("warden"), "Warden", 20),
-    attempt: boundedInteger(url.searchParams.get("attempt"), "Attempt", 20)
+    wardenId: boundedInteger(url.searchParams.get("warden"), "Warden", 0, 20),
+    attempt: boundedInteger(url.searchParams.get("attempt"), "Attempt", 0, 20),
+    labyrinthNumber: boundedInteger(
+      url.searchParams.get("labyrinth"),
+      "Labyrinth",
+      1,
+      20
+    ),
+    questionOrdinal: boundedInteger(
+      url.searchParams.get("question"),
+      "Question",
+      0,
+      5000
+    )
   };
 }
 
@@ -75,7 +94,9 @@ export function createQuestionRateLimiter(options = {}) {
  *   levelId: string,
  *   seed: string,
  *   wardenId: number,
- *   attempt: number
+ *   attempt: number,
+ *   labyrinthNumber: number,
+ *   questionOrdinal: number
  * }) => Promise<unknown> }} questionService
  * @param {{ maxRequests?: number, windowMs?: number, now?: () => number }} [options]
  */

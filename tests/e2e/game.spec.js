@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 const WINNING_SEED = "DAYLIGHT-0";
-const WINNING_PATH = "right,right,right,right,down,down,down,down,left,left,up,left,left,down,down,down,right,right,right,right,right,right,up,up,up,up,right,right,up,up,right,right,down,down,right,right,down,down,down,down,left,left,left,left,down,down,down,up,up,up,right,right,right,right,up,down,left,left,left,left,down,down,down,down,right,right,down,down,left,left,left,left,left,left,up,up,right,right,up,up,left,left,left,left,left,down,down,right,down,down,left,left".split(",");
+const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
 const DEFEAT_SEED = "DEFEAT-RECORD";
-const DEFEAT_PATH = "right,right,right,right,down,down,down,down,left,left,down,down,down,down,down,down,down,down,right,right,right,right,right,right,right,right,right,right,up,down,left,left,left,left,left,right,right,right,right".split(",");
+const DEFEAT_PATH = "down,down,right,right,up,up,right".split(",");
 const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   up: "ArrowUp",
   right: "ArrowRight",
@@ -20,15 +20,28 @@ const TEST_QUESTION = {
     { id: "c", label: "8" }
   ],
   answerId: "b",
+  hint: "Combine four objects with three more.",
+  difficultyBand: "foundation",
+  difficultyRank: 21,
   explanation: "Four plus three equals seven."
 };
 
 /** @param {import("@playwright/test").Page} page */
 async function mockQuestionApi(page) {
   await page.route("**/api/question?**", async (route) => {
+    const ordinal = Number(
+      new URL(route.request().url()).searchParams.get("question") ?? 0
+    );
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ question: TEST_QUESTION, source: "bundled" })
+      body: JSON.stringify({
+        question: {
+          ...TEST_QUESTION,
+          id: `${TEST_QUESTION.id}-${ordinal}`,
+          prompt: `${TEST_QUESTION.prompt} Card ${ordinal + 1}.`
+        },
+        source: "bundled"
+      })
     });
   });
 }
@@ -70,8 +83,16 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   );
   await chooseTrailScout(page);
   await expect(
-    page.getByRole("heading", { name: /Find 3 Echoes. Outsmart 2 Wardens/i })
+    page.getByRole("heading", {
+      name: /Labyrinth 1: find 3 Echoes and outsmart 2 Wardens/i
+    })
   ).toBeVisible();
+  await expect(page.locator("#quest-level-name")).toHaveText(
+    "Quest Level 2 · Trail Scout"
+  );
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 1 of 20 · Foundation"
+  );
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
 
@@ -141,7 +162,14 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
     localStorage.setItem(
       "echo-maze:run-records:v1",
       JSON.stringify([
-        { elapsedMs: 65000, moves: 70, seed: "NARROW-RECORD" }
+        {
+          elapsedMs: 65000,
+          moves: 70,
+          seed: "NARROW-RECORD",
+          questLevelId: "trail-scout",
+          labyrinthNumber: 13,
+          echoTotal: 5
+        }
       ])
     );
   });
@@ -161,6 +189,11 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
   }
   expect(dialog.x).toBeGreaterThanOrEqual(0);
   expect(dialog.x + dialog.width).toBeLessThanOrEqual(320);
+  await page.getByRole("button", { name: "Replay seed NARROW-RECORD" }).click();
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Advanced"
+  );
+  await expect(page.locator("#echo-count")).toHaveText("0 / 5");
 });
 
 test("preserves native button keyboard behavior and pause timing", async ({
@@ -217,7 +250,7 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
   });
   await expect(page.locator("#moves-value")).toHaveText("001");
 
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "New Quest" }).click();
   await chooseTrailScout(page);
   await expect(page.locator("#seed-value")).not.toHaveText("RUNE-CHOIR-93");
   expect(new URL(page.url()).searchParams.get("seed")).not.toBe("RUNE-CHOIR-93");
@@ -245,7 +278,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   const canvas = page.getByLabel(/Interactive maze/);
   const initialLabyrinth = await canvas.screenshot();
 
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "New Quest" }).click();
   await chooseTrailScout(page);
 
   await expect(page.locator("#seed-value")).not.toHaveText(originalSeed);
@@ -296,7 +329,57 @@ test("saves a defeated Run Record and restores it after reload", async ({
   await expect(records).toContainText("Defeated");
 });
 
-test("completes a seeded passage, records the result, and replays it", async ({
+test("reveals a Hint, grants one free skip, then warns before paid skips", async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One full challenge flow is sufficient.");
+  await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+
+  const firstQuestion = await page.locator("#challenge-question").textContent();
+  await page.getByRole("button", { name: "Show Hint" }).click();
+  await expect(page.locator("#question-hint")).toHaveText(TEST_QUESTION.hint);
+  await expect(page.getByRole("button", { name: "Hint shown" })).toBeDisabled();
+
+  await page.getByRole("button", { name: "Skip free" }).click();
+  await expect(page.locator("#vitality-count")).toHaveText("3 / 3");
+  await expect(page.getByRole("button", { name: "Show Hint" })).toBeEnabled();
+  await expect(page.locator("#challenge-question")).not.toHaveText(
+    firstQuestion ?? ""
+  );
+
+  await page.getByRole("button", { name: "Skip · 1 Vitality" }).click();
+  await expect(page.locator("#skip-warning")).toContainText(
+    "Skipping costs 1 Vitality."
+  );
+  await page.getByRole("button", { name: "Keep question" }).click();
+  await expect(page.locator("#skip-warning")).toBeHidden();
+
+  for (const expectedVitality of [2, 1]) {
+    await page.getByRole("button", { name: "Skip · 1 Vitality" }).click();
+    await page.getByRole("button", { name: "Use skip" }).click();
+    await expect(page.locator("#vitality-count")).toHaveText(
+      `${expectedVitality} / 3`
+    );
+  }
+
+  await page.getByRole("button", { name: "Skip · 1 Vitality" }).click();
+  await expect(page.locator("#skip-warning")).toContainText(
+    "This skip uses your last Vitality and will end this Labyrinth."
+  );
+  await page.getByRole("button", { name: "Use skip" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "The maze light needs a rest." })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry Labyrinth" })).toBeVisible();
+});
+
+test("completes a Labyrinth, persists Quest progress, and replays its Record", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
@@ -309,18 +392,39 @@ test("completes a seeded passage, records the result, and replays it", async ({
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "You brought the Echoes home."
+    name: "You brought these Echoes home."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-seed")).toHaveText(WINNING_SEED);
   await expect(page.locator("#result-rank")).toHaveText("Personal #1");
   await expect(page.locator("#best-run")).toContainText(WINNING_SEED);
+  expect(new URL(page.url()).searchParams.get("seed")).toBeNull();
+  expect(new URL(page.url()).searchParams.get("labyrinth")).toBe("2");
 
-  await page.getByRole("button", { name: "Replay seed" }).click();
+  await page.getByRole("button", { name: "Continue Quest" }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.locator("#seed-value")).toHaveText(WINNING_SEED);
+  await expect(page.locator("#seed-value")).not.toHaveText(WINNING_SEED);
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 2 of 20 · Foundation"
+  );
   await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
+
+  await page.reload();
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 2 of 20 · Foundation"
+  );
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toBeVisible();
+  await expect(records).toContainText(WINNING_SEED);
+  await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
+  await expect(records).not.toBeVisible();
+  await expect(page.locator("#seed-value")).toHaveText(WINNING_SEED);
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 1 of 20 · Foundation"
+  );
 
   for (const direction of WINNING_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -333,7 +437,6 @@ test("completes a seeded passage, records the result, and replays it", async ({
   await expect(page.locator("#challenge-dialog")).not.toBeVisible();
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
-  const records = page.getByRole("dialog", { name: "Run Records" });
   await expect(records).toBeVisible();
   await expect(records).toContainText(WINNING_SEED);
   await page.evaluate(() => {
