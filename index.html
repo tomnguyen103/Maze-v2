@@ -15,6 +15,8 @@
     <title>Echo Maze</title>
   </head>
   <body>
+    <div id="game-root"></div>
+    <template id="game-template">
     <a class="skip-link" href="#labyrinth">Skip to the Labyrinth</a>
 
     <nav class="command-bar" aria-label="Game controls">
@@ -107,7 +109,7 @@
             <button class="seed-copy" id="seed-copy" type="button">
               <span class="section-label">Seed</span>
               <strong id="seed-value"></strong>
-              <span class="seed-copy__hint">Copy</span>
+              <span class="seed-copy__hint">Copy Share Link</span>
             </button>
             <button class="control-button" id="pause-run" type="button" aria-pressed="false">
               Pause
@@ -394,6 +396,7 @@
       </div>
     </dialog>
 
-    <script type="module" src="/src/main.js"></script>
+    </template>
+    <script type="module" src="/src/app.js"></script>
   </body>
 </html>

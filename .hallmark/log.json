@@ -4,6 +4,16 @@
       "date": "2026-07-24",
       "project": "Echo Maze",
       "genre": "playful",
+      "macrostructure": "Threshold",
+      "theme": "Hum",
+      "signature": "Labyrinth-mark threshold leads Explorers from a calm introduction into the Workbench.",
+      "nav": "N7 Compact Slab",
+      "footer": "None"
+    },
+    {
+      "date": "2026-07-24",
+      "project": "Echo Maze",
+      "genre": "playful",
       "macrostructure": "Workbench",
       "theme": "Hum",
       "signature": "Player console joins the live maze with account colors, current score, and a compact global scoreboard",

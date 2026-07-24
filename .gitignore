@@ -1,4 +1,5 @@
 .codegraph/
+.vercel/
 graphify-out/
 node_modules/
 dist/
