@@ -1,4 +1,7 @@
-import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
+import {
+  QUEST_LEVELS,
+  getLabyrinthConfig
+} from "../src/questions/quest-levels.js";
 
 /** @type {Set<string>} */
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
@@ -153,6 +156,17 @@ export function validateScoreInput(value) {
     elapsedMs: boundedInteger(input, "elapsedMs", 0, 86400000, "Elapsed time"),
     escaped: true
   };
+  const config = getLabyrinthConfig(run.levelId, run.labyrinthNumber);
+  if (run.echoesCollected !== config.echoCount) {
+    throw new InputError(
+      "Echo count does not match the selected Labyrinth."
+    );
+  }
+  if (run.wardensDefeated > config.wardenCount) {
+    throw new InputError(
+      "Warden count exceeds the selected Labyrinth."
+    );
+  }
 
   return { ...run, score: computeRunScore(run) };
 }

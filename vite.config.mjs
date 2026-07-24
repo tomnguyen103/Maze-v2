@@ -32,6 +32,10 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           server.middlewares.use(questionHandler);
           server.middlewares.use(playerApi);
+        },
+        configurePreviewServer(server) {
+          server.middlewares.use(questionHandler);
+          server.middlewares.use(playerApi);
         }
       }
     ],

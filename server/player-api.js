@@ -37,6 +37,13 @@ export function createPlayerApi(env = process.env) {
         next?.();
         return;
       }
+      if (pathname === "/api/leaderboard" && request.method === "GET") {
+        response.statusCode = 200;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader("cache-control", "no-store");
+        response.end(JSON.stringify({ entries: [], globalMaxScore: 0 }));
+        return;
+      }
       sendError(
         response,
         503,

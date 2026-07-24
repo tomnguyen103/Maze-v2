@@ -141,5 +141,9 @@ describe("player store", () => {
       92000,
       900
     ]);
+    expect(pool.query.mock.calls[0][0]).toContain(
+      "ON CONFLICT (player_id, idempotency_key) DO UPDATE"
+    );
+    expect(pool.query.mock.calls[0][0]).toContain("(xmax = 0) AS inserted");
   });
 });

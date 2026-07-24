@@ -36,6 +36,29 @@
     <main class="play-workbench">
       <section class="play-grid" aria-label="Echo Maze game">
         <aside class="status-deck" aria-label="Run status">
+          <div class="player-console" aria-label="Player status">
+            <button class="player-console__identity" id="player-button" type="button">
+              <span class="player-swatch" aria-hidden="true"></span>
+              <span>
+                <small>Explorer</small>
+                <strong id="player-name">Guest</strong>
+              </span>
+            </button>
+            <dl class="player-score">
+              <div>
+                <dt>Score</dt>
+                <dd id="player-score">0</dd>
+              </div>
+              <div>
+                <dt>Global max</dt>
+                <dd id="global-max-score">—</dd>
+              </div>
+            </dl>
+            <button class="scoreboard-button" id="scoreboard-button" type="button">
+              Top 10
+            </button>
+          </div>
+
           <div class="status-deck__heading">
             <span class="section-label" id="quest-level-name">Trail Scout</span>
             <span class="run-state" id="run-state">Exploring</span>
@@ -267,6 +290,86 @@
         Echo progress. Replay or share any seed.
       </p>
       <ol class="run-records" id="run-records"></ol>
+    </dialog>
+
+    <dialog class="player-dialog" id="player-dialog" aria-labelledby="player-dialog-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">Explorer profile</span>
+          <h2 id="player-dialog-title">Make the maze yours.</h2>
+        </div>
+        <button class="control-button" id="player-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro" id="player-dialog-intro">
+        Sign in to save a username, colors, and escaped-run scores.
+      </p>
+      <div class="player-auth-row">
+        <button class="primary-button" id="player-auth-button" type="button">
+          Sign in
+        </button>
+        <button class="control-button" id="player-sign-out" type="button" hidden>
+          Sign out
+        </button>
+      </div>
+      <form class="player-form" id="player-form">
+        <label class="player-field" for="player-username">
+          <span>Username</span>
+          <input
+            id="player-username"
+            name="username"
+            type="text"
+            minlength="3"
+            maxlength="20"
+            autocomplete="username"
+            placeholder="Moss Runner"
+            required
+          />
+          <small>3–20 letters, numbers, spaces, underscores, or hyphens.</small>
+        </label>
+        <fieldset class="palette-fieldset">
+          <legend>Explorer color</legend>
+          <div class="palette-options palette-options--explorer">
+            <label><input type="radio" name="explorerPalette" value="teal" checked /><span data-palette="teal">Signal teal</span></label>
+            <label><input type="radio" name="explorerPalette" value="sunset" /><span data-palette="sunset">Sunset coral</span></label>
+            <label><input type="radio" name="explorerPalette" value="violet" /><span data-palette="violet">Quest violet</span></label>
+            <label><input type="radio" name="explorerPalette" value="gold" /><span data-palette="gold">Lantern gold</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="palette-fieldset">
+          <legend>Playground color</legend>
+          <div class="palette-options palette-options--playground">
+            <label><input type="radio" name="playgroundPalette" value="daylight" checked /><span data-palette="daylight">Daylight</span></label>
+            <label><input type="radio" name="playgroundPalette" value="twilight" /><span data-palette="twilight">Twilight</span></label>
+            <label><input type="radio" name="playgroundPalette" value="sea-glass" /><span data-palette="sea-glass">Sea glass</span></label>
+            <label><input type="radio" name="playgroundPalette" value="dusk" /><span data-palette="dusk">Dusk</span></label>
+          </div>
+        </fieldset>
+        <p class="player-form__status" id="player-form-status" role="status" aria-live="polite"></p>
+        <button class="primary-button" id="player-save" type="submit">
+          Save profile
+        </button>
+      </form>
+    </dialog>
+
+    <dialog
+      class="scoreboard-dialog"
+      id="scoreboard-dialog"
+      aria-labelledby="scoreboard-title"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">All Explorers</span>
+          <h2 id="scoreboard-title">Global Scoreboard</h2>
+        </div>
+        <button class="control-button" id="scoreboard-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro">
+        Each Explorer’s best escaped run. Warden 100 · Echo 50 · Escape 500.
+      </p>
+      <p class="scoreboard-status" id="scoreboard-status" role="status" aria-live="polite">
+        Loading scores…
+      </p>
+      <ol class="scoreboard-list" id="scoreboard-list"></ol>
     </dialog>
 
     <dialog

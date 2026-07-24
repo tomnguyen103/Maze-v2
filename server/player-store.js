@@ -161,7 +161,7 @@ export function createPlayerStore(pool) {
      */
     async submitScore(userId, run) {
       const result = await pool.query(
-        `WITH inserted AS (
+        `WITH selected_score AS (
            INSERT INTO score_entries (
              player_id,
              idempotency_key,
@@ -176,22 +176,28 @@ export function createPlayerStore(pool) {
              escaped
            )
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)
-           ON CONFLICT (player_id, idempotency_key) DO NOTHING
-           RETURNING id
+           ON CONFLICT (player_id, idempotency_key) DO UPDATE SET
+             idempotency_key = score_entries.idempotency_key
+           RETURNING
+             (xmax = 0) AS inserted,
+             player_id,
+             score,
+             level_id,
+             labyrinth_number,
+             moves,
+             elapsed_ms
          )
          SELECT
-           EXISTS(SELECT 1 FROM inserted) AS inserted,
+           selected_score.inserted,
            players.username,
-           score_entries.score,
-           score_entries.level_id,
-           score_entries.labyrinth_number,
-           score_entries.moves,
-           score_entries.elapsed_ms
-         FROM score_entries
-         JOIN players ON players.clerk_user_id = score_entries.player_id
-         WHERE
-           score_entries.player_id = $1 AND
-           score_entries.idempotency_key = $2`,
+           selected_score.score,
+           selected_score.level_id,
+           selected_score.labyrinth_number,
+           selected_score.moves,
+           selected_score.elapsed_ms
+         FROM selected_score
+         JOIN players ON players.clerk_user_id = selected_score.player_id
+         LIMIT 1`,
         [
           userId,
           run.idempotencyKey,

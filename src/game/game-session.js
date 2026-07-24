@@ -58,6 +58,7 @@
  *   pulseExpiresAt: number | null,
  *   pulses: number,
  *   score: number,
+ *   wardensDefeated: number,
  *   freeQuestionSkipAvailable: boolean,
  *   moves: number,
  *   lastDirection: Direction | null,
@@ -174,6 +175,7 @@ export function createRun(requestedSeed, input = {}) {
     pulseExpiresAt: null,
     pulses: config.pulses,
     score: 0,
+    wardensDefeated: 0,
     freeQuestionSkipAvailable: true,
     moves: 0,
     lastDirection: null,
@@ -378,6 +380,7 @@ export function applyAction(run, action) {
       challenge: null,
       pulses: run.pulses + 1,
       score: run.score + 100,
+      wardensDefeated: run.wardensDefeated + 1,
       status: "active",
       event: {
         type: "warden-defeated",
@@ -765,8 +768,8 @@ function normalizeConfig(input) {
   }
   return {
     size,
-    echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 5),
-    wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 5),
+    echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 8),
+    wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 6),
     vitality: clampInteger(input.vitality, DEFAULT_CONFIG.vitality, 1, 9),
     pulses: clampInteger(input.pulses, DEFAULT_CONFIG.pulses, 0, 5)
   };

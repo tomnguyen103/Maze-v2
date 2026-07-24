@@ -45,8 +45,8 @@ describe("player validation", () => {
       levelId: "trail-scout",
       labyrinthNumber: 4,
       seed: "MOSS-WATCH-11",
-      wardensDefeated: 3,
-      echoesCollected: 2,
+      wardensDefeated: 2,
+      echoesCollected: 3,
       moves: 81,
       elapsedMs: 92000,
       escaped: true,
@@ -58,12 +58,12 @@ describe("player validation", () => {
       levelId: "trail-scout",
       labyrinthNumber: 4,
       seed: "MOSS-WATCH-11",
-      wardensDefeated: 3,
-      echoesCollected: 2,
+      wardensDefeated: 2,
+      echoesCollected: 3,
       moves: 81,
       elapsedMs: 92000,
       escaped: true,
-      score: 900
+      score: 850
     });
   });
 
@@ -73,8 +73,8 @@ describe("player validation", () => {
       levelId: "trail-scout",
       labyrinthNumber: 4,
       seed: "MOSS-WATCH-11",
-      wardensDefeated: 3,
-      echoesCollected: 2,
+      wardensDefeated: 2,
+      echoesCollected: 3,
       moves: 81,
       elapsedMs: 92000,
       escaped: true
@@ -87,6 +87,12 @@ describe("player validation", () => {
       validateScoreInput({ ...base, labyrinthNumber: 21 })
     ).toThrow("Labyrinth");
     expect(() => validateScoreInput({ ...base, moves: 0 })).toThrow("Moves");
+    expect(() =>
+      validateScoreInput({ ...base, echoesCollected: 20 })
+    ).toThrow("Echo count");
+    expect(() =>
+      validateScoreInput({ ...base, wardensDefeated: 20 })
+    ).toThrow("Warden count");
   });
 
   it("uses the documented score formula", () => {

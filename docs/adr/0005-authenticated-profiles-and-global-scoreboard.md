@@ -24,8 +24,8 @@ Warden movement, or the result of a gameplay action.
   exposes only its chosen username on the Global Scoreboard.
 - A first authenticated visit without a Player Profile blocks shared score
   submission until the player creates a unique username.
-- Usernames contain 3 to 20 ASCII letters, numbers, or underscores. Uniqueness
-  is case-insensitive.
+- Usernames contain 3 to 20 letters, numbers, spaces, underscores, or hyphens.
+  Uniqueness is case-insensitive.
 - Explorer and playground colors come from reviewed accessible presets. They
   are cosmetic and never enter Run state or deterministic calculations.
 - A Run Score starts at zero for each Labyrinth:

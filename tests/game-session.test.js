@@ -135,6 +135,7 @@ describe("GameSession", () => {
     ]);
     expect(first.lastDirection).toBeNull();
     expect(first.score).toBe(0);
+    expect(first.wardensDefeated).toBe(0);
   });
 
   it("creates different labyrinths from distinct known seeds", () => {
@@ -164,6 +165,17 @@ describe("GameSession", () => {
     expect(run.echoes.every((echo) => pathBetween(run, run.explorer, echo).length > 0)).toBe(true);
     expect(run.wardens.every((warden) => pathBetween(run, run.explorer, warden).length > 0)).toBe(true);
     expect(reachable.size).toBeGreaterThan(0);
+  });
+
+  it("preserves the largest Quest progression entity counts", () => {
+    const run = createRun("MAZE-MASTER-20", {
+      size: 23,
+      echoCount: 8,
+      wardenCount: 6
+    });
+
+    expect(run.echoes).toHaveLength(8);
+    expect(run.wardens).toHaveLength(6);
   });
 
   it("rejects a wall without spending a turn", () => {
@@ -516,6 +528,7 @@ describe("GameSession", () => {
     expect(answered.explorer.vitality).toBe(2);
     expect(answered.pulses).toBe(run.pulses + 1);
     expect(answered.score).toBe(100);
+    expect(answered.wardensDefeated).toBe(1);
     expect(answered.event.type).toBe("warden-defeated");
     expect(answered.event.message).toContain(QUESTION.explanation);
     expect(answered.event.message).toContain("1 Pulse");

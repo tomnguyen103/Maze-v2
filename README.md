@@ -20,6 +20,11 @@ The original project is preserved at
   Explorers, and Intercept predictable movement.
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
   incorrectly to lose one Vitality and, if Vitality remains, try a new question.
+  Each defeated Warden awards one Pulse and 100 score.
+- Signed-in Explorers can claim a unique username, choose Explorer and
+  playground colors, and submit escaped runs to the Global Scoreboard.
+- Global scores award 100 per Warden, 50 per Echo, and 500 for escaping. Only
+  each Explorer’s best escaped run appears in the top ten.
 - Use the seed to replay or share the exact same Labyrinth.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress.
@@ -41,8 +46,9 @@ The Ollama CLI may also be installed separately; if Ollama or the model is not
 available, the game automatically uses its bundled question deck. Open
 `http://localhost:3000`.
 
-Copy `.env.example` to `.env.local` to override the local provider or model.
-The browser never receives provider credentials.
+Copy `.env.example` to `.env.local` to configure Clerk and Neon locally. The
+browser receives only `VITE_CLERK_PUBLISHABLE_KEY`; server secrets and database
+credentials stay server-side.
 
 ## Deploy
 
@@ -56,12 +62,20 @@ npm run build
 npm start
 ```
 
-Set these server-side environment variables on the host:
+For Vercel, connect the Neon project, apply
+`db/migrations/0001_players_and_scores.sql`, and set:
 
 ```text
+DATABASE_URL=your-neon-pooled-connection-string
+VITE_CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
+CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
+CLERK_SECRET_KEY=your-clerk-secret-key
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
+
+The game remains playable in Guest mode when Clerk or Neon is unavailable.
+Guest runs continue to use the unchanged local Records tab.
 
 ## Validate
 
@@ -84,6 +98,10 @@ The tracked pre-push hook runs the core gate before every push.
   applies the fallback.
 - `src/game/canvas-renderer.js` projects run state onto the Canvas.
 - `src/main.js` connects keyboard, touch, swipe, HUD, dialog, and timing.
+- `src/player/` owns Clerk session state, profile colors, score submission, and
+  the Global Scoreboard client.
+- `server/player-*.js` validate profiles and escaped runs, compute scores, and
+  read or write Neon without exposing Clerk IDs.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 

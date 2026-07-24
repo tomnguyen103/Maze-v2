@@ -164,8 +164,8 @@ describe("player API", () => {
           levelId: "trail-scout",
           labyrinthNumber: 4,
           seed: "MOSS-WATCH-11",
-          wardensDefeated: 3,
-          echoesCollected: 2,
+          wardensDefeated: 2,
+          echoesCollected: 3,
           moves: 81,
           elapsedMs: 92000,
           escaped: true,
@@ -176,7 +176,7 @@ describe("player API", () => {
       expect(response.status).toBe(201);
       expect(store.submittedRun).toMatchObject({
         userId: "user_123",
-        score: 900
+        score: 850
       });
     });
   });
