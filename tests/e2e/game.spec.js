@@ -427,8 +427,7 @@ test("requires account creation before a guest starts a second Labyrinth", async
 
 test("reveals a Hint, grants one free skip, then warns before paid skips", async ({
   page
-}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One full challenge flow is sufficient.");
+}) => {
   await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
 
@@ -440,7 +439,15 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   const firstQuestion = await page.locator("#challenge-question").textContent();
   await page.getByRole("button", { name: "Show Hint" }).click();
   await expect(page.locator("#question-hint")).toHaveText(TEST_QUESTION.hint);
-  await expect(page.getByRole("button", { name: "Hint shown" })).toBeDisabled();
+  const hideHint = page.getByRole("button", { name: "Hide Hint" });
+  await expect(hideHint).toBeEnabled();
+  await expect(hideHint).toHaveAttribute("aria-expanded", "true");
+  await hideHint.click();
+  await expect(page.locator("#question-hint")).toBeHidden();
+  await expect(page.locator("#question-hint")).toHaveText("");
+  const showHint = page.getByRole("button", { name: "Show Hint" });
+  await expect(showHint).toHaveAttribute("aria-expanded", "false");
+  await expect(showHint).toBeEnabled();
 
   await page.getByRole("button", { name: "Skip free" }).click();
   await expect(page.locator("#vitality-count")).toHaveText("3 / 3");
