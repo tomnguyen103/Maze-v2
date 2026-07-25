@@ -375,7 +375,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   await expect(page.locator("#seed-value")).toHaveText("RUNE-CHOIR-93");
 });
 
-test("saves a defeated Run Record and retries with a fresh Quest map", async ({
+test("requires account creation before a guest starts a second Labyrinth", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
@@ -408,27 +408,21 @@ test("saves a defeated Run Record and retries with a fresh Quest map", async ({
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "The maze light needs a rest."
+    name: "Create an account to continue."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
-  await page.getByRole("button", { name: "Retry Labyrinth" }).click();
-  const retrySeed = await page.locator("#seed-value").textContent();
-  expect(retrySeed).not.toBe(DEFEAT_SEED);
-  expect(new URL(page.url()).pathname).toBe("/play");
-  expect(new URL(page.url()).search).toBe("");
+  await expect(
+    page.getByRole("button", { name: "Create account to continue" })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry Labyrinth" })).toHaveCount(0);
   await expect.poll(() =>
     page.evaluate(() => {
       const stored = localStorage.getItem("echo-maze:quest-progress:v1");
       return stored ? JSON.parse(stored).usedMapFingerprints.length : 0;
     })
-  ).toBe(2);
-  await page.reload();
-  await expect(page.locator("#seed-value")).toHaveText(retrySeed ?? "");
-  await page.getByRole("button", { name: "Records", exact: true }).click();
-  const records = page.getByRole("dialog", { name: "Run Records" });
-  await expect(records).toContainText(DEFEAT_SEED);
-  await expect(records).toContainText("Defeated");
+  ).toBe(1);
+  await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
 });
 
 test("reveals a Hint, grants one free skip, then warns before paid skips", async ({
@@ -476,12 +470,14 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   );
   await page.getByRole("button", { name: "Use skip" }).click();
   await expect(
-    page.getByRole("dialog", { name: "The maze light needs a rest." })
+    page.getByRole("dialog", { name: "Create an account to continue." })
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry Labyrinth" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create account to continue" })
+  ).toBeVisible();
 });
 
-test("completes a Labyrinth, persists Quest progress, and replays its Record", async ({
+test("completes a guest Labyrinth and persists Quest progress before account creation", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
@@ -494,7 +490,7 @@ test("completes a Labyrinth, persists Quest progress, and replays its Record", a
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "You brought these Echoes home."
+    name: "Create an account to continue."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-seed")).toHaveText(WINNING_SEED);
@@ -503,6 +499,17 @@ test("completes a Labyrinth, persists Quest progress, and replays its Record", a
   expect(new URL(page.url()).pathname).toBe("/play");
   expect(new URL(page.url()).search).toBe("");
 
+  await expect(
+    page.getByRole("button", { name: "Create account to continue" })
+  ).toBeVisible();
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored) : null;
+    })
+  ).toMatchObject({ labyrinthNumber: 2, completedLabyrinths: 1 });
+
+  if (await page.getByRole("button", { name: "Continue Quest" }).isVisible()) {
   await page.getByRole("button", { name: "Continue Quest" }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.locator("#seed-value")).not.toHaveText(WINNING_SEED);
@@ -563,6 +570,7 @@ test("completes a Labyrinth, persists Quest progress, and replays its Record", a
 
   await page.reload();
   await expect(page.locator("#best-run")).toContainText(WINNING_SEED);
+  }
 });
 
 test("reflows across required widths and keeps the game in the laptop fold", async ({

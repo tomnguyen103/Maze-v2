@@ -84,6 +84,46 @@ describe("Clerk browser initializer", () => {
     }
   });
 
+  it("opens Clerk SignUp for the demo continuation gate", async () => {
+    const originalDocument = globalThis.document;
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    let instance = /** @type {any} */ (null);
+    class FakeClerk {
+      constructor() {
+        instance = this;
+        this.openedSignUp = false;
+      }
+
+      async load() {}
+
+      addListener() {}
+
+      openSignUp() {
+        this.openedSignUp = true;
+      }
+    }
+    globalThis.document = /** @type {Document} */ ({ documentElement: {} });
+    globalThis.getComputedStyle = /** @type {typeof getComputedStyle} */ (
+      () => /** @type {CSSStyleDeclaration} */ (/** @type {unknown} */ ({
+        getPropertyValue: () => "token"
+      }))
+    );
+
+    try {
+      const clerkBrowser = createClerkBrowser({
+        env: { VITE_CLERK_PUBLISHABLE_KEY: "pk_test_example" },
+        loadClerkModule: async () => ({ Clerk: FakeClerk }),
+        loadClerkUi: async () => ({ component: "ClerkUI" })
+      });
+
+      await expect(clerkBrowser.openSignUp()).resolves.toBe(true);
+      expect(instance?.openedSignUp).toBe(true);
+    } finally {
+      globalThis.document = originalDocument;
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    }
+  });
+
   it("loads Clerk's maintained UI before initializing configured Clerk", async () => {
     const originalDocument = globalThis.document;
     const originalGetComputedStyle = globalThis.getComputedStyle;
