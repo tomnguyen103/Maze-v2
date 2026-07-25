@@ -610,11 +610,18 @@ function showDemoAccountGate() {
 }
 
 async function requestDemoAccount() {
+  const restoreDemoGate = elements.resultDialog.open;
+  if (restoreDemoGate) {
+    elements.resultDialog.close();
+  }
   if (await playerController.openAccountCreation()) {
     return;
   }
   elements.resultSummary.textContent =
     "Account creation is unavailable right now. Try again later to continue your Quest.";
+  if (restoreDemoGate && !elements.resultDialog.open) {
+    elements.resultDialog.showModal();
+  }
   announce("Account creation is unavailable right now.");
   showEvent("Account creation is unavailable right now.");
 }

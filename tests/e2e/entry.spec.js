@@ -92,6 +92,31 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   ).toBeVisible();
 });
 
+test("hands the top layer from the demo gate to Clerk account creation", async ({
+  page
+}) => {
+  test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:demo-access:v1",
+      JSON.stringify({ version: 1, completed: true })
+    );
+  });
+
+  await page.goto("/play");
+
+  const demoGate = page.getByRole("dialog", {
+    name: "Create an account to continue."
+  });
+  await expect(demoGate).toBeVisible();
+  await page
+    .getByRole("button", { name: "Create account to continue" })
+    .click();
+
+  await expect(demoGate).not.toBeVisible();
+  await expect(page.getByLabel(/Email address/i)).toBeVisible();
+});
+
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
   await page.route(
     /\/(?:src\/main\.js|assets\/main-[^/]+\.js)(?:\?.*)?$/,
