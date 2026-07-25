@@ -39,6 +39,7 @@
     "@types/pg": "^8.20.0",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
+    "happy-dom": "^20.11.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

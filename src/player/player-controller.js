@@ -235,6 +235,7 @@ export function createPlayerController({
       return;
     }
     const form = new FormData(elements.form);
+    const profileWasRequired = playerState.profileRequired;
     elements.save.disabled = true;
     setFormStatus("Saving…", "loading");
     try {
@@ -254,6 +255,9 @@ export function createPlayerController({
       renderAuth();
       setFormStatus("Profile saved.", "success");
       elements.close.disabled = false;
+      if (profileWasRequired && elements.dialog.open) {
+        elements.dialog.close();
+      }
     } catch (error) {
       setFormStatus(errorMessage(error), "error");
     } finally {

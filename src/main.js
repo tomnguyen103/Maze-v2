@@ -143,6 +143,7 @@ let eventTimer = 0;
 let resumeAfterRecords = false;
 let questionRequestKey = "";
 let runFinished = false;
+let hintVisible = false;
 let demoAccessPending = hasCompletedGuestDemo();
 let mustChooseLevel =
   locationSeed === null &&
@@ -255,6 +256,12 @@ elements.challengeChoices.addEventListener("click", (event) => {
   });
 });
 elements.hintButton.addEventListener("click", () => {
+  if (run.challenge?.hintRevealed) {
+    hintVisible = !hintVisible;
+    syncChallengeDialog();
+    return;
+  }
+  hintVisible = true;
   transition({ type: "reveal-hint" });
 });
 elements.skipQuestion.addEventListener("click", () => {
@@ -725,6 +732,7 @@ function transition(action) {
 
 function syncChallengeDialog() {
   if (run.status !== "challenge" || !run.challenge) {
+    hintVisible = false;
     hideSkipWarning();
     if (elements.challengeDialog.open) {
       elements.challengeDialog.close();
@@ -751,6 +759,7 @@ function syncChallengeDialog() {
     : "Think carefully. Your timer is paused.";
 
   if (!question) {
+    hintVisible = false;
     hideSkipWarning();
     elements.challengeQuestion.textContent = feedback
       ? "The Warden draws a new question…"
@@ -767,16 +776,16 @@ function syncChallengeDialog() {
   }
 
   elements.challengeQuestion.textContent = question.prompt;
-  elements.hintButton.disabled = run.challenge.hintRevealed;
-  elements.hintButton.textContent = run.challenge.hintRevealed
-    ? "Hint shown"
-    : "Show Hint";
+  elements.hintButton.disabled = false;
+  elements.hintButton.textContent =
+    run.challenge.hintRevealed && hintVisible ? "Hide Hint" : "Show Hint";
   elements.hintButton.setAttribute(
     "aria-expanded",
-    String(run.challenge.hintRevealed)
+    String(run.challenge.hintRevealed && hintVisible)
   );
-  elements.questionHint.hidden = !run.challenge.hintRevealed;
-  elements.questionHint.textContent = run.challenge.hintRevealed
+  elements.questionHint.hidden = !run.challenge.hintRevealed || !hintVisible;
+  elements.questionHint.textContent =
+    run.challenge.hintRevealed && hintVisible
     ? question.hint
     : "";
   elements.skipQuestion.disabled = false;
