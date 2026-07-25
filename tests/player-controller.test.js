@@ -90,7 +90,9 @@ describe("Player Profile dialog", () => {
       new SubmitEvent("submit", { bubbles: true, cancelable: true })
     );
 
-    await vi.waitFor(() => expect(client.saveProfile).toHaveBeenCalledOnce());
-    expect(dialog.open).toBe(false);
+    await vi.waitFor(() => {
+      expect(client.saveProfile).toHaveBeenCalledOnce();
+      expect(dialog.open).toBe(false);
+    });
   });
 });

@@ -441,9 +441,13 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   await expect(page.locator("#question-hint")).toHaveText(TEST_QUESTION.hint);
   const hideHint = page.getByRole("button", { name: "Hide Hint" });
   await expect(hideHint).toBeEnabled();
+  await expect(hideHint).toHaveAttribute("aria-expanded", "true");
   await hideHint.click();
   await expect(page.locator("#question-hint")).toBeHidden();
-  await expect(page.getByRole("button", { name: "Show Hint" })).toBeEnabled();
+  await expect(page.locator("#question-hint")).toHaveText("");
+  const showHint = page.getByRole("button", { name: "Show Hint" });
+  await expect(showHint).toHaveAttribute("aria-expanded", "false");
+  await expect(showHint).toBeEnabled();
 
   await page.getByRole("button", { name: "Skip free" }).click();
   await expect(page.locator("#vitality-count")).toHaveText("3 / 3");
