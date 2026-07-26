@@ -101,6 +101,42 @@ describe("Lantern Journal continuity", () => {
     expect(cloudJournal.events).toHaveLength(0);
   });
 
+  it("migrates an in-memory guest Journal when storage is denied at sign-in", async () => {
+    const client = {
+      getLearningJournal: vi.fn(async () => ({
+        journal: createLanternJournal()
+      })),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn()
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: {
+        getItem: () => {
+          throw new Error("storage denied");
+        },
+        removeItem: () => {
+          throw new Error("storage denied");
+        },
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      }
+    });
+
+    await continuity.selectUser("");
+    continuity.record(question(), "wrong", () => eventId(11));
+    await continuity.selectUser("user_a");
+    await continuity.whenIdle();
+
+    expect(continuity.getJournal().events).toHaveLength(1);
+    expect(client.saveLearningJournal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [expect.objectContaining({ eventId: eventId(11) })]
+      })
+    );
+  });
+
   it("migrates guest learning once into the selected authenticated account", async () => {
     const storage = createStorage();
     const client = {

@@ -44,6 +44,8 @@ export function createJournalContinuity({
 
   /** @param {string} userId */
   async function selectUser(userId) {
+    const previousUserId = selectedUserId;
+    const previousJournal = journal;
     selectedUserId = userId;
     authEpoch += 1;
     const epoch = authEpoch;
@@ -52,7 +54,14 @@ export function createJournalContinuity({
     journal = selectedStored ?? createLanternJournal();
 
     if (userId && !selectedStored) {
-      const guest = readJournal(journalKey(""));
+      const storedGuest = readJournal(journalKey(""));
+      const guest =
+        previousUserId === ""
+          ? mergeLanternJournals(
+              previousJournal,
+              storedGuest ?? createLanternJournal()
+            )
+          : storedGuest;
       if (guest?.events.length) {
         journal = mergeLanternJournals(journal, guest);
         if (
