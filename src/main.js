@@ -13,6 +13,15 @@ import {
   requiresDemoAccount
 } from "./game/demo-access.js";
 import {
+  createDailyContract,
+  getDailyQuestion,
+  isDailyCurrent,
+  loadDailyRecord,
+  resolveDailyRequest,
+  saveDailyResult,
+  utcDateKey
+} from "./game/daily-labyrinth.js";
+import {
   applyAction,
   createRun,
   normalizeSeed
@@ -77,6 +86,16 @@ const elements = {
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
+  dailyButton: requiredElement("daily-button", HTMLButtonElement),
+  dailyClose: requiredElement("daily-close", HTMLButtonElement),
+  dailyCopy: requiredElement("daily-copy", HTMLButtonElement),
+  dailyDate: requiredElement("daily-date", HTMLElement),
+  dailyDialog: requiredElement("daily-dialog", HTMLDialogElement),
+  dailyExpired: requiredElement("daily-expired", HTMLElement),
+  dailyRecord: requiredElement("daily-record", HTMLElement),
+  dailyReturn: requiredElement("daily-return", HTMLButtonElement),
+  dailyStart: requiredElement("daily-start", HTMLButtonElement),
+  dailyTitle: requiredElement("daily-title", HTMLElement),
   echoCount: requiredElement("echo-count", HTMLElement),
   echoMeter: requiredElement("echo-meter", HTMLElement),
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
@@ -127,6 +146,7 @@ const elements = {
   questStage: requiredElement("quest-stage", HTMLElement),
   questionHint: requiredElement("question-hint", HTMLElement),
   seedCopy: requiredElement("seed-copy", HTMLButtonElement),
+  seedCopyHint: requiredElement("seed-copy-hint", HTMLElement),
   seedValue: requiredElement("seed-value", HTMLElement),
   skipCancel: requiredElement("skip-cancel", HTMLButtonElement),
   skipConfirm: requiredElement("skip-confirm", HTMLButtonElement),
@@ -142,6 +162,9 @@ const elements = {
   wardenState: requiredElement("warden-state", HTMLElement)
 };
 
+const dailyRequest = resolveDailyRequest(
+  new URL(window.location.href).searchParams.get("daily")
+);
 const locationSeed = seedFromLocation();
 const sharedParametersNeedNotice =
   locationSeed !== null && hasInvalidSharedParameters();
@@ -153,7 +176,8 @@ const sharedLocationFacts = {
   levelId: getQuestLevel(levelFromLocation()).id,
   labyrinthNumber: labyrinthFromLocation() ?? 1
 };
-let activeRunLocator = loadActiveRunLocator();
+let activeRunLocator =
+  dailyRequest.status === "none" ? loadActiveRunLocator() : null;
 if (
   locationSeed !== null &&
   activeRunLocator &&
@@ -162,6 +186,7 @@ if (
   activeRunLocator = null;
 }
 if (
+  dailyRequest.status === "none" &&
   activeRunLocator &&
   storedQuestProgress &&
   !activeRunLocator.pending &&
@@ -221,6 +246,7 @@ let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterAtlas = false;
+let resumeAfterDaily = false;
 let resumeAfterRecords = false;
 let reopenJournalAfterPractice = false;
 let journalOpenPending = false;
@@ -229,6 +255,9 @@ let activePracticeQuestion = null;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
+/** @type {ReturnType<typeof createDailyContract> | null} */
+let activeDaily = null;
+let dailyQuestionIndex = 0;
 let demoAccessPending = hasCompletedGuestDemo();
 let completedQuestIdle = false;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
@@ -236,10 +265,15 @@ let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
 let pendingLifetimeSessionId = "";
 let mustChooseLevel =
+  dailyRequest.status === "none" &&
   locationSeed === null &&
   activeRunLocator === null &&
   storedQuestProgress === null;
-if (!mustChooseLevel && !activeRunLocator?.pending) {
+if (
+  dailyRequest.status === "none" &&
+  !mustChooseLevel &&
+  !activeRunLocator?.pending
+) {
   questProgress = saveQuestProgress(questProgress);
 }
 /** @type {{ message: string, kind: string }[]} */
@@ -303,7 +337,26 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 
 elements.pulse.addEventListener("click", usePulse);
 elements.pause.addEventListener("click", togglePause);
-elements.newRun.addEventListener("click", openLevelPicker);
+elements.newRun.addEventListener("click", () => {
+  if (activeDaily) {
+    returnToQuest();
+    return;
+  }
+  void openLevelPicker();
+});
+elements.dailyButton.addEventListener("click", openDailyDialog);
+elements.dailyClose.addEventListener("click", closeDailyDialog);
+elements.dailyDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeDailyDialog();
+});
+elements.dailyStart.addEventListener("click", () => {
+  startDailyRun();
+});
+elements.dailyCopy.addEventListener("click", async () => {
+  await copyDailyLink(elements.dailyCopy);
+});
+elements.dailyReturn.addEventListener("click", returnToQuest);
 elements.levelCards.addEventListener("click", async (event) => {
   const button =
     event.target instanceof Element
@@ -746,6 +799,10 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 });
 elements.freshRun.addEventListener("click", () => {
+  if (activeDaily) {
+    startDailyRun();
+    return;
+  }
   void openLevelPicker();
 });
 elements.replay.addEventListener("click", async () => {
@@ -762,6 +819,10 @@ elements.replay.addEventListener("click", async () => {
     elements.resultDialog.close();
     return;
   }
+  if (action === "daily-return") {
+    returnToQuest();
+    return;
+  }
   await openLevelPicker();
 });
 elements.sound.addEventListener("click", async () => {
@@ -771,6 +832,14 @@ elements.sound.addEventListener("click", async () => {
 });
 elements.seedCopy.addEventListener("click", async () => {
   try {
+    if (activeDaily) {
+      await navigator.clipboard.writeText(
+        createDailyShareLink(currentDailyContract())
+      );
+      announce("Today’s Daily link copied.");
+      showEvent("Daily link copied. It contains only the public UTC date.");
+      return;
+    }
     await navigator.clipboard.writeText(createShareLink());
     announce("Share link copied.");
     showEvent("Share link copied. Send it to another Explorer.");
@@ -823,8 +892,12 @@ document.addEventListener("visibilitychange", () => {
  *   levelId: string,
  *   labyrinthNumber: number
  * }} locator
+ * @param {ReturnType<typeof createDailyContract> | null} [daily]
  */
-function startRun(locator) {
+function startRun(locator, daily = null) {
+  activeDaily = daily;
+  dailyQuestionIndex = 0;
+  document.body.dataset.runMode = daily ? "daily" : "quest";
   completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
@@ -832,21 +905,25 @@ function startRun(locator) {
     locator.seed,
     getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
   );
-  const fingerprint = labyrinthFingerprint(run);
-  if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
-    questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
+  if (!daily) {
+    const fingerprint = labyrinthFingerprint(run);
+    if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
+      questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
+    }
+    activeRunLocator = saveActiveRunLocator({
+      ...locator,
+      pending: false
+    });
   }
-  activeRunLocator = saveActiveRunLocator({
-    ...locator,
-    pending: false
-  });
   lastTick = performance.now();
   questionRequestKey = "";
   runFinished = false;
   storyEntries = [];
   hideSkipWarning();
   addStory(
-    `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
+    daily
+      ? `${daily.date} UTC Daily begins. Recover every Echo; your Quest stays unchanged.`
+      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
   );
   if (elements.resultDialog.open) {
@@ -858,12 +935,22 @@ function startRun(locator) {
   if (elements.challengeDialog.open) {
     elements.challengeDialog.close();
   }
+  if (elements.dailyDialog.open) {
+    elements.dailyDialog.close();
+  }
+  resumeAfterDaily = false;
   updateInterface();
   canvas.focus({ preventScroll: true });
   announce(
-    `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${run.echoes.length} Echoes remain.`
+    daily
+      ? `Today’s shared Labyrinth for ${daily.date} UTC. ${run.echoes.length} Echoes remain.`
+      : `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${run.echoes.length} Echoes remain.`
   );
-  showEvent(`Labyrinth ${currentLabyrinthNumber} ready. Find the Echoes.`);
+  showEvent(
+    daily
+      ? "Today’s Daily is ready. Find the Echoes."
+      : `Labyrinth ${currentLabyrinthNumber} ready. Find the Echoes.`
+  );
   if (lifetimeReturnConfirmed) {
     lifetimeReturnConfirmed = false;
     announce("Lifetime access unlocked. Your saved Run is ready.");
@@ -872,6 +959,16 @@ function startRun(locator) {
 }
 
 async function initializeRunEntry() {
+  if (dailyRequest.status === "current") {
+    startDailyRun();
+    return;
+  }
+  if (dailyRequest.status === "expired") {
+    document.body.dataset.runMode = "daily";
+    updateInterface();
+    openDailyDialog();
+    return;
+  }
   if (!(await resolveLifetimeReturn())) {
     return;
   }
@@ -904,6 +1001,108 @@ async function initializeRunEntry() {
   if (mustChooseLevel) {
     await openLevelPicker();
   }
+}
+
+function currentDailyContract() {
+  return createDailyContract(utcDateKey());
+}
+
+function startDailyRun() {
+  const daily = currentDailyContract();
+  const locator = /** @type {{
+   *   version: 2,
+   *   runId: string,
+   *   pending: boolean,
+   *   seed: string,
+   *   levelId: string,
+   *   labyrinthNumber: number
+   * }} */ ({
+    version: 2,
+    runId: `daily-${daily.date}`,
+    pending: false,
+    seed: daily.seed,
+    levelId: daily.levelId,
+    labyrinthNumber: daily.labyrinthNumber
+  });
+  window.history.replaceState(
+    {},
+    "",
+    `/play?daily=${encodeURIComponent(daily.date)}`
+  );
+  startRun(locator, daily);
+}
+
+function openDailyDialog() {
+  const currentDaily = currentDailyContract();
+  resumeAfterDaily = run.status === "active";
+  if (resumeAfterDaily) {
+    togglePause();
+  }
+  const record = loadDailyRecord(currentDaily.date);
+  elements.dailyDate.textContent = `${currentDaily.date} UTC`;
+  elements.dailyRecord.textContent = record?.completed
+    ? `Personal Best ${formatTime(record.bestElapsedMs ?? 0)} · ${record.bestMoves} moves. Stored only on this device.`
+    : "No Daily escape recorded today. Results stay only on this device.";
+  const expiredRequest =
+    dailyRequest.status === "expired" && activeDaily === null;
+  const expiredActive =
+    activeDaily !== null && !isDailyCurrent(activeDaily);
+  const expiredDate = expiredActive
+    ? activeDaily?.date ?? null
+    : dailyRequest.requestedDate;
+  elements.dailyExpired.hidden = !expiredRequest && !expiredActive;
+  elements.dailyExpired.textContent = expiredRequest || expiredActive
+    ? expiredDate
+      ? `${expiredDate} has expired. Daily links change at the UTC date boundary; today is ${currentDaily.date}.`
+      : `That Daily link has an invalid date. Today’s UTC Daily is ${currentDaily.date}.`
+    : "";
+  elements.dailyStart.textContent = activeDaily && !expiredActive
+    ? "Restart today’s Daily"
+    : "Start today’s Daily";
+  elements.dailyClose.textContent =
+    expiredRequest || expiredActive ? "Return to Quest" : "Close";
+  if (!elements.dailyDialog.open) {
+    elements.dailyDialog.showModal();
+  }
+  requestAnimationFrame(() => {
+    elements.dailyTitle?.focus?.({ preventScroll: true });
+  });
+}
+
+function closeDailyDialog() {
+  if (
+    dailyRequest.status === "expired" && activeDaily === null ||
+    activeDaily !== null && !isDailyCurrent(activeDaily)
+  ) {
+    returnToQuest();
+    return;
+  }
+  elements.dailyDialog.close();
+  if (resumeAfterDaily && run.status === "paused") {
+    togglePause();
+  }
+  resumeAfterDaily = false;
+}
+
+/** @param {HTMLButtonElement} button */
+async function copyDailyLink(button) {
+  const currentDaily = currentDailyContract();
+  try {
+    await navigator.clipboard.writeText(createDailyShareLink(currentDaily));
+    button.textContent = "Copied";
+    announce("Today’s Daily link copied. It contains only the public UTC date.");
+    window.setTimeout(() => {
+      if (button.isConnected) {
+        button.textContent = "Copy today’s link";
+      }
+    }, 1400);
+  } catch {
+    announce(`Copy failed. Today’s Daily date is ${currentDaily.date} UTC.`);
+  }
+}
+
+function returnToQuest() {
+  window.location.assign("/play");
 }
 
 async function startFreshRun() {
@@ -1362,6 +1561,9 @@ async function requestDemoAccount() {
 
 /** @param {boolean} signedIn */
 function syncDemoAccountAction(signedIn) {
+  if (activeDaily) {
+    return;
+  }
   if (!signedIn) {
     demoAccessPending = demoAccessPending || requiresDemoAccount(false);
     return;
@@ -1382,7 +1584,7 @@ function syncDemoAccountAction(signedIn) {
 /** @param {Direction | undefined} direction */
 function move(direction) {
   if (
-    demoAccessPending ||
+    isDemoBlocked() ||
     completedQuestIdle ||
     !direction ||
     run.status !== "active"
@@ -1393,7 +1595,7 @@ function move(direction) {
 }
 
 function usePulse() {
-  if (demoAccessPending || completedQuestIdle || run.status !== "active") {
+  if (isDemoBlocked() || completedQuestIdle || run.status !== "active") {
     return;
   }
   transition({ type: "pulse" });
@@ -1401,14 +1603,18 @@ function usePulse() {
 
 function togglePause() {
   if (
-    demoAccessPending ||
+    isDemoBlocked() ||
     completedQuestIdle ||
-    activeRunLocator?.pending ||
+    activeDaily === null && activeRunLocator?.pending ||
     (run.status !== "active" && run.status !== "paused")
   ) {
     return;
   }
   transition({ type: "pause" });
+}
+
+function isDemoBlocked() {
+  return demoAccessPending && activeDaily === null;
 }
 
 /** @param {Parameters<typeof applyAction>[1]} action */
@@ -1596,6 +1802,15 @@ async function loadChallengeQuestion() {
   }
   questionRequestKey = key;
 
+  if (activeDaily) {
+    const question = getDailyQuestion(activeDaily, dailyQuestionIndex);
+    dailyQuestionIndex += 1;
+    elements.challengeSource.textContent =
+      "Today’s reviewed Daily question card is ready.";
+    transition({ type: "provide-question", question });
+    return;
+  }
+
   let acceptedQuestion = null;
   let acceptedOrdinal = challengeSnapshot.questionOrdinal;
   let acceptedSource = "bundled";
@@ -1717,13 +1932,19 @@ function updateInterface() {
   renderer.render(run);
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
-  elements.questLevelName.textContent =
-    `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
-  elements.questStage.textContent =
-    `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
-  elements.questHeadline.textContent =
-    `Labyrinth ${currentLabyrinthNumber}: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
+  elements.questLevelName.textContent = activeDaily
+    ? `Daily · ${activeDaily.date} UTC`
+    : `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
+  elements.questStage.textContent = activeDaily
+    ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
+    : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
+  elements.questHeadline.textContent = activeDaily
+    ? `Today’s shared Labyrinth: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`
+    : `Labyrinth ${currentLabyrinthNumber}: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
   elements.seedValue.textContent = run.seed;
+  elements.seedCopyHint.textContent = activeDaily
+    ? "Copy Daily Link"
+    : "Copy Share Link";
   elements.time.textContent = formatTime(run.elapsedMs);
   elements.moves.textContent = String(run.moves).padStart(3, "0");
   elements.echoCount.textContent = `${collected} / ${run.echoes.length}`;
@@ -1732,8 +1953,12 @@ function updateInterface() {
   elements.pulseCount.textContent = String(run.pulses);
   playerController.updateScore(run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
-  elements.atlasButton.disabled = run.status === "challenge";
-  elements.recordsButton.disabled = run.status === "challenge";
+  elements.dailyButton.disabled = run.status === "challenge";
+  elements.atlasButton.disabled =
+    run.status === "challenge" || activeDaily !== null;
+  elements.recordsButton.disabled =
+    run.status === "challenge" || activeDaily !== null;
+  elements.newRun.textContent = activeDaily ? "Return to Quest" : "New Quest";
   elements.pause.textContent = completedQuestIdle
     ? "Quest complete"
     : run.status === "paused"
@@ -1765,17 +1990,30 @@ function updateInterface() {
     run.explorer.vitality,
     "vitality-pip"
   );
-  elements.best.textContent = bestEscapeRecord
-    ? `Best ${formatTime(bestEscapeRecord.elapsedMs)} / ${bestEscapeRecord.moves} moves / ${bestEscapeRecord.seed}`
-    : runRecords.length > 0
-      ? `${runRecords.length} ${runRecords.length === 1 ? "attempt" : "attempts"} saved. First escape sets the pace.`
-      : "No finished run yet. Escape or defeat saves an attempt.";
+  if (activeDaily) {
+    const dailyRecord = loadDailyRecord(activeDaily.date);
+    elements.best.textContent = dailyRecord?.completed
+      ? `Daily Personal Best ${formatTime(dailyRecord.bestElapsedMs ?? 0)} / ${dailyRecord.bestMoves} moves / stored on this device`
+      : "Today’s Daily has no escape yet. Your Quest and Run Records stay unchanged.";
+  } else {
+    elements.best.textContent = bestEscapeRecord
+      ? `Best ${formatTime(bestEscapeRecord.elapsedMs)} / ${bestEscapeRecord.moves} moves / ${bestEscapeRecord.seed}`
+      : runRecords.length > 0
+        ? `${runRecords.length} ${runRecords.length === 1 ? "attempt" : "attempts"} saved. First escape sets the pace.`
+        : "No finished run yet. Escape or defeat saves an attempt.";
+  }
   renderStory();
 }
 
 function finishRun() {
   runFinished = true;
+  elements.resultAtlas.hidden = false;
+  elements.freshRun.textContent = "New Quest";
   const won = run.status === "won";
+  if (activeDaily) {
+    finishDailyRun(activeDaily, won);
+    return;
+  }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   runRecords = saveRunRecord({
@@ -1883,11 +2121,87 @@ function finishRun() {
   }
 }
 
+/**
+ * @param {ReturnType<typeof createDailyContract>} daily
+ * @param {boolean} won
+ */
+function finishDailyRun(daily, won) {
+  if (!isDailyCurrent(daily)) {
+    elements.resultKicker.textContent = "UTC date changed";
+    elements.resultTitle.textContent = "This Daily has expired.";
+    elements.resultSummary.textContent =
+      "The UTC date changed before this Run ended, so the result was not saved. Today’s current Daily is ready, and your Quest remains unchanged.";
+    elements.resultAtlas.hidden = true;
+    elements.resultAccessNote.hidden = true;
+    elements.resultAccessNote.textContent = "";
+    elements.replay.dataset.resultAction = "daily-return";
+    elements.replay.textContent = "Return to Quest";
+    elements.freshRun.hidden = false;
+    elements.freshRun.textContent = "Start current Daily";
+    elements.resultTime.textContent = formatTime(run.elapsedMs);
+    elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+    elements.resultSeed.textContent = daily.seed;
+    elements.resultRank.textContent = "Expired";
+    updateInterface();
+    if (!elements.resultDialog.open) {
+      elements.resultDialog.showModal();
+    }
+    return;
+  }
+  const previous = loadDailyRecord(daily.date);
+  const { record, persisted } = saveDailyResult(daily, {
+    outcome: won ? "escaped" : "defeated",
+    elapsedMs: run.elapsedMs,
+    moves: run.moves
+  });
+  const newBest =
+    won &&
+    (!previous?.completed ||
+      previous.bestElapsedMs === null ||
+      run.elapsedMs < previous.bestElapsedMs ||
+      run.elapsedMs === previous.bestElapsedMs &&
+        (previous.bestMoves === null || run.moves < previous.bestMoves));
+
+  elements.resultKicker.textContent = persisted
+    ? "Casual Daily · stored locally"
+    : "Casual Daily · storage unavailable";
+  elements.resultTitle.textContent = won
+    ? "Daily Labyrinth complete."
+    : "Today’s Daily ended.";
+  const resultSummary = won
+    ? "You escaped today’s shared maze. Your Quest, Atlas, Run Access, and Global Scoreboard did not change."
+    : "You can try today’s shared maze again. Your Quest, Atlas, Run Access, and Global Scoreboard did not change.";
+  elements.resultSummary.textContent = persisted
+    ? resultSummary
+    : `${resultSummary} This result could not be saved on this device.`;
+  elements.resultAtlas.hidden = true;
+  elements.resultAccessNote.hidden = true;
+  elements.resultAccessNote.textContent = "";
+  elements.replay.dataset.resultAction = "daily-return";
+  elements.replay.textContent = "Return to Quest";
+  elements.freshRun.hidden = false;
+  elements.freshRun.textContent = "Play Daily again";
+  elements.resultTime.textContent = formatTime(run.elapsedMs);
+  elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+  elements.resultSeed.textContent = daily.seed;
+  elements.resultRank.textContent = !persisted
+    ? "Not saved"
+    : won
+      ? newBest
+        ? "Personal Best"
+        : `Best ${formatTime(record.bestElapsedMs ?? 0)}`
+      : "Not complete";
+  updateInterface();
+  if (!elements.resultDialog.open) {
+    elements.resultDialog.showModal();
+  }
+}
+
 /** @param {number} now */
 function tick(now) {
   const deltaMs = Math.min(1000, now - lastTick);
   lastTick = now;
-  if (!demoAccessPending && run.status === "active") {
+  if (!isDemoBlocked() && run.status === "active") {
     run = applyAction(run, { type: "tick", deltaMs });
     elements.time.textContent = formatTime(run.elapsedMs);
   }
@@ -1980,6 +2294,13 @@ function createSeed() {
 /** @param {typeof run} gameRun */
 function labyrinthFingerprint(gameRun) {
   return gameRun.labyrinth.map((row) => row.join("")).join("/");
+}
+
+/** @param {ReturnType<typeof createDailyContract>} daily */
+function createDailyShareLink(daily) {
+  const url = new URL("/play", window.location.origin);
+  url.searchParams.set("daily", daily.date);
+  return url.toString();
 }
 
 /**

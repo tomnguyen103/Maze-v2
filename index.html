@@ -23,6 +23,9 @@
       <a class="wordmark" href="#" aria-label="Echo Maze home">Echo Maze</a>
       <h1 id="quest-headline">Choose a quest. Outsmart the Wardens.</h1>
       <div class="command-bar__actions">
+        <button class="control-button" id="daily-button" type="button">
+          Daily
+        </button>
         <button class="control-button" id="atlas-button" type="button">
           Atlas
         </button>
@@ -115,7 +118,7 @@
             <button class="seed-copy" id="seed-copy" type="button">
               <span class="section-label">Seed</span>
               <strong id="seed-value"></strong>
-              <span class="seed-copy__hint">Copy Share Link</span>
+              <span class="seed-copy__hint" id="seed-copy-hint">Copy Share Link</span>
             </button>
             <button class="control-button" id="pause-run" type="button" aria-pressed="false">
               Pause
@@ -253,6 +256,47 @@
         </button>
       </div>
       <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
+    </dialog>
+
+    <dialog
+      class="daily-dialog"
+      id="daily-dialog"
+      aria-labelledby="daily-title"
+      aria-describedby="daily-intro daily-boundary daily-record"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">One maze · every Explorer</span>
+          <h2 id="daily-title" tabindex="-1">Daily Shared Labyrinth</h2>
+        </div>
+        <button class="control-button" id="daily-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro" id="daily-intro">
+        A casual shared maze with the same reviewed Questions for everyone.
+        It never changes your Quest, Atlas, Run Access, or Global Scoreboard.
+      </p>
+      <div class="daily-contract" aria-label="Today’s Daily details">
+        <span class="section-label">Today in UTC</span>
+        <strong id="daily-date"></strong>
+        <span>Trail Scout · Labyrinth 5 · Developing</span>
+      </div>
+      <p class="daily-expired" id="daily-expired" role="status" hidden></p>
+      <p id="daily-boundary">
+        A Daily begins and expires at 00:00 UTC. Old links offer today’s maze
+        instead of replaying an expired one.
+      </p>
+      <p class="daily-record" id="daily-record"></p>
+      <div class="daily-dialog__actions">
+        <button class="primary-button" id="daily-start" type="button">
+          Start today’s Daily
+        </button>
+        <button class="control-button" id="daily-copy" type="button">
+          Copy today’s link
+        </button>
+        <button class="control-button" id="daily-return" type="button">
+          Return to Quest
+        </button>
+      </div>
     </dialog>
 
     <dialog

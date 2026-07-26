@@ -762,6 +762,7 @@ kbd {
 
 .atlas-dialog,
 .level-dialog,
+.daily-dialog,
 .challenge-dialog,
 .journal-dialog,
 .practice-dialog,
@@ -784,6 +785,7 @@ kbd {
 
 .atlas-dialog::backdrop,
 .level-dialog::backdrop,
+.daily-dialog::backdrop,
 .challenge-dialog::backdrop,
 .journal-dialog::backdrop,
 .practice-dialog::backdrop,
@@ -816,6 +818,7 @@ kbd {
 .dialog-intro,
 .journal-dialog > p,
 .practice-dialog > p,
+.daily-dialog > p,
 .lifetime-dialog > p,
 .result-dialog > p {
   color: var(--color-ink-muted);
@@ -828,6 +831,63 @@ kbd {
 .lifetime-dialog .dialog-intro,
 .scoreboard-dialog .dialog-intro {
   font-size: 1rem;
+}
+
+.daily-contract {
+  display: grid;
+  min-width: 0;
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  gap: var(--space-1);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-signal-soft);
+}
+
+.daily-contract strong {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  overflow-wrap: anywhere;
+}
+
+.daily-contract > span:last-child,
+.daily-record {
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.8rem;
+}
+
+.daily-dialog .dialog-heading {
+  flex-wrap: wrap;
+}
+
+.daily-dialog button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#daily-expired.daily-expired {
+  padding: var(--space-3);
+  color: var(--color-ink);
+  border-left: 0.3rem solid var(--color-warden);
+  background: var(--color-warden-soft);
+  font-weight: 700;
+}
+
+.daily-dialog__actions {
+  display: flex;
+  margin-top: var(--space-5);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.daily-dialog__actions button {
+  min-height: 2.75rem;
+}
+
+body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
+  display: none;
 }
 
 .atlas-dialog {
@@ -2087,6 +2147,7 @@ kbd {
 
   .atlas-dialog,
   .level-dialog,
+  .daily-dialog,
   .challenge-dialog,
   .journal-dialog,
   .practice-dialog,
@@ -2098,6 +2159,7 @@ kbd {
     padding: var(--space-4);
   }
 
+  .daily-dialog__actions,
   .lifetime-dialog__actions {
     flex-direction: column;
   }
