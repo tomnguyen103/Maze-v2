@@ -65,4 +65,31 @@ describe("composed player API", () => {
       });
     });
   });
+
+  it("keeps Cloud Quest storage optional without blocking local play", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/quest-progress`);
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringMatching(/Guest play still works/i)
+      });
+    });
+  });
+
+  it("fails Clerk account-deletion webhooks closed without storage", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/clerk-webhook`, {
+        method: "POST",
+        body: "{}"
+      });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringMatching(/Guest play still works/i)
+      });
+    });
+  });
 });

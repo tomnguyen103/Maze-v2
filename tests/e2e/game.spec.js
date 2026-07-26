@@ -523,6 +523,155 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
   expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.001);
 });
 
+test("keeps signed-out Quest progress local and playable", async ({
+  page
+}) => {
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
+  await expect(page.locator("#quest-sync-status")).toHaveText(
+    "Device save"
+  );
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#moves-value")).toHaveText("001");
+});
+
+test("shows an explicit keyboard-safe choice for different device Quests", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/play");
+  await page.locator("#level-dialog").evaluate(
+    /** @param {HTMLDialogElement} dialog */
+    (dialog) => dialog.close()
+  );
+  await page.evaluate(() => {
+    const local = document.getElementById("quest-conflict-local");
+    const cloud = document.getElementById("quest-conflict-cloud");
+    const intro = document.getElementById("quest-conflict-intro");
+    const dialog = document.getElementById("quest-conflict-dialog");
+    if (
+      !(local instanceof HTMLElement) ||
+      !(cloud instanceof HTMLElement) ||
+      !(intro instanceof HTMLElement) ||
+      !(dialog instanceof HTMLDialogElement)
+    ) {
+      throw new Error("Quest conflict dialog is unavailable.");
+    }
+    intro.textContent =
+      "This device and your account have different Quests. Compare both, then choose one.";
+    local.textContent = "This device Trail Scout 4 of 20 complete";
+    cloud.textContent = "Cloud Quest Maze Master 8 of 20 complete";
+    dialog.showModal();
+    document.getElementById("quest-conflict-title")?.focus();
+  });
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Trail Scout");
+  await expect(dialog).toContainText("Maze Master");
+  await expect(page.locator("#quest-conflict-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(
+    await page.evaluate(() => innerWidth)
+  );
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth
+      )
+    )
+    .toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Use Cloud Quest" }).click();
+  await expect(dialog).not.toBeVisible();
+});
+
+test("resumes an active Run after a repeated Cloud Quest conflict is resolved", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_repeat_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 4,
+    completedLabyrinths: 3,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_repeat_456",
+      labyrinthNumber: 8,
+      completedLabyrinths: 7
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            let choices = 0;
+            const conflict = ${JSON.stringify({ local, cloud })};
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(conflict);
+                return Promise.resolve(false);
+              },
+              resolveConflict() {
+                choices += 1;
+                if (choices === 1) {
+                  onConflict(conflict);
+                  return Promise.resolve(false);
+                }
+                return Promise.resolve(true);
+              }
+            };
+          }
+        `
+      });
+    }
+  );
+
+  await page.goto("/?seed=REPEATED-CLOUD-CONFLICT&level=trail-scout");
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep this device" }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Use Cloud Quest" }).click();
+
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
 test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
   page
 }) => {
@@ -779,6 +928,7 @@ test("preserves native button keyboard behavior and pause timing", async ({
 }) => {
   await page.goto("/?seed=BUTTON-KEYS");
   const pulseCount = page.locator("#pulse-count");
+  await expect(page.getByLabel(/Interactive maze/)).toBeFocused();
   await page.getByRole("button", { name: "Pause" }).focus();
   await page.keyboard.press("Space");
 
@@ -1252,4 +1402,13 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
       .map((element) => element.id || element.className || element.tagName)
   );
   expect(overflow, `overflow sources: ${overflowSources.join(", ")}`).toBeLessThanOrEqual(1);
+
+  const heading = await page.locator(".status-deck__heading").boundingBox();
+  const syncStatus = await page.locator("#quest-sync-status").boundingBox();
+  const metrics = await page.locator(".run-metrics").boundingBox();
+  if (!heading || !syncStatus || !metrics) {
+    throw new Error("Expected status layout at 200 percent text.");
+  }
+  expect(syncStatus.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+  expect(metrics.y).toBeGreaterThanOrEqual(syncStatus.y + syncStatus.height);
 });

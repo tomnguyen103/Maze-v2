@@ -151,6 +151,20 @@ Account-bound Quest Progress synchronized only at Labyrinth boundaries. An
 active in-progress Run remains on its current device.
 _Avoid_: live multiplayer sync, mid-Run resume
 
+**Quest ID**:
+The opaque identifier for one intentional twenty-Labyrinth Quest. It lets
+Quest Continuity distinguish two Quests at the same Quest Level.
+_Avoid_: Run ID, seed, account ID
+
+**Quest Revision**:
+The server-issued optimistic version of one Cloud Quest Progress record.
+_Avoid_: Labyrinth Number, schema version, save count
+
+**Quest Conflict**:
+A local and cloud Quest with different Quest IDs. The Explorer must explicitly
+choose which Quest to continue; neither record is silently overwritten.
+_Avoid_: automatic merge, newest-wins replacement
+
 **Lantern Journal**:
 A clearable learning view projected from bounded, reviewed Question outcomes
 during play.

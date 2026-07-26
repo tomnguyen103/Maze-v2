@@ -11,6 +11,7 @@ const MAX_MAP_HISTORY = 1000;
  * @typedef {"bright-start" | "trail-scout" | "maze-master"} QuestLevelId
  * @typedef {{
  *   version: 1,
+ *   questId: string,
  *   levelId: QuestLevelId,
  *   labyrinthNumber: number,
  *   completedLabyrinths: number,
@@ -28,9 +29,14 @@ const MAX_MAP_HISTORY = 1000;
 /**
  * @param {string} levelId
  * @param {number} [labyrinthNumber]
+ * @param {string} [questId]
  * @returns {QuestProgress}
  */
-export function createQuestProgress(levelId, labyrinthNumber = 1) {
+export function createQuestProgress(
+  levelId,
+  labyrinthNumber = 1,
+  questId = createQuestId()
+) {
   const level = getQuestLevel(levelId);
   if (level.id !== levelId) {
     throw new Error("Choose a valid Quest Level.");
@@ -42,8 +48,12 @@ export function createQuestProgress(levelId, labyrinthNumber = 1) {
   ) {
     throw new Error("Choose a valid Labyrinth Number.");
   }
+  if (!isQuestId(questId)) {
+    throw new Error("Choose a valid Quest ID.");
+  }
   return {
     version: 1,
+    questId,
     levelId: level.id,
     labyrinthNumber,
     completedLabyrinths: labyrinthNumber - 1,
@@ -141,7 +151,7 @@ export function loadQuestProgress(storage = globalThis.localStorage) {
     return null;
   }
   try {
-    const progress = normalizeProgress(
+    const progress = normalizeQuestProgress(
       JSON.parse(storage.getItem(QUEST_PROGRESS_KEY) ?? "null")
     );
     return progress;
@@ -159,7 +169,7 @@ export function saveQuestProgress(
   progress,
   storage = globalThis.localStorage
 ) {
-  const normalized = normalizeProgress(progress);
+  const normalized = normalizeQuestProgress(progress);
   if (!normalized) {
     throw new Error("Cannot save invalid Quest Progress.");
   }
@@ -172,14 +182,18 @@ export function saveQuestProgress(
 }
 
 /** @param {unknown} value @returns {QuestProgress | null} */
-function normalizeProgress(value) {
+export function normalizeQuestProgress(value) {
   if (!value || typeof value !== "object") {
     return null;
   }
   const candidate = /** @type {Partial<QuestProgress>} */ (value);
   const usedMapFingerprints = candidate.usedMapFingerprints ?? [];
+  const questId = isQuestId(candidate.questId)
+    ? candidate.questId
+    : deriveLegacyQuestId(candidate);
   if (
     candidate.version !== 1 ||
+    !questId ||
     (candidate.levelId !== "bright-start" &&
       candidate.levelId !== "trail-scout" &&
       candidate.levelId !== "maze-master") ||
@@ -219,6 +233,7 @@ function normalizeProgress(value) {
   }
   return {
     version: 1,
+    questId,
     levelId: candidate.levelId,
     labyrinthNumber: Number(candidate.labyrinthNumber),
     completedLabyrinths: Number(candidate.completedLabyrinths),
@@ -227,6 +242,48 @@ function normalizeProgress(value) {
     nextQuestionOrdinal: Number(candidate.nextQuestionOrdinal),
     complete: candidate.complete
   };
+}
+
+function createQuestId() {
+  const randomId = globalThis.crypto?.randomUUID?.();
+  if (randomId) {
+    return `quest_${randomId}`;
+  }
+  return `quest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+/** @param {unknown} value */
+function isQuestId(value) {
+  return (
+    typeof value === "string" &&
+    /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/i.test(value)
+  );
+}
+
+/** @param {Partial<QuestProgress>} candidate */
+function deriveLegacyQuestId(candidate) {
+  if (
+    candidate.version !== 1 ||
+    typeof candidate.levelId !== "string" ||
+    !Number.isInteger(candidate.labyrinthNumber)
+  ) {
+    return "";
+  }
+  const source = JSON.stringify({
+    levelId: candidate.levelId,
+    labyrinthNumber: candidate.labyrinthNumber,
+    completedLabyrinths: candidate.completedLabyrinths,
+    usedMapFingerprints: candidate.usedMapFingerprints ?? [],
+    usedQuestionIds: candidate.usedQuestionIds ?? [],
+    nextQuestionOrdinal: candidate.nextQuestionOrdinal,
+    complete: candidate.complete
+  });
+  let hash = 2166136261;
+  for (const character of source) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `legacy_${(hash >>> 0).toString(36).padStart(7, "0")}`;
 }
 
 /** @param {QuestProgress} progress @returns {QuestProgress} */
