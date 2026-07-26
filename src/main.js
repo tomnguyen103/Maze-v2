@@ -31,6 +31,11 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
+import { projectQuestAtlas } from "./game/quest-atlas.js";
+import {
+  createQuestAtlasView,
+  renderQuestAtlasSummary
+} from "./game/quest-atlas-view.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import {
@@ -55,13 +60,17 @@ const renderer = createCanvasRenderer(canvas);
 const audio = new EchoAudio();
 
 const elements = {
+  atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
   challengeDialog: requiredElement("challenge-dialog", HTMLDialogElement),
   challengeFeedback: requiredElement("challenge-feedback", HTMLElement),
+  challengeKicker: requiredElement("challenge-kicker", HTMLElement),
+  challengePromise: requiredElement("challenge-promise", HTMLElement),
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
+  challengeTitle: requiredElement("challenge-title", HTMLElement),
   echoCount: requiredElement("echo-count", HTMLElement),
   echoMeter: requiredElement("echo-meter", HTMLElement),
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
@@ -83,6 +92,7 @@ const elements = {
   resultDialog: requiredElement("result-dialog", HTMLDialogElement),
   resultKicker: requiredElement("result-kicker", HTMLElement),
   resultAccessNote: requiredElement("result-access-note", HTMLElement),
+  resultAtlas: requiredElement("result-atlas", HTMLElement),
   resultMoves: requiredElement("result-moves", HTMLElement),
   resultRank: requiredElement("result-rank", HTMLElement),
   resultSeed: requiredElement("result-seed", HTMLElement),
@@ -176,11 +186,13 @@ let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
 let eventTimer = 0;
+let resumeAfterAtlas = false;
 let resumeAfterRecords = false;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
 let demoAccessPending = hasCompletedGuestDemo();
+let completedQuestIdle = false;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
@@ -196,6 +208,14 @@ if (!mustChooseLevel && !activeRunLocator?.pending) {
 let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
+const atlasView = createQuestAtlasView({
+  onClose: () => {
+    if (resumeAfterAtlas && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAtlas = false;
+  }
+});
 
 void initializeRunEntry();
 requestAnimationFrame(tick);
@@ -305,6 +325,13 @@ elements.skipCancel.addEventListener("click", () => {
 elements.skipConfirm.addEventListener("click", () => {
   hideSkipWarning();
   transition({ type: "skip-question" });
+});
+elements.atlasButton.addEventListener("click", () => {
+  resumeAfterAtlas = run.status === "active";
+  if (resumeAfterAtlas) {
+    togglePause();
+  }
+  atlasView.show(projectQuestAtlas(questProgress), elements.atlasButton);
 });
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
@@ -445,6 +472,7 @@ document.addEventListener("visibilitychange", () => {
  * }} locator
  */
 function startRun(locator) {
+  completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
   run = createRun(
@@ -510,6 +538,13 @@ async function initializeRunEntry() {
     return;
   }
   if (storedQuestProgress !== null) {
+    if (storedQuestProgress.complete) {
+      completedQuestIdle = true;
+      updateInterface();
+      announce("Quest complete. Your restored Echo Atlas has all five Sigils.");
+      showEvent("Quest complete. Open the Atlas or start a New Quest.");
+      return;
+    }
     await startFreshRun();
     return;
   }
@@ -993,14 +1028,19 @@ function syncDemoAccountAction(signedIn) {
 
 /** @param {Direction | undefined} direction */
 function move(direction) {
-  if (demoAccessPending || !direction || run.status !== "active") {
+  if (
+    demoAccessPending ||
+    completedQuestIdle ||
+    !direction ||
+    run.status !== "active"
+  ) {
     return;
   }
   transition({ type: "move", direction });
 }
 
 function usePulse() {
-  if (demoAccessPending || run.status !== "active") {
+  if (demoAccessPending || completedQuestIdle || run.status !== "active") {
     return;
   }
   transition({ type: "pulse" });
@@ -1009,6 +1049,7 @@ function usePulse() {
 function togglePause() {
   if (
     demoAccessPending ||
+    completedQuestIdle ||
     activeRunLocator?.pending ||
     (run.status !== "active" && run.status !== "paused")
   ) {
@@ -1033,6 +1074,8 @@ function transition(action) {
       [
         "echo-collected",
         "gate-locked",
+        "gate-warden-challenge",
+        "gate-warden-defeated",
         "challenge-started",
         "question-skipped-free",
         "question-skipped-paid",
@@ -1084,6 +1127,20 @@ function syncChallengeDialog() {
   if (!elements.challengeDialog.open) {
     elements.challengeDialog.showModal();
   }
+
+  const isGateWarden = run.challenge.kind === "gate-warden";
+  elements.challengeDialog.dataset.kind = isGateWarden
+    ? "gate-warden"
+    : "warden";
+  elements.challengeKicker.textContent = isGateWarden
+    ? "Gate Warden challenge"
+    : "Warden challenge";
+  elements.challengeTitle.textContent = isGateWarden
+    ? "The Gate Warden seals the way."
+    : "A Warden blocks the path.";
+  elements.challengePromise.textContent = isGateWarden
+    ? "Answer correctly to break the seal. Then step through the Gate."
+    : "Answer correctly and the Warden is defeated.";
 
   const { question, feedback } = run.challenge;
   elements.challengeFeedback.classList.toggle(
@@ -1316,17 +1373,28 @@ function updateInterface() {
   elements.pulseCount.textContent = String(run.pulses);
   playerController.updateScore(run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
+  elements.atlasButton.disabled = run.status === "challenge";
   elements.recordsButton.disabled = run.status === "challenge";
-  elements.pause.textContent = run.status === "paused" ? "Resume" : "Pause";
-  elements.pause.disabled = run.status === "challenge";
+  elements.pause.textContent = completedQuestIdle
+    ? "Quest complete"
+    : run.status === "paused"
+      ? "Resume"
+      : "Pause";
+  elements.pause.disabled = run.status === "challenge" || completedQuestIdle;
   elements.pause.setAttribute("aria-pressed", String(run.status === "paused"));
-  elements.runState.textContent = {
-    active: run.gate.open ? "Gate open" : "Exploring",
-    paused: "Paused",
-    challenge: "Brain battle",
-    won: "Escaped",
-    lost: "Light lost"
-  }[run.status];
+  elements.runState.textContent = completedQuestIdle
+    ? "Quest complete"
+    : {
+        active: run.gate.open
+          ? run.gate.sealed
+            ? "Gate sealed"
+            : "Gate open"
+          : "Exploring",
+        paused: "Paused",
+        challenge: "Brain battle",
+        won: "Escaped",
+        lost: "Light lost"
+      }[run.status];
   const wardenMode = summarizeWardenMode();
   elements.wardenState.textContent = wardenModeLabel(wardenMode);
   elements.wardenReadout.dataset.mode = wardenMode;
@@ -1409,6 +1477,11 @@ function finishRun() {
     : won
       ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
       : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
+  renderQuestAtlasSummary(
+    elements.resultAtlas,
+    projectQuestAtlas(questProgress),
+    { finishedLabyrinthNumber, won }
+  );
   elements.resultAccessNote.hidden =
     latestRunAccess?.state !== "free" ||
     latestRunAccess.freeRunsRemaining !== 1;
@@ -1468,6 +1541,8 @@ function playEventSound(type) {
     moved: "move",
     blocked: "blocked",
     "gate-locked": "blocked",
+    "gate-warden-challenge": "challenge",
+    "gate-warden-defeated": "correct",
     "echo-collected": "echo",
     pulse: "pulse",
     "challenge-started": "challenge",

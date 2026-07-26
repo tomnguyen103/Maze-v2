@@ -106,7 +106,7 @@ describe("Quest Progress", () => {
     ]);
   });
 
-  it("ignores malformed or completed stored Quest Progress", () => {
+  it("ignores malformed stored Quest Progress", () => {
     const storage = createStorage();
     storage.setItem(
       "echo-maze:quest-progress:v1",
@@ -121,16 +121,19 @@ describe("Quest Progress", () => {
       })
     );
     expect(loadQuestProgress(storage)).toBeNull();
+  });
 
-    saveQuestProgress(
-      {
-        ...createQuestProgress("trail-scout"),
-        labyrinthNumber: 20,
-        completedLabyrinths: 20,
-        complete: true
-      },
-      storage
-    );
-    expect(loadQuestProgress(storage)).toBeNull();
+  it("restores completed Quest Progress until a new Quest is started", () => {
+    const storage = createStorage();
+    const completed = {
+      ...createQuestProgress("trail-scout"),
+      labyrinthNumber: 20,
+      completedLabyrinths: 20,
+      complete: true
+    };
+
+    saveQuestProgress(completed, storage);
+
+    expect(loadQuestProgress(storage)).toEqual(completed);
   });
 });

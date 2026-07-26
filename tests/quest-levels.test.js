@@ -4,7 +4,8 @@ import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
   getLabyrinthConfig,
-  getQuestLevel
+  getQuestLevel,
+  isGateWardenMilestone
 } from "../src/questions/quest-levels.js";
 
 describe("Quest Level progression", () => {
@@ -27,6 +28,20 @@ describe("Quest Level progression", () => {
     expect(getDifficultyBand(16).id).toBe("advanced");
     expect(getDifficultyBand(17).id).toBe("mastery");
     expect(getDifficultyBand(20).id).toBe("mastery");
+  });
+
+  it("classifies only every fourth Labyrinth as a Gate Warden milestone", () => {
+    expect(
+      Array.from({ length: QUEST_LABYRINTH_COUNT }, (_, index) => index + 1)
+        .filter(isGateWardenMilestone)
+    ).toEqual([4, 8, 12, 16, 20]);
+    expect(getLabyrinthConfig("trail-scout", 4)).toMatchObject({
+      gateWarden: true,
+      wardenCount: 2
+    });
+    expect(getLabyrinthConfig("trail-scout", 5)).not.toHaveProperty(
+      "gateWarden"
+    );
   });
 
   it("scales each Quest Level through the approved Labyrinth ranges", () => {

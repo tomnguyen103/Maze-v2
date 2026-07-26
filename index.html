@@ -23,6 +23,9 @@
       <a class="wordmark" href="#" aria-label="Echo Maze home">Echo Maze</a>
       <h1 id="quest-headline">Choose a quest. Outsmart the Wardens.</h1>
       <div class="command-bar__actions">
+        <button class="control-button" id="atlas-button" type="button">
+          Atlas
+        </button>
         <button class="control-button" id="records-button" type="button">
           Records
         </button>
@@ -176,7 +179,9 @@
             <ul>
               <li><span class="legend-mark legend-mark--explorer"></span>Explorer</li>
               <li><span class="legend-mark legend-mark--echo"></span>Echo</li>
-              <li><span class="legend-mark legend-mark--gate"></span>Gate</li>
+              <li><span class="legend-mark legend-mark--gate-locked"></span>Locked Gate</li>
+              <li><span class="legend-mark legend-mark--gate-sealed"></span>Open, sealed Gate</li>
+              <li><span class="legend-mark legend-mark--gate-open"></span>Open Gate</li>
               <li><span class="legend-mark legend-mark--warden"></span>Warden</li>
             </ul>
           </div>
@@ -194,6 +199,26 @@
     </footer>
 
     <p class="sr-only" id="live-region" aria-live="polite"></p>
+
+    <dialog
+      class="atlas-dialog"
+      id="atlas-dialog"
+      aria-labelledby="atlas-title"
+      aria-describedby="atlas-progress atlas-legend"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">Quest Progress</span>
+          <h2 id="atlas-title" tabindex="-1">Echo Atlas</h2>
+        </div>
+        <button class="control-button" id="atlas-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro" id="atlas-progress"></p>
+      <p class="atlas-legend" id="atlas-legend">
+        Each numbered mark includes its state in text. Diamond marks are Gate Warden milestones.
+      </p>
+      <div class="atlas-regions" id="atlas-regions"></div>
+    </dialog>
 
     <dialog class="level-dialog" id="level-dialog" aria-labelledby="level-title">
       <div class="level-dialog__intro">
@@ -234,7 +259,7 @@
       aria-describedby="challenge-promise challenge-feedback challenge-question"
     >
       <div class="challenge-dialog__crest" aria-hidden="true">?</div>
-      <span class="section-label">Warden challenge</span>
+      <span class="section-label" id="challenge-kicker">Warden challenge</span>
       <h2 id="challenge-title">A Warden blocks the path.</h2>
       <p class="challenge-dialog__promise" id="challenge-promise">Answer correctly and the Warden is defeated.</p>
       <div class="challenge-feedback" id="challenge-feedback" role="status">
@@ -416,6 +441,7 @@
       <h2 id="result-title">Gate reached.</h2>
       <p id="result-summary"></p>
       <p class="result-access-note" id="result-access-note" hidden></p>
+      <div class="result-atlas" id="result-atlas" aria-label="Echo Atlas progress"></div>
       <div class="result-dialog__stats">
         <span><strong id="result-time">00:00</strong> time</span>
         <span><strong id="result-moves">000</strong> moves</span>

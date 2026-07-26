@@ -18,6 +18,7 @@
  *   explanation: string
  * }} ChallengeFeedback
  * @typedef {{
+ *   kind?: "gate-warden",
  *   wardenId: number,
  *   question: WardenQuestion | null,
  *   attempt: number,
@@ -29,14 +30,16 @@
  *   echoCount?: number,
  *   wardenCount?: number,
  *   vitality?: number,
- *   pulses?: number
+ *   pulses?: number,
+ *   gateWarden?: boolean
  * }} RunConfigInput
  * @typedef {{
  *   size: number,
  *   echoCount: number,
  *   wardenCount: number,
  *   vitality: number,
- *   pulses: number
+ *   pulses: number,
+ *   gateWarden?: true
  * }} RunConfig
  * @typedef {"active" | "paused" | "challenge" | "won" | "lost"} RunStatus
  * @typedef {{
@@ -50,8 +53,9 @@
  *   labyrinth: number[][],
  *   explorer: Position & { vitality: number, maxVitality: number },
  *   echoes: Echo[],
- *   gate: Position & { open: boolean },
+ *   gate: Position & { open: boolean, sealed?: boolean },
  *   wardens: Warden[],
+ *   gateWarden?: { id: number, defeated: boolean },
  *   challenge: WardenChallenge | null,
  *   revealed: string[],
  *   pulseVisible: string[],
@@ -145,7 +149,7 @@ export function createRun(requestedSeed, input = {}) {
   ).map((position) => ({ ...position, collected: false }));
 
   /** @type {Warden[]} */
-  const wardens = pickEntities(
+  const generatedWardens = pickEntities(
     openTiles,
     distances,
     occupied,
@@ -153,6 +157,12 @@ export function createRun(requestedSeed, input = {}) {
     random,
     Math.max(5, Math.floor(config.size * 0.6))
   ).map((position, id) => ({ ...position, id, mode: "patrol" }));
+  const gateWarden = config.gateWarden
+    ? generatedWardens.at(-1)
+    : undefined;
+  const wardens = gateWarden
+    ? generatedWardens.slice(0, -1)
+    : generatedWardens;
 
   const explorer = {
     ...explorerPosition,
@@ -167,8 +177,13 @@ export function createRun(requestedSeed, input = {}) {
     labyrinth,
     explorer,
     echoes,
-    gate: { ...gatePosition, open: config.echoCount === 0 },
+    gate: gateWarden
+      ? { ...gatePosition, open: config.echoCount === 0, sealed: true }
+      : { ...gatePosition, open: config.echoCount === 0 },
     wardens,
+    ...(gateWarden
+      ? { gateWarden: { id: gateWarden.id, defeated: false } }
+      : {}),
     challenge: null,
     revealed: revealKeys(labyrinth, explorer, 2),
     pulseVisible: [],
@@ -372,6 +387,24 @@ export function applyAction(run, action) {
         }
       };
     }
+    if (run.challenge.kind === "gate-warden") {
+      return {
+        ...run,
+        gate: { ...run.gate, sealed: false },
+        gateWarden: run.gateWarden
+          ? { ...run.gateWarden, defeated: true }
+          : undefined,
+        challenge: null,
+        pulses: run.pulses + 1,
+        score: run.score + 100,
+        wardensDefeated: run.wardensDefeated + 1,
+        status: "active",
+        event: {
+          type: "gate-warden-defeated",
+          message: `Correct! ${question.explanation} The Gate Warden yields. The seal breaks, and you earned 1 Pulse and 100 score.`
+        }
+      };
+    }
     return {
       ...run,
       wardens: run.wardens.filter(
@@ -438,6 +471,33 @@ function resolveMove(run, directionName) {
   }
 
   const nextMoves = run.moves + 1;
+  if (
+    samePosition(target, run.gate) &&
+    run.gate.open &&
+    run.gate.sealed &&
+    run.gateWarden &&
+    !run.gateWarden.defeated
+  ) {
+    return expirePulse({
+      ...cloneRun(run),
+      moves: nextMoves,
+      lastDirection: directionName,
+      status: "challenge",
+      challenge: {
+        kind: "gate-warden",
+        wardenId: run.gateWarden.id,
+        question: null,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      },
+      event: {
+        type: "gate-warden-challenge",
+        message: "The Gate is open but sealed. Defeat its Warden to pass."
+      }
+    });
+  }
+
   /** @type {GameRun} */
   let next = {
     ...cloneRun(run),
@@ -564,7 +624,9 @@ function collectEcho(run) {
     event: {
       type: "echo-collected",
       message: allCollected
-        ? "Final Echo recovered. The Gate is open. You earned 50 score."
+        ? run.gate.sealed
+          ? "Final Echo recovered. The Gate is open but sealed. The Gate Warden waits. You earned 50 score."
+          : "Final Echo recovered. The Gate is open. You earned 50 score."
         : `Echo recovered. ${echoes.filter((echo) => !echo.collected).length} remain. You earned 50 score.`
     }
   };
@@ -737,6 +799,9 @@ function cloneRun(run) {
     gate: { ...run.gate },
     echoes: run.echoes.map((echo) => ({ ...echo })),
     wardens: run.wardens.map((warden) => ({ ...warden })),
+    ...(run.gateWarden
+      ? { gateWarden: { ...run.gateWarden } }
+      : {}),
     challenge: run.challenge
       ? {
           ...run.challenge,
@@ -766,13 +831,16 @@ function normalizeConfig(input) {
   if (size % 2 === 0) {
     size += size === 25 ? -1 : 1;
   }
-  return {
+  const config = {
     size,
     echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 8),
     wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 6),
     vitality: clampInteger(input.vitality, DEFAULT_CONFIG.vitality, 1, 9),
     pulses: clampInteger(input.pulses, DEFAULT_CONFIG.pulses, 0, 5)
   };
+  return input.gateWarden === true
+    ? { ...config, gateWarden: true }
+    : config;
 }
 
 /**

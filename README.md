@@ -18,11 +18,19 @@ The original project is preserved at
 - Choose Bright Start, Trail Scout, or Maze Master. Each Quest Level changes
   the maze, resources, Warden count, and question difficulty.
 - Recover every Echo before entering the Gate.
+- Open `Atlas` to inspect the five-region, twenty-Labyrinth Echo Atlas. It is
+  derived from Quest Progress, pauses the Run while open, and restores one
+  cosmetic region Sigil after each fourth Labyrinth.
 - Wardens move after each valid action. They Patrol objectives, Hunt nearby
   Explorers, and Intercept predictable movement.
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
   incorrectly to lose one Vitality and, if Vitality remains, try a new question.
   Each defeated Warden awards one Pulse and 100 score.
+- Labyrinths 4, 8, 12, 16, and 20 reserve one configured Warden as a Gate
+  Warden. Recovering every Echo opens the Gate but leaves it sealed; answer the
+  normal paused Warden challenge to break the seal, then step through. The
+  configured Warden count, score ceiling, Hint, Skip, Vitality, fallback, and
+  Quest-wide Question uniqueness rules stay unchanged.
 - One complete Guest Run is available before account creation. Signed-in
   Explorers receive three server-authorized free Run starts. They can also
   claim a unique username, choose Explorer and playground colors, and submit
@@ -130,6 +138,9 @@ push.
 ## Architecture
 
 - `src/game/game-session.js` contains deterministic generation and pure rules.
+- `src/game/quest-atlas.js` derives Atlas regions, nodes, milestone states, and
+  cosmetic Sigils from version-1 Quest Progress without a second progress
+  store; `src/game/quest-atlas-view.js` owns its accessible presentation.
 - `src/questions/` contains Quest Levels and the deterministic fallback deck.
 - `server/question-service.js` selects Ollama locally or Gemini in production,
   requests reviewed structured output, caches it, validates child safety, and
