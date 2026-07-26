@@ -41,7 +41,6 @@ describe("release readiness evidence", () => {
         "Delivered",
         "Deferred - external approval",
         "Not applicable",
-        "Pending mandatory review",
         "Pending remote-main proof"
       ]).toContain(row[statusIndex]);
     }
