@@ -2,11 +2,11 @@
 
 **Opened:** 2026-07-25
 
-**Live baseline:** `9391e04` on `main`; signed-in allowance and lifetime
-membership are merged through PRs #49-#50. Current #43 worktree proof includes
-248 passing Vitest cases plus 60 passing Playwright cases with 4 intentional
-environment/project skips, including complete desktop/mobile Atlas and
-Labyrinth 4 Gate Warden journeys. Merge remains pending.
+**Live baseline:** `7702dff` on `main`; signed-in allowance, lifetime
+membership, Echo Atlas, and Gate Warden milestones are merged through PRs
+#49-#51. Current #47 worktree proof includes 256 passing Vitest cases plus 74
+passing Playwright cases with 4 intentional Clerk-environment skips, including
+complete desktop/mobile Daily Shared Labyrinth journeys. Merge remains pending.
 
 **Authority:** the attached implementation approval, then `AGENTS.md`, then the
 combined master plan. A source document being marked draft or superseded does
@@ -42,7 +42,7 @@ are updated only from verified evidence.
 | C21 | Lantern Journal remembers bounded reviewed learning outcomes and can be cleared separately | Master 17/25; Roadmap 10, Release D | Missing | Add allowlisted `topicId` and `learningObjectiveId`; local bounded attempt-event projection | #45 | Metadata validation/projection/clear tests pending |
 | C22 | Optional Practice uses a different reviewed card, no Warden/timer/Vitality/score/Quest effect, encouraging feedback | Roadmap 10 Acceptance/vertical slices | Missing | Result-screen Practice Lantern through reviewed Question seam | #45 | Isolation and non-repeat tests pending |
 | C23 | Explorer Access Settings: stronger contrast, larger marks, reader-friendly Questions, reduced effects, preview/save/reset | Master 17/25; Roadmap 11, Release E | Missing | Versioned local presentation-only settings adapter; default remains `design.md` | #46 | Deterministic rendering and mobile/zoom tests pending |
-| C24 | Daily Shared Labyrinth is date-deterministic, fair, privacy-safe, separate from Quest, casual, shareable, and expiry-safe | Master 17/25; Roadmap 12-15, Release F | Missing | UTC-dated bundled contract, separate local Daily record, no scarce reward or global claim | #47 | Same-date/time-zone/Quest-isolation/expiry tests pending |
+| C24 | Daily Shared Labyrinth is date-deterministic, fair, privacy-safe, separate from Quest, casual, shareable, and expiry-safe | Master 17/25; Roadmap 12-15, Release F | Delivered (merge pending) | UTC-dated bundled contract, separate local Daily record, no scarce reward or global claim | #47 | Pure contract/storage fixtures plus desktop/mobile same-maze, bundled-Question, no-access, Quest-isolation, privacy-safe share, expiry, and Personal Best passages pass; merge pending |
 | C25 | Platform trust: explicit database certificate verification, Clerk timeout fallback, bundle baseline, storage/migration characterization | Roadmap 6; Master 15/24 | Partial | Keep dynamic Clerk boundary; normalize production/preview DB SSL config; document bundle budgets and migration proof | #41 | 3 SSL tests, four budgets, Clerk fallback, and development-Neon proof; merged PR #49 |
 | C26 | Observability uses privacy-minimized allowlisted events and never logs secrets, raw webhooks, card data, or child data | Master 17, 23; Membership 10, 15 | Missing | Small structured event interface and in-memory test adapter; no new analytics vendor | #41, #48 | Access and lifetime allowlist tests exclude IDs, secrets, and commercial/card fields; #42 PR pending |
 | C27 | Support, refund, dispute, deletion, privacy, rollback, and receipt-recovery runbooks exist before live payment | Master T17-T18, 22.6; Membership 8.5, 12, M9 | Missing | Add production setup and support runbooks; enforcement flag can disable gates without deleting entitlements | #48 | Lifetime test setup/support/recovery/privacy/rollback runbook added; final cross-feature drill pending |
