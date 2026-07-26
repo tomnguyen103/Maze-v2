@@ -51,7 +51,7 @@ npx playwright test --workers=4
 
 Final integrated closure-candidate evidence:
 
-- Vitest: 370 passed; 4 intentional environment skips
+- Vitest: 373 passed; 4 intentional environment skips
 - Playwright desktop/mobile: 103 passed; 5 intentional Clerk-network skips
 - Live PostgreSQL integration: 4 passed across Run Access and Journal stores
 - Landing JavaScript: 6.31 KB gzip / 8 KB
