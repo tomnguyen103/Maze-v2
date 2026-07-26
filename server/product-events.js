@@ -21,7 +21,7 @@ export function createProductEventRecorder({
   return function recordProductEvent(eventName, fields) {
     const allowedFields =
       EVENT_FIELDS[/** @type {keyof typeof EVENT_FIELDS} */ (eventName)];
-    if (!allowedFields) {
+    if (!Object.hasOwn(EVENT_FIELDS, eventName) || !Array.isArray(allowedFields)) {
       return;
     }
     /** @type {Record<string, unknown>} */

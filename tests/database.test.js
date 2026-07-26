@@ -31,4 +31,12 @@ describe("database connection security", () => {
       )
     ).toBe("postgresql://user:secret@127.0.0.1:5432/maze");
   });
+
+  it("recognizes the bracketed IPv6 loopback hostname as local", () => {
+    expect(
+      normalizeDatabaseConnectionString(
+        "postgresql://user:secret@[::1]:5432/maze"
+      )
+    ).toBe("postgresql://user:secret@[::1]:5432/maze");
+  });
 });

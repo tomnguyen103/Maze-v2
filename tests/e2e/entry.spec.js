@@ -178,6 +178,7 @@ test("copies an explicit share link without changing normal gameplay URL", async
     );
     return locator?.runId;
   });
+  expect(firstAccessRunId).toMatch(/^access_[A-Za-z0-9_-]+$/);
   await page.reload();
   const reloadedAccessRunId = await page.evaluate(() => {
     const locator = JSON.parse(

@@ -4,7 +4,7 @@ import { attachDatabasePool } from "@vercel/functions";
 /** @param {string} connectionString */
 export function normalizeDatabaseConnectionString(connectionString) {
   const url = new URL(connectionString);
-  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
   if (!localHosts.has(url.hostname)) {
     url.searchParams.set("sslmode", "verify-full");
   }

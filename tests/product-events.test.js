@@ -32,4 +32,12 @@ describe("privacy-minimized product events", () => {
 
     expect(write).not.toHaveBeenCalled();
   });
+
+  it("drops inherited object keys instead of treating them as event schemas", () => {
+    const write = vi.fn();
+    const record = createProductEventRecorder({ write });
+
+    expect(() => record("constructor", { body: "secret" })).not.toThrow();
+    expect(write).not.toHaveBeenCalled();
+  });
 });
