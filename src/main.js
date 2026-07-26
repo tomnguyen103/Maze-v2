@@ -50,6 +50,8 @@ import {
 import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
+import { applyAccessSettings } from "./player/access-settings.js";
+import { createAccessSettingsView } from "./player/access-settings-view.js";
 import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
@@ -61,6 +63,7 @@ const audio = new EchoAudio();
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
+  settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
@@ -188,6 +191,7 @@ let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterRecords = false;
+let resumeAfterAccessSettings = false;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
@@ -215,6 +219,19 @@ const atlasView = createQuestAtlasView({
     }
     resumeAfterAtlas = false;
   }
+});
+const accessSettingsView = createAccessSettingsView({
+  onApply: (settings) => {
+    applyAccessSettings(settings);
+    renderer.render(run);
+  },
+  onClose: () => {
+    if (resumeAfterAccessSettings && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAccessSettings = false;
+  },
+  onSave: () => announce("Explorer Access Settings saved on this device.")
 });
 
 void initializeRunEntry();
@@ -340,6 +357,13 @@ elements.recordsButton.addEventListener("click", () => {
   }
   renderRunRecords();
   elements.recordsDialog.showModal();
+});
+elements.settingsButton.addEventListener("click", () => {
+  resumeAfterAccessSettings = run.status === "active";
+  if (resumeAfterAccessSettings) {
+    togglePause();
+  }
+  accessSettingsView.show(elements.settingsButton);
 });
 elements.recordsClose.addEventListener("click", () => {
   elements.recordsDialog.close();
@@ -1375,6 +1399,7 @@ function updateInterface() {
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
   elements.atlasButton.disabled = run.status === "challenge";
   elements.recordsButton.disabled = run.status === "challenge";
+  elements.settingsButton.disabled = run.status === "challenge";
   elements.pause.textContent = completedQuestIdle
     ? "Quest complete"
     : run.status === "paused"

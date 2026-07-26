@@ -333,6 +333,196 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   );
 });
 
+test("previews, saves, and resets presentation-only Explorer Access Settings", async ({
+  page
+}) => {
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  const settingsButton = page.getByRole("button", { name: "Settings" });
+  const initialRunFacts = await page.evaluate(() => ({
+    seed: document.querySelector("#seed-value")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    echoes: document.querySelector("#echo-count")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    canvasWidth: document.querySelector("#maze-canvas")?.getAttribute("width"),
+    canvasHeight: document.querySelector("#maze-canvas")?.getAttribute("height")
+  }));
+  const defaultFog = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-fog")
+      .trim()
+  );
+
+  await settingsButton.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", {
+    name: "Explorer Access Settings"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#access-settings-title")).toBeFocused();
+  const defaultQuestionFamily = await page
+    .locator(".access-question-preview")
+    .evaluate((element) => getComputedStyle(element).fontFamily);
+  const defaultAnswerLineHeight = await page
+    .locator(".access-answer-preview strong")
+    .evaluate((element) => getComputedStyle(element).lineHeight);
+
+  const contrast = page.getByLabel("Stronger Fog contrast");
+  await contrast.focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-contrast",
+    "strong"
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-marks",
+    "large"
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:explorer-access-settings:v1")
+    )
+  ).toBeNull();
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-fog")
+        .trim()
+    )
+  ).not.toBe(defaultFog);
+  expect(
+    await page.locator(".access-question-preview").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toContain("Geist");
+  expect(
+    await page.locator(".access-answer-preview strong").evaluate(
+      (element) => getComputedStyle(element).lineHeight
+    )
+  ).not.toBe(defaultAnswerLineHeight);
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(settingsButton).toBeFocused();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-contrast",
+    "default"
+  );
+  expect(
+    await page.locator(".access-question-preview").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toBe(defaultQuestionFamily);
+  expect(
+    await page.locator(".access-answer-preview strong").evaluate(
+      (element) => getComputedStyle(element).lineHeight
+    )
+  ).toBe(defaultAnswerLineHeight);
+
+  await settingsButton.click();
+  await page.getByLabel("Stronger Fog contrast").check();
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  const storedSettings = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:explorer-access-settings:v1")
+  );
+  expect(JSON.parse(storedSettings ?? "null")).toEqual({
+    version: 1,
+    highContrast: true,
+    largeMarks: true,
+    readerFriendlyQuestions: true,
+    reducedEffects: true
+  });
+  const savedRunFacts = await page.evaluate(() => ({
+    seed: document.querySelector("#seed-value")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    echoes: document.querySelector("#echo-count")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    canvasWidth: document.querySelector("#maze-canvas")?.getAttribute("width"),
+    canvasHeight: document.querySelector("#maze-canvas")?.getAttribute("height")
+  }));
+  expect(savedRunFacts).toEqual(initialRunFacts);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-type",
+    "reader"
+  );
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(page.locator("#access-settings-status")).toHaveText(
+    "Canonical design restored."
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-effects",
+    "system"
+  );
+});
+
+test("keeps every Access Setting readable at mobile fold and 200 percent text", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?seed=ACCESS-FOLD&level=trail-scout");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Stronger Fog contrast").check();
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  const mobileMaze = await page.locator("#maze-canvas").boundingBox();
+  const touchControls = await page.locator(".touch-controls").boundingBox();
+  if (!mobileMaze || !touchControls) {
+    throw new Error("Expected mobile gameplay controls.");
+  }
+  expect(mobileMaze.y + mobileMaze.height).toBeLessThanOrEqual(844);
+  expect(touchControls.y + touchControls.height).toBeLessThanOrEqual(844);
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--maze-mark-scale")
+        .trim()
+    )
+  ).toBe("1.22");
+  expect(
+    await page.locator("#challenge-question").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toContain("Geist");
+
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+    document.querySelector("#canvas-frame")?.classList.add("is-hurt");
+  });
+  await page.getByRole("button", { name: "Settings" }).click();
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  const saveSettings = page.getByRole("button", { name: "Save settings" });
+  await expect(saveSettings).toBeVisible();
+  await saveSettings.scrollIntoViewIfNeeded();
+  const saveBounds = await saveSettings.boundingBox();
+  if (!saveBounds) {
+    throw new Error("Expected the Settings actions.");
+  }
+  expect(saveBounds.y).toBeGreaterThanOrEqual(0);
+  expect(saveBounds.y + saveBounds.height).toBeLessThanOrEqual(844);
+  const animationDuration = await page
+    .locator("#canvas-frame")
+    .evaluate((element) => getComputedStyle(element).animationDuration);
+  expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.001);
+});
+
 test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
   page
 }) => {

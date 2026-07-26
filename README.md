@@ -45,6 +45,11 @@ The original project is preserved at
   the same active Labyrinth from its device-local locator.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress.
+- Open `Settings` to preview and save device-local stronger Fog contrast,
+  larger maze marks, reader-friendly Question text, or reduced visual effects.
+  These settings never alter Labyrinth geometry, timing, Questions, score, or
+  Quest Progress, and the operating-system reduced-motion preference is always
+  respected.
 - New run guarantees a different seed and Labyrinth layout.
 - Sound is optional and never starts without player input.
 
@@ -156,6 +161,9 @@ push.
 - `server/lifetime-*.js` and `server/stripe-lifetime.js` own fixed-price
   Checkout verification, replay-safe webhooks, and durable entitlement state.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
+- `src/player/access-settings.js` owns the versioned, device-local
+  presentation contract; `src/player/access-settings-view.js` owns preview,
+  save, cancel, and canonical reset behavior.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 
 Game-rule decisions live under `docs/adr/`, including deterministic Warden
