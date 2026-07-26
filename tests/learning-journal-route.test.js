@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createLearningJournalHandler } from "../server/learning-journal-route.js";
 
 const JOURNAL = {
@@ -138,5 +138,27 @@ describe("learning Journal API", () => {
         expect(response.status).toBe(400);
       }
     });
+  });
+
+  it("logs only a bounded error class when storage fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = createStore();
+    store.getJournal = async () => {
+      throw new Error("database token must-not-leak");
+    };
+    const handler = createLearningJournalHandler({
+      store,
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      expect((await fetch(`${origin}/api/learning-journal`)).status).toBe(500);
+    });
+    expect(log).toHaveBeenCalledWith(
+      "[learning-journal] API request failed",
+      { name: "Error" }
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain("must-not-leak");
+    log.mockRestore();
   });
 });

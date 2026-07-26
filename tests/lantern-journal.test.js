@@ -52,6 +52,25 @@ describe("Lantern Journal", () => {
     expect(JSON.stringify(recorded)).not.toContain("answerId");
   });
 
+  it("records reviewed Daily question identifiers with seven-digit ordinals", () => {
+    const dailyQuestion = getBundledQuestion({
+      levelId: "trail-scout",
+      seed: "DAILY-20260726",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 1_322_240
+    });
+
+    const recorded = recordLearningOutcome(
+      createLanternJournal(),
+      dailyQuestion,
+      "correct",
+      () => EVENT_IDS[0]
+    );
+
+    expect(recorded.events[0].questionId).toBe(dailyQuestion.id);
+  });
+
   it("aggregates repeated outcomes deterministically by learning objective", () => {
     let journal = createLanternJournal();
     journal = recordLearningOutcome(

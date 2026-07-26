@@ -9,7 +9,7 @@ const OUTCOMES = new Set(["correct", "wrong", "hint", "skip"]);
 const EVENT_ID_PATTERN =
   /^event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const QUESTION_ID_PATTERN =
-  /^(bright|scout|master)-(foundation|developing|capable|advanced|mastery)-([0-9]{1,6})$/;
+  /^(bright|scout|master)-(foundation|developing|capable|advanced|mastery)-([0-9]{1,10})$/;
 const BAND_ORDER = Object.freeze([
   ["foundation", "Foundation"],
   ["developing", "Developing"],

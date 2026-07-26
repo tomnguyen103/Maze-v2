@@ -3,6 +3,7 @@ import {
   normalizeLanternJournal
 } from "../src/learning/lantern-journal.js";
 import { URL } from "node:url";
+import { safeErrorName } from "./safe-error-log.js";
 
 export const LEARNING_JOURNAL_PATH = "/api/learning-journal";
 const MAX_BODY_BYTES = 128 * 1024;
@@ -81,7 +82,9 @@ export function createLearningJournalHandler({ store, getUserId }) {
         sendJson(response, 400, { error: error.message });
         return;
       }
-      console.error("[learning-journal] API request failed", error);
+      console.error("[learning-journal] API request failed", {
+        name: safeErrorName(error)
+      });
       sendJson(response, 500, {
         error: "Lantern Journal cloud sync is unavailable."
       });
