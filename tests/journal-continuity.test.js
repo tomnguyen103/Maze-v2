@@ -59,6 +59,48 @@ describe("Lantern Journal continuity", () => {
     );
   });
 
+  it("clears authenticated cloud history when device storage is denied", async () => {
+    let cloudJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(10),
+          questionId: question().id,
+          topicId: question().topicId,
+          learningObjectiveId: question().learningObjectiveId,
+          difficultyBand: question().difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => ({ journal: cloudJournal })),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => {
+        cloudJournal = createLanternJournal();
+      })
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      }
+    });
+
+    await continuity.selectUser("user_a");
+    expect(continuity.getJournal().events).toHaveLength(1);
+    continuity.clear();
+    await continuity.whenIdle();
+
+    expect(client.clearLearningJournal).toHaveBeenCalledOnce();
+    expect(continuity.getJournal().events).toHaveLength(0);
+    expect(cloudJournal.events).toHaveLength(0);
+  });
+
   it("migrates guest learning once into the selected authenticated account", async () => {
     const storage = createStorage();
     const client = {

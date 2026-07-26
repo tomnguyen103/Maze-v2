@@ -29,6 +29,7 @@ export function createJournalContinuity({
   let selectedUserId = "";
   let authEpoch = 0;
   let journal = createLanternJournal();
+  const pendingClearUsers = new Set();
   /** @type {Promise<void>} */
   let idle = Promise.resolve();
 
@@ -97,6 +98,7 @@ export function createJournalContinuity({
     let stored = writeJournal(journalKey(selectedUserId), journal);
     authEpoch += 1;
     if (selectedUserId) {
+      pendingClearUsers.add(selectedUserId);
       stored = setItem(clearKey(selectedUserId), "pending") && stored;
       idle = queueCloudSync(authEpoch, selectedUserId);
     }
@@ -133,10 +135,13 @@ export function createJournalContinuity({
       return;
     }
     try {
-      const pendingClear = getItem(clearKey(userId)) === "pending";
+      const pendingClear =
+        pendingClearUsers.has(userId) ||
+        getItem(clearKey(userId)) === "pending";
       if (pendingClear) {
         await client.clearLearningJournal();
         if (!isCurrent(epoch, userId)) return;
+        pendingClearUsers.delete(userId);
         removeItem(clearKey(userId));
         if (journal.events.length === 0) {
           onStatus("");
