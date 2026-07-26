@@ -1,4 +1,9 @@
 import { getBundledQuestion } from "../src/questions/question-bank.js";
+import {
+  LEARNING_OBJECTIVE_IDS,
+  LEARNING_TOPIC_IDS,
+  isLearningMetadata
+} from "../src/questions/learning-objectives.js";
 import { getQuestLevel } from "../src/questions/quest-levels.js";
 
 /**
@@ -18,7 +23,9 @@ import { getQuestLevel } from "../src/questions/quest-levels.js";
  *   hint: string,
  *   explanation: string,
  *   difficultyBand: string,
- *   difficultyRank: number
+ *   difficultyRank: number,
+ *   topicId: string,
+ *   learningObjectiveId: string
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
@@ -59,7 +66,12 @@ export const QUESTION_SCHEMA = Object.freeze({
       type: "string",
       enum: ["foundation", "developing", "capable", "advanced", "mastery"]
     },
-    difficultyRank: { type: "integer", minimum: 1, maximum: 99 }
+    difficultyRank: { type: "integer", minimum: 1, maximum: 99 },
+    topicId: { type: "string", enum: LEARNING_TOPIC_IDS },
+    learningObjectiveId: {
+      type: "string",
+      enum: LEARNING_OBJECTIVE_IDS
+    }
   },
   required: [
     "id",
@@ -69,7 +81,9 @@ export const QUESTION_SCHEMA = Object.freeze({
     "hint",
     "explanation",
     "difficultyBand",
-    "difficultyRank"
+    "difficultyRank",
+    "topicId",
+    "learningObjectiveId"
   ]
 });
 
@@ -147,6 +161,15 @@ export function normalizeQuestion(rawQuestion, fallbackId = "generated-question"
   ) {
     throw new Error("Question difficulty rank is not valid.");
   }
+  const topicId = requiredText(raw.topicId, "topic id", 40);
+  const learningObjectiveId = requiredText(
+    raw.learningObjectiveId,
+    "learning objective id",
+    80
+  );
+  if (!isLearningMetadata(topicId, learningObjectiveId)) {
+    throw new Error("Question learning metadata is not reviewed.");
+  }
   const childFacingText = [
     prompt,
     hint,
@@ -175,6 +198,8 @@ export function normalizeQuestion(rawQuestion, fallbackId = "generated-question"
     hint,
     difficultyBand,
     difficultyRank,
+    topicId,
+    learningObjectiveId,
     explanation
   };
 }
@@ -202,7 +227,9 @@ function buildPrompt(request, previousQuestion, reviewedQuestion) {
       hint: reviewedQuestion.hint,
       explanation: reviewedQuestion.explanation,
       difficultyBand: reviewedQuestion.difficultyBand,
-      difficultyRank: reviewedQuestion.difficultyRank
+      difficultyRank: reviewedQuestion.difficultyRank,
+      topicId: reviewedQuestion.topicId,
+      learningObjectiveId: reviewedQuestion.learningObjectiveId
     })}`,
     previousQuestion
       ? `Do not repeat this previous question: ${previousQuestion.prompt} Choices: ${previousQuestion.choices.map((choice) => choice.label).join(", ")}.`
@@ -513,6 +540,8 @@ function assertReviewedTemplate(question, reviewedQuestion) {
     question.explanation === reviewedQuestion.explanation &&
     question.difficultyBand === reviewedQuestion.difficultyBand &&
     question.difficultyRank === reviewedQuestion.difficultyRank &&
+    question.topicId === reviewedQuestion.topicId &&
+    question.learningObjectiveId === reviewedQuestion.learningObjectiveId &&
     question.choices.length === reviewedQuestion.choices.length &&
     question.choices.every(
       (choice, index) =>

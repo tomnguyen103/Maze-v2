@@ -38,6 +38,7 @@ import {
 } from "./game/quest-atlas-view.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
+import { isLearningMetadata } from "./questions/learning-objectives.js";
 import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
@@ -51,6 +52,11 @@ import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
 import { createPlayerController } from "./player/player-controller.js";
+import {
+  createLanternJournal
+} from "./learning/lantern-journal.js";
+/** @type {Promise<typeof import("./learning/lantern-journal-ui.js")> | null} */
+let lanternJournalUiPromise = null;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
@@ -77,6 +83,15 @@ const elements = {
   fieldNote: requiredElement("field-note", HTMLElement),
   freshRun: requiredElement("fresh-run", HTMLButtonElement),
   hintButton: requiredElement("hint-button", HTMLButtonElement),
+  journalBands: requiredElement("journal-bands", HTMLElement),
+  journalButton: requiredElement("journal-button", HTMLButtonElement),
+  journalClear: requiredElement("journal-clear", HTMLButtonElement),
+  journalClearCancel: requiredElement("journal-clear-cancel", HTMLButtonElement),
+  journalClearConfirm: requiredElement("journal-clear-confirm", HTMLButtonElement),
+  journalClearWarning: requiredElement("journal-clear-warning", HTMLElement),
+  journalClose: requiredElement("journal-close", HTMLButtonElement),
+  journalDialog: requiredElement("journal-dialog", HTMLDialogElement),
+  journalStatus: requiredElement("journal-status", HTMLElement),
   liveRegion: requiredElement("live-region", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
@@ -85,6 +100,11 @@ const elements = {
   pause: requiredElement("pause-run", HTMLButtonElement),
   pulse: requiredElement("pulse-action", HTMLButtonElement),
   pulseCount: requiredElement("pulse-count", HTMLElement),
+  practiceChoices: requiredElement("practice-choices", HTMLElement),
+  practiceClose: requiredElement("practice-close", HTMLButtonElement),
+  practiceDialog: requiredElement("practice-dialog", HTMLDialogElement),
+  practiceFeedback: requiredElement("practice-feedback", HTMLElement),
+  practiceQuestion: requiredElement("practice-question", HTMLElement),
   recordsButton: requiredElement("records-button", HTMLButtonElement),
   recordsClose: requiredElement("records-close", HTMLButtonElement),
   recordsDialog: requiredElement("records-dialog", HTMLDialogElement),
@@ -94,6 +114,7 @@ const elements = {
   resultAccessNote: requiredElement("result-access-note", HTMLElement),
   resultAtlas: requiredElement("result-atlas", HTMLElement),
   resultMoves: requiredElement("result-moves", HTMLElement),
+  resultPractice: requiredElement("result-practice", HTMLButtonElement),
   resultRank: requiredElement("result-rank", HTMLElement),
   resultSeed: requiredElement("result-seed", HTMLElement),
   resultSummary: requiredElement("result-summary", HTMLElement),
@@ -175,9 +196,22 @@ let run = createRun(
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
 run.status = "paused";
+let lanternJournal = createLanternJournal();
+let lanternJournalStatus = "";
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
-  onAuthenticationChange: syncDemoAccountAction
+  onAuthenticationChange: syncDemoAccountAction,
+  onJournalChange: (journal) => {
+    lanternJournal = journal;
+    void syncPracticeOffer();
+    if (elements.journalDialog.open) {
+      void renderLanternJournal().catch(reportLanternJournalUnavailable);
+    }
+  },
+  onJournalStatusChange: (message) => {
+    lanternJournalStatus = message;
+    elements.journalStatus.textContent = message;
+  }
 });
 const lifetimeView = createLifetimeView({
   onUnlock: openLifetimeCheckout
@@ -188,6 +222,10 @@ let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterRecords = false;
+let reopenJournalAfterPractice = false;
+let journalOpenPending = false;
+/** @type {ReturnType<typeof import("./learning/lantern-journal-ui.js").selectPracticeQuestion> | null} */
+let activePracticeQuestion = null;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
@@ -297,6 +335,13 @@ elements.challengeChoices.addEventListener("click", (event) => {
     return;
   }
 
+  const question = run.challenge?.question;
+  if (question) {
+    playerController.recordLearningOutcome(
+      question,
+      button.dataset.answer === question.answerId ? "correct" : "wrong"
+    );
+  }
   transition({
     type: "answer-question",
     answerId: button.dataset.answer
@@ -309,10 +354,14 @@ elements.hintButton.addEventListener("click", () => {
     return;
   }
   hintVisible = true;
+  if (run.challenge?.question) {
+    playerController.recordLearningOutcome(run.challenge.question, "hint");
+  }
   transition({ type: "reveal-hint" });
 });
 elements.skipQuestion.addEventListener("click", () => {
   if (run.freeQuestionSkipAvailable) {
+    recordCurrentSkip();
     transition({ type: "skip-question" });
     return;
   }
@@ -324,6 +373,7 @@ elements.skipCancel.addEventListener("click", () => {
 });
 elements.skipConfirm.addEventListener("click", () => {
   hideSkipWarning();
+  recordCurrentSkip();
   transition({ type: "skip-question" });
 });
 elements.atlasButton.addEventListener("click", () => {
@@ -350,6 +400,309 @@ elements.recordsDialog.addEventListener("close", () => {
   }
   resumeAfterRecords = false;
 });
+elements.journalButton.addEventListener("click", () => {
+  void openLanternJournal();
+});
+elements.journalClose.addEventListener("click", () => {
+  elements.journalDialog.close();
+});
+elements.journalDialog.addEventListener("close", () => {
+  elements.journalClearWarning.hidden = true;
+  if (
+    !reopenJournalAfterPractice &&
+    elements.journalDialog.dataset.resumeRun === "true" &&
+    run.status === "paused"
+  ) {
+    togglePause();
+  }
+  if (!reopenJournalAfterPractice) {
+    delete elements.journalDialog.dataset.resumeRun;
+  }
+});
+elements.journalBands.addEventListener("click", (event) => {
+  const button =
+    event.target instanceof Element
+      ? event.target.closest("button[data-practice-question]")
+      : null;
+  if (!(button instanceof HTMLButtonElement)) return;
+  void openPractice(
+    {
+      id: button.dataset.practiceQuestion ?? "",
+      topicId: button.dataset.topic ?? "",
+      learningObjectiveId: button.dataset.objective ?? "",
+      difficultyBand: button.dataset.band ?? ""
+    },
+    true
+  );
+});
+elements.journalClear.addEventListener("click", () => {
+  elements.journalClearWarning.hidden = false;
+  elements.journalClearConfirm.focus();
+});
+elements.journalClearCancel.addEventListener("click", () => {
+  elements.journalClearWarning.hidden = true;
+  elements.journalClear.focus();
+});
+elements.journalClearConfirm.addEventListener("click", () => {
+  elements.journalClearWarning.hidden = true;
+  playerController.clearLanternJournal();
+  void renderLanternJournal().catch(reportLanternJournalUnavailable);
+  elements.journalClose.focus();
+});
+elements.practiceChoices.addEventListener("click", async (event) => {
+  const button =
+    event.target instanceof Element
+      ? event.target.closest("button[data-practice-answer]")
+      : null;
+  if (
+    !(button instanceof HTMLButtonElement) ||
+    !button.dataset.practiceAnswer ||
+    !activePracticeQuestion
+  ) {
+    return;
+  }
+  const practiceQuestion = activePracticeQuestion;
+  for (const choice of elements.practiceChoices.querySelectorAll("button")) {
+    if (choice instanceof HTMLButtonElement) {
+      choice.disabled = true;
+    }
+  }
+  const { evaluatePracticeAnswer } = await loadLanternJournalUi();
+  const result = evaluatePracticeAnswer(
+    practiceQuestion,
+    button.dataset.practiceAnswer
+  );
+  playerController.recordLearningOutcome(
+    practiceQuestion,
+    result.correct ? "correct" : "wrong"
+  );
+  elements.practiceFeedback.dataset.state = result.correct
+    ? "correct"
+    : "wrong";
+  elements.practiceFeedback.textContent =
+    `${result.message} ${result.explanation}`;
+  elements.practiceClose.focus();
+});
+elements.practiceClose.addEventListener("click", () => {
+  elements.practiceDialog.close();
+});
+elements.practiceDialog.addEventListener("close", async () => {
+  activePracticeQuestion = null;
+  if (reopenJournalAfterPractice && !elements.journalDialog.open) {
+    reopenJournalAfterPractice = false;
+    await renderLanternJournal();
+    if (!elements.journalDialog.open) {
+      elements.journalDialog.showModal();
+    }
+  }
+});
+elements.resultPractice.addEventListener("click", () => {
+  void openFirstPractice();
+});
+
+async function openLanternJournal() {
+  if (journalOpenPending) {
+    return;
+  }
+  journalOpenPending = true;
+  try {
+    const pauseForJournal = run.status === "active";
+    if (pauseForJournal) {
+      elements.journalDialog.dataset.resumeRun = "true";
+      togglePause();
+    }
+    await renderLanternJournal();
+    if (!elements.journalDialog.open) {
+      elements.journalDialog.showModal();
+    }
+  } catch {
+    if (
+      elements.journalDialog.dataset.resumeRun === "true" &&
+      run.status === "paused"
+    ) {
+      togglePause();
+    }
+    delete elements.journalDialog.dataset.resumeRun;
+    reportLanternJournalUnavailable();
+    return;
+  } finally {
+    journalOpenPending = false;
+  }
+}
+
+async function renderLanternJournal() {
+  const { projectLanternJournal } = await loadLanternJournalUi();
+  const projection = projectLanternJournal(lanternJournal);
+  elements.journalStatus.textContent =
+    lanternJournalStatus ||
+    (playerController.getAuthenticatedUserId()
+      ? "Signed in: Journal entries sync with this account."
+      : "Guest Journal: entries stay on this device.");
+  elements.journalClear.disabled = projection.empty;
+
+  if (projection.empty) {
+    const empty = document.createElement("div");
+    const title = document.createElement("strong");
+    const note = document.createElement("p");
+    empty.className = "journal-empty";
+    title.textContent = "Your lantern is ready.";
+    note.textContent =
+      "Answer, use a Hint, or skip a Warden Question to add a learning note.";
+    empty.append(title, note);
+    elements.journalBands.replaceChildren(empty);
+    return;
+  }
+
+  elements.journalBands.replaceChildren(
+    ...projection.bands.map((band) => {
+      const section = document.createElement("section");
+      const heading = document.createElement("h3");
+      const objectives = document.createElement("div");
+      section.className = "journal-band";
+      heading.textContent = band.label;
+      objectives.className = "journal-objectives";
+      objectives.replaceChildren(
+        ...band.objectives.map((objective) => {
+          const row = document.createElement("article");
+          const copy = document.createElement("div");
+          const title = document.createElement("h4");
+          const topic = document.createElement("p");
+          const counts = document.createElement("ul");
+          const practice = document.createElement("button");
+          row.className = "journal-objective";
+          title.textContent = objective.label;
+          topic.textContent = objective.topicLabel;
+          counts.className = "journal-counts";
+          counts.replaceChildren(
+            countItem("Correct", objective.correct),
+            countItem("Wrong", objective.wrong),
+            countItem("Hints", objective.hint),
+            countItem("Skips", objective.skip)
+          );
+          copy.append(title, topic, counts);
+          practice.type = "button";
+          practice.className = "control-button journal-practice";
+          practice.textContent = "Practice";
+          practice.hidden = objective.status !== "practice-ready";
+          practice.dataset.practiceQuestion = objective.practiceQuestionId;
+          practice.dataset.topic = objective.topicId;
+          practice.dataset.objective = objective.learningObjectiveId;
+          practice.dataset.band = objective.difficultyBand;
+          row.append(copy, practice);
+          return row;
+        })
+      );
+      section.append(heading, objectives);
+      return section;
+    })
+  );
+}
+
+/** @param {string} label @param {number} count */
+function countItem(label, count) {
+  const item = document.createElement("li");
+  item.textContent = `${label} ${count}`;
+  return item;
+}
+
+/**
+ * @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} triggeringQuestion
+ * @param {boolean} returnToJournal
+ */
+async function openPractice(triggeringQuestion, returnToJournal) {
+  const { selectPracticeQuestion } = await loadLanternJournalUi();
+  try {
+    activePracticeQuestion = selectPracticeQuestion(triggeringQuestion);
+  } catch {
+    elements.journalStatus.textContent =
+      "A different reviewed Practice Question is unavailable.";
+    return;
+  }
+  reopenJournalAfterPractice = returnToJournal;
+  elements.practiceClose.textContent = returnToJournal
+    ? "Back to Journal"
+    : "Close Practice";
+  elements.practiceQuestion.textContent = activePracticeQuestion.prompt;
+  elements.practiceFeedback.dataset.state = "";
+  elements.practiceFeedback.textContent =
+    "Take your time. This answer changes only the Journal.";
+  elements.practiceChoices.replaceChildren(
+    ...activePracticeQuestion.choices.map((choice) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "practice-choice";
+      button.dataset.practiceAnswer = choice.id;
+      button.textContent = choice.label;
+      return button;
+    })
+  );
+  if (elements.journalDialog.open) {
+    elements.journalDialog.close();
+  }
+  if (!elements.practiceDialog.open) {
+    elements.practiceDialog.showModal();
+  }
+  requestAnimationFrame(() => {
+    elements.practiceQuestion.focus({ preventScroll: true });
+  });
+}
+
+async function openFirstPractice() {
+  const { projectLanternJournal } = await loadLanternJournalUi();
+  const objective = projectLanternJournal(lanternJournal).bands
+    .flatMap((band) => band.objectives)
+    .find((entry) => entry.status === "practice-ready");
+  if (!objective) return;
+  await openPractice(
+    {
+      id: objective.practiceQuestionId,
+      topicId: objective.topicId,
+      learningObjectiveId: objective.learningObjectiveId,
+      difficultyBand: objective.difficultyBand
+    },
+    false
+  );
+}
+
+async function syncPracticeOffer() {
+  try {
+    const { projectLanternJournal } = await loadLanternJournalUi();
+    const hasPractice = projectLanternJournal(lanternJournal).bands
+      .some((band) =>
+        band.objectives.some(
+          (objective) => objective.status === "practice-ready"
+        )
+      );
+    elements.resultPractice.hidden = !hasPractice;
+  } catch {
+    elements.resultPractice.hidden = true;
+  }
+}
+
+function loadLanternJournalUi() {
+  if (!lanternJournalUiPromise) {
+    lanternJournalUiPromise = import(
+      "./learning/lantern-journal-ui.js"
+    ).catch((error) => {
+      lanternJournalUiPromise = null;
+      throw error;
+    });
+  }
+  return lanternJournalUiPromise;
+}
+
+function reportLanternJournalUnavailable() {
+  const message = "Lantern Journal is temporarily unavailable. Try again.";
+  elements.journalStatus.textContent = message;
+  announce(message);
+  showEvent(message);
+}
+
+function recordCurrentSkip() {
+  if (run.challenge?.question) {
+    playerController.recordLearningOutcome(run.challenge.question, "skip");
+  }
+}
 elements.runRecords.addEventListener("click", async (event) => {
   const button =
     event.target instanceof Element
@@ -1349,6 +1702,12 @@ function isClientQuestion(value) {
     typeof question.explanation === "string" &&
     typeof question.difficultyBand === "string" &&
     typeof question.difficultyRank === "number" &&
+    typeof question.topicId === "string" &&
+    typeof question.learningObjectiveId === "string" &&
+    isLearningMetadata(
+      question.topicId,
+      question.learningObjectiveId
+    ) &&
     Array.isArray(question.choices) &&
     question.choices.length === 3
   );

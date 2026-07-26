@@ -92,6 +92,21 @@ export function createPlayerApiClient({
     async getLeaderboard() {
       return request("/api/leaderboard");
     },
+    async getLearningJournal() {
+      return request("/api/learning-journal");
+    },
+    /** @param {unknown} journal */
+    async saveLearningJournal(journal) {
+      return request("/api/learning-journal", {
+        method: "PUT",
+        body: JSON.stringify(journal)
+      });
+    },
+    async clearLearningJournal() {
+      return request("/api/learning-journal", {
+        method: "DELETE"
+      });
+    },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeRun(run) {
       return request("/api/access/runs", {

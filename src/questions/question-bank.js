@@ -2,6 +2,7 @@ import {
   getDifficultyBand,
   getQuestLevel
 } from "./quest-levels.js";
+import { getLearningMetadata } from "./learning-objectives.js";
 
 /**
  * @typedef {{
@@ -12,8 +13,11 @@ import {
  *   hint: string,
  *   explanation: string,
  *   difficultyBand: string,
- *   difficultyRank: number
+ *   difficultyRank: number,
+ *   topicId: string,
+ *   learningObjectiveId: string
  * }} WardenQuestion
+ * @typedef {Omit<WardenQuestion, "topicId" | "learningObjectiveId">} BaseWardenQuestion
  * @typedef {{
  *   levelId: string,
  *   seed: string,
@@ -243,7 +247,7 @@ function numericChoices(answer, spread, ordinal) {
  * @param {string} explanation
  * @param {string} difficultyBand
  * @param {number} difficultyRank
- * @returns {WardenQuestion}
+ * @returns {BaseWardenQuestion}
  */
 function createNumericQuestion(
   id,
@@ -273,7 +277,7 @@ function createNumericQuestion(
  * @param {CurriculumCard} card
  * @param {string} difficultyBand
  * @param {number} difficultyRank
- * @returns {WardenQuestion}
+ * @returns {BaseWardenQuestion}
  */
 function createCurriculumQuestion(
   id,
@@ -609,5 +613,8 @@ export function getBundledQuestion({
     throw new Error(`Unsupported Quest Level: ${level.id}`);
   }
 
-  return cloneQuestion(question);
+  return cloneQuestion({
+    ...question,
+    ...getLearningMetadata(level.id, ordinal)
+  });
 }

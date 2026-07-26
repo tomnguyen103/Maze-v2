@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
+import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
 
 const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
@@ -15,7 +16,7 @@ const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
 });
 
 const TEST_QUESTION = {
-  id: "browser-math",
+  id: "scout-foundation-0",
   prompt: "What is 4 + 3?",
   choices: [
     { id: "a", label: "6" },
@@ -26,8 +27,21 @@ const TEST_QUESTION = {
   hint: "Combine four objects with three more.",
   difficultyBand: "foundation",
   difficultyRank: 21,
+  topicId: "arithmetic",
+  learningObjectiveId: "scout-equal-groups",
   explanation: "Four plus three equals seven."
 };
+
+/** @param {number} ordinal */
+function reviewedQuestionForRequest(ordinal) {
+  return getBundledQuestion({
+    levelId: "trail-scout",
+    seed: "journal-e2e",
+    wardenId: 0,
+    labyrinthNumber: 1,
+    questionOrdinal: ordinal * 8
+  });
+}
 
 /**
  * @param {ReturnType<typeof createRun>} run
@@ -128,22 +142,29 @@ function milestoneWinningPlan(seed) {
 
 /** @param {import("@playwright/test").Page} page */
 async function mockQuestionApi(page) {
+  /** @type {ReturnType<typeof getBundledQuestion>[]} */
+  const servedQuestions = [];
   await page.route("**/api/question?**", async (route) => {
     const ordinal = Number(
       new URL(route.request().url()).searchParams.get("question") ?? 0
     );
+    const reviewedQuestion = reviewedQuestionForRequest(ordinal);
+    servedQuestions.push(reviewedQuestion);
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        question: {
-          ...TEST_QUESTION,
-          id: `${TEST_QUESTION.id}-${ordinal}`,
-          prompt: `${TEST_QUESTION.prompt} Card ${ordinal + 1}.`
-        },
+        question: reviewedQuestion,
         source: "bundled"
       })
     });
   });
+  return () => {
+    const question = servedQuestions.at(-1);
+    if (!question) {
+      throw new Error("The reviewed Question fixture has not served a card.");
+    }
+    return question;
+  };
 }
 
 /** @param {import("@playwright/test").Page} page */
@@ -161,12 +182,17 @@ async function stubClipboard(page) {
   });
 }
 
-/** @param {import("@playwright/test").Page} page */
-async function answerCorrectlyIfChallenged(page) {
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {() => ReturnType<typeof getBundledQuestion>} getCurrentQuestion
+ */
+async function answerCorrectlyIfChallenged(page, getCurrentQuestion) {
   const challenge = page.locator("#challenge-dialog");
   if (await challenge.isVisible()) {
     await expect(page.locator("#challenge-question")).toBeFocused();
-    await page.locator('[data-answer="b"]').click();
+    await page
+      .locator(`[data-answer="${getCurrentQuestion().answerId}"]`)
+      .click();
     await expect(challenge).not.toBeVisible();
     await expect(page.locator("#maze-canvas")).toBeFocused();
   }
@@ -664,7 +690,7 @@ test("requires account creation before a guest starts a second Labyrinth", async
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
-  await mockQuestionApi(page);
+  const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await page.getByLabel(/Interactive maze/).focus();
 
@@ -676,17 +702,24 @@ test("requires account creation before a guest starts a second Labyrinth", async
   }
   await expect(page.locator("#challenge-dialog")).toBeVisible();
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.locator('[data-answer="a"]').click();
+    const question = getCurrentQuestion();
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) throw new Error("Reviewed fixture needs a wrong answer.");
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
     if (attempt < 2) {
-      await expect(page.locator('[data-answer="a"]')).toBeVisible();
+      await expect(page.locator("#challenge-question")).not.toHaveText(
+        question.prompt
+      );
       await expect(page.locator("#challenge-feedback")).toContainText(
-        "Four plus three equals seven."
+        question.explanation
       );
       await expect(page.locator("#challenge-source")).toContainText(
         "trusty question card"
       );
       const answerBounds = await page
-        .locator('[data-answer="a"]')
+        .locator(`[data-answer="${wrongAnswer.id}"]`)
         .boundingBox();
       expect(answerBounds?.height).toBeGreaterThanOrEqual(44);
     }
@@ -713,7 +746,7 @@ test("requires account creation before a guest starts a second Labyrinth", async
 test("reveals a Hint, grants one free skip, then warns before paid skips", async ({
   page
 }) => {
-  await mockQuestionApi(page);
+  const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await page.getByLabel(/Interactive maze/).focus();
 
@@ -724,7 +757,9 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
 
   const firstQuestion = await page.locator("#challenge-question").textContent();
   await page.getByRole("button", { name: "Show Hint" }).click();
-  await expect(page.locator("#question-hint")).toHaveText(TEST_QUESTION.hint);
+  await expect(page.locator("#question-hint")).toHaveText(
+    getCurrentQuestion().hint
+  );
   const hideHint = page.getByRole("button", { name: "Hide Hint" });
   await expect(hideHint).toBeEnabled();
   await expect(hideHint).toHaveAttribute("aria-expanded", "true");
@@ -741,6 +776,17 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   await expect(page.locator("#challenge-question")).not.toHaveText(
     firstQuestion ?? ""
   );
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const key = Object.keys(localStorage).find((entry) =>
+        entry.startsWith("echo-maze:lantern-journal")
+      );
+      if (!key) return [];
+      return JSON.parse(localStorage.getItem(key) ?? "{}").events?.map(
+        (/** @type {{ outcome: string }} */ event) => event.outcome
+      ) ?? [];
+    })
+  ).toEqual(expect.arrayContaining(["hint", "skip"]));
 
   await page.getByRole("button", { name: "Skip · 1 Vitality" }).click();
   await expect(page.locator("#skip-warning")).toContainText(
@@ -770,17 +816,217 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   ).toBeVisible();
 });
 
+test("reviews coarse Journal outcomes and keeps Practice outside the Run", async ({
+  page
+}) => {
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await page.getByLabel(/Interactive maze/).focus();
+
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) throw new Error("Reviewed fixture needs a wrong answer.");
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+    await expect(page.locator("#challenge-feedback")).toContainText(
+      question.explanation
+    );
+    await expect(page.locator("#challenge-question")).not.toHaveText(
+      question.prompt
+    );
+  }
+  await page
+    .locator(`[data-answer="${getCurrentQuestion().answerId}"]`)
+    .click();
+  await expect(page.locator("#challenge-dialog")).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Journal", exact: true }).click();
+  const journal = page.getByRole("dialog", {
+    name: "What you have practiced"
+  });
+  await expect(journal).toBeVisible();
+  await expect(journal).toContainText("Correct 1");
+  await expect(journal).toContainText("Wrong 2");
+  await expect(journal).toContainText("Guest Journal");
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  expect(
+    await journal.evaluate(
+      (element) => element.scrollWidth - element.clientWidth
+    )
+  ).toBeLessThanOrEqual(1);
+  await expect(journal.getByRole("button", { name: "Practice" })).toBeVisible();
+  await expect(
+    journal.getByRole("button", { name: "Clear Journal" })
+  ).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("font-size");
+  });
+
+  const practiceButton = journal.getByRole("button", { name: "Practice" });
+  const triggeringQuestion = {
+    id: (await practiceButton.getAttribute("data-practice-question")) ?? "",
+    topicId: (await practiceButton.getAttribute("data-topic")) ?? "",
+    learningObjectiveId:
+      (await practiceButton.getAttribute("data-objective")) ?? "",
+    difficultyBand: (await practiceButton.getAttribute("data-band")) ?? ""
+  };
+  const expectedPractice = selectPracticeQuestion(triggeringQuestion);
+  const runBeforePractice = await page.evaluate(() => ({
+    score: document.getElementById("player-score")?.textContent,
+    vitality: document.getElementById("vitality-count")?.textContent,
+    moves: document.getElementById("moves-value")?.textContent,
+    stage: document.getElementById("quest-stage")?.textContent,
+    time: document.getElementById("time-value")?.textContent
+  }));
+
+  await practiceButton.click();
+  const practice = page.getByRole("dialog", {
+    name: "Try a different Question"
+  });
+  await expect(practice).toBeVisible();
+  await expect(page.locator("#practice-question")).toHaveText(
+    expectedPractice.prompt
+  );
+  const correctLabel = expectedPractice.choices.find(
+    (choice) => choice.id === expectedPractice.answerId
+  )?.label;
+  if (!correctLabel) throw new Error("Practice answer label was missing.");
+  await practice.getByRole("button", { name: correctLabel, exact: true }).click();
+  await expect(page.locator("#practice-feedback")).toContainText("Nice work");
+
+  expect(
+    await page.evaluate(() => ({
+      score: document.getElementById("player-score")?.textContent,
+      vitality: document.getElementById("vitality-count")?.textContent,
+      moves: document.getElementById("moves-value")?.textContent,
+      stage: document.getElementById("quest-stage")?.textContent,
+      time: document.getElementById("time-value")?.textContent
+    }))
+  ).toEqual(runBeforePractice);
+
+  await page.getByRole("button", { name: "Back to Journal" }).click();
+  await expect(journal).toBeVisible();
+  await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(0);
+
+  const storedJournal = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((entry) =>
+      entry.startsWith("echo-maze:lantern-journal")
+    );
+    return key ? localStorage.getItem(key) : null;
+  });
+  expect(storedJournal).not.toContain("\"prompt\"");
+  expect(storedJournal).not.toContain("answerId");
+
+  await page.getByRole("button", { name: "Clear Journal" }).click();
+  await expect(page.locator("#journal-clear-warning")).toBeVisible();
+  await page.getByRole("button", { name: "Clear now" }).click();
+  await expect(journal).toContainText("Your lantern is ready.");
+  await expect(page.getByRole("button", { name: "Clear Journal" })).toBeDisabled();
+});
+
+test("keeps an active Run operable when the Journal chunk is unavailable", async ({
+  page
+}) => {
+  let failedChunkRequests = 0;
+  await page.route("**/assets/lantern-journal-ui-*.js", async (route) => {
+    failedChunkRequests += 1;
+    await route.abort("failed");
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  const canvas = page.getByLabel(/Interactive maze/);
+  await canvas.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("#moves-value")).toHaveText("001");
+
+  const journalButton = page.getByRole("button", {
+    name: "Journal",
+    exact: true
+  });
+  await journalButton.click();
+  await journalButton.click();
+  await expect(page.locator("#live-region")).toHaveText(
+    "Lantern Journal is temporarily unavailable. Try again."
+  );
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+
+  await canvas.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("#moves-value")).toHaveText("002");
+  await expect.poll(() => failedChunkRequests).toBeGreaterThanOrEqual(1);
+});
+
+test("resumes an active Run after a double-click during slow Journal loading", async ({
+  page
+}) => {
+  let chunkRequested = false;
+  let releaseChunk = () => {};
+  const chunkGate = new Promise((resolve) => {
+    releaseChunk = () => resolve(undefined);
+  });
+  await page.route("**/assets/lantern-journal-ui-*.js", async (route) => {
+    chunkRequested = true;
+    await chunkGate;
+    await route.continue();
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expect.poll(() => chunkRequested).toBe(true);
+  await page.getByLabel(/Interactive maze/).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+
+  const journalButton = page.getByRole("button", {
+    name: "Journal",
+    exact: true
+  });
+  await journalButton.click();
+  await journalButton.click();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+
+  releaseChunk();
+  const journal = page.getByRole("dialog", {
+    name: "What you have practiced"
+  });
+  await expect(journal).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(journal).not.toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
 test("completes a guest Labyrinth and persists Quest progress before account creation", async ({
   page
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
-  await mockQuestionApi(page);
+  const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of WINNING_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
-    await answerCorrectlyIfChallenged(page);
+    await answerCorrectlyIfChallenged(page, getCurrentQuestion);
   }
 
   const dialog = page.getByRole("dialog", {

@@ -26,6 +26,9 @@
         <button class="control-button" id="atlas-button" type="button">
           Atlas
         </button>
+        <button class="control-button" id="journal-button" type="button">
+          Journal
+        </button>
         <button class="control-button" id="records-button" type="button">
           Records
         </button>
@@ -305,6 +308,61 @@
       <p class="challenge-source" id="challenge-source">Opening the question scroll…</p>
     </dialog>
 
+    <dialog
+      class="journal-dialog"
+      id="journal-dialog"
+      aria-labelledby="journal-title"
+      aria-describedby="journal-intro journal-status"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">Lantern Journal</span>
+          <h2 id="journal-title">What you have practiced</h2>
+        </div>
+        <button class="control-button" id="journal-close" type="button">Close</button>
+      </div>
+      <p class="dialog-intro" id="journal-intro">
+        Review learning goals by difficulty band. The Journal saves Question
+        topics and coarse outcomes, never typed answers or a child profile.
+      </p>
+      <p class="journal-status" id="journal-status" role="status" aria-live="polite"></p>
+      <div class="journal-bands" id="journal-bands"></div>
+      <div class="journal-clear">
+        <button class="control-button" id="journal-clear" type="button">
+          Clear Journal
+        </button>
+        <div class="journal-clear__warning" id="journal-clear-warning" role="alert" hidden>
+          <strong>Clear every Journal entry?</strong>
+          <p>This removes local entries now. Signed-in cloud entries are also removed.</p>
+          <div class="journal-clear__actions">
+            <button class="control-button" id="journal-clear-cancel" type="button">
+              Keep Journal
+            </button>
+            <button class="danger-button" id="journal-clear-confirm" type="button">
+              Clear now
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      class="practice-dialog"
+      id="practice-dialog"
+      aria-labelledby="practice-title"
+      aria-describedby="practice-promise practice-feedback"
+    >
+      <span class="section-label">Optional Practice</span>
+      <h2 id="practice-title">Try a different Question</h2>
+      <p class="dialog-intro" id="practice-promise">
+        No timer, score, Vitality, access, or Quest progress changes here.
+      </p>
+      <p class="practice-question" id="practice-question" tabindex="-1"></p>
+      <div class="practice-choices" id="practice-choices"></div>
+      <p class="practice-feedback" id="practice-feedback" role="status" aria-live="polite"></p>
+      <button class="control-button" id="practice-close" type="button">Back to Journal</button>
+    </dialog>
+
     <dialog class="records-dialog" id="records-dialog" aria-labelledby="records-title">
       <div class="dialog-heading">
         <div>
@@ -454,6 +512,7 @@
         <span><strong id="result-rank">PERSONAL #1</strong> standing</span>
       </div>
       <div class="result-dialog__actions">
+        <button class="control-button" id="result-practice" type="button" hidden>Practice</button>
         <button class="primary-button" id="replay-run" type="button">Continue Quest</button>
         <button class="control-button" id="fresh-run" type="button">New Quest</button>
       </div>

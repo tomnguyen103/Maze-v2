@@ -39,7 +39,12 @@ const client = {
   confirmLifetimeCheckout: vi.fn(async () => ({
     lifetime: true,
     state: "lifetime_active"
-  }))
+  })),
+  getLearningJournal: vi.fn(async () => ({
+    journal: { version: 1, events: [] }
+  })),
+  saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+  clearLearningJournal: vi.fn(async () => {})
 };
 
 vi.mock("../src/player/clerk-browser.js", () => ({

@@ -11,6 +11,7 @@ import {
   reducePlayerState
 } from "./player-state.js";
 import { createClerkBrowser } from "./clerk-browser.js";
+import { createJournalContinuity } from "../learning/journal-continuity.js";
 
 /**
  * @typedef {{
@@ -21,11 +22,18 @@ import { createClerkBrowser } from "./clerk-browser.js";
  */
 
 /**
- * @param {{ onPaletteChange?: () => void, onAuthenticationChange?: (signedIn: boolean) => void }} [options]
+ * @param {{
+ *   onPaletteChange?: () => void,
+ *   onAuthenticationChange?: (signedIn: boolean) => void,
+ *   onJournalChange?: (journal: ReturnType<typeof import("../learning/lantern-journal.js").createLanternJournal>) => void,
+ *   onJournalStatusChange?: (message: string) => void
+ * }} [options]
  */
 export function createPlayerController({
   onPaletteChange = () => {},
-  onAuthenticationChange = () => {}
+  onAuthenticationChange = () => {},
+  onJournalChange = () => {},
+  onJournalStatusChange = () => {}
 } = {}) {
   const elements = {
     auth: requiredElement("player-auth-button", HTMLButtonElement),
@@ -60,11 +68,17 @@ export function createPlayerController({
   const client = createPlayerApiClient({
     getToken: clerkBrowser.getToken
   });
+  const journalContinuity = createJournalContinuity({
+    client,
+    onChange: onJournalChange,
+    onStatus: onJournalStatusChange
+  });
 
   setPalettes(DEFAULT_PLAYER_PROFILE);
   bindEvents();
   renderAuth();
   void refreshLeaderboard();
+  void journalContinuity.selectUser("");
   void initializeClerk();
 
   return {
@@ -85,6 +99,25 @@ export function createPlayerController({
     },
     hasAuthenticatedUser() {
       return Boolean(clerkBrowser.user);
+    },
+    getAuthenticatedUserId() {
+      return clerkBrowser.user?.id ?? "";
+    },
+    getLanternJournal() {
+      return journalContinuity.getJournal();
+    },
+    /**
+     * @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} question
+     * @param {"correct" | "wrong" | "hint" | "skip"} outcome
+     */
+    recordLearningOutcome(question, outcome) {
+      return journalContinuity.record(question, outcome);
+    },
+    clearLanternJournal() {
+      journalContinuity.clear();
+    },
+    async retryLanternJournalSync() {
+      await journalContinuity.retry();
     },
     async isAuthenticated() {
       await clerkBrowser.initialize();
@@ -207,6 +240,7 @@ export function createPlayerController({
       type: "auth-changed",
       userId
     });
+    await journalContinuity.selectUser(userId);
     if (!userId) {
       setPalettes(DEFAULT_PLAYER_PROFILE);
       renderAuth();

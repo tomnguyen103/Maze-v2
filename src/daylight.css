@@ -763,6 +763,8 @@ kbd {
 .atlas-dialog,
 .level-dialog,
 .challenge-dialog,
+.journal-dialog,
+.practice-dialog,
 .records-dialog,
 .player-dialog,
 .scoreboard-dialog,
@@ -783,6 +785,8 @@ kbd {
 .atlas-dialog::backdrop,
 .level-dialog::backdrop,
 .challenge-dialog::backdrop,
+.journal-dialog::backdrop,
+.practice-dialog::backdrop,
 .records-dialog::backdrop,
 .player-dialog::backdrop,
 .scoreboard-dialog::backdrop,
@@ -794,6 +798,8 @@ kbd {
 
 .dialog-heading h2,
 .atlas-dialog h2,
+.journal-dialog h2,
+.practice-dialog h2,
 .player-dialog h2,
 .scoreboard-dialog h2,
 .lifetime-dialog h2,
@@ -808,6 +814,8 @@ kbd {
 }
 
 .dialog-intro,
+.journal-dialog > p,
+.practice-dialog > p,
 .lifetime-dialog > p,
 .result-dialog > p {
   color: var(--color-ink-muted);
@@ -815,6 +823,8 @@ kbd {
 }
 
 .player-dialog .dialog-intro,
+.journal-dialog .dialog-intro,
+.practice-dialog .dialog-intro,
 .lifetime-dialog .dialog-intro,
 .scoreboard-dialog .dialog-intro {
   font-size: 1rem;
@@ -826,6 +836,172 @@ kbd {
   width: min(54rem, calc(100% - 2rem));
   height: fit-content;
   margin: auto;
+}
+
+.journal-dialog {
+  width: min(46rem, calc(100% - 2rem));
+}
+
+.journal-status {
+  min-height: 1.5em;
+  margin: var(--space-3) 0;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+}
+
+.journal-bands {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.journal-empty {
+  margin: var(--space-5) 0;
+  padding: var(--space-5);
+  border: 2px solid var(--color-line-soft);
+  background: var(--color-panel);
+}
+
+.journal-empty strong,
+.journal-band h3,
+.journal-objective h4,
+.journal-clear__warning strong {
+  font-family: var(--font-display);
+}
+
+.journal-empty strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 1.2rem;
+}
+
+.journal-empty p {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.journal-band h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+}
+
+.journal-objectives {
+  display: grid;
+  border-top: 2px solid var(--color-line);
+}
+
+.journal-objective {
+  display: grid;
+  min-width: 0;
+  padding: var(--space-4) 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.journal-objective h4 {
+  min-width: 0;
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.journal-objective > div > p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.76rem;
+}
+
+.journal-counts {
+  display: flex;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  list-style: none;
+}
+
+.journal-counts li {
+  font-family: var(--font-utility);
+  font-size: 0.7rem;
+}
+
+.journal-practice {
+  min-width: 5.5rem;
+}
+
+.journal-clear {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-line);
+}
+
+.journal-clear__warning {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 2px solid var(--color-warden);
+  background: var(--color-warden-soft);
+}
+
+.journal-clear__warning p {
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.journal-clear__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.practice-dialog {
+  width: min(40rem, calc(100% - 2rem));
+  border-width: 3px;
+  box-shadow:
+    0.65rem 0.7rem 0 var(--color-shadow),
+    0 0 0 0.45rem var(--color-echo-soft);
+}
+
+.practice-question {
+  margin: var(--space-5) 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.practice-choices {
+  display: grid;
+  margin-bottom: var(--space-4);
+  gap: var(--space-2);
+}
+
+.practice-choice {
+  width: 100%;
+  min-height: 3.75rem;
+  padding: var(--space-3);
+  background: var(--color-panel);
+  text-align: left;
+  white-space: normal;
+}
+
+.practice-choice:hover:not(:disabled) {
+  border-color: var(--color-echo);
+  background: var(--color-echo-soft);
+}
+
+.practice-feedback {
+  min-height: 3.5rem;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 0.35rem solid var(--color-echo);
+  background: var(--color-echo-soft);
+}
+
+.practice-feedback[data-state="wrong"] {
+  border-left-color: var(--color-warden);
+  background: var(--color-warden-soft);
 }
 
 .atlas-dialog .dialog-heading {
@@ -1912,6 +2088,8 @@ kbd {
   .atlas-dialog,
   .level-dialog,
   .challenge-dialog,
+  .journal-dialog,
+  .practice-dialog,
   .records-dialog,
   .player-dialog,
   .scoreboard-dialog,
@@ -1931,6 +2109,14 @@ kbd {
 
   .challenge-question {
     margin-top: var(--space-5);
+  }
+
+  .journal-objective {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-practice {
+    width: 100%;
   }
 
   .player-score {
