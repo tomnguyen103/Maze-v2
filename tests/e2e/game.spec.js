@@ -926,6 +926,9 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
 
   expect(gateChallenges).toBe(1);
   await expect(page.locator("#result-seed")).toHaveText(seed);
+  await expect(
+    page.getByRole("group", { name: "Echo Atlas progress" })
+  ).toBeVisible();
   await expect(page.locator("#result-atlas")).toContainText("Atlas 4 / 20");
   await expect(page.locator("#result-atlas")).toContainText(
     "Foundation Sigil restored"

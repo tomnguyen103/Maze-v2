@@ -5,11 +5,14 @@ describe("Gate legend", () => {
   it("names distinct non-color marks for locked, sealed, and open Gates", async () => {
     const markup = await readFile(new URL("../index.html", import.meta.url), "utf8");
 
-    expect(markup).toContain("legend-mark--gate-locked");
-    expect(markup).toContain(">Locked Gate</li>");
-    expect(markup).toContain("legend-mark--gate-sealed");
-    expect(markup).toContain(">Open, sealed Gate</li>");
-    expect(markup).toContain("legend-mark--gate-open");
-    expect(markup).toContain(">Open Gate</li>");
+    expect(markup).toContain(
+      '<li><span class="legend-mark legend-mark--gate-locked"></span>Locked Gate</li>'
+    );
+    expect(markup).toContain(
+      '<li><span class="legend-mark legend-mark--gate-sealed"></span>Open, sealed Gate</li>'
+    );
+    expect(markup).toContain(
+      '<li><span class="legend-mark legend-mark--gate-open"></span>Open Gate</li>'
+    );
   });
 });
