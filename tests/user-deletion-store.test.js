@@ -4,9 +4,10 @@ import { createUserDeletionStore } from "../server/user-deletion-store.js";
 describe("Clerk user deletion store", () => {
   it("deletes every Clerk-keyed player record in one transaction", async () => {
     const client = {
-      query: vi.fn(async (sql, _values) => ({
-        rows: sql.includes("AS tombstone_present")
-          ? [{
+      query: vi.fn(async (...args) => {
+        const [sql] = args;
+        return {
+          rows: sql.includes("AS tombstone_present") ? [{
               tombstone_present: true,
               cloud_deleted: true,
               player_deleted: true,
@@ -17,7 +18,8 @@ describe("Clerk user deletion store", () => {
               journal_deleted: true
             }]
           : []
-      })),
+        };
+      }),
       release: vi.fn()
     };
     const store = createUserDeletionStore({
@@ -45,9 +47,10 @@ describe("Clerk user deletion store", () => {
 
   it("rolls back when any application-owned record survives verification", async () => {
     const client = {
-      query: vi.fn(async (sql, _values) => ({
-        rows: sql.includes("AS tombstone_present")
-          ? [{
+      query: vi.fn(async (...args) => {
+        const [sql] = args;
+        return {
+          rows: sql.includes("AS tombstone_present") ? [{
               tombstone_present: true,
               cloud_deleted: true,
               player_deleted: true,
@@ -58,7 +61,8 @@ describe("Clerk user deletion store", () => {
               journal_deleted: true
             }]
           : []
-      })),
+        };
+      }),
       release: vi.fn()
     };
     const store = createUserDeletionStore({

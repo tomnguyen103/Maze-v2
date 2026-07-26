@@ -126,14 +126,19 @@ From a PowerShell session with the approved database available through
 `DATABASE_URL` or `.env.local`, run:
 
 ```powershell
-$verifiedUserId = Read-Host "Verified Clerk user id"
-$reenteredUserId = Read-Host "Re-enter the Clerk user id"
-if ($verifiedUserId -cne $reenteredUserId) {
-  throw "Clerk user ids do not match."
-}
-$env:ECHO_MAZE_DELETE_USER_ID = $verifiedUserId
-$sha256 = [Security.Cryptography.SHA256]::Create()
+$verifiedUserId = $null
+$reenteredUserId = $null
+$bytes = $null
+$digest = $null
+$sha256 = $null
 try {
+  $verifiedUserId = Read-Host "Verified Clerk user id"
+  $reenteredUserId = Read-Host "Re-enter the Clerk user id"
+  if ($verifiedUserId -cne $reenteredUserId) {
+    throw "Clerk user ids do not match."
+  }
+  $env:ECHO_MAZE_DELETE_USER_ID = $verifiedUserId
+  $sha256 = [Security.Cryptography.SHA256]::Create()
   $bytes = [Text.Encoding]::UTF8.GetBytes(
     $env:ECHO_MAZE_DELETE_USER_ID
   )
@@ -141,18 +146,17 @@ try {
   $env:ECHO_MAZE_DELETE_CONFIRM_SHA256 = -join (
     $digest | ForEach-Object { $_.ToString("x2") }
   )
-} finally {
-  $sha256.Dispose()
-}
-$env:ECHO_MAZE_DELETE_CONFIRM = Read-Host (
-  "Type DELETE APPLICATION DATA to confirm"
-)
-try {
+  $env:ECHO_MAZE_DELETE_CONFIRM = Read-Host (
+    "Type DELETE APPLICATION DATA to confirm"
+  )
   node --env-file-if-exists=.env.local scripts/delete-user-data.mjs
   if ($LASTEXITCODE -ne 0) {
     throw "Application data deletion did not verify."
   }
 } finally {
+  if ($null -ne $sha256) {
+    $sha256.Dispose()
+  }
   Remove-Item Env:ECHO_MAZE_DELETE_USER_ID -ErrorAction SilentlyContinue
   Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM_SHA256 -ErrorAction SilentlyContinue
   Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM -ErrorAction SilentlyContinue
