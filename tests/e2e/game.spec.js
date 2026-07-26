@@ -633,6 +633,17 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
   await page.goto("/?seed=TOUCH-CONTROLS&level=trail-scout");
 
+  for (const action of await page.locator(".command-bar__actions button").all()) {
+    const dimensions = await action.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth
+    }));
+    expect(
+      dimensions.scrollWidth,
+      `${await action.textContent()} must not clip`
+    ).toBeLessThanOrEqual(dimensions.clientWidth);
+  }
+
   const touchActions = page.locator("button:visible, a:visible");
   for (let index = 0; index < (await touchActions.count()); index += 1) {
     const action = touchActions.nth(index);
