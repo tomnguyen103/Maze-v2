@@ -1,5 +1,6 @@
 import { verifyWebhook } from "@clerk/express/webhooks";
 import { URL } from "node:url";
+import { safeErrorName } from "./safe-error-log.js";
 
 export const CLERK_WEBHOOK_PATH = "/api/clerk-webhook";
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -53,7 +54,9 @@ export function createClerkWebhookHandler({
         });
         return;
       }
-      console.error("[clerk-webhook] Event rejected", error);
+      console.error("[clerk-webhook] Event rejected", {
+        name: safeErrorName(error)
+      });
       sendJson(response, 400, { error: "Clerk webhook verification failed." });
       return;
     }
@@ -66,7 +69,9 @@ export function createClerkWebhookHandler({
       try {
         await deleteUser(userId);
       } catch (error) {
-        console.error("[clerk-webhook] Account deletion failed", error);
+        console.error("[clerk-webhook] Account deletion failed", {
+          name: safeErrorName(error)
+        });
         sendJson(response, 503, {
           error: "Account deletion is temporarily unavailable."
         });

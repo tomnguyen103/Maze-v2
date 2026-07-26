@@ -3,6 +3,7 @@ import {
   InputError,
   validateCloudQuestWrite
 } from "./quest-progress-validation.js";
+import { safeErrorName } from "./safe-error-log.js";
 
 export const QUEST_PROGRESS_PATHS = new Set(["/api/quest-progress"]);
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -69,7 +70,9 @@ export function createQuestProgressHandler({ store, getUserId }) {
         sendJson(response, 400, { error: error.message });
         return;
       }
-      console.error("[quest-progress] API request failed", error);
+      console.error("[quest-progress] API request failed", {
+        name: safeErrorName(error)
+      });
       sendJson(response, 500, {
         error: "Cloud Quest Progress is unavailable. Local play still works."
       });

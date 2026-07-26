@@ -407,6 +407,81 @@ test("shows an explicit keyboard-safe choice for different device Quests", async
   await expect(dialog).not.toBeVisible();
 });
 
+test("resumes an active Run after a repeated Cloud Quest conflict is resolved", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_repeat_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 4,
+    completedLabyrinths: 3,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_repeat_456",
+      labyrinthNumber: 8,
+      completedLabyrinths: 7
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            let choices = 0;
+            const conflict = ${JSON.stringify({ local, cloud })};
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(conflict);
+                return Promise.resolve(false);
+              },
+              resolveConflict() {
+                choices += 1;
+                if (choices === 1) {
+                  onConflict(conflict);
+                  return Promise.resolve(false);
+                }
+                return Promise.resolve(true);
+              }
+            };
+          }
+        `
+      });
+    }
+  );
+
+  await page.goto("/?seed=REPEATED-CLOUD-CONFLICT&level=trail-scout");
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep this device" }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Use Cloud Quest" }).click();
+
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
 test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
   page
 }) => {

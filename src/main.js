@@ -206,8 +206,11 @@ let run = createRun(
 run.status = "paused";
 /** @type {QuestContinuityController | null} */
 let questContinuityController = null;
-/** @type {Promise<QuestContinuityController> | null} */
+/** @type {Promise<QuestContinuityController | null> | null} */
 let questContinuityControllerPromise = null;
+/** @type {"initial" | "new-quest" | "terminal" | "online" | null} */
+let questContinuityLoadKind = null;
+const failedQuestContinuityLoads = new Set();
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: handleAuthenticationChange
@@ -215,7 +218,7 @@ const playerController = createPlayerController({
 const questConflictView = createQuestConflictView({
   onChoose: (choice) => {
     void loadQuestContinuityController().then((controller) =>
-      controller.resolveConflict(choice)
+      controller?.resolveConflict(choice) ?? false
     ).then((resolved) => {
       if (
         resolved &&
@@ -555,8 +558,8 @@ window.addEventListener("resize", () => {
 });
 
 window.addEventListener("online", () => {
-  void loadQuestContinuityController().then((controller) =>
-    controller.retry(loadQuestProgress())
+  void loadQuestContinuityController("online").then((controller) =>
+    controller?.retry(loadQuestProgress()) ?? false
   );
 });
 
@@ -903,8 +906,8 @@ async function startNewQuest(levelId, seed) {
     return false;
   }
   questProgress = saveQuestProgress(nextProgress);
-  void loadQuestContinuityController().then((controller) =>
-    controller.queueBoundary(questProgress)
+  void loadQuestContinuityController("new-quest").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
   );
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
@@ -932,8 +935,8 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
   questProgress = saveQuestProgress(
     createQuestProgress(levelId, labyrinthNumber)
   );
-  void loadQuestContinuityController().then((controller) =>
-    controller.queueBoundary(questProgress)
+  void loadQuestContinuityController("new-quest").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
   );
   window.history.replaceState({}, "", "/play");
   startRun(locator);
@@ -1275,17 +1278,48 @@ function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   void loadQuestContinuityController().then((controller) => {
+    if (!controller) {
+      return false;
+    }
     controller.setAuthenticated(userId);
     return userId ? controller.retry(loadQuestProgress()) : false;
   });
 }
 
-/** @returns {Promise<QuestContinuityController>} */
-function loadQuestContinuityController() {
-  if (!questContinuityControllerPromise) {
-    questContinuityControllerPromise = import(
-      "./player/quest-continuity-controller.js"
-    ).then(({ createQuestContinuityController }) => {
+/**
+ * @param {"initial" | "new-quest" | "terminal" | "online"} [loadKind]
+ * @returns {Promise<QuestContinuityController | null>}
+ */
+function loadQuestContinuityController(loadKind = "initial") {
+  if (questContinuityControllerPromise) {
+    if (loadKind === questContinuityLoadKind || loadKind === "initial") {
+      return questContinuityControllerPromise;
+    }
+    return questContinuityControllerPromise.then((controller) =>
+      controller ?? loadQuestContinuityController(loadKind)
+    );
+  }
+  if (failedQuestContinuityLoads.has(loadKind)) {
+    return Promise.resolve(null);
+  }
+  /** @type {Promise<typeof import("./player/quest-continuity-controller.js")>} */
+  let controllerModule;
+  if (loadKind === "new-quest") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=new-quest");
+  } else if (loadKind === "terminal") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=terminal");
+  } else if (loadKind === "online") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=online");
+  } else {
+    controllerModule = import("./player/quest-continuity-controller.js");
+  }
+  questContinuityLoadKind = loadKind;
+  const loading = controllerModule.then(({
+      createQuestContinuityController
+    }) => {
       questContinuityController = createQuestContinuityController({
         loadCloud: () => playerController.getCloudQuestProgress(),
         saveCloud: (progress, revision) =>
@@ -1295,8 +1329,16 @@ function loadQuestContinuityController() {
         onStatus: renderQuestSyncStatus
       });
       return questContinuityController;
+    }).catch(() => {
+      failedQuestContinuityLoads.add(loadKind);
+      if (questContinuityControllerPromise === loading) {
+        questContinuityControllerPromise = null;
+        questContinuityLoadKind = null;
+      }
+      renderQuestSyncStatus("offline");
+      return null;
     });
-  }
+  questContinuityControllerPromise = loading;
   return questContinuityControllerPromise;
 }
 
@@ -1308,8 +1350,9 @@ function showQuestConflict(conflict) {
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-  resumeAfterQuestConflict = run.status === "active";
-  if (resumeAfterQuestConflict) {
+  const pauseActiveRun = run.status === "active";
+  resumeAfterQuestConflict ||= pauseActiveRun;
+  if (pauseActiveRun) {
     togglePause();
   }
   if (elements.levelDialog.open) {
@@ -1324,9 +1367,11 @@ function showQuestConflict(conflict) {
  */
 function receiveCloudQuestProgress(progress, source) {
   if (
-    activeRunLocator !== null &&
-    !runFinished &&
-    ["active", "paused", "challenge"].includes(run.status)
+    dailyRequest.status !== "none" ||
+    activeDaily !== null ||
+    (activeRunLocator !== null &&
+      !runFinished &&
+      ["active", "paused", "challenge"].includes(run.status))
   ) {
     deferredCloudQuest = { progress, source };
     return;
@@ -1870,8 +1915,8 @@ function finishRun() {
   if (won) {
     saveNextBoundaryLocator();
   }
-  void loadQuestContinuityController().then((controller) =>
-    controller.queueBoundary(questProgress)
+  void loadQuestContinuityController("terminal").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
   );
   window.history.replaceState({}, "", "/play");
 

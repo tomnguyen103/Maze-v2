@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createQuestProgressHandler } from "../server/quest-progress-route.js";
 import { createQuestProgress } from "../src/game/quest-progress.js";
 
@@ -147,5 +147,30 @@ describe("Cloud Quest API", () => {
       });
       expect(malformed.status).toBe(400);
     });
+  });
+
+  it("logs only a bounded error class when storage fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = createQuestProgressHandler({
+      store: {
+        async get() {
+          throw new Error("database password must-not-leak");
+        },
+        async save() {
+          throw new Error("unused");
+        }
+      },
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      expect((await fetch(`${origin}/api/quest-progress`)).status).toBe(500);
+    });
+    expect(log).toHaveBeenCalledWith(
+      "[quest-progress] API request failed",
+      { name: "Error" }
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain("must-not-leak");
+    log.mockRestore();
   });
 });

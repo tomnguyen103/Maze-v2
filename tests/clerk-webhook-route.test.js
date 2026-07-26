@@ -56,6 +56,7 @@ describe("Clerk webhook", () => {
   });
 
   it("rejects an unverifiable event without deleting data", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const deleteUser = vi.fn();
     const handler = createClerkWebhookHandler({
       deleteUser,
@@ -72,7 +73,12 @@ describe("Clerk webhook", () => {
 
       expect(response.status).toBe(400);
       expect(deleteUser).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledWith("[clerk-webhook] Event rejected", {
+        name: "Error"
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain("bad signature");
     });
+    log.mockRestore();
   });
 
   it("acknowledges unrelated verified events without deleting data", async () => {
@@ -97,8 +103,9 @@ describe("Clerk webhook", () => {
   });
 
   it("returns a retryable server error when verified deletion fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const deleteUser = vi.fn(async () => {
-      throw new Error("database unavailable");
+      throw new Error("database password must-not-leak");
     });
     const handler = createClerkWebhookHandler({
       deleteUser,
@@ -119,5 +126,11 @@ describe("Clerk webhook", () => {
         error: "Account deletion is temporarily unavailable."
       });
     });
+    expect(log).toHaveBeenCalledWith(
+      "[clerk-webhook] Account deletion failed",
+      { name: "Error" }
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain("must-not-leak");
+    log.mockRestore();
   });
 });
