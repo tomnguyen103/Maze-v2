@@ -86,13 +86,13 @@ Stripe test transaction.
 
 ## Mandatory review follow-ups
 
-PR #52 reached final `Review completed` status after refill, and its one-time
-findings read produced no actionable follow-up. PRs #53 and #55 were merged
-under the documented blocked-progress fallback after their final CodeRabbit
-re-reviews were rate-limited. Their local gates and two-axis local reviews are
-clean, but the post-merge CodeRabbit reviews remain mandatory. Any actionable
-result will be fixed in a focused PR before this record is promoted beyond a
-test-mode engineering candidate.
+PRs #52 and #53 reached final `Review completed` status after refill, and their
+one-time findings reads produced no actionable follow-up. PR #55 was merged
+under the documented blocked-progress fallback after its final CodeRabbit
+re-review was rate-limited. Its local gate and two-axis local review are clean,
+but its post-merge CodeRabbit review remains mandatory. Any actionable result
+will be fixed in a focused PR before this record is promoted beyond a test-mode
+engineering candidate.
 
 ## External deferrals
 
