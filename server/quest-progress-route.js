@@ -3,6 +3,7 @@ import {
   InputError,
   validateCloudQuestWrite
 } from "./quest-progress-validation.js";
+import { DeletedUserError } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 
 export const QUEST_PROGRESS_PATHS = new Set(["/api/quest-progress"]);
@@ -68,6 +69,12 @@ export function createQuestProgressHandler({ store, getUserId }) {
     } catch (error) {
       if (error instanceof InputError) {
         sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof DeletedUserError) {
+        sendJson(response, 410, {
+          error: "This account has been deleted."
+        });
         return;
       }
       console.error("[quest-progress] API request failed", {

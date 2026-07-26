@@ -33,6 +33,7 @@ export function createQuestContinuityController({
   /** @type {string | null} */
   let authenticatedUserId = null;
   let authEpoch = 0;
+  let accountDeleted = false;
   /** @type {{ local: QuestProgress, cloud: CloudQuest } | null} */
   let conflict = null;
   let syncChain = Promise.resolve(false);
@@ -47,11 +48,18 @@ export function createQuestContinuityController({
       }
       authenticatedUserId = normalizedUserId;
       authEpoch += 1;
+      accountDeleted = false;
       conflict = null;
       onStatus("local");
     },
     /** @param {QuestProgress} progress */
     queueBoundary(progress) {
+      if (accountDeleted) {
+        clearPending(storage);
+        clearLocalChoice(storage);
+        onStatus("local");
+        return Promise.resolve(false);
+      }
       savePending(progress, storage);
       return enqueue(progress);
     },
@@ -99,7 +107,10 @@ export function createQuestContinuityController({
         onProgress(saved.progress, "merged");
         onStatus("saved");
         return true;
-      } catch {
+      } catch (error) {
+        if (handleDeletedAccount(error, session)) {
+          return true;
+        }
         if (isCurrentSession(session)) {
           onStatus("offline");
         }
@@ -120,6 +131,10 @@ export function createQuestContinuityController({
   async function synchronize(progress) {
     const session = currentSession();
     if (!session.userId) {
+      onStatus("local");
+      return false;
+    }
+    if (accountDeleted) {
       onStatus("local");
       return false;
     }
@@ -217,7 +232,10 @@ export function createQuestContinuityController({
       }
       onStatus("saved");
       return true;
-    } catch {
+    } catch (error) {
+      if (handleDeletedAccount(error, session)) {
+        return false;
+      }
       if (isCurrentSession(session)) {
         onStatus("offline");
       }
@@ -286,6 +304,22 @@ export function createQuestContinuityController({
     return { userId: authenticatedUserId, epoch: authEpoch };
   }
 
+  /**
+   * @param {unknown} error
+   * @param {{ userId: string | null, epoch: number }} session
+   */
+  function handleDeletedAccount(error, session) {
+    if (!isDeletedAccountError(error) || !isCurrentSession(session)) {
+      return false;
+    }
+    accountDeleted = true;
+    conflict = null;
+    clearPending(storage);
+    clearLocalChoice(storage);
+    onStatus("local");
+    return true;
+  }
+
   /** @param {{ userId: string | null, epoch: number }} session */
   function isCurrentSession(session) {
     return (
@@ -294,6 +328,16 @@ export function createQuestContinuityController({
       session.epoch === authEpoch
     );
   }
+}
+
+/** @param {unknown} error */
+function isDeletedAccountError(error) {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    error.status === 410
+  );
 }
 
 /** @param {QuestStorage} storage */

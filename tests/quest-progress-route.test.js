@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createQuestProgressHandler } from "../server/quest-progress-route.js";
 import { createQuestProgress } from "../src/game/quest-progress.js";
+import { DeletedUserError } from "../server/deleted-user-guard.js";
 
 /**
  * @param {(request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse) => void | Promise<void>} handler
@@ -123,6 +124,38 @@ describe("Cloud Quest API", () => {
       expect(response.status).toBe(409);
       await expect(response.json()).resolves.toMatchObject({
         record: { revision: 4 }
+      });
+    });
+  });
+
+  it("returns a terminal response when the account was deleted", async () => {
+    const progress = createQuestProgress(
+      "trail-scout",
+      4,
+      "quest_route_123"
+    );
+    const handler = createQuestProgressHandler({
+      store: {
+        async get() {
+          return null;
+        },
+        async save() {
+          throw new DeletedUserError();
+        }
+      },
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/quest-progress`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expectedRevision: 0, progress })
+      });
+
+      expect(response.status).toBe(410);
+      await expect(response.json()).resolves.toEqual({
+        error: "This account has been deleted."
       });
     });
   });

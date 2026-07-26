@@ -25,6 +25,8 @@ const GENERATED_QUESTION = {
   hint: "Use equal groups and multiply.",
   difficultyBand: "foundation",
   difficultyRank: 21,
+  topicId: "arithmetic",
+  learningObjectiveId: "scout-equal-groups",
   explanation: "Six groups of four make twenty-four."
 };
 

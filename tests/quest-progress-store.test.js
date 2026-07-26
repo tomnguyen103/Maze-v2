@@ -65,7 +65,32 @@ describe("Cloud Quest store", () => {
       "INSERT INTO player_access"
     );
     expect(pool.query.mock.calls[0][0]).toContain("ON CONFLICT DO NOTHING");
+    expect(pool.query.mock.calls[0][0]).toContain("pg_advisory_xact_lock");
+    expect(pool.query.mock.calls[0][0]).toContain(
+      "deleted_user_tombstones"
+    );
     expect(pool.query.mock.calls[0][1][0]).toBe("user_123");
+    expect(pool.query.mock.calls[0][1].at(-1)).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("reports a deleted account instead of an initial-save conflict", async () => {
+    const progress = createQuestProgress(
+      "trail-scout",
+      1,
+      "quest_cloud_123"
+    );
+    const pool = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ exists: 1 }] })
+    };
+
+    await expect(
+      createQuestProgressStore(pool).save("user_123", 0, progress)
+    ).rejects.toMatchObject({ name: "DeletedUserError" });
+    expect(pool.query.mock.calls[1][0]).toContain(
+      "FROM deleted_user_tombstones"
+    );
   });
 
   it("updates only the expected revision and surfaces a stale conflict", async () => {

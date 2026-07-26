@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/access/config",
+      "destination": "/api/access?_accessRoute=config"
+    },
+    {
+      "source": "/api/access/runs",
+      "destination": "/api/access?_accessRoute=runs"
+    },
+    {
       "source": "/play",
       "destination": "/index.html"
     }

@@ -1,3 +1,9 @@
+import {
+  activeUserGuardCtes,
+  DeletedUserError,
+  deletedUserHash
+} from "./deleted-user-guard.js";
+
 const FREE_RUN_LIMIT = 3;
 
 export class RunAccessConflictError extends Error {
@@ -43,16 +49,29 @@ export function createRunAccessStore(pool) {
     /** @param {string} userId */
     async getAccess(userId) {
       const result = await pool.query(
-        `WITH ensured_access AS (
+        `WITH ${activeUserGuardCtes("$2")},
+         ensured_access AS (
            INSERT INTO player_access (clerk_user_id)
-           VALUES ($1)
+           SELECT $1
+           FROM active_user
            ON CONFLICT (clerk_user_id) DO NOTHING
+           RETURNING free_runs_used, membership_state
+         ),
+         available_access AS (
+           SELECT free_runs_used, membership_state
+           FROM ensured_access
+           UNION ALL
+           SELECT free_runs_used, membership_state
+           FROM player_access
+           WHERE clerk_user_id = $1
+             AND EXISTS (SELECT 1 FROM active_user)
          )
          SELECT free_runs_used, membership_state
-         FROM player_access
-         WHERE clerk_user_id = $1`,
-        [userId]
+         FROM available_access
+         LIMIT 1`,
+        [userId, deletedUserHash(userId)]
       );
+      if (!result.rows[0]) throw new DeletedUserError();
       return accessState(result.rows[0] ?? {});
     },
 
@@ -69,12 +88,18 @@ export function createRunAccessStore(pool) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-        await client.query(
-          `INSERT INTO player_access (clerk_user_id)
-           VALUES ($1)
-           ON CONFLICT (clerk_user_id) DO NOTHING`,
-          [userId]
+        const guard = await client.query(
+          `WITH ${activeUserGuardCtes("$2")},
+           ensured_access AS (
+             INSERT INTO player_access (clerk_user_id)
+             SELECT $1
+             FROM active_user
+             ON CONFLICT (clerk_user_id) DO NOTHING
+           )
+           SELECT NOT EXISTS (SELECT 1 FROM active_user) AS deleted`,
+          [userId, deletedUserHash(userId)]
         );
+        if (guard.rows[0]?.deleted === true) throw new DeletedUserError();
         const accessResult = await client.query(
           `SELECT free_runs_used, membership_state
            FROM player_access

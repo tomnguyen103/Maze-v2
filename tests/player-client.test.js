@@ -300,6 +300,44 @@ describe("player client", () => {
       })
     );
   });
+
+  it("reads, saves, and clears the authenticated learning Journal", async () => {
+    const fetchImpl = vi.fn(
+      /** @param {string | URL | Request} _path @param {RequestInit} [_options] */
+      async (_path, _options) => {
+        void _path;
+        void _options;
+        return new Response(JSON.stringify({ journal: { version: 1, events: [] } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+    const journal = { version: 1, events: [] };
+
+    await client.getLearningJournal();
+    await client.saveLearningJournal(journal, 2);
+    await client.clearLearningJournal();
+
+    expect(fetchImpl.mock.calls.map(([path]) => path)).toEqual([
+      "/api/learning-journal",
+      "/api/learning-journal",
+      "/api/learning-journal"
+    ]);
+    expect(fetchImpl.mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ journal, clearGeneration: 2 })
+      })
+    );
+    expect(fetchImpl.mock.calls[2][1]).toEqual(
+      expect.objectContaining({ method: "DELETE" })
+    );
+  });
 });
 
 describe("player palettes", () => {

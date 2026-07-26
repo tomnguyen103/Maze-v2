@@ -86,11 +86,38 @@ describe("Run Access store", () => {
     ).toBe(true);
     expect(
       client.query.mock.calls.some(([sql]) =>
+        sql.includes("pg_advisory_xact_lock") &&
+        sql.includes("deleted_user_tombstones")
+      )
+    ).toBe(true);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
         sql.includes("ON CONFLICT (player_id, run_id) DO NOTHING")
       )
     ).toBe(true);
     expect(client.query).toHaveBeenCalledWith("COMMIT");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("guards the access read before it can create an account row", async () => {
+    const { pool } = createTransactionalPool();
+    const store = createRunAccessStore(pool);
+
+    await store.getAccess("user_123");
+    const call = /** @type {[string, unknown[]]} */ (
+      /** @type {unknown} */ (pool.query.mock.calls[0])
+    );
+
+    expect(call[0]).toContain(
+      "pg_advisory_xact_lock"
+    );
+    expect(call[0]).toContain(
+      "deleted_user_tombstones"
+    );
+    expect(call[1]).toEqual([
+      "user_123",
+      expect.stringMatching(/^[a-f0-9]{64}$/)
+    ]);
   });
 
   it("returns the original grant without consuming again", async () => {

@@ -1,6 +1,11 @@
 import {
   transitionLifetimeState
 } from "./lifetime-state.js";
+import {
+  activeUserGuardCtes,
+  DeletedUserError,
+  deletedUserHash
+} from "./deleted-user-guard.js";
 
 /**
  * @param {{
@@ -20,12 +25,18 @@ export function createLifetimeStore(pool) {
      */
     async reservePurchase(userId, purchaseId, priceId) {
       return transact(pool, async (client) => {
-        await client.query(
-          `INSERT INTO player_access (clerk_user_id)
-           VALUES ($1)
-           ON CONFLICT (clerk_user_id) DO NOTHING`,
-          [userId]
+        const guard = await client.query(
+          `WITH ${activeUserGuardCtes("$2")},
+           ensured_access AS (
+             INSERT INTO player_access (clerk_user_id)
+             SELECT $1
+             FROM active_user
+             ON CONFLICT (clerk_user_id) DO NOTHING
+           )
+           SELECT NOT EXISTS (SELECT 1 FROM active_user) AS deleted`,
+          [userId, deletedUserHash(userId)]
         );
+        if (guard.rows[0]?.deleted === true) throw new DeletedUserError();
         const existing = await client.query(
           `SELECT id, checkout_session_id, status
            FROM lifetime_purchases

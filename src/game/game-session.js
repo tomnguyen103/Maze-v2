@@ -10,7 +10,10 @@
  *   choices: readonly { id: string, label: string }[],
  *   answerId: string,
  *   hint: string,
- *   explanation: string
+ *   explanation: string,
+ *   difficultyBand: string,
+ *   topicId: string,
+ *   learningObjectiveId: string
  * }} WardenQuestion
  * @typedef {{
  *   kind: "wrong" | "skipped",

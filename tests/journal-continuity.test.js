@@ -1,0 +1,760 @@
+import { describe, expect, it, vi } from "vitest";
+import { createJournalContinuity } from "../src/learning/journal-continuity.js";
+import { createLanternJournal } from "../src/learning/lantern-journal.js";
+import { getBundledQuestion } from "../src/questions/question-bank.js";
+
+function question(ordinal = 0) {
+  return getBundledQuestion({
+    levelId: "trail-scout",
+    seed: "continuity-test",
+    wardenId: 0,
+    labyrinthNumber: 9,
+    questionOrdinal: ordinal
+  });
+}
+
+/** @param {number} value */
+function eventId(value) {
+  return `event_00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function createStorage() {
+  const records = new Map();
+  return {
+    /** @param {string} key */
+    getItem: (key) => records.get(key) ?? null,
+    /** @param {string} key */
+    removeItem: (key) => records.delete(key),
+    /** @param {string} key @param {string} value */
+    setItem: (key, value) => records.set(key, value)
+  };
+}
+
+describe("Lantern Journal continuity", () => {
+  it("contains rejected outcome metadata so gameplay callers never throw", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: createStorage(),
+      onStatus
+    });
+
+    await continuity.selectUser("");
+    expect(() =>
+      continuity.record(
+        { ...question(), id: "not-a-reviewed-question" },
+        "wrong",
+        () => eventId(12)
+      )
+    ).not.toThrow();
+    expect(continuity.getJournal().events).toHaveLength(0);
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal could not record this outcome."
+    );
+  });
+
+  it("keeps gameplay-facing recording operable when device storage is denied", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("");
+    expect(() =>
+      continuity.record(question(), "wrong", () => eventId(9))
+    ).not.toThrow();
+    expect(continuity.getJournal().events).toHaveLength(1);
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal storage is unavailable on this device."
+    );
+  });
+
+  it("reports when a newer cloud clear cannot persist on this device", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(async () => ({
+          journal: createLanternJournal(),
+          clearGeneration: 2
+        })),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("user_a");
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal storage is unavailable on this device."
+    );
+  });
+
+  it("reports when an unchanged cloud Journal cannot persist locally", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(async () => ({
+          journal: createLanternJournal(),
+          clearGeneration: 0
+        })),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("user_a");
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal storage is unavailable on this device."
+    );
+  });
+
+  it("reports when a confirmed cloud clear generation cannot persist", async () => {
+    const records = new Map();
+    let failWrites = false;
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(async () => ({
+          journal: createLanternJournal(),
+          clearGeneration: 0
+        })),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn(async () => {
+          failWrites = true;
+          return {
+            journal: createLanternJournal(),
+            clearGeneration: 1
+          };
+        })
+      },
+      storage: {
+        getItem: (key) => records.get(key) ?? null,
+        removeItem: (key) => records.delete(key),
+        setItem: (key, value) => {
+          if (failWrites) throw new Error("storage denied");
+          records.set(key, value);
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("user_a");
+    continuity.clear();
+    await continuity.whenIdle();
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal storage is unavailable on this device."
+    );
+  });
+
+  it("does not resurrect stale local events after a transient clear write failure", async () => {
+    const storage = createStorage();
+    const storedQuestion = question();
+    const staleJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(14),
+          questionId: storedQuestion.id,
+          topicId: storedQuestion.topicId,
+          learningObjectiveId: storedQuestion.learningObjectiveId,
+          difficultyBand: storedQuestion.difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    storage.setItem(
+      "echo-maze:lantern-journal:account:user_a",
+      JSON.stringify(staleJournal)
+    );
+    let cloud = {
+      journal: staleJournal,
+      clearGeneration: 0
+    };
+    let failNextJournalWrite = false;
+    const flakyStorage = {
+      getItem: storage.getItem,
+      removeItem: storage.removeItem,
+      /** @param {string} key @param {string} value */
+      setItem(key, value) {
+        if (
+          failNextJournalWrite &&
+          key === "echo-maze:lantern-journal:account:user_a"
+        ) {
+          failNextJournalWrite = false;
+          throw new Error("transient storage failure");
+        }
+        storage.setItem(key, value);
+      }
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => cloud),
+      saveLearningJournal: vi.fn(async (journal, clearGeneration) => {
+        cloud = { journal, clearGeneration };
+        return cloud;
+      }),
+      clearLearningJournal: vi.fn(async () => {
+        cloud = {
+          journal: createLanternJournal(),
+          clearGeneration: 1
+        };
+        return cloud;
+      })
+    };
+    const firstTab = createJournalContinuity({
+      client,
+      storage: flakyStorage
+    });
+
+    await firstTab.selectUser("user_a");
+    failNextJournalWrite = true;
+    firstTab.clear();
+    await firstTab.whenIdle();
+
+    client.saveLearningJournal.mockClear();
+    const reloadedTab = createJournalContinuity({
+      client,
+      storage: flakyStorage
+    });
+    await reloadedTab.selectUser("user_a");
+
+    expect(reloadedTab.getJournal()).toEqual(createLanternJournal());
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+  });
+
+  it("treats a recovered pending-clear marker as newer than stale local events", async () => {
+    const storage = createStorage();
+    const storedQuestion = question();
+    const staleJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(16),
+          questionId: storedQuestion.id,
+          topicId: storedQuestion.topicId,
+          learningObjectiveId: storedQuestion.learningObjectiveId,
+          difficultyBand: storedQuestion.difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    storage.setItem(
+      "echo-maze:lantern-journal:account:user_a",
+      JSON.stringify(staleJournal)
+    );
+    storage.setItem(
+      "echo-maze:lantern-journal:account:user_a:clear",
+      "pending"
+    );
+    const client = {
+      getLearningJournal: vi.fn(),
+      saveLearningJournal: vi.fn(),
+      clearLearningJournal: vi.fn(async () => ({
+        journal: createLanternJournal(),
+        clearGeneration: 1
+      }))
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage
+    });
+
+    await continuity.selectUser("user_a");
+
+    expect(continuity.getJournal()).toEqual(createLanternJournal());
+    expect(client.clearLearningJournal).toHaveBeenCalledOnce();
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+  });
+
+  it("recovers an offline clear after its empty-Journal write failed", async () => {
+    const storage = createStorage();
+    const storedQuestion = question();
+    const staleJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(17),
+          questionId: storedQuestion.id,
+          topicId: storedQuestion.topicId,
+          learningObjectiveId: storedQuestion.learningObjectiveId,
+          difficultyBand: storedQuestion.difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    const journalKey = "echo-maze:lantern-journal:account:user_a";
+    storage.setItem(journalKey, JSON.stringify(staleJournal));
+    let failNextJournalWrite = false;
+    let offline = true;
+    const flakyStorage = {
+      getItem: storage.getItem,
+      removeItem: storage.removeItem,
+      /** @param {string} key @param {string} value */
+      setItem(key, value) {
+        if (failNextJournalWrite && key === journalKey) {
+          failNextJournalWrite = false;
+          throw new Error("transient storage failure");
+        }
+        storage.setItem(key, value);
+      }
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => ({
+        journal: staleJournal,
+        clearGeneration: 0
+      })),
+      saveLearningJournal: vi.fn(),
+      clearLearningJournal: vi.fn(async () => {
+        if (offline) throw new Error("offline");
+        return {
+          journal: createLanternJournal(),
+          clearGeneration: 1
+        };
+      })
+    };
+    const firstTab = createJournalContinuity({
+      client,
+      storage: flakyStorage
+    });
+
+    await firstTab.selectUser("user_a");
+    failNextJournalWrite = true;
+    firstTab.clear();
+    await firstTab.whenIdle();
+
+    offline = false;
+    const reloadedTab = createJournalContinuity({
+      client,
+      storage: flakyStorage
+    });
+    await reloadedTab.selectUser("user_a");
+
+    expect(reloadedTab.getJournal()).toEqual(createLanternJournal());
+    expect(client.clearLearningJournal).toHaveBeenCalledTimes(2);
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+  });
+
+  it("stops Journal cloud retries after a deleted-account response", async () => {
+    const onStatus = vi.fn();
+    const client = {
+      getLearningJournal: vi.fn(async () => ({
+        journal: createLanternJournal(),
+        clearGeneration: 0
+      })),
+      saveLearningJournal: vi.fn(async () => {
+        throw Object.assign(new Error("deleted"), { status: 410 });
+      }),
+      clearLearningJournal: vi.fn()
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: createStorage(),
+      onStatus
+    });
+
+    await continuity.selectUser("");
+    continuity.record(question(), "wrong", () => eventId(15));
+    await continuity.selectUser("user_a");
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Account deleted. Journal stays on this device and will not sync."
+    );
+    expect(client.getLearningJournal).toHaveBeenCalledTimes(2);
+    await continuity.retry();
+    expect(client.saveLearningJournal).toHaveBeenCalledOnce();
+    expect(client.getLearningJournal).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears authenticated cloud history when device storage is denied", async () => {
+    let cloudJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(10),
+          questionId: question().id,
+          topicId: question().topicId,
+          learningObjectiveId: question().learningObjectiveId,
+          difficultyBand: question().difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => ({ journal: cloudJournal })),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => {
+        cloudJournal = createLanternJournal();
+      })
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      }
+    });
+
+    await continuity.selectUser("user_a");
+    expect(continuity.getJournal().events).toHaveLength(1);
+    continuity.clear();
+    await continuity.whenIdle();
+
+    expect(client.clearLearningJournal).toHaveBeenCalledOnce();
+    expect(continuity.getJournal().events).toHaveLength(0);
+    expect(cloudJournal.events).toHaveLength(0);
+  });
+
+  it("does not claim an offline clear was saved when device storage is denied", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(async () => ({
+          journal: createLanternJournal(),
+          clearGeneration: 0
+        })),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn(async () => {
+          throw new Error("offline");
+        })
+      },
+      storage: {
+        getItem: () => {
+          throw new Error("storage denied");
+        },
+        removeItem: () => {
+          throw new Error("storage denied");
+        },
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("user_a");
+    continuity.clear();
+    await continuity.whenIdle();
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal is kept in this tab. Keep it open while cloud sync retries."
+    );
+  });
+
+  it("migrates an in-memory guest Journal when storage is denied at sign-in", async () => {
+    const client = {
+      getLearningJournal: vi.fn(async () => ({
+        journal: createLanternJournal()
+      })),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn()
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: {
+        getItem: () => {
+          throw new Error("storage denied");
+        },
+        removeItem: () => {
+          throw new Error("storage denied");
+        },
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      }
+    });
+
+    await continuity.selectUser("");
+    continuity.record(question(), "wrong", () => eventId(11));
+    await continuity.selectUser("user_a");
+    await continuity.whenIdle();
+
+    expect(continuity.getJournal().events).toHaveLength(1);
+    expect(client.saveLearningJournal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [expect.objectContaining({ eventId: eventId(11) })]
+      }),
+      0
+    );
+  });
+
+  it("migrates guest learning once into the selected authenticated account", async () => {
+    const storage = createStorage();
+    const client = {
+      getLearningJournal: vi.fn(async () => ({ journal: createLanternJournal() })),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => ({}))
+    };
+    const continuity = createJournalContinuity({ client, storage });
+
+    await continuity.selectUser("");
+    continuity.record(question(), "wrong", () => eventId(1));
+    await continuity.selectUser("user_a");
+    await continuity.whenIdle();
+
+    expect(continuity.getJournal().events).toHaveLength(1);
+    expect(client.saveLearningJournal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [expect.objectContaining({ eventId: eventId(1) })]
+      }),
+      0
+    );
+
+    await continuity.selectUser("");
+    expect(continuity.getJournal().events).toHaveLength(0);
+  });
+
+  it("never exposes one authenticated account journal to another", async () => {
+    const storage = createStorage();
+    const cloudByUser = new Map([
+      ["user_a", createLanternJournal()],
+      ["user_b", createLanternJournal()]
+    ]);
+    let selectedUser = "";
+    const client = {
+      getLearningJournal: vi.fn(async () => ({
+        journal: cloudByUser.get(selectedUser) ?? createLanternJournal()
+      })),
+      saveLearningJournal: vi.fn(async (journal) => {
+        cloudByUser.set(selectedUser, journal);
+        return { journal };
+      }),
+      clearLearningJournal: vi.fn(async () => {
+        cloudByUser.set(selectedUser, createLanternJournal());
+      })
+    };
+    const continuity = createJournalContinuity({ client, storage });
+
+    selectedUser = "user_a";
+    await continuity.selectUser(selectedUser);
+    continuity.record(question(), "wrong", () => eventId(2));
+    await continuity.whenIdle();
+
+    selectedUser = "user_b";
+    await continuity.selectUser(selectedUser);
+    expect(continuity.getJournal().events).toHaveLength(0);
+  });
+
+  it("ignores a stale cloud response after account switching", async () => {
+    /** @type {(value: unknown) => void} */
+    let resolveUserA = () => {};
+    const userACloud = new Promise((resolve) => {
+      resolveUserA = resolve;
+    });
+    let selectedUser = "user_a";
+    const client = {
+      getLearningJournal: vi.fn(() =>
+        selectedUser === "user_a"
+          ? userACloud
+          : Promise.resolve({ journal: createLanternJournal() })
+      ),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => ({}))
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+
+    const selectingA = continuity.selectUser("user_a");
+    selectedUser = "user_b";
+    const selectingB = continuity.selectUser("user_b");
+    continuity.record(question(1), "correct", () => eventId(3));
+    resolveUserA({
+      journal: {
+        version: 1,
+        events: [
+          {
+            eventId: eventId(4),
+            questionId: question().id,
+            topicId: question().topicId,
+            learningObjectiveId: question().learningObjectiveId,
+            difficultyBand: question().difficultyBand,
+            outcome: "wrong"
+          }
+        ]
+      }
+    });
+    await Promise.all([selectingA, selectingB, continuity.whenIdle()]);
+
+    expect(continuity.getJournal().events.map((event) => event.eventId)).toEqual([
+      eventId(3)
+    ]);
+  });
+
+  it("does not restore a clear made during an in-flight cloud read", async () => {
+    /** @type {(value: unknown) => void} */
+    let resolveCloud = () => {};
+    const cloudRead = new Promise((resolve) => {
+      resolveCloud = resolve;
+    });
+    const cloudJournal = {
+      version: 1,
+      events: [
+        {
+          eventId: eventId(5),
+          questionId: question().id,
+          topicId: question().topicId,
+          learningObjectiveId: question().learningObjectiveId,
+          difficultyBand: question().difficultyBand,
+          outcome: "wrong"
+        }
+      ]
+    };
+    const client = {
+      getLearningJournal: vi.fn(() => cloudRead),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => ({}))
+    };
+    const continuity = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+
+    const selecting = continuity.selectUser("user_a");
+    continuity.clear();
+    resolveCloud({ journal: cloudJournal });
+    await Promise.all([selecting, continuity.whenIdle()]);
+
+    expect(continuity.getJournal().events).toHaveLength(0);
+    expect(client.clearLearningJournal).toHaveBeenCalledOnce();
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+  });
+
+  it("keeps an offline clear pending and suppresses cloud restoration", async () => {
+    const storage = createStorage();
+    let offline = true;
+    const cloud = {
+      journal: {
+        version: 1,
+        events: [
+          {
+            eventId: eventId(6),
+            questionId: question().id,
+            topicId: question().topicId,
+            learningObjectiveId: question().learningObjectiveId,
+            difficultyBand: question().difficultyBand,
+            outcome: "wrong"
+          }
+        ]
+      }
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => cloud),
+      saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+      clearLearningJournal: vi.fn(async () => {
+        if (offline) throw new Error("offline");
+        cloud.journal = createLanternJournal();
+      })
+    };
+    const continuity = createJournalContinuity({ client, storage });
+
+    await continuity.selectUser("user_a");
+    expect(continuity.getJournal().events).toHaveLength(1);
+    continuity.clear();
+    await continuity.whenIdle();
+    expect(continuity.getJournal().events).toHaveLength(0);
+
+    await continuity.selectUser("");
+    await continuity.selectUser("user_a");
+    expect(continuity.getJournal().events).toHaveLength(0);
+
+    offline = false;
+    await continuity.retry();
+    await continuity.whenIdle();
+    expect(cloud.journal.events).toHaveLength(0);
+  });
+
+  it("does not let a stale second device restore Journal events after a clear", async () => {
+    let cloud = {
+      journal: {
+        version: 1,
+        events: [
+          {
+            eventId: eventId(13),
+            questionId: question().id,
+            topicId: question().topicId,
+            learningObjectiveId: question().learningObjectiveId,
+            difficultyBand: question().difficultyBand,
+            outcome: "wrong"
+          }
+        ]
+      },
+      clearGeneration: 0
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => cloud),
+      saveLearningJournal: vi.fn(async (journal, clearGeneration) => {
+        cloud = { journal, clearGeneration };
+        return cloud;
+      }),
+      clearLearningJournal: vi.fn(async () => {
+        cloud = {
+          journal: createLanternJournal(),
+          clearGeneration: cloud.clearGeneration + 1
+        };
+        return cloud;
+      })
+    };
+    const deviceA = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+    const deviceB = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+
+    await deviceA.selectUser("user_a");
+    await deviceB.selectUser("user_a");
+    expect(deviceB.getJournal().events).toHaveLength(1);
+
+    deviceA.clear();
+    await deviceA.whenIdle();
+    client.saveLearningJournal.mockClear();
+
+    await deviceB.retry();
+
+    expect(deviceB.getJournal().events).toHaveLength(0);
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+    expect(cloud).toEqual({
+      journal: createLanternJournal(),
+      clearGeneration: 1
+    });
+  });
+});

@@ -12,6 +12,11 @@ import {
 } from "./lifetime-route.js";
 import { createLifetimeService } from "./lifetime-service.js";
 import { createLifetimeStore } from "./lifetime-store.js";
+import {
+  createLearningJournalHandler,
+  LEARNING_JOURNAL_PATH
+} from "./learning-journal-route.js";
+import { createLearningJournalStore } from "./learning-journal-store.js";
 import { createPlayerApiHandler } from "./player-route.js";
 import { createPlayerStore } from "./player-store.js";
 import {
@@ -33,6 +38,7 @@ const PLAYER_PATHS = new Set([
   "/api/profile",
   "/api/leaderboard",
   "/api/scores",
+  LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
   ...LIFETIME_PATHS,
@@ -110,6 +116,7 @@ export function createPlayerApi(env = process.env) {
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
+  const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
   const lifetimeConfig = loadLifetimeConfig(env);
@@ -120,6 +127,10 @@ export function createPlayerApi(env = process.env) {
   ).userId;
   const handler = createPlayerApiHandler({
     store,
+    getUserId
+  });
+  const learningJournalHandler = createLearningJournalHandler({
+    store: learningJournalStore,
     getUserId
   });
   const lifetimeHandler = createLifetimeHandler({
@@ -181,6 +192,10 @@ export function createPlayerApi(env = process.env) {
           })
         : unavailableLifetimeService()
     });
+    const unavailableLearningJournalHandler = createLearningJournalHandler({
+      store: learningJournalStore,
+      getUserId: () => null
+    });
     const unavailableQuestProgressHandler = createQuestProgressHandler({
       store: questProgressStore,
       getUserId: () => null
@@ -202,6 +217,10 @@ export function createPlayerApi(env = process.env) {
       }
       if (LIFETIME_PATHS.has(pathname)) {
         void unavailableLifetimeHandler(request, response, next);
+        return;
+      }
+      if (pathname === LEARNING_JOURNAL_PATH) {
+        void unavailableLearningJournalHandler(request, response, next);
         return;
       }
       if (QUEST_PROGRESS_PATHS.has(pathname)) {
@@ -261,6 +280,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (LIFETIME_PATHS.has(pathname)) {
           void lifetimeHandler(request, response, next);
+          return;
+        }
+        if (pathname === LEARNING_JOURNAL_PATH) {
+          void learningJournalHandler(request, response, next);
           return;
         }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {
