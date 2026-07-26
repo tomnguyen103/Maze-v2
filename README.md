@@ -58,6 +58,11 @@ The original project is preserved at
   Atlas, Run Records, cosmetics, or the Global Scoreboard.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress. Run Records remain device-local.
+- Open `Settings` to preview and save device-local stronger Fog contrast,
+  larger maze marks, reader-friendly Question text, or reduced visual effects.
+  These settings never alter Labyrinth geometry, timing, Questions, score, or
+  Quest Progress, and the operating-system reduced-motion preference is always
+  respected.
 - Signing out stops Cloud Quest requests but leaves the current local Quest on
   that device. Account deletion must remove the Clerk-keyed cloud row; it
   cannot erase local storage on another signed-out device.
@@ -186,6 +191,9 @@ push.
 - `server/clerk-webhook-route.js` verifies Clerk account-deletion events before
   `server/user-deletion-store.js` removes all Clerk-keyed player data.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
+- `src/player/access-settings.js` owns the versioned, device-local
+  presentation contract; `src/player/access-settings-view.js` owns preview,
+  save, cancel, and canonical reset behavior.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 
 Game-rule decisions live under `docs/adr/`, including deterministic Warden

@@ -57,10 +57,13 @@ import {
 import {
   createLifetimeView
 } from "./player/lifetime-view.js";
-import { createQuestConflictView } from "./player/quest-conflict-view.js";
 import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
+import {
+  applyAccessSettings,
+  loadAccessSettings
+} from "./player/access-settings.js";
 import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
@@ -73,6 +76,7 @@ const audio = new EchoAudio();
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
+  settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
@@ -215,24 +219,9 @@ const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: handleAuthenticationChange
 });
-const questConflictView = createQuestConflictView({
-  onChoose: (choice) => {
-    void loadQuestContinuityController().then((controller) =>
-      controller?.resolveConflict(choice) ?? false
-    ).then((resolved) => {
-      if (
-        resolved &&
-        resumeAfterQuestConflict &&
-        run.status === "paused"
-      ) {
-        togglePause();
-      }
-      if (resolved) {
-        resumeAfterQuestConflict = false;
-      }
-    });
-  }
-});
+/** @type {Promise<ReturnType<typeof import("./player/quest-conflict-view.js").createQuestConflictView>> | null} */
+let questConflictViewPromise = null;
+let questConflictViewRetry = false;
 const lifetimeView = createLifetimeView({
   onUnlock: openLifetimeCheckout
 });
@@ -243,6 +232,7 @@ let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterDaily = false;
 let resumeAfterRecords = false;
+let resumeAfterAccessSettings = false;
 let resumeAfterQuestConflict = false;
 /** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
 let deferredCloudQuest = null;
@@ -282,6 +272,11 @@ const atlasView = createQuestAtlasView({
     resumeAfterAtlas = false;
   }
 });
+applyAccessSettings(loadAccessSettings());
+/** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
+let accessSettingsViewPromise = null;
+let accessSettingsOpening = false;
+let accessSettingsViewRetry = false;
 
 void initializeRunEntry();
 void playerController.isAuthenticated().then(handleAuthenticationChange);
@@ -426,6 +421,59 @@ elements.recordsButton.addEventListener("click", () => {
   }
   renderRunRecords();
   elements.recordsDialog.showModal();
+});
+elements.settingsButton.addEventListener("click", async () => {
+  if (accessSettingsOpening) {
+    return;
+  }
+  accessSettingsOpening = true;
+  resumeAfterAccessSettings = run.status === "active";
+  if (resumeAfterAccessSettings) {
+    togglePause();
+  }
+  const retrying = accessSettingsViewRetry;
+  try {
+    if (!accessSettingsViewPromise) {
+      /** @type {Promise<typeof import("./player/access-settings-view.js")>} */
+      const viewModule = retrying
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("./player/access-settings-view.js?retry=1")
+        : import("./player/access-settings-view.js");
+      accessSettingsViewRetry = true;
+      accessSettingsViewPromise = viewModule.then(
+      ({ createAccessSettingsView }) =>
+        createAccessSettingsView({
+          onApply: (settings) => {
+            applyAccessSettings(settings);
+            renderer.render(run);
+          },
+          onClose: () => {
+            if (resumeAfterAccessSettings && run.status === "paused") {
+              togglePause();
+            }
+            resumeAfterAccessSettings = false;
+          },
+          onSave: () =>
+            announce("Explorer Access Settings saved on this device.")
+        })
+      );
+    }
+    const accessSettingsView = await accessSettingsViewPromise;
+    accessSettingsView.show(elements.settingsButton);
+  } catch {
+    accessSettingsViewPromise = null;
+    if (resumeAfterAccessSettings && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAccessSettings = false;
+    announce(
+      retrying
+        ? "Explorer Access Settings are unavailable. Reload to try again."
+        : "Explorer Access Settings are unavailable. Try again."
+    );
+  } finally {
+    accessSettingsOpening = false;
+  }
 });
 elements.recordsClose.addEventListener("click", () => {
   elements.recordsDialog.close();
@@ -1358,7 +1406,52 @@ function showQuestConflict(conflict) {
   if (elements.levelDialog.open) {
     elements.levelDialog.close();
   }
-  questConflictView.show(conflict, trigger);
+  const retrying = questConflictViewRetry;
+  if (!questConflictViewPromise) {
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./player/quest-conflict-view.js?retry=1")
+      : import("./player/quest-conflict-view.js");
+    questConflictViewRetry = true;
+    questConflictViewPromise = viewModule.then(({ createQuestConflictView }) =>
+      createQuestConflictView({ onChoose: resolveQuestConflictChoice })
+    );
+  }
+  const loading = questConflictViewPromise;
+  void loading
+    .then((questConflictView) => questConflictView.show(conflict, trigger))
+    .catch(() => {
+      if (questConflictViewPromise === loading) {
+        questConflictViewPromise = null;
+      }
+      if (resumeAfterQuestConflict && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterQuestConflict = false;
+      announce(
+        retrying
+          ? "Cloud Quest choice is unavailable. Reload to try again."
+          : "Cloud Quest choice is unavailable. Your device Quest is safe."
+      );
+    });
+}
+
+/** @param {"local" | "cloud"} choice */
+function resolveQuestConflictChoice(choice) {
+  void loadQuestContinuityController().then((controller) =>
+    controller?.resolveConflict(choice) ?? false
+  ).then((resolved) => {
+    if (
+      resolved &&
+      resumeAfterQuestConflict &&
+      run.status === "paused"
+    ) {
+      togglePause();
+    }
+    if (resolved) {
+      resumeAfterQuestConflict = false;
+    }
+  });
 }
 
 /**
@@ -1824,6 +1917,7 @@ function updateInterface() {
     run.status === "challenge" || activeDaily !== null;
   elements.recordsButton.disabled =
     run.status === "challenge" || activeDaily !== null;
+  elements.settingsButton.disabled = run.status === "challenge";
   elements.newRun.textContent = activeDaily ? "Return to Quest" : "New Quest";
   elements.pause.textContent = completedQuestIdle
     ? "Quest complete"

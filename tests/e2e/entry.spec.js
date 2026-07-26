@@ -27,7 +27,10 @@ test("keeps root as a non-running Echo Maze introduction", async ({ page }) => {
 test("keeps guest entry available beside sign in", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("button", { name: "Sign in", exact: true }).first()).toBeVisible();
+  const accountControl = hasClerkPublishableKey
+    ? page.getByRole("button", { name: "Sign in", exact: true }).first()
+    : page.getByRole("button", { name: "Sign-in unavailable" }).first();
+  await expect(accountControl).toBeVisible();
   await expect(page.getByRole("link", { name: "Enter the Maze" })).toBeEnabled();
 });
 
