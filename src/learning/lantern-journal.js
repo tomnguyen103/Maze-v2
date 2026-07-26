@@ -10,6 +10,7 @@ const EVENT_ID_PATTERN =
   /^event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const QUESTION_ID_PATTERN =
   /^(bright|scout|master)-(foundation|developing|capable|advanced|mastery)-([0-9]{1,10})$/;
+const JOURNAL_ORDINAL_COUNT = 8;
 const BAND_ORDER = Object.freeze([
   ["foundation", "Foundation"],
   ["developing", "Developing"],
@@ -93,8 +94,10 @@ export function recordLearningOutcome(
   createEventId = () => `event_${crypto.randomUUID()}`
 ) {
   const normalized = normalizeLanternJournal(journal);
+  const questionId = journalQuestionId(question);
   if (
     !normalized ||
+    !questionId ||
     !OUTCOMES.has(outcome) ||
     !isLearningMetadata(question.topicId, question.learningObjectiveId) ||
     !BAND_ORDER.some(([id]) => id === question.difficultyBand)
@@ -103,7 +106,7 @@ export function recordLearningOutcome(
   }
   const event = normalizeEvent({
     eventId: createEventId(),
-    questionId: question.id,
+    questionId,
     topicId: question.topicId,
     learningObjectiveId: question.learningObjectiveId,
     difficultyBand: question.difficultyBand,
@@ -143,9 +146,12 @@ function normalizeEvent(value) {
     return null;
   }
   const event = /** @type {Record<string, unknown>} */ (value);
+  const questionId =
+    typeof event.questionId === "string" ? event.questionId : "";
+  const questionMatch = QUESTION_ID_PATTERN.exec(questionId);
   const reviewedQuestion =
-    typeof event.questionId === "string"
-      ? reviewedQuestionForId(event.questionId)
+    questionMatch && Number(questionMatch[3]) < JOURNAL_ORDINAL_COUNT
+      ? reviewedQuestionForId(questionId)
       : null;
   if (
     typeof event.eventId !== "string" ||
@@ -172,6 +178,31 @@ function normalizeEvent(value) {
     difficultyBand: event.difficultyBand,
     outcome: /** @type {LearningOutcome} */ (event.outcome)
   };
+}
+
+/**
+ * @param {{
+ *   id: string,
+ *   topicId: string,
+ *   learningObjectiveId: string,
+ *   difficultyBand: string
+ * }} question
+ */
+function journalQuestionId(question) {
+  const match = QUESTION_ID_PATTERN.exec(question.id);
+  const source = reviewedQuestionForId(question.id);
+  if (
+    !match ||
+    !source ||
+    source.topicId !== question.topicId ||
+    source.learningObjectiveId !== question.learningObjectiveId ||
+    source.difficultyBand !== question.difficultyBand
+  ) {
+    return null;
+  }
+  return `${match[1]}-${match[2]}-${
+    Number(match[3]) % JOURNAL_ORDINAL_COUNT
+  }`;
 }
 
 /** @param {string} questionId */

@@ -16,7 +16,9 @@ The Lantern Journal stores a bounded set of coarse outcome events. Each event
 contains only:
 
 - a generated UUID-shaped event ID;
-- a bundled reviewed Question ID whose allowlisted metadata must match;
+- a normalized bundled reviewed Question ID whose allowlisted metadata must
+  match. Its ordinal is reduced to the eight learning-objective anchors, so it
+  cannot retain a Run position or date-derived Daily ordinal;
 - an allowlisted topic ID and learning-objective ID;
 - one of the five established difficulty bands; and
 - one coarse outcome: correct, wrong, hint, or skip.
@@ -54,4 +56,7 @@ access, Quest progress, or Echo Atlas progress.
   per-account continuity.
 - Clearing remains trustworthy during temporary network failures.
 - Aggregate counts can be rebuilt and tested from the bounded event set.
+- Browser storage denial cannot block a deterministic Warden action; the
+  Journal remains available in memory for the current tab and reports that
+  device persistence is unavailable.
 - Practice stays visibly and technically separate from competitive gameplay.

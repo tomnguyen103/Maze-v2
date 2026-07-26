@@ -31,6 +31,34 @@ function createStorage() {
 }
 
 describe("Lantern Journal continuity", () => {
+  it("keeps gameplay-facing recording operable when device storage is denied", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("");
+    expect(() =>
+      continuity.record(question(), "wrong", () => eventId(9))
+    ).not.toThrow();
+    expect(continuity.getJournal().events).toHaveLength(1);
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal storage is unavailable on this device."
+    );
+  });
+
   it("migrates guest learning once into the selected authenticated account", async () => {
     const storage = createStorage();
     const client = {

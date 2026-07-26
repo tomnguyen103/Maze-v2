@@ -21,10 +21,11 @@ const STORAGE_PREFIX = "echo-maze:lantern-journal";
  */
 export function createJournalContinuity({
   client,
-  storage = localStorage,
+  storage,
   onChange = () => {},
   onStatus = () => {}
 }) {
+  const deviceStorage = resolveStorage(storage);
   let selectedUserId = "";
   let authEpoch = 0;
   let journal = createLanternJournal();
@@ -53,8 +54,14 @@ export function createJournalContinuity({
       const guest = readJournal(journalKey(""));
       if (guest?.events.length) {
         journal = mergeLanternJournals(journal, guest);
-        writeJournal(selectedKey, journal);
-        storage.removeItem(journalKey(""));
+        if (
+          writeJournal(selectedKey, journal) &&
+          removeItem(journalKey(""))
+        ) {
+          onStatus("");
+        } else {
+          onStatus("Journal storage is unavailable on this device.");
+        }
       }
     }
     emit();
@@ -74,7 +81,9 @@ export function createJournalContinuity({
    */
   function record(question, outcome, createEventId) {
     journal = recordLearningOutcome(journal, question, outcome, createEventId);
-    writeJournal(journalKey(selectedUserId), journal);
+    if (!writeJournal(journalKey(selectedUserId), journal)) {
+      onStatus("Journal storage is unavailable on this device.");
+    }
     emit();
     authEpoch += 1;
     if (selectedUserId) {
@@ -85,11 +94,14 @@ export function createJournalContinuity({
 
   function clear() {
     journal = createLanternJournal();
-    writeJournal(journalKey(selectedUserId), journal);
+    let stored = writeJournal(journalKey(selectedUserId), journal);
     authEpoch += 1;
     if (selectedUserId) {
-      storage.setItem(clearKey(selectedUserId), "pending");
+      stored = setItem(clearKey(selectedUserId), "pending") && stored;
       idle = queueCloudSync(authEpoch, selectedUserId);
+    }
+    if (!stored) {
+      onStatus("Journal storage is unavailable on this device.");
     }
     emit();
   }
@@ -121,11 +133,11 @@ export function createJournalContinuity({
       return;
     }
     try {
-      const pendingClear = storage.getItem(clearKey(userId)) === "pending";
+      const pendingClear = getItem(clearKey(userId)) === "pending";
       if (pendingClear) {
         await client.clearLearningJournal();
         if (!isCurrent(epoch, userId)) return;
-        storage.removeItem(clearKey(userId));
+        removeItem(clearKey(userId));
         if (journal.events.length === 0) {
           onStatus("");
           return;
@@ -163,7 +175,9 @@ export function createJournalContinuity({
     const normalized = normalizeLanternJournal(value);
     if (!normalized) return;
     journal = normalized;
-    writeJournal(journalKey(userId), journal);
+    if (!writeJournal(journalKey(userId), journal)) {
+      onStatus("Journal storage is unavailable on this device.");
+    }
     emit();
   }
 
@@ -174,9 +188,9 @@ export function createJournalContinuity({
 
   /** @param {string} key */
   function readJournal(key) {
-    const raw = storage.getItem(key);
-    if (!raw) return null;
     try {
+      const raw = deviceStorage.getItem(key);
+      if (!raw) return null;
       return normalizeLanternJournal(JSON.parse(raw));
     } catch {
       return null;
@@ -185,12 +199,61 @@ export function createJournalContinuity({
 
   /** @param {string} key @param {unknown} value */
   function writeJournal(key, value) {
-    storage.setItem(key, JSON.stringify(value));
+    return setItem(key, JSON.stringify(value));
+  }
+
+  /** @param {string} key */
+  function getItem(key) {
+    try {
+      return deviceStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  /** @param {string} key @param {string} value */
+  function setItem(key, value) {
+    try {
+      deviceStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** @param {string} key */
+  function removeItem(key) {
+    try {
+      deviceStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function emit() {
     onChange(journal);
   }
+}
+
+/**
+ * @param {Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined} storage
+ */
+function resolveStorage(storage) {
+  if (storage) return storage;
+  try {
+    const browserStorage = globalThis.localStorage;
+    if (browserStorage) return browserStorage;
+  } catch {
+    // Fall through to the unavailable adapter.
+  }
+  return {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error("Device storage is unavailable.");
+    },
+    removeItem: () => {}
+  };
 }
 
 /** @param {string} userId */

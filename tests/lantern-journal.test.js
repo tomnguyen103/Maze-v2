@@ -52,7 +52,7 @@ describe("Lantern Journal", () => {
     expect(JSON.stringify(recorded)).not.toContain("answerId");
   });
 
-  it("records reviewed Daily question identifiers with seven-digit ordinals", () => {
+  it("normalizes Daily outcomes without retaining the date-derived ordinal", () => {
     const dailyQuestion = getBundledQuestion({
       levelId: "trail-scout",
       seed: "DAILY-20260726",
@@ -68,7 +68,8 @@ describe("Lantern Journal", () => {
       () => EVENT_IDS[0]
     );
 
-    expect(recorded.events[0].questionId).toBe(dailyQuestion.id);
+    expect(recorded.events[0].questionId).toBe("scout-developing-0");
+    expect(recorded.events[0].questionId).not.toBe(dailyQuestion.id);
   });
 
   it("aggregates repeated outcomes deterministically by learning objective", () => {
