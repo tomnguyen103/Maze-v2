@@ -1,6 +1,15 @@
 # Implementation Plan: Echo Maze Entry Experience
 
-**Status:** Draft for product review  
+**Planning status at authorship:** Draft for product review
+
+**Implementation status (2026-07-26):** Engineering implementation is complete
+through merged PRs #34, #37, and #38. PR #56 adds the honest free-account and
+optional lifetime-access preview plus integrated validation evidence and remains
+pending mandatory review and merge; that merge is still required for remote-main
+proof. Route, Guest, Clerk fallback, responsive, 200% text, reduced-motion, and
+value-copy behavior is exercised by
+`tests/e2e/entry.spec.js` and the linked unit suites in
+[`implementation-coverage.md`](implementation-coverage.md).
 **Date:** 2026-07-24  
 **Scope:** Introduction landing page, clean gameplay URL, optional Clerk sign-in  
 **Implementation authorization:** Not granted by this document

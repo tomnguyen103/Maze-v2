@@ -27,11 +27,46 @@ test("keeps root as a non-running Echo Maze introduction", async ({ page }) => {
 test("keeps guest entry available beside sign in", async ({ page }) => {
   await page.goto("/");
 
-  const accountControl = hasClerkPublishableKey
-    ? page.getByRole("button", { name: "Sign in", exact: true }).first()
-    : page.getByRole("button", { name: "Sign-in unavailable" }).first();
+  const accountControl = page.locator("#landing-sign-in");
   await expect(accountControl).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        if (
+          (await accountControl.isEnabled()) &&
+          (await accountControl.textContent()) === "Sign in"
+        ) {
+          return "ready";
+        }
+        return (await accountControl.textContent()) === "Sign-in unavailable"
+          ? "unavailable"
+          : "loading";
+      },
+      { timeout: 10_000 }
+    )
+    .toMatch(/ready|unavailable/);
+  if (!hasClerkPublishableKey) {
+    await expect(accountControl).toHaveText("Sign-in unavailable");
+    await expect(accountControl).toBeDisabled();
+  }
   await expect(page.getByRole("link", { name: "Enter the Maze" })).toBeEnabled();
+});
+
+test("explains free and optional lifetime access below the game-first hero", async ({
+  page
+}) => {
+  await page.goto("/");
+
+  const hero = page.locator(".landing-hero");
+  const accountSection = page.getByRole("region", { name: "Play your way" });
+
+  await expect(hero).not.toContainText("$5.99");
+  await expect(accountSection).toContainText("one Guest Run");
+  await expect(accountSection).toContainText("three more Runs");
+  await expect(accountSection).toContainText("$5.99 USD once");
+  await expect(accountSection).toContainText("No subscription or renewal");
+  await expect(accountSection).toContainText("Same fair Warden rules");
+  await expect(accountSection).toContainText("Ask a parent or grown-up");
 });
 
 test("opens the maintained Clerk SignIn dialog when configured", async ({
@@ -40,9 +75,25 @@ test("opens the maintained Clerk SignIn dialog when configured", async ({
   test.skip(testInfo.project.name !== "desktop", "One configured browser check is sufficient.");
   test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
   await page.goto("/");
-  const signIn = page.getByRole("button", { name: "Sign in", exact: true }).first();
+  const signIn = page.locator("#landing-sign-in");
 
-  await expect(signIn).toBeEnabled();
+  await expect
+    .poll(
+      async () => {
+        if (await signIn.isEnabled()) {
+          return "ready";
+        }
+        return (await signIn.textContent()) === "Sign-in unavailable"
+          ? "unavailable"
+          : "loading";
+      },
+      { timeout: 10_000 }
+    )
+    .toMatch(/ready|unavailable/);
+  test.skip(
+    !(await signIn.isEnabled()),
+    "Clerk could not initialize during this browser run."
+  );
   await signIn.click();
 
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -68,6 +119,10 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   });
 
   await page.goto("/play");
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
 
   await expect
     .poll(() =>
@@ -85,11 +140,19 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   ).not.toBeVisible();
 
   await page.reload();
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
   await expect(
     page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
 
   await page.goto("/play?seed=DEMO-GATE&level=trail-scout&labyrinth=2");
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
   await expect(
     page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
@@ -108,6 +171,10 @@ test("hands the top layer from the demo gate to Clerk account creation", async (
   });
 
   await page.goto("/play");
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
 
   const demoGate = page.getByRole("dialog", {
     name: "Create an account for three free Runs."
@@ -117,8 +184,30 @@ test("hands the top layer from the demo gate to Clerk account creation", async (
     .getByRole("button", { name: "Create account for three Runs" })
     .click();
 
+  const createAccountHeading = page.getByRole("heading", {
+    name: "Create your account"
+  });
+  await expect
+    .poll(
+      async () => {
+        if (await createAccountHeading.isVisible()) {
+          return "ready";
+        }
+        return (await page.locator("#result-summary").textContent())?.includes(
+          "Account creation is unavailable"
+        )
+          ? "unavailable"
+          : "loading";
+      },
+      { timeout: 15_000 }
+    )
+    .toMatch(/ready|unavailable/);
+  test.skip(
+    !(await createAccountHeading.isVisible()),
+    "Clerk could not initialize during this browser run."
+  );
   await expect(demoGate).not.toBeVisible();
-  await expect(page.getByLabel(/Email address/i)).toBeVisible();
+  await expect(createAccountHeading).toBeVisible();
 });
 
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {

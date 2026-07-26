@@ -1310,6 +1310,10 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
 }) => {
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
@@ -1432,6 +1436,10 @@ test("keeps an active Run operable when the Journal chunk is unavailable", async
     await route.abort("failed");
   });
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true"
+  );
   const canvas = page.getByLabel(/Interactive maze/);
   await canvas.focus();
   await page.keyboard.press("ArrowDown");

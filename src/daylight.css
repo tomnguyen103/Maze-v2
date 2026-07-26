@@ -2761,6 +2761,51 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   padding-bottom: var(--space-8);
 }
 
+.landing-account__copy {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.landing-membership-preview {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-left: 2px solid var(--color-line);
+  background: var(--color-stone);
+}
+
+.landing-membership-preview h3,
+.landing-membership-price {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 760;
+}
+
+.landing-membership-preview h3 {
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.landing-membership-preview .landing-membership-price {
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  line-height: 1;
+}
+
+.landing-membership-preview ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--color-ink);
+  line-height: 1.5;
+}
+
+.landing-membership-preview p:last-child {
+  font-size: 1rem;
+}
+
 .landing-auth-status {
   margin: var(--space-3) 0 0;
   color: var(--color-ink-muted);

@@ -5,6 +5,12 @@ const coverage = readFileSync(
   "docs/plans/implementation-coverage.md",
   "utf8"
 );
+const sourcePlans = [
+  "docs/plans/echo-maze-lifetime-membership-and-echo-atlas-master-plan.md",
+  "docs/plans/entry-experience-implementation-plan.md",
+  "docs/plans/echo-maze-prioritized-feature-roadmap.md",
+  "docs/plans/membership-access-implementation-plan.md"
+];
 
 /** @param {string} line */
 function tableCells(line) {
@@ -47,5 +53,15 @@ describe("release readiness evidence", () => {
     expect(
       rows.find(([id]) => id === "C27")?.[statusIndex]
     ).toBe("Deferred - external approval");
+  });
+
+  it("records current implementation and PR/test evidence in every source plan", () => {
+    for (const path of sourcePlans) {
+      const plan = readFileSync(path, "utf8");
+
+      expect(plan, path).toContain("**Implementation status (2026-07-26):**");
+      expect(plan, path).toContain("PR #56");
+      expect(plan, path).toMatch(/`tests\//);
+    }
   });
 });

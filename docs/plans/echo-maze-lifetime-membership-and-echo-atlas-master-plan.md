@@ -2,7 +2,17 @@
 
 ## Lifetime Membership + Echo Atlas and Gate Wardens
 
-**Status:** Proposed - awaiting explicit implementation approval
+**Planning status at authorship:** Proposed - awaiting explicit implementation
+approval
+
+**Implementation status (2026-07-26):** Engineering implementation is complete
+through merged PRs #49-#55. Release-closure PR #56 adds the integrated landing
+and validation evidence and remains pending mandatory review and merge; that
+merge is still required for remote-main proof. Access, lifetime membership,
+Atlas, Warden, continuity, settings, Daily, and Journal behavior is exercised by
+the matching `tests/*.test.js`,
+`tests/e2e/*.spec.js`, and live PostgreSQL store suites indexed in
+[`implementation-coverage.md`](implementation-coverage.md).
 
 **Document version:** 1.0
 
@@ -10,7 +20,7 @@
 
 **Reviewed commit:** `85c485f` on `main`
 
-**Current scope:** Documentation only
+**Document scope at authorship:** Documentation only
 
 **Implementation authorization:** Not granted by this document
 

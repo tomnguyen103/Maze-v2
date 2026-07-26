@@ -51,8 +51,20 @@ export function renderLanding(root) {
         </ul>
       </section>
       <section class="landing-account" aria-labelledby="landing-account-title">
-        <h2 id="landing-account-title">Play your way</h2>
-        <p>Try one Labyrinth as a guest. Create an account to continue your Quest, save colors, and join the Global Scoreboard.</p>
+        <div class="landing-account__copy">
+          <h2 id="landing-account-title">Play your way</h2>
+          <p>Play one Guest Run. After that, a free Explorer account includes three more Runs and saves your public username, color choices, and Global Scoreboard entries.</p>
+        </div>
+        <aside class="landing-membership-preview" aria-labelledby="landing-membership-title">
+          <h3 id="landing-membership-title">Optional lifetime access</h3>
+          <p class="landing-membership-price">$5.99 USD once</p>
+          <ul>
+            <li>Unlimited Runs for this Explorer account</li>
+            <li>No subscription or renewal</li>
+            <li>Same fair Warden rules, with no paid power</li>
+          </ul>
+          <p>Ask a parent or grown-up to help if you choose it. Guest play stays available.</p>
+        </aside>
       </section>
     </main>
   `;
@@ -67,6 +79,10 @@ export function renderLanding(root) {
     getToken: clerkBrowser.getToken
   });
 
+  headerSignIn.disabled = true;
+  heroSignIn.disabled = true;
+  headerSignIn.setAttribute("aria-busy", "true");
+  heroSignIn.setAttribute("aria-busy", "true");
   headerSignIn.addEventListener("click", openAccount);
   heroSignIn.addEventListener("click", openAccount);
   void syncAccount();
@@ -88,6 +104,8 @@ export function renderLanding(root) {
   async function syncAccount() {
     const available = await clerkBrowser.initialize();
     const user = clerkBrowser.user;
+    headerSignIn.removeAttribute("aria-busy");
+    heroSignIn.removeAttribute("aria-busy");
     if (!available) {
       headerSignIn.disabled = true;
       heroSignIn.disabled = true;

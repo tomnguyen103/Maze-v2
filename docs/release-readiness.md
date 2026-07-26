@@ -51,12 +51,12 @@ npx playwright test --workers=4
 
 Final integrated closure-candidate evidence:
 
-- Vitest: 373 passed; 4 intentional environment skips
-- Playwright desktop/mobile: 103 passed; 5 intentional Clerk-network skips
+- Vitest: 374 passed; 4 intentional environment skips
+- Playwright desktop/mobile: 105 passed; 5 intentional Clerk-network skips
 - Live PostgreSQL integration: 4 passed across Run Access and Journal stores
-- Landing JavaScript: 6.31 KB gzip / 8 KB
-- Game JavaScript: 26.24 KB gzip / 30 KB
-- Shared styles: 10.11 KB gzip / 12 KB
+- Landing JavaScript: 6.70 KB gzip / 8 KB
+- Game JavaScript: 26.26 KB gzip / 30 KB
+- Shared styles: 10.21 KB gzip / 12 KB
 - Optional Clerk boundary: 544.21 KB gzip / 600 KB
 
 ## Operational drills
@@ -87,9 +87,13 @@ Stripe test transaction.
 ## Mandatory review follow-ups
 
 PRs #52, #53, and #55 reached final `Review completed` status after refill.
-Their one-time findings reads produced no new actionable follow-up: the six
-comments visible on #55 were already marked addressed in commits through its
-merged head. No mandatory post-merge review remains outstanding.
+Their one-time findings reads are complete. PR #55 has ten review threads, ten
+CodeRabbit inline findings, two CodeRabbit resolution replies, and two owner
+resolution replies. Its final Critical first-save clear-generation finding was
+fixed in `d013f3f`, covered by the non-zero-generation PostgreSQL regression
+test, answered with that evidence, and resolved. Live GraphQL verification
+reports zero unresolved #55 threads. No mandatory post-merge review remains
+outstanding.
 
 ## External deferrals
 
