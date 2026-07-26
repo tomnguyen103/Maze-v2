@@ -15,20 +15,20 @@ remote `main`.
 
 | Journey | Automated and browser evidence | Required profiles | Final result |
 |---|---|---|---|
-| Public landing and Guest entry | `tests/e2e/entry.spec.js` | Desktop, mobile, 200% text, reduced motion | Pending integrated `main` |
-| Guest demo completion and account handoff | `tests/demo-access.test.js`, `tests/e2e/entry.spec.js`, `tests/e2e/game.spec.js` | Escape, defeat, reload, direct link | Pending integrated `main` |
-| Signed-in profile and score continuity | Player client/controller/route/store tests plus `tests/e2e/game.spec.js` | Signed fixture, Guest fallback | Pending integrated `main` |
-| Three free Run starts and idempotent replay | Run Access domain/route/store/integration tests | Duplicate, multi-tab, retry, outage | Pending integrated `main` |
-| `$5.99 USD` one-time test Checkout | Lifetime domain/service/route/store tests and membership browser passage | Desktop, mobile, 200% text; test mode only | Pending integrated `main` |
-| Direct confirmation and signed webhook convergence | Lifetime service/store fixtures | Return-first, webhook-first, duplicate, wrong owner | Pending integrated `main` |
-| Refund, dispute, restored funds, and outage | Lifetime transition/store fixtures | Active Run finishes; next start gated | Pending integrated `main` |
-| Echo Atlas and Gate Warden milestones | Atlas/session/view tests plus `tests/e2e/game.spec.js` | Desktop, mobile, keyboard, 200% text, reduced motion | Pending integrated `main` |
-| Cloud Quest Continuity | Quest continuity/controller/route/store tests and browser passage | Offline retry, same-Quest merge, incompatible-Quest choice, two-device proof | Pending integrated `main` |
-| Lantern Journal and Practice Lantern | Journal/learning-objective/continuity tests and browser passage | Clear, sync, non-repeat, no gameplay effect | Pending integrated `main` |
-| Explorer Access Settings | Settings adapter/view tests and browser passage | 390 px, 200% text, reduced motion, persistence/reset | Pending integrated `main` |
-| Daily Shared Labyrinth | Daily contract/storage tests and `tests/e2e/daily.spec.js` | Desktop, mobile, UTC rollover, expired link, Quest isolation | Pending integrated `main` |
-| Account deletion | Signed Clerk webhook, deletion-store, and migration tests | Retry-safe transactional cascade | Pending integrated `main` |
-| Billing disable and rollback | Access-config tests and `docs/lifetime-membership-operations.md` | Desktop/mobile starts, entitlement preserved, webhook retained | Pending integrated `main` |
+| Public landing and Guest entry | `tests/e2e/entry.spec.js` | Desktop, mobile, 200% text, reduced motion | Pass - integrated closure candidate |
+| Guest demo completion and account handoff | `tests/demo-access.test.js`, `tests/e2e/entry.spec.js`, `tests/e2e/game.spec.js` | Escape, defeat, reload, direct link | Pass - integrated closure candidate |
+| Signed-in profile and score continuity | Player client/controller/route/store tests plus `tests/e2e/game.spec.js` | Signed fixture, Guest fallback | Pass - integrated closure candidate |
+| Three free Run starts and idempotent replay | Run Access domain/route/store/integration tests | Duplicate, multi-tab, retry, outage | Pass - integrated closure candidate |
+| `$5.99 USD` one-time test Checkout | Lifetime domain/service/route/store tests and membership browser passage | Desktop, mobile, 200% text; test mode only | Pass - fixed adapter fixtures; no live charge |
+| Direct confirmation and signed webhook convergence | Lifetime service/store fixtures | Return-first, webhook-first, duplicate, wrong owner | Pass - integrated closure candidate |
+| Refund, dispute, restored funds, and outage | Lifetime transition/store fixtures | Active Run finishes; next start gated | Pass - integrated closure candidate |
+| Echo Atlas and Gate Warden milestones | Atlas/session/view tests plus `tests/e2e/game.spec.js` | Desktop, mobile, keyboard, 200% text, reduced motion | Pass - integrated closure candidate |
+| Cloud Quest Continuity | Quest continuity/controller/route/store tests and browser passage | Offline retry, same-Quest merge, incompatible-Quest choice, two-device proof | Pass - integrated closure candidate |
+| Lantern Journal and Practice Lantern | Journal/learning-objective/continuity tests and browser passage | Clear, sync, non-repeat, no gameplay effect | Pass - integrated closure candidate |
+| Explorer Access Settings | Settings adapter/view tests and browser passage | 390 px, 200% text, reduced motion, persistence/reset | Pass - integrated closure candidate |
+| Daily Shared Labyrinth | Daily contract/storage tests and `tests/e2e/daily.spec.js` | Desktop, mobile, UTC rollover, expired link, Quest isolation | Pass - integrated closure candidate |
+| Account deletion | Signed Clerk webhook, deletion-store, and migration tests | Retry-safe transactional cascade | Pass - integrated closure candidate |
+| Billing disable and rollback | Access-config tests and `docs/lifetime-membership-operations.md` | Desktop/mobile starts, entitlement preserved, webhook retained | Pass - integrated closure candidate |
 
 Semantic assertions cover dialog names, heading focus, focus return, visible
 keyboard focus, non-color state labels, live status regions, native button
@@ -49,15 +49,15 @@ npm run check:bundle
 npx playwright test --workers=4
 ```
 
-Record the final totals, intentional environment skips, and four bundle-budget
-measurements here after the last dependency merges:
+Final integrated closure-candidate evidence:
 
-- Vitest: pending integrated `main`
-- Playwright desktop/mobile: pending integrated `main`
-- Landing JavaScript: pending integrated `main`
-- Game JavaScript: pending integrated `main`
-- Shared styles: pending integrated `main`
-- Optional Clerk boundary: pending integrated `main`
+- Vitest: 370 passed; 4 intentional environment skips
+- Playwright desktop/mobile: 103 passed; 5 intentional Clerk-network skips
+- Live PostgreSQL integration: 4 passed across Run Access and Journal stores
+- Landing JavaScript: 6.31 KB gzip / 8 KB
+- Game JavaScript: 26.24 KB gzip / 30 KB
+- Shared styles: 10.11 KB gzip / 12 KB
+- Optional Clerk boundary: 544.21 KB gzip / 600 KB
 
 ## Operational drills
 
@@ -76,6 +76,21 @@ The final drill must prove:
 5. Structured events contain only bounded public states and never identities,
    secrets, tokens, raw webhooks, payment identifiers, card/billing data,
    Question text, or child-entered content.
+
+All five engineering drills pass through the integrated access, membership,
+deletion, product-event, safe-log, operations-contract, and browser fixtures.
+The live PostgreSQL subset passes against the configured development database.
+Stripe network credentials are not configured on this machine, so the Checkout
+result above is fixed-adapter contract proof and does not claim an external
+Stripe test transaction.
+
+## Mandatory review follow-ups
+
+PRs #52, #53, and #55 were merged under the documented blocked-progress
+fallback after their final CodeRabbit re-reviews were rate-limited. Their local
+gates and two-axis local reviews are clean, but the post-merge CodeRabbit
+reviews remain mandatory. Any actionable result will be fixed in a focused PR
+before this record is promoted beyond a test-mode engineering candidate.
 
 ## External deferrals
 

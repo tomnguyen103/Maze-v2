@@ -107,20 +107,28 @@ Classify the case before taking action:
 ## Account deletion
 
 The normal path is Clerk's signed `user.deleted` webhook. Its verified opaque
-user id enters the deletion store as a bound parameter, and one transaction
-deletes Cloud Quest Progress, the Player Profile (including Score Entries),
-and Run Access (including Run Grants and local purchase projections). Never
-accept an unsigned deletion request.
+user id enters the deletion store as a bound parameter. One transaction takes
+the same per-user advisory lock used by account-creating writes, stores only a
+SHA-256 tombstone of the identity, then deletes Cloud Quest Progress, the
+Player Profile (including Score Entries), and Run Access (including Run Grants,
+local purchase projections, and the cloud Journal). The tombstone prevents a
+late or retried writer from recreating deleted application data. Never accept
+an unsigned deletion request.
 
 Use the SQL below only as an approved break-glass recovery after independently
-authenticating the account-deletion request. Keep the opaque Clerk user id in
-an operator-local bound parameter; never paste it into logs, issues,
-screenshots, or chat.
+authenticating the account-deletion request. Keep the opaque Clerk user id and
+its lowercase hexadecimal SHA-256 digest in operator-local bound parameters;
+never paste either value into logs, issues, screenshots, or chat.
 
-Run the following as one parameterized transaction:
+Bind `$1` to the opaque Clerk user id and `$2` to its 64-character SHA-256
+digest. Run the following as one parameterized transaction:
 
 ```sql
 BEGIN;
+SELECT pg_advisory_xact_lock(hashtextextended($1, 0));
+INSERT INTO deleted_user_tombstones (clerk_user_id_hash)
+VALUES ($2)
+ON CONFLICT (clerk_user_id_hash) DO UPDATE SET deleted_at = NOW();
 DELETE FROM cloud_quest_progress WHERE clerk_user_id = $1;
 DELETE FROM players WHERE clerk_user_id = $1;
 DELETE FROM player_access WHERE clerk_user_id = $1;
@@ -132,7 +140,8 @@ cascades to Run Grants, local purchase projections, Cloud Quest Progress, and
 the cloud Journal. Verify that
 `cloud_quest_progress`, `players`, `score_entries`, `player_access`,
 `run_access_grants`, `lifetime_purchases`, and `learning_journals` contain zero
-rows for the bound identity. Stripe financial records follow Stripe and legal
+rows for the bound identity, and that `deleted_user_tombstones` contains exactly
+one row for the bound digest. Stripe financial records follow Stripe and legal
 retention rules and must not be erased by direct database edits. Device-local
 Quest Progress, Run Records, Journal, settings, Daily records, and active Run
 state remain on the player's devices; support must explain how the player can

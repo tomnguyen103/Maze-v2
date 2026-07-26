@@ -34,6 +34,13 @@ describe("release operations contract", () => {
     expect(operations).toMatch(
       /BEGIN;[\s\S]*DELETE FROM cloud_quest_progress WHERE clerk_user_id = \$1;[\s\S]*DELETE FROM players WHERE clerk_user_id = \$1;[\s\S]*DELETE FROM player_access WHERE clerk_user_id = \$1;[\s\S]*COMMIT;/
     );
+    expect(operations).toContain(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0));"
+    );
+    expect(operations).toMatch(
+      /INSERT INTO deleted_user_tombstones \(clerk_user_id_hash\)[\s\S]*VALUES \(\$2\)/
+    );
+    expect(operations).toContain("64-character SHA-256");
     expect(operations).toContain("signed `user.deleted` webhook");
     expect(operations).toMatch(
       /Stripe financial records follow Stripe and legal\s+retention rules/
