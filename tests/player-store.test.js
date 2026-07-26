@@ -50,8 +50,13 @@ describe("player store", () => {
       "Moss Runner",
       "moss runner",
       "sunset",
-      "twilight"
+      "twilight",
+      expect.stringMatching(/^[a-f0-9]{64}$/)
     ]);
+    expect(pool.query.mock.calls[0][0]).toContain("pg_advisory_xact_lock");
+    expect(pool.query.mock.calls[0][0]).toContain(
+      "deleted_user_tombstones"
+    );
   });
 
   it("returns one ranked best escaped run per player", async () => {

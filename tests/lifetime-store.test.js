@@ -45,6 +45,12 @@ describe("Lifetime Membership store", () => {
     expect(client.query.mock.calls[2][0]).toContain(
       "FROM lifetime_purchases"
     );
+    expect(client.query.mock.calls[1][0]).toContain(
+      "pg_advisory_xact_lock"
+    );
+    expect(client.query.mock.calls[1][0]).toContain(
+      "deleted_user_tombstones"
+    );
     expect(client.query.mock.calls[3][0]).toContain("FOR UPDATE");
     expect(client.query.mock.calls[4][0]).toContain(
       "INSERT INTO lifetime_purchases"

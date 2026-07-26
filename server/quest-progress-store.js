@@ -1,4 +1,9 @@
 import { normalizeQuestProgress } from "../src/game/quest-progress.js";
+import {
+  activeUserGuardCtes,
+  DeletedUserError,
+  deletedUserHash
+} from "./deleted-user-guard.js";
 
 const COLUMNS = `
   schema_version,
@@ -57,10 +62,21 @@ export function createQuestProgressStore(pool) {
       ];
       const result = expectedRevision === 0
         ? await pool.query(
-            `WITH ensured_access AS (
+            `WITH ${activeUserGuardCtes("$11")},
+             ensured_access AS (
                INSERT INTO player_access (clerk_user_id)
-               VALUES ($1)
+               SELECT $1
+               FROM active_user
                ON CONFLICT (clerk_user_id) DO NOTHING
+               RETURNING clerk_user_id
+             ),
+             available_access AS (
+               SELECT clerk_user_id FROM ensured_access
+               UNION ALL
+               SELECT clerk_user_id
+               FROM player_access
+               WHERE clerk_user_id = $1
+                 AND EXISTS (SELECT 1 FROM active_user)
              )
              INSERT INTO cloud_quest_progress (
                clerk_user_id,
@@ -74,7 +90,10 @@ export function createQuestProgressStore(pool) {
                next_question_ordinal,
                complete
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7::JSONB, $8::JSONB, $9, $10)
+             SELECT
+               $1, $2, $3, $4, $5, $6, $7::JSONB, $8::JSONB, $9, $10
+             FROM available_access
+             LIMIT 1
              ON CONFLICT DO NOTHING
              RETURNING ${COLUMNS}`,
             [
@@ -87,7 +106,8 @@ export function createQuestProgressStore(pool) {
               JSON.stringify(progress.usedMapFingerprints),
               JSON.stringify(progress.usedQuestionIds),
               progress.nextQuestionOrdinal,
-              progress.complete
+              progress.complete,
+              deletedUserHash(userId)
             ]
           )
         : await pool.query(
@@ -115,6 +135,17 @@ export function createQuestProgressStore(pool) {
           conflict: false,
           duplicate: false
         };
+      }
+      if (expectedRevision === 0) {
+        const deleted = await pool.query(
+          `SELECT 1
+           FROM deleted_user_tombstones
+           WHERE clerk_user_id_hash = $1`,
+          [deletedUserHash(userId)]
+        );
+        if (deleted.rows.length) {
+          throw new DeletedUserError();
+        }
       }
       const record = await get(userId);
       const duplicate =

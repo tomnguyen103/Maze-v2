@@ -40,6 +40,24 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("billing_address");
   });
 
+  it("stores bounded privacy-minimized Journals with account deletion cascade", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0005_lantern_journal.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE learning_journals");
+    expect(sql).toContain("CREATE TABLE deleted_user_tombstones");
+    expect(sql).toContain("clerk_user_id_hash CHAR(64) PRIMARY KEY");
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("clear_generation INTEGER NOT NULL DEFAULT 0");
+    expect(sql).toContain("journal -> 'version' = '1'::jsonb");
+    expect(sql).toContain("REFERENCES player_access(clerk_user_id) ON DELETE CASCADE");
+    expect(sql).toContain("jsonb_array_length(journal->'events') <= 200");
+    expect(sql).not.toContain("answer_text");
+    expect(sql).not.toContain("child_name");
+  });
+
   it("adds one bounded optimistic Cloud Quest record per Clerk identity", async () => {
     const sql = await readFile(
       new URL("../db/migrations/0004_cloud_quest_progress.sql", import.meta.url),

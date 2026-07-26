@@ -15,12 +15,17 @@ describe("Clerk user deletion store", () => {
 
     expect(client.query.mock.calls.map(([sql]) => sql.trim())).toEqual([
       "BEGIN",
+      expect.stringContaining("pg_advisory_xact_lock"),
+      expect.stringContaining("INSERT INTO deleted_user_tombstones"),
       expect.stringContaining("DELETE FROM cloud_quest_progress"),
       expect.stringContaining("DELETE FROM players"),
       expect.stringContaining("DELETE FROM player_access"),
       "COMMIT"
     ]);
     expect(client.query.mock.calls[1][1]).toEqual(["user_deleted"]);
+    expect(client.query.mock.calls[2][1]).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/)
+    ]);
     expect(client.release).toHaveBeenCalledOnce();
   });
 

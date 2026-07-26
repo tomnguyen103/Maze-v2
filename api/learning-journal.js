@@ -1,4 +1,4 @@
-import { createPlayerApi } from "../../server/player-api.js";
+import { createPlayerApi } from "../server/player-api.js";
 
 const handler = createPlayerApi();
 
@@ -6,6 +6,6 @@ const handler = createPlayerApi();
  * @param {import("node:http").IncomingMessage} request
  * @param {import("node:http").ServerResponse} response
  */
-export default function runs(request, response) {
+export default function learningJournal(request, response) {
   return handler(request, response);
 }

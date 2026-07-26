@@ -1,3 +1,9 @@
+import {
+  activeUserGuardCtes,
+  DeletedUserError,
+  deletedUserHash
+} from "./deleted-user-guard.js";
+
 const PROFILE_COLUMNS = `
   username,
   explorer_palette,
@@ -58,14 +64,16 @@ export function createPlayerStore(pool) {
      */
     async saveProfile(userId, profile) {
       const result = await pool.query(
-        `INSERT INTO players (
+        `WITH ${activeUserGuardCtes("$6")}
+         INSERT INTO players (
            clerk_user_id,
            username,
            username_key,
            explorer_palette,
            playground_palette
          )
-         VALUES ($1, $2, $3, $4, $5)
+         SELECT $1, $2, $3, $4, $5
+         FROM active_user
          ON CONFLICT (clerk_user_id) DO UPDATE SET
            username = EXCLUDED.username,
            username_key = EXCLUDED.username_key,
@@ -78,9 +86,11 @@ export function createPlayerStore(pool) {
           profile.username,
           profile.usernameKey,
           profile.explorerPalette,
-          profile.playgroundPalette
+          profile.playgroundPalette,
+          deletedUserHash(userId)
         ]
       );
+      if (!result.rows[0]) throw new DeletedUserError();
       return mapProfile(result.rows[0]);
     },
 

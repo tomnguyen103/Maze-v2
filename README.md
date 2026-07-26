@@ -107,6 +107,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 2. `db/migrations/0002_run_access.sql`
 3. `db/migrations/0003_lifetime_membership.sql`
 4. `db/migrations/0004_cloud_quest_progress.sql`
+5. `db/migrations/0005_lantern_journal.sql`
 
 Then set:
 
@@ -133,8 +134,11 @@ database before presenting production sign-in as available.
 
 Configure a Clerk `user.deleted` webhook at `/api/clerk-webhook`. Its verified
 handler transactionally removes profile, score, access, purchase, Run-grant,
-and Cloud Quest rows for that Clerk identity. A missing or invalid webhook
-secret fails closed; it never accepts an unsigned deletion request.
+Cloud Quest, and Lantern Journal rows for that Clerk identity. Before removal,
+it stores only a SHA-256 deletion tombstone—not the raw Clerk identity—and
+serializes account-creating writes so an in-flight request cannot recreate
+deleted data. A missing or invalid webhook secret fails closed; it never
+accepts an unsigned deletion request.
 
 The browser reads the server-owned rollback state before admission; there is no
 client flag that can bypass it. `RUN_ACCESS_ENFORCEMENT_ENABLED=true` becomes

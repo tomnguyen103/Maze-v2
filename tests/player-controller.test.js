@@ -43,7 +43,12 @@ const client = {
   confirmLifetimeCheckout: vi.fn(async () => ({
     lifetime: true,
     state: "lifetime_active"
-  }))
+  })),
+  getLearningJournal: vi.fn(async () => ({
+    journal: { version: 1, events: [] }
+  })),
+  saveLearningJournal: vi.fn(async (journal) => ({ journal })),
+  clearLearningJournal: vi.fn(async () => {})
 };
 
 vi.mock("../src/player/clerk-browser.js", () => ({
@@ -69,6 +74,7 @@ const { createPlayerController } = await import(
 describe("Player Profile dialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     document.body.innerHTML = `
       <button id="player-auth-button"></button>
       <button id="player-close"></button>
@@ -158,6 +164,25 @@ describe("Player Profile dialog", () => {
       state: "free"
     });
     expect(client.getRunAccess).toHaveBeenCalledOnce();
+  });
+
+  it("retries a pending authenticated Journal clear after reconnect", async () => {
+    client.clearLearningJournal
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce();
+    const controller = createPlayerController();
+    await vi.waitFor(() =>
+      expect(client.getLearningJournal).toHaveBeenCalledOnce()
+    );
+
+    controller.clearLanternJournal();
+    await vi.waitFor(() =>
+      expect(client.clearLearningJournal).toHaveBeenCalledOnce()
+    );
+
+    await controller.retryLanternJournalSync();
+
+    expect(client.clearLearningJournal).toHaveBeenCalledTimes(2);
   });
 
   it("initializes Clerk before reading and saving Cloud Quest Progress", async () => {

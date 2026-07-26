@@ -24,7 +24,10 @@ const QUESTION = Object.freeze({
   ]),
   answerId: "b",
   hint: "Count on three steps from four.",
-  explanation: "Four plus three equals seven."
+  explanation: "Four plus three equals seven.",
+  difficultyBand: "foundation",
+  topicId: "arithmetic",
+  learningObjectiveId: "scout-equal-groups"
 });
 
 /** @param {TestPosition} position */
