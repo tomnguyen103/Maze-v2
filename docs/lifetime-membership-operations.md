@@ -126,7 +126,12 @@ From a PowerShell session with the approved database available through
 `DATABASE_URL` or `.env.local`, run:
 
 ```powershell
-$env:ECHO_MAZE_DELETE_USER_ID = Read-Host "Verified Clerk user id"
+$verifiedUserId = Read-Host "Verified Clerk user id"
+$reenteredUserId = Read-Host "Re-enter the Clerk user id"
+if ($verifiedUserId -cne $reenteredUserId) {
+  throw "Clerk user ids do not match."
+}
+$env:ECHO_MAZE_DELETE_USER_ID = $verifiedUserId
 $sha256 = [Security.Cryptography.SHA256]::Create()
 try {
   $bytes = [Text.Encoding]::UTF8.GetBytes(
@@ -139,7 +144,9 @@ try {
 } finally {
   $sha256.Dispose()
 }
-$env:ECHO_MAZE_DELETE_CONFIRM = "DELETE APPLICATION DATA"
+$env:ECHO_MAZE_DELETE_CONFIRM = Read-Host (
+  "Type DELETE APPLICATION DATA to confirm"
+)
 try {
   node --env-file-if-exists=.env.local scripts/delete-user-data.mjs
   if ($LASTEXITCODE -ne 0) {
@@ -149,6 +156,11 @@ try {
   Remove-Item Env:ECHO_MAZE_DELETE_USER_ID -ErrorAction SilentlyContinue
   Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM_SHA256 -ErrorAction SilentlyContinue
   Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM -ErrorAction SilentlyContinue
+  Remove-Variable verifiedUserId -ErrorAction SilentlyContinue
+  Remove-Variable reenteredUserId -ErrorAction SilentlyContinue
+  Remove-Variable bytes -ErrorAction SilentlyContinue
+  Remove-Variable digest -ErrorAction SilentlyContinue
+  Remove-Variable sha256 -ErrorAction SilentlyContinue
 }
 ```
 

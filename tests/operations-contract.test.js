@@ -33,7 +33,18 @@ describe("release operations contract", () => {
 
   it("deletes application identity transactionally without erasing provider records", () => {
     expect(operations).toContain("scripts/delete-user-data.mjs");
-    expect(operations).toContain("DELETE APPLICATION DATA");
+    expect(operations).toContain(
+      '$reenteredUserId = Read-Host "Re-enter the Clerk user id"'
+    );
+    expect(operations).toContain(
+      "if ($verifiedUserId -cne $reenteredUserId)"
+    );
+    expect(operations).toMatch(
+      /\$env:ECHO_MAZE_DELETE_CONFIRM = Read-Host \(/
+    );
+    expect(operations).not.toContain(
+      '$env:ECHO_MAZE_DELETE_CONFIRM = "DELETE APPLICATION DATA"'
+    );
     expect(deletionTool).toContain("createUserDeletionStore");
     expect(deletionTool).toContain("deletedUserHash");
     expect(deletionTool).toContain("ECHO_MAZE_DELETE_CONFIRM_SHA256");
