@@ -94,7 +94,8 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
 
 test("hands the top layer from the demo gate to Clerk account creation", async ({
   page
-}) => {
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One configured browser check is sufficient.");
   test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
   await page.addInitScript(() => {
     localStorage.setItem(

@@ -19,6 +19,7 @@ import {
 } from "./game/game-session.js";
 import {
   createRunAccessId,
+  isAdmittedRunResume,
   runLocatorMatches,
   withRunAccessId
 } from "./game/run-access.js";
@@ -38,6 +39,12 @@ import {
   getLabyrinthConfig,
   getQuestLevel
 } from "./questions/quest-levels.js";
+import {
+  createLifetimeView
+} from "./player/lifetime-view.js";
+import {
+  LIFETIME_PRICE_ONCE
+} from "../shared/lifetime-product.js";
 import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
@@ -75,6 +82,7 @@ const elements = {
   replay: requiredElement("replay-run", HTMLButtonElement),
   resultDialog: requiredElement("result-dialog", HTMLDialogElement),
   resultKicker: requiredElement("result-kicker", HTMLElement),
+  resultAccessNote: requiredElement("result-access-note", HTMLElement),
   resultMoves: requiredElement("result-moves", HTMLElement),
   resultRank: requiredElement("result-rank", HTMLElement),
   resultSeed: requiredElement("result-seed", HTMLElement),
@@ -161,6 +169,9 @@ const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: syncDemoAccountAction
 });
+const lifetimeView = createLifetimeView({
+  onUnlock: openLifetimeCheckout
+});
 let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
@@ -170,6 +181,10 @@ let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
 let demoAccessPending = hasCompletedGuestDemo();
+/** @type {{ freeRunsRemaining: number, state: string } | null} */
+let latestRunAccess = null;
+let lifetimeReturnConfirmed = false;
+let pendingLifetimeSessionId = "";
 let mustChooseLevel =
   locationSeed === null &&
   activeRunLocator === null &&
@@ -182,21 +197,7 @@ let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
 
-if (locationSeed !== null || activeRunLocator !== null) {
-  const locator = activeRunLocator;
-  void startSharedRun(
-    normalizedLocationSeed ?? locator?.seed ?? run.seed,
-    currentLevel.id,
-    currentLabyrinthNumber,
-    sharedParametersNeedNotice,
-    locator?.runId
-  );
-} else if (storedQuestProgress !== null) {
-  void startFreshRun();
-}
-if (mustChooseLevel) {
-  void openLevelPicker();
-}
+void initializeRunEntry();
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
@@ -377,6 +378,10 @@ elements.replay.addEventListener("click", async () => {
     await startFreshRun();
     return;
   }
+  if (action === "dismiss-access") {
+    elements.resultDialog.close();
+    return;
+  }
   await openLevelPicker();
 });
 elements.sound.addEventListener("click", async () => {
@@ -478,6 +483,39 @@ function startRun(locator) {
     `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${run.echoes.length} Echoes remain.`
   );
   showEvent(`Labyrinth ${currentLabyrinthNumber} ready. Find the Echoes.`);
+  if (lifetimeReturnConfirmed) {
+    lifetimeReturnConfirmed = false;
+    announce("Lifetime access unlocked. Your saved Run is ready.");
+    showEvent("Lifetime access unlocked. Your saved Run is ready.");
+  }
+}
+
+async function initializeRunEntry() {
+  if (!(await resolveLifetimeReturn())) {
+    return;
+  }
+  if (lifetimeReturnConfirmed && activeRunLocator !== null) {
+    await resumePendingRun();
+    return;
+  }
+  if (locationSeed !== null || activeRunLocator !== null) {
+    const locator = activeRunLocator;
+    await startSharedRun(
+      normalizedLocationSeed ?? locator?.seed ?? run.seed,
+      currentLevel.id,
+      currentLabyrinthNumber,
+      sharedParametersNeedNotice,
+      locator?.runId
+    );
+    return;
+  }
+  if (storedQuestProgress !== null) {
+    await startFreshRun();
+    return;
+  }
+  if (mustChooseLevel) {
+    await openLevelPicker();
+  }
 }
 
 async function startFreshRun() {
@@ -642,13 +680,17 @@ async function openLevelPicker() {
 
 /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number } & Record<string, unknown>} locator */
 async function authorizeRunLocator(locator) {
+  const resumingAdmittedRun = isAdmittedRunResume(
+    activeRunLocator,
+    locator
+  );
   activeRunLocator = saveActiveRunLocator(
     /** @type {Parameters<typeof saveActiveRunLocator>[0]} */ ({
       ...locator,
-      pending: true
+      pending: !resumingAdmittedRun
     })
   );
-  return canStartAnotherLabyrinth(locator);
+  return canStartAnotherLabyrinth(locator, resumingAdmittedRun);
 }
 
 async function canOpenStartChoice() {
@@ -671,8 +713,11 @@ async function canOpenStartChoice() {
   return false;
 }
 
-/** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator */
-async function canStartAnotherLabyrinth(locator) {
+/**
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator
+ * @param {boolean} [resumingAdmittedRun]
+ */
+async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
   let config;
   try {
     config = await playerController.getRunAccessConfig();
@@ -706,7 +751,20 @@ async function canStartAnotherLabyrinth(locator) {
     demoAccessPending = false;
   }
   try {
+    const accessBeforeStart = await playerController.getRunAccess();
+    if (
+      !resumingAdmittedRun &&
+      accessBeforeStart.state === "free" &&
+      accessBeforeStart.freeRunsRemaining === 1 &&
+      !(await lifetimeView.confirmLastFreeRun())
+    ) {
+      return false;
+    }
     const access = await playerController.authorizeRun(locator);
+    latestRunAccess = {
+      freeRunsRemaining: Number(access.freeRunsRemaining ?? 0),
+      state: String(access.state ?? "")
+    };
     if (access.allowed) {
       markGuestDemoComplete();
       return true;
@@ -722,16 +780,29 @@ async function canStartAnotherLabyrinth(locator) {
 
 /** @param {{ state: string, freeRunsRemaining: number }} access */
 function showRunAccessGate(access) {
+  if (access.state !== "membership-blocked") {
+    if (elements.levelDialog.open) {
+      elements.levelDialog.close();
+    }
+    if (elements.recordsDialog.open) {
+      elements.recordsDialog.close();
+    }
+    if (elements.resultDialog.open) {
+      elements.resultDialog.close();
+    }
+    lifetimeView.showMembership();
+    announce(
+      `No free Runs remain. Lifetime Membership is ${LIFETIME_PRICE_ONCE}. ${access.freeRunsRemaining} free Runs remaining.`
+    );
+    return;
+  }
   elements.resultKicker.textContent = "Explorer access";
-  const membershipNeedsAttention = access.state === "membership-blocked";
-  elements.resultTitle.textContent = membershipNeedsAttention
-    ? "Lifetime access needs attention."
-    : "Your three free Runs are complete.";
-  elements.resultSummary.textContent = membershipNeedsAttention
-    ? "This account's purchase was refunded or disputed. Your current Labyrinth is saved; ask a parent or guardian to contact support."
-    : "Lifetime Membership is $5.99 once, with no subscription or renewal. Your next Labyrinth is saved.";
-  elements.replay.dataset.resultAction = "access-blocked";
-  elements.replay.textContent = "See Lifetime Membership";
+  elements.resultTitle.textContent = "Lifetime access needs attention.";
+  elements.resultSummary.textContent =
+    "This account's purchase was refunded or disputed. Your current Labyrinth is saved; ask a parent or guardian to contact support.";
+  elements.resultAccessNote.hidden = true;
+  elements.replay.dataset.resultAction = "dismiss-access";
+  elements.replay.textContent = "Close";
   elements.freshRun.hidden = true;
   if (elements.levelDialog.open) {
     elements.levelDialog.close();
@@ -739,9 +810,129 @@ function showRunAccessGate(access) {
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
-  announce(membershipNeedsAttention
-    ? "Lifetime access needs attention before a new Run can start."
-    : `No free Runs remain. Lifetime Membership is $5.99 once. ${access.freeRunsRemaining} free Runs remaining.`);
+  announce("Lifetime access needs attention before a new Run can start.");
+}
+
+async function openLifetimeCheckout() {
+  if (pendingLifetimeSessionId) {
+    await confirmLifetimeSession(pendingLifetimeSessionId);
+    pendingLifetimeSessionId = "";
+    removeCheckoutParameters(new URL(window.location.href));
+    lifetimeView.close();
+    await resumePendingRun();
+    return;
+  }
+  const checkout = await playerController.createLifetimeCheckout();
+  if (checkout.state === "lifetime_active") {
+    lifetimeView.setStatus(
+      "Lifetime access is already active. Resuming your saved Run.",
+      "success"
+    );
+    lifetimeView.close();
+    await resumePendingRun();
+    return;
+  }
+  const checkoutUrl = String(checkout.checkoutUrl ?? "");
+  let destination;
+  try {
+    destination = new URL(checkoutUrl);
+  } catch {
+    throw new Error("Checkout URL was invalid.");
+  }
+  if (
+    destination.protocol !== "https:" ||
+    destination.hostname !== "checkout.stripe.com"
+  ) {
+    throw new Error("Checkout URL was invalid.");
+  }
+  window.location.assign(destination.href);
+}
+
+async function resolveLifetimeReturn() {
+  const url = new URL(window.location.href);
+  const checkout = url.searchParams.get("checkout");
+  if (!checkout) {
+    return true;
+  }
+  const sessionId = url.searchParams.get("session_id");
+  if (checkout === "canceled") {
+    removeCheckoutParameters(url);
+    lifetimeView.showMembership(
+      "Checkout canceled. Nothing was charged. Your Run is still saved."
+    );
+    return false;
+  }
+  if (
+    checkout !== "success" ||
+    !sessionId ||
+    !/^cs_[A-Za-z0-9_]{6,255}$/.test(sessionId)
+  ) {
+    removeCheckoutParameters(url);
+    lifetimeView.showMembership(
+      "Checkout could not be confirmed. Your Run is still saved.",
+      "error"
+    );
+    return false;
+  }
+  try {
+    pendingLifetimeSessionId = sessionId;
+    await confirmLifetimeSession(sessionId);
+    pendingLifetimeSessionId = "";
+    removeCheckoutParameters(url);
+    lifetimeReturnConfirmed = activeRunLocator !== null;
+    return true;
+  } catch {
+    lifetimeView.showMembership(
+      "Payment confirmation is taking longer than expected. Try again; your saved Run is safe.",
+      "error"
+    );
+    return false;
+  }
+}
+
+/** @param {string} sessionId */
+async function confirmLifetimeSession(sessionId) {
+  if (!(await playerController.isAuthenticated())) {
+    throw new Error("Sign in is required.");
+  }
+  const confirmation =
+    await playerController.confirmLifetimeCheckout(sessionId);
+  if (
+    confirmation.lifetime !== true ||
+    confirmation.state !== "lifetime_active"
+  ) {
+    throw new Error("Payment was not verified.");
+  }
+}
+
+/** @param {URL} url */
+function removeCheckoutParameters(url) {
+  url.searchParams.delete("checkout");
+  url.searchParams.delete("session_id");
+  window.history.replaceState(
+    {},
+    "",
+    `${url.pathname}${url.search}${url.hash}`
+  );
+}
+
+async function resumePendingRun() {
+  if (!activeRunLocator) {
+    lifetimeReturnConfirmed = false;
+    return false;
+  }
+  lifetimeReturnConfirmed = true;
+  const started = await startSharedRun(
+    activeRunLocator.seed,
+    activeRunLocator.levelId,
+    activeRunLocator.labyrinthNumber,
+    false,
+    activeRunLocator.runId
+  );
+  if (!started) {
+    lifetimeReturnConfirmed = false;
+  }
+  return started;
 }
 
 function showDemoAccountGate() {
@@ -818,6 +1009,7 @@ function usePulse() {
 function togglePause() {
   if (
     demoAccessPending ||
+    activeRunLocator?.pending ||
     (run.status !== "active" && run.status !== "paused")
   ) {
     return;
@@ -1217,6 +1409,12 @@ function finishRun() {
     : won
       ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
       : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
+  elements.resultAccessNote.hidden =
+    latestRunAccess?.state !== "free" ||
+    latestRunAccess.freeRunsRemaining !== 1;
+  elements.resultAccessNote.textContent = elements.resultAccessNote.hidden
+    ? ""
+    : "One free Run remains.";
   elements.replay.dataset.resultAction = questComplete
     ? "new-quest"
     : won

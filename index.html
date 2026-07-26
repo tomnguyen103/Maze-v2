@@ -376,6 +376,37 @@
     </dialog>
 
     <dialog
+      class="lifetime-dialog"
+      id="lifetime-dialog"
+      aria-labelledby="lifetime-title"
+      aria-describedby="lifetime-intro lifetime-details lifetime-storage-note"
+    >
+      <span class="section-label" id="lifetime-kicker"></span>
+      <h2 id="lifetime-title"></h2>
+      <p class="dialog-intro" id="lifetime-intro"></p>
+      <div class="lifetime-offer" id="lifetime-offer">
+        <strong id="lifetime-price"></strong>
+        <span id="lifetime-price-note"></span>
+      </div>
+      <p id="lifetime-details"></p>
+      <p class="lifetime-storage-note" id="lifetime-storage-note"></p>
+      <p
+        class="lifetime-status"
+        id="lifetime-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <div class="lifetime-dialog__actions">
+        <button
+          class="primary-button"
+          id="lifetime-primary"
+          type="button"
+        ></button>
+        <button class="control-button" id="lifetime-close" type="button"></button>
+      </div>
+    </dialog>
+
+    <dialog
       class="result-dialog"
       id="result-dialog"
       aria-labelledby="result-title"
@@ -384,6 +415,7 @@
       <span class="section-label" id="result-kicker">Run complete</span>
       <h2 id="result-title">Gate reached.</h2>
       <p id="result-summary"></p>
+      <p class="result-access-note" id="result-access-note" hidden></p>
       <div class="result-dialog__stats">
         <span><strong id="result-time">00:00</strong> time</span>
         <span><strong id="result-moves">000</strong> moves</span>

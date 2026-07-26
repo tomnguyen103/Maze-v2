@@ -74,6 +74,15 @@ export function createPlayerController({
     async getRunAccess() {
       return client.getRunAccess();
     },
+    async createLifetimeCheckout() {
+      await clerkBrowser.initialize();
+      return client.createLifetimeCheckout();
+    },
+    /** @param {string} sessionId */
+    async confirmLifetimeCheckout(sessionId) {
+      await clerkBrowser.initialize();
+      return client.confirmLifetimeCheckout(sessionId);
+    },
     hasAuthenticatedUser() {
       return Boolean(clerkBrowser.user);
     },

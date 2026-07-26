@@ -72,6 +72,48 @@ async function answerCorrectlyIfChallenged(page) {
   }
 }
 
+test("presents transparent lifetime pricing in a focused dialog", async ({ page }) => {
+  await page.goto("/play");
+  await page.locator("#lifetime-dialog").evaluate(
+    /** @param {HTMLDialogElement} dialog */
+    (dialog) => dialog.showModal()
+  );
+
+  await expect(
+    page.getByRole("heading", { name: "Unlock every future Run" })
+  ).toBeVisible();
+  await expect(page.locator("#lifetime-offer")).toContainText("$5.99 once");
+  await expect(page.locator("#lifetime-details")).toContainText(
+    "No subscription. No renewal."
+  );
+  await expect(page.locator("#lifetime-storage-note")).toContainText(
+    "stay on this device"
+  );
+  await expect(
+    page.getByRole("button", {
+      name: "Unlock lifetime access - $5.99"
+    })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Not now" })).toBeVisible();
+
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  const unlock = page.getByRole("button", {
+    name: "Unlock lifetime access - $5.99"
+  });
+  await unlock.focus();
+  await expect(unlock).toBeFocused();
+  const dialogWidth = await page.locator("#lifetime-dialog").evaluate(
+    (dialog) => dialog.clientWidth
+  );
+  expect(dialogWidth).toBeGreaterThan(0);
+  await expect(page.locator("#lifetime-dialog")).toHaveJSProperty(
+    "scrollWidth",
+    dialogWidth
+  );
+});
+
 test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
   /** @type {string[]} */
   const pageErrors = [];
@@ -83,7 +125,8 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
       .text()
       .startsWith("Clerk: Clerk has been loaded with development keys.");
     const isOptionalClerkUiUnavailable =
-      message.location().url.includes(".clerk.accounts.dev/npm/@clerk/ui@") &&
+      (message.location().url.includes(".clerk.accounts.dev/npm/@clerk/ui@") ||
+        message.text().includes(".clerk.accounts.dev/npm/@clerk/ui@")) &&
       (message.text().includes("blocked by CORS policy") ||
         message.text() === "Failed to load resource: net::ERR_FAILED");
     if (
@@ -435,6 +478,7 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
 }) => {
   await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -495,6 +539,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
   await mockQuestionApi(page);
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of WINNING_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);

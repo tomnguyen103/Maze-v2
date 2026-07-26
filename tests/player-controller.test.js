@@ -31,6 +31,14 @@ const client = {
   getRunAccess: vi.fn(async () => ({
     freeRunsRemaining: 3,
     state: "free"
+  })),
+  createLifetimeCheckout: vi.fn(async () => ({
+    checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_echo",
+    state: "checkout_open"
+  })),
+  confirmLifetimeCheckout: vi.fn(async () => ({
+    lifetime: true,
+    state: "lifetime_active"
   }))
 };
 
@@ -146,5 +154,18 @@ describe("Player Profile dialog", () => {
       state: "free"
     });
     expect(client.getRunAccess).toHaveBeenCalledOnce();
+  });
+
+  it("initializes Clerk before creating authenticated Checkout", async () => {
+    const controller = createPlayerController();
+
+    await controller.createLifetimeCheckout();
+
+    expect(clerkBrowser.initialize).toHaveBeenCalled();
+    expect(
+      clerkBrowser.initialize.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      client.createLifetimeCheckout.mock.invocationCallOrder[0]
+    );
   });
 });

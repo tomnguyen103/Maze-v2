@@ -24,8 +24,12 @@ The original project is preserved at
   incorrectly to lose one Vitality and, if Vitality remains, try a new question.
   Each defeated Warden awards one Pulse and 100 score.
 - One complete Guest Run is available before account creation. Signed-in
-  Explorers can claim a unique username, choose Explorer and playground
-  colors, and submit escaped runs to the Global Scoreboard.
+  Explorers receive three server-authorized free Run starts. They can also
+  claim a unique username, choose Explorer and playground colors, and submit
+  escaped runs to the Global Scoreboard.
+- After the three signed-in starts, Lifetime Membership unlocks future Runs
+  for `$5.99 USD` once. It is not a subscription, never renews, and never
+  changes Warden difficulty, Vitality, score, or rewards.
 - Global scores award 100 per Warden, 50 per Echo, and 500 for escaping. Only
   each Explorer’s best escaped run appears in the top ten.
 - Use `Copy Share Link` to copy the exact seed, Quest Level, and Labyrinth
@@ -72,6 +76,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 
 1. `db/migrations/0001_players_and_scores.sql`
 2. `db/migrations/0002_run_access.sql`
+3. `db/migrations/0003_lifetime_membership.sql`
 
 Then set:
 
@@ -81,6 +86,10 @@ VITE_CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_SECRET_KEY=your-clerk-secret-key
 RUN_ACCESS_ENFORCEMENT_ENABLED=false
+STRIPE_SECRET_KEY=your-stripe-test-secret-key
+STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
+STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
+ECHO_MAZE_APP_ORIGIN=https://your-app.example
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
@@ -91,12 +100,19 @@ playable in Guest mode when Clerk or Neon is unavailable. Guest runs continue
 to use the unchanged local Records tab. Configure all three Clerk variables and
 the database before presenting production sign-in as available.
 
-The additive Run Access ledger is ready for exactly three signed-in free starts,
-but the server-owned enforcement flag stays `false` until the Lifetime Membership purchase
-and recovery slice is deployed and the production release checklist is
-approved. The browser reads this server-owned rollback state before admission;
-there is no client flag that can bypass it. Hosted database URLs are normalized
-to `sslmode=verify-full`.
+The browser reads the server-owned rollback state before admission; there is no
+client flag that can bypass it. `RUN_ACCESS_ENFORCEMENT_ENABLED=true` becomes
+effective only when the complete Stripe **test-mode** configuration is valid,
+so a partial payment setup cannot strand signed-in players. Production remains
+`false` until the production release checklist is approved. Hosted database
+URLs are normalized to `sslmode=verify-full`.
+
+Lifetime Checkout accepts no browser price, amount, currency, quantity, owner,
+or redirect fields. Direct return confirmation and signed raw-body webhooks
+both activate the same PostgreSQL entitlement. Ordinary Run admission reads
+PostgreSQL and does not call Stripe. See
+[`docs/lifetime-membership-operations.md`](docs/lifetime-membership-operations.md)
+for test setup, webhook events, refund/dispute recovery, support, and rollback.
 
 ## Validate
 
@@ -126,6 +142,8 @@ push.
   read or write Neon without exposing Clerk IDs.
 - `server/run-access-*.js` owns row-locked, idempotent Run admission; the
   browser keeps its stable opaque Run id in the active locator.
+- `server/lifetime-*.js` and `server/stripe-lifetime.js` own fixed-price
+  Checkout verification, replay-safe webhooks, and durable entitlement state.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 

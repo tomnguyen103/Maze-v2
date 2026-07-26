@@ -40,4 +40,23 @@ describe("privacy-minimized product events", () => {
     expect(() => record("constructor", { body: "secret" })).not.toThrow();
     expect(write).not.toHaveBeenCalled();
   });
+
+  it("keeps Lifetime Membership events free of account and payment IDs", () => {
+    const write = vi.fn();
+    const record = createProductEventRecorder({ write });
+
+    record("lifetime_webhook", {
+      eventId: "must-not-leak",
+      eventType: "checkout.session.completed",
+      outcome: "processed",
+      paymentIntentId: "must-not-leak",
+      userId: "must-not-leak"
+    });
+
+    expect(write).toHaveBeenCalledWith({
+      event: "lifetime_webhook",
+      eventType: "checkout.session.completed",
+      outcome: "processed"
+    });
+  });
 });

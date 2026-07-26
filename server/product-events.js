@@ -1,4 +1,7 @@
 const EVENT_FIELDS = {
+  lifetime_checkout: ["outcome"],
+  lifetime_confirmation: ["outcome"],
+  lifetime_webhook: ["eventType", "outcome"],
   run_access_decision: [
     "accessState",
     "duplicate",

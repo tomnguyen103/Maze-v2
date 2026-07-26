@@ -19,4 +19,24 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("ALTER TABLE players");
     expect(sql).not.toContain("ALTER TABLE score_entries");
   });
+
+  it("adds constrained lifetime purchases and a Stripe replay ledger", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0003_lifetime_membership.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE lifetime_purchases");
+    expect(sql).toContain("amount SMALLINT NOT NULL DEFAULT 599");
+    expect(sql).toContain("CHECK (amount = 599)");
+    expect(sql).toContain("CHECK (currency = 'usd')");
+    expect(sql).toContain("checkout_session_id TEXT UNIQUE");
+    expect(sql).toContain("payment_intent_id TEXT UNIQUE");
+    expect(sql).toContain("CREATE TABLE stripe_webhook_events");
+    expect(sql).toContain("event_id TEXT PRIMARY KEY");
+    expect(sql).toContain("'duplicate'");
+    expect(sql).toContain("active_purchase_id UUID");
+    expect(sql).not.toContain("card_number");
+    expect(sql).not.toContain("billing_address");
+  });
 });

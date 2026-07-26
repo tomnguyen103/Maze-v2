@@ -2,6 +2,11 @@ import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
+export const ACCESS_PATHS = new Set([
+  "/api/access",
+  "/api/access/config",
+  "/api/access/runs"
+]);
 
 /** @param {import("node:http").ServerResponse} response */
 function noStore(response) {
@@ -114,11 +119,7 @@ export function createRunAccessHandler({
    */
   return async function runAccessHandler(request, response, next) {
     const pathname = new URL(request.url ?? "", "http://local").pathname;
-    if (
-      !["/api/access", "/api/access/config", "/api/access/runs"].includes(
-        pathname
-      )
-    ) {
+    if (!ACCESS_PATHS.has(pathname)) {
       next?.();
       return;
     }

@@ -1,5 +1,6 @@
 import {
   createRunAccessId,
+  isAdmittedRunResume,
   runLocatorMatches,
   withRunAccessId
 } from "../src/game/run-access.js";
@@ -26,6 +27,27 @@ describe("browser Run Access identity", () => {
     };
 
     expect(withRunAccessId(locator, () => "unused")).toEqual(locator);
+  });
+
+  it("recognizes only the same admitted Run as a free-warning bypass", () => {
+    const admitted = {
+      version: 2,
+      runId: "access_existing",
+      pending: false,
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+
+    expect(isAdmittedRunResume(admitted, admitted)).toBe(true);
+    expect(isAdmittedRunResume(
+      { ...admitted, pending: true },
+      admitted
+    )).toBe(false);
+    expect(isAdmittedRunResume(
+      admitted,
+      { ...admitted, runId: "access_different" }
+    )).toBe(false);
   });
 
   it("upgrades a legacy locator without changing reconstruction facts", () => {

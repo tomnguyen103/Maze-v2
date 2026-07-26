@@ -51,6 +51,18 @@ export function withRunAccessId(locator, idFactory = defaultIdFactory) {
 }
 
 /**
+ * @param {{ version?: number, runId?: string, pending?: boolean } | null} active
+ * @param {{ runId?: string }} candidate
+ */
+export function isAdmittedRunResume(active, candidate) {
+  return Boolean(
+    active?.version === 2 &&
+    active.pending === false &&
+    active.runId === candidate.runId
+  );
+}
+
+/**
  * @param {{ seed: string, levelId: string, labyrinthNumber: number }} locator
  * @param {{ seed: string, levelId: string, labyrinthNumber: number }} run
  */
