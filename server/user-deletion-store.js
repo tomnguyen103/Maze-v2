@@ -1,3 +1,5 @@
+import { deletedUserHash } from "./deleted-user-guard.js";
+
 /**
  * @param {{
  *   connect: () => Promise<{
@@ -49,4 +51,3 @@ export function createUserDeletionStore(pool) {
     }
   };
 }
-import { deletedUserHash } from "./deleted-user-guard.js";

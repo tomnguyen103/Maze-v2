@@ -98,6 +98,34 @@ describe.runIf(runIntegration)("learning Journal store on PostgreSQL", () => {
     }
   });
 
+  it("creates a first Journal at a non-zero clear generation", async () => {
+    if (!pool) throw new Error("Database pool was not initialized.");
+    const connection = await pool.connect();
+    const store = createLearningJournalStore(connection);
+    const userId = "journal_nonzero_generation_integration";
+    const journal = {
+      version: 1,
+      events: []
+    };
+
+    try {
+      await connection.query("BEGIN");
+      await connection.query(
+        "DELETE FROM player_access WHERE clerk_user_id = $1",
+        [userId]
+      );
+      await expect(
+        store.saveJournal(userId, journal, 3)
+      ).resolves.toEqual({
+        journal,
+        clearGeneration: 3
+      });
+    } finally {
+      await connection.query("ROLLBACK");
+      connection.release();
+    }
+  });
+
   it("blocks an authenticated write that was waiting while deletion committed", async () => {
     if (!pool) throw new Error("Database pool was not initialized.");
     const userId = "journal_deleted_write_integration";

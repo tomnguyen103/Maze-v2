@@ -32,6 +32,7 @@ export function createJournalContinuity({
   let clearGeneration = 0;
   let devicePersistenceAvailable = true;
   const pendingClearUsers = new Set();
+  const deletedUsers = new Set();
   /** @type {Promise<void>} */
   let idle = Promise.resolve();
 
@@ -113,7 +114,7 @@ export function createJournalContinuity({
     }
     emit();
     authEpoch += 1;
-    if (selectedUserId) {
+    if (selectedUserId && !deletedUsers.has(selectedUserId)) {
       idle = queueCloudSync(authEpoch, selectedUserId);
     }
     return journal;
@@ -123,9 +124,15 @@ export function createJournalContinuity({
     journal = createLanternJournal();
     let stored = writeJournal(journalKey(selectedUserId), journal);
     authEpoch += 1;
-    if (selectedUserId) {
+    if (selectedUserId && deletedUsers.has(selectedUserId)) {
+      removeItem(clearKey(selectedUserId));
+    } else if (selectedUserId) {
       pendingClearUsers.add(selectedUserId);
-      stored = setItem(clearKey(selectedUserId), "pending") && stored;
+      const markedPending = setItem(
+        clearKey(selectedUserId),
+        "pending"
+      );
+      stored = markedPending && stored;
       idle = queueCloudSync(authEpoch, selectedUserId);
     }
     if (!stored) {
@@ -136,6 +143,10 @@ export function createJournalContinuity({
 
   async function retry() {
     if (!selectedUserId) {
+      return;
+    }
+    if (deletedUsers.has(selectedUserId)) {
+      onStatus(deletedAccountStatus());
       return;
     }
     authEpoch += 1;
@@ -160,20 +171,38 @@ export function createJournalContinuity({
     if (!isCurrent(epoch, userId)) {
       return;
     }
+    if (deletedUsers.has(userId)) {
+      onStatus(deletedAccountStatus());
+      return;
+    }
     try {
-      const pendingClear =
-        pendingClearUsers.has(userId) ||
+      const pendingInMemory = pendingClearUsers.has(userId);
+      const pendingFromStorage =
         getItem(clearKey(userId)) === "pending";
+      if (pendingFromStorage && !pendingInMemory) {
+        journal = createLanternJournal();
+        emit();
+      }
+      const pendingClear = pendingInMemory || pendingFromStorage;
       if (pendingClear) {
         const cleared = await client.clearLearningJournal();
         if (!isCurrent(epoch, userId)) return;
         const clearedState = cloudState(cleared, clearGeneration + 1);
         clearGeneration = clearedState.clearGeneration;
-        persistGeneration(userId);
-        pendingClearUsers.delete(userId);
-        removeItem(clearKey(userId));
+        const persistedState = persistState(userId);
+        const removedPendingClear = persistedState
+          ? removeItem(clearKey(userId))
+          : false;
+        const persisted = persistedState && removedPendingClear;
+        if (persisted) {
+          pendingClearUsers.delete(userId);
+        }
         if (journal.events.length === 0) {
-          onStatus("");
+          onStatus(
+            persisted
+              ? ""
+              : "Journal storage is unavailable on this device."
+          );
           return;
         }
         const saved = await client.saveLearningJournal(
@@ -181,8 +210,12 @@ export function createJournalContinuity({
           clearGeneration
         );
         if (!isCurrent(epoch, userId)) return;
-        adoptCloudResult(saved, userId);
-        onStatus("");
+        const persistedSavedJournal = adoptCloudResult(saved, userId);
+        onStatus(
+          persisted && persistedSavedJournal
+            ? ""
+            : "Journal storage is unavailable on this device."
+        );
         return;
       }
 
@@ -193,9 +226,13 @@ export function createJournalContinuity({
       if (cloudResult.clearGeneration > clearGeneration) {
         clearGeneration = cloudResult.clearGeneration;
         journal = cloudJournal;
-        persistState(userId);
+        const persisted = persistState(userId);
         emit();
-        onStatus("");
+        onStatus(
+          persisted
+            ? ""
+            : "Journal storage is unavailable on this device."
+        );
         return;
       }
       if (cloudResult.clearGeneration < clearGeneration) {
@@ -203,7 +240,7 @@ export function createJournalContinuity({
       }
       const merged = mergeLanternJournals(journal, cloudJournal);
       journal = merged;
-      writeJournal(journalKey(userId), journal);
+      let persisted = writeJournal(journalKey(userId), journal);
       emit();
       if (JSON.stringify(merged) !== JSON.stringify(cloudJournal)) {
         const saved = await client.saveLearningJournal(
@@ -211,11 +248,22 @@ export function createJournalContinuity({
           clearGeneration
         );
         if (!isCurrent(epoch, userId)) return;
-        adoptCloudResult(saved, userId);
+        persisted = adoptCloudResult(saved, userId);
       }
-      onStatus("");
-    } catch {
+      onStatus(
+        persisted
+          ? ""
+          : "Journal storage is unavailable on this device."
+      );
+    } catch (error) {
       if (isCurrent(epoch, userId)) {
+        if (isDeletedAccountError(error)) {
+          deletedUsers.add(userId);
+          pendingClearUsers.delete(userId);
+          removeItem(clearKey(userId));
+          onStatus(deletedAccountStatus());
+          return;
+        }
         onStatus(
           devicePersistenceAvailable
             ? "Journal saved on this device. Cloud sync will retry."
@@ -230,10 +278,9 @@ export function createJournalContinuity({
     const state = cloudState(value, clearGeneration);
     journal = state.journal;
     clearGeneration = state.clearGeneration;
-    if (!persistState(userId)) {
-      onStatus("Journal storage is unavailable on this device.");
-    }
+    const persisted = persistState(userId);
     emit();
+    return persisted;
   }
 
   /** @param {number} epoch @param {string} userId */
@@ -313,6 +360,12 @@ export function createJournalContinuity({
   function emit() {
     onChange(journal);
   }
+
+  function deletedAccountStatus() {
+    return devicePersistenceAvailable
+      ? "Account deleted. Journal stays on this device and will not sync."
+      : "Account deleted. Journal stays in this tab and will not sync.";
+  }
 }
 
 /**
@@ -367,4 +420,14 @@ function cloudState(value, fallbackGeneration) {
         ? generation
         : fallbackGeneration
   };
+}
+
+/** @param {unknown} error */
+function isDeletedAccountError(error) {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    error.status === 410
+  );
 }

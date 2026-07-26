@@ -59,6 +59,30 @@ describe("learning Journal store", () => {
     );
   });
 
+  it("seeds a first cloud Journal with its known clear generation", async () => {
+    let capturedSql = "";
+    const query = vi.fn(
+      /** @param {string} sql */
+      async (sql) => {
+        capturedSql = sql;
+        return {
+          rows: [{ journal: JOURNAL, clear_generation: 3 }]
+        };
+      }
+    );
+    const store = createLearningJournalStore({ query });
+
+    await expect(
+      store.saveJournal("user_123", JOURNAL, 3)
+    ).resolves.toEqual({
+      journal: JOURNAL,
+      clearGeneration: 3
+    });
+
+    expect(capturedSql).toMatch(/SELECT \$1, \$2::jsonb, \$3/);
+    expect(capturedSql).not.toContain("WHERE $3 = 0");
+  });
+
   it("keeps an empty clear tombstone and advances its generation", async () => {
     const query = vi.fn(async () => ({
       rows: [{

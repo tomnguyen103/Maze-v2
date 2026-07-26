@@ -59,9 +59,8 @@ export function createLearningJournalStore(pool) {
              journal,
              clear_generation
            )
-           SELECT $1, $2::jsonb, 0
+           SELECT $1, $2::jsonb, $3
            FROM available_access
-           WHERE $3 = 0
            LIMIT 1
            ON CONFLICT (clerk_user_id) DO UPDATE SET
              journal = jsonb_build_object(

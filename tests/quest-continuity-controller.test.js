@@ -127,6 +127,44 @@ describe("Quest Continuity controller", () => {
     expect(storage.getItem("echo-maze:quest-sync-pending:v1")).toBeNull();
   });
 
+  it("stops cloud retries after a deleted-account response", async () => {
+    const storage = createStorage();
+    const progress = progressAt(4);
+    const loadCloud = vi.fn()
+      .mockRejectedValueOnce(
+        Object.assign(new Error("deleted"), { status: 410 })
+      )
+      .mockResolvedValue({ record: null });
+    const saveCloud = vi.fn();
+    const onStatus = vi.fn();
+    const controller = createQuestContinuityController({
+      loadCloud,
+      saveCloud,
+      storage,
+      onStatus
+    });
+    controller.setAuthenticated("user_123");
+
+    await controller.queueBoundary(progress);
+
+    expect(onStatus).toHaveBeenLastCalledWith("local");
+    expect(storage.getItem("echo-maze:quest-sync-pending:v1")).toBeNull();
+
+    await controller.retry(progress);
+    expect(loadCloud).toHaveBeenCalledOnce();
+    expect(onStatus).toHaveBeenLastCalledWith("local");
+
+    await controller.queueBoundary(
+      progressAt(8, "quest_deleted_account_a")
+    );
+    controller.setAuthenticated("user_b");
+    await controller.retry(null);
+
+    expect(loadCloud).toHaveBeenCalledTimes(2);
+    expect(saveCloud).not.toHaveBeenCalled();
+    expect(storage.getItem("echo-maze:quest-sync-pending:v1")).toBeNull();
+  });
+
   it("recovers the sync queue after a callback rejects one task", async () => {
     const storage = createStorage();
     const progress = progressAt(4);
