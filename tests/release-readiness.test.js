@@ -47,13 +47,14 @@ describe("release readiness evidence", () => {
       expect([
         "Delivered",
         "Deferred - external approval",
-        "Not applicable",
-        "Pending remote-main proof"
+        "Not applicable"
       ]).toContain(row[statusIndex]);
     }
+    expect(rows.find(([id]) => id === "C03")?.[statusIndex]).toBe("Delivered");
     expect(
       rows.find(([id]) => id === "C27")?.[statusIndex]
     ).toBe("Deferred - external approval");
+    expect(rows.find(([id]) => id === "C30")?.[statusIndex]).toBe("Delivered");
   });
 
   it("records current implementation and PR/test evidence in every source plan", () => {
@@ -75,6 +76,6 @@ describe("release readiness evidence", () => {
     );
     expect(releaseReadiness).toContain("## Remote-main proof");
     expect(releaseReadiness).toMatch(/- closure PR: .+/);
-    expect(releaseReadiness).toMatch(/- remote `main` commit: .+/);
+    expect(releaseReadiness).toMatch(/- remote `main` program merge commit: .+/);
   });
 });

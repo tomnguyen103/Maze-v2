@@ -9,11 +9,14 @@
 
 **Implementation status (2026-07-26):** Test-mode engineering implementation is
 complete through merged PR #49 for server-authoritative free Run access and
-merged PR #50 for one-time lifetime membership. PR #56 adds integrated landing
-and validation evidence and remains pending mandatory review and merge; that
-merge is still required for remote-main proof. Enforcement remains off and no
-live charge is claimed. Access, Checkout, fulfillment, refund/dispute, deletion,
-and recovery behavior is exercised by the matching `tests/*access*.test.js`,
+merged PR #50 for one-time lifetime membership. Merged PR #56 supplied
+integrated landing and validation evidence and is present on remote `main` at
+`5b378aa`. Its mandatory CodeRabbit review is resolved: all findings were fixed
+in `b99aef4`, acknowledged, and all four review threads are closed; the
+refill-time post-merge trigger produced no new actionable finding because the PR
+was already closed. Enforcement remains off and no live charge is claimed.
+Access, Checkout, fulfillment, refund/dispute, deletion, and recovery behavior is
+exercised by the matching `tests/*access*.test.js`,
 `tests/lifetime-*.test.js`,
 `tests/e2e/game.spec.js`, and live PostgreSQL store suites indexed in
 [`implementation-coverage.md`](implementation-coverage.md).

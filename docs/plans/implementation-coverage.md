@@ -48,7 +48,7 @@ are updated only from verified evidence.
 | C27 | Support, refund, dispute, deletion, privacy, rollback, and receipt-recovery runbooks exist before live payment | Master T17-T18, 22.6; Membership 8.5, 12, M9 | Missing | Add production setup and support runbooks; enforcement flag can disable gates without deleting entitlements | #48 | Test setup/support/recovery/privacy/rollback runbook and integrated operations-contract drills pass; external policy and live-billing approvals remain deferred |
 | C28 | All major journeys work at desktop/mobile, 200% text, keyboard, screen reader, and reduced motion | Master 16, T18, 22.6; Entry 6-10; Roadmap all feature gates | Partial | Extend Playwright projects and focused fixtures for every access/member/Atlas/follow-on state | #48 | Integrated gate: 105 desktop/mobile journeys pass with 5 intentional Clerk-network skips, including 200% text, keyboard, semantic accessibility, and reduced-motion profiles |
 | C29 | Two or three tested small surprise improvements strengthen discovery, mastery, anticipation, celebration, learning, or return motivation | Attached approval | Missing | Select after full feature playtest; keep deterministic and local/free | #48 | Two local/free Atlas surprises pass projection and view tests: each sealed Sigil names its restoration Labyrinth, and the summary forecasts the next Gate Warden or announces that it is here |
-| C30 | Plans, README, environment template, migrations, support docs, coverage ledger, issues, PRs, and remote `main` show truthful final state | Attached approval; Master T17-T18, 19, 22.6; Entry Task 8; Membership M9 | Partial | Update evidence after each merged PR; never mark completion from a plan label | #40, #48 | Final remote verification pending |
+| C30 | Plans, README, environment template, migrations, support docs, coverage ledger, issues, PRs, and remote `main` show truthful final state | Attached approval; Master T17-T18, 19, 22.6; Entry Task 8; Membership M9 | Partial | Update evidence after each merged PR; never mark completion from a plan label | #40, #48 | PR #56 merged at `5b378aa`; its CodeRabbit findings are fixed and all review threads are resolved; GitHub deployment record `5612622739` maps to READY Vercel production deployment `dpl_C7ARaDukdAwBCGqxyNvLwrD95X73`, which serves `/`, `/play`, and deterministic shared links; enforcement is off, Actions are disabled, and issues #40/#48 are closed |
 
 ## Final disposition
 
@@ -61,7 +61,7 @@ runbooks and safety controls are delivered.
 |---|---|
 | C01 | Delivered |
 | C02 | Delivered |
-| C03 | Pending remote-main proof |
+| C03 | Delivered |
 | C04 | Delivered |
 | C05 | Delivered |
 | C06 | Delivered |
@@ -88,7 +88,7 @@ runbooks and safety controls are delivered.
 | C27 | Deferred - external approval |
 | C28 | Delivered |
 | C29 | Delivered |
-| C30 | Pending remote-main proof |
+| C30 | Delivered |
 
 ## Source task crosswalk
 

@@ -92,8 +92,14 @@ CodeRabbit inline findings, two CodeRabbit resolution replies, and two owner
 resolution replies. Its final Critical first-save clear-generation finding was
 fixed in `d013f3f`, covered by the non-zero-generation PostgreSQL regression
 test, answered with that evidence, and resolved. Live GraphQL verification
-reports zero unresolved #55 threads. No mandatory post-merge review remains
-outstanding.
+reports zero unresolved #55 threads.
+
+PR #56 received a complete CodeRabbit review before merge. Its four inline
+findings were fixed together in `b99aef4`, individually acknowledged by
+CodeRabbit, and all four threads are resolved. After the confirmed adaptive
+limit refilled, the required post-merge trigger reached terminal status and
+posted no new actionable finding because the PR was already closed. The one-time
+findings read is complete. No mandatory review remains outstanding.
 
 ## External deferrals
 
@@ -111,11 +117,17 @@ is required and does not perform a live charge.
 
 ## Remote-main proof
 
-Fill only after the closure PR merges:
+Captured after the closure merge, mandatory review resolution, and issue
+closure:
 
-- closure PR: pending
-- remote `main` commit: pending
-- issue #40 state: pending
-- issues #41-#48 state: pending
-- GitHub Actions permissions: expected `enabled=false`; final API proof pending
-- production deployment for remote `main`: pending
+- closure PR: #56 merged at 2026-07-26T17:52:29Z
+- remote `main` program merge commit: `5b378aafc9bf80b930d0e707e7b4b4e752cb27d0`
+- issue #40 state: closed
+- issues #41-#47 state: closed
+- issue #48 state: closed
+- GitHub Actions permissions: API verified `enabled=false`
+- production deployment: GitHub deployment record `5612622739` maps to READY
+  Vercel deployment `dpl_C7ARaDukdAwBCGqxyNvLwrD95X73` for the exact remote
+  `main` program merge commit
+- live routes: `/`, `/play`, and a deterministic shared link returned usable
+  runtime state; Run Access reported `enforcementEnabled=false`
