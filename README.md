@@ -23,9 +23,9 @@ The original project is preserved at
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
   incorrectly to lose one Vitality and, if Vitality remains, try a new question.
   Each defeated Warden awards one Pulse and 100 score.
-- Guest play is always available. Signed-in Explorers can claim a unique
-  username, choose Explorer and playground colors, and submit escaped runs to
-  the Global Scoreboard.
+- One complete Guest Run is available before account creation. Signed-in
+  Explorers can claim a unique username, choose Explorer and playground
+  colors, and submit escaped runs to the Global Scoreboard.
 - Global scores award 100 per Warden, 50 per Echo, and 500 for escaping. Only
   each Explorer’s best escaped run appears in the top ten.
 - Use `Copy Share Link` to copy the exact seed, Quest Level, and Labyrinth
@@ -68,14 +68,19 @@ npm run build
 npm start
 ```
 
-For Vercel, connect the Neon project, apply
-`db/migrations/0001_players_and_scores.sql`, and set:
+For Vercel, connect the Neon project and apply the migrations in order:
+
+1. `db/migrations/0001_players_and_scores.sql`
+2. `db/migrations/0002_run_access.sql`
+
+Then set:
 
 ```text
 DATABASE_URL=your-neon-pooled-connection-string
 VITE_CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_SECRET_KEY=your-clerk-secret-key
+RUN_ACCESS_ENFORCEMENT_ENABLED=false
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
@@ -86,6 +91,13 @@ playable in Guest mode when Clerk or Neon is unavailable. Guest runs continue
 to use the unchanged local Records tab. Configure all three Clerk variables and
 the database before presenting production sign-in as available.
 
+The additive Run Access ledger is ready for exactly three signed-in free starts,
+but the server-owned enforcement flag stays `false` until the Lifetime Membership purchase
+and recovery slice is deployed and the production release checklist is
+approved. The browser reads this server-owned rollback state before admission;
+there is no client flag that can bypass it. Hosted database URLs are normalized
+to `sslmode=verify-full`.
+
 ## Validate
 
 GitHub Actions are intentionally disabled. The complete gate runs locally:
@@ -95,8 +107,9 @@ npm run check:full
 ```
 
 This runs ESLint, strict JavaScript type checking, Vitest unit tests, the Vite
-production build, and Playwright tests on desktop and mobile browser profiles.
-The tracked pre-push hook runs the core gate before every push.
+production build, bundle budgets, and Playwright tests on desktop and mobile
+browser profiles. The tracked pre-push hook runs the core gate before every
+push.
 
 ## Architecture
 
@@ -111,6 +124,8 @@ The tracked pre-push hook runs the core gate before every push.
   the Global Scoreboard client.
 - `server/player-*.js` validate profiles and escaped runs, compute scores, and
   read or write Neon without exposing Clerk IDs.
+- `server/run-access-*.js` owns row-locked, idempotent Run admission; the
+  browser keeps its stable opaque Run id in the active locator.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 

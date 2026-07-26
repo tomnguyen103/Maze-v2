@@ -791,7 +791,7 @@ function clampInteger(value, fallback, minimum, maximum) {
 /**
  * @param {string} seed
  */
-function normalizeSeed(seed) {
+export function normalizeSeed(seed) {
   const normalized = String(seed ?? "")
     .trim()
     .toUpperCase()

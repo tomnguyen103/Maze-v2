@@ -16,6 +16,21 @@ _Avoid_: Level, board, map
 One attempt that starts in a new labyrinth and ends in escape, defeat, or restart.
 _Avoid_: Game, session, round
 
+**Run Access**:
+The account-bound permission to start a distinct Run. A Run that has already
+received access may finish even if later access changes.
+_Avoid_: Subscription, play token, energy
+
+**Run Grant**:
+The durable authorization for one Explorer account and one stable Run
+identifier. Repeating the same request returns the same Grant.
+_Avoid_: Ticket, charge, temporary entitlement
+
+**Lifetime Membership**:
+Permanent Run Access attached to one Clerk identity after one verified $5.99
+USD purchase. It has no renewal and changes no gameplay rule.
+_Avoid_: Subscription, plan, premium power
+
 **Quest Level**:
 The learning tier chosen before a Quest. It sets the curriculum and the overall
 Labyrinth challenge range across all twenty Labyrinths.
@@ -34,6 +49,21 @@ _Avoid_: Map number, map level, Quest Level
 One of five four-Labyrinth steps within a Quest: Foundation, Developing,
 Capable, Advanced, or Mastery.
 _Avoid_: Grade, Question Level
+
+**Echo Atlas**:
+The five-region, twenty-node view of one Quest. It is a projection of Quest
+Progress and never owns or changes that progress.
+_Avoid_: Level selector, inventory, paid map
+
+**Atlas Region**:
+One four-Labyrinth stretch of the Echo Atlas that corresponds to a Difficulty
+Band and ends at a Gate Warden milestone.
+_Avoid_: World, paid zone, chapter pack
+
+**Gate Warden**:
+One configured Warden reserved at Labyrinths 4, 8, 12, 16, and 20. It seals the
+open Gate until defeated through the normal Warden Challenge rules.
+_Avoid_: Boss, raid, premium Warden
 
 **Echo**:
 A collectible fragment required to unlock the Gate.
@@ -115,3 +145,28 @@ _Avoid_: Personal Records, lifetime leaderboard, live multiplayer
 **Global Max Score**:
 The highest Run Score currently present on the Global Scoreboard.
 _Avoid_: maximum possible score, personal best
+
+**Quest Continuity**:
+Account-bound Quest Progress synchronized only at Labyrinth boundaries. An
+active in-progress Run remains on its current device.
+_Avoid_: live multiplayer sync, mid-Run resume
+
+**Lantern Journal**:
+A clearable learning view projected from bounded, reviewed Question outcomes
+during play.
+_Avoid_: gradebook, diagnosis, permanent student record
+
+**Practice Lantern**:
+One optional, unscored reviewed Question that revisits a learning objective
+without a Warden, Vitality cost, timer, or Quest consequence.
+_Avoid_: remediation, punishment, bonus score
+
+**Explorer Access Settings**:
+Device-local presentation preferences that improve Fog, maze-mark, Question,
+or motion readability without changing geometry, timing, rules, or score.
+_Avoid_: difficulty settings, gameplay assist
+
+**Daily Shared Labyrinth**:
+One optional date-derived deterministic Run that is separate from the active
+Quest and uses a reviewed Question order shared by every Explorer for that date.
+_Avoid_: ranked tournament, streak, daily reward

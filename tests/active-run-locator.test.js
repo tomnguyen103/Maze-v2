@@ -32,6 +32,43 @@ describe("Active Run Locator", () => {
     expect(loadActiveRunLocator(storage)).toEqual(locator);
   });
 
+  it("round-trips the stable access id for an admitted Run", () => {
+    const storage = createStorage();
+    const locator = {
+      version: 2,
+      runId: "access_01J1MOSSWATCH",
+      pending: true,
+      seed: "STONE-VAULT-00",
+      levelId: "maze-master",
+      labyrinthNumber: 13
+    };
+
+    expect(saveActiveRunLocator(locator, storage)).toEqual(locator);
+    expect(loadActiveRunLocator(storage)).toEqual(locator);
+  });
+
+  it("distinguishes a pending admission from an admitted active Run", () => {
+    const storage = createStorage();
+    const pending = saveActiveRunLocator(
+      {
+        version: 2,
+        runId: "access_01J1MOSSWATCH",
+        pending: true,
+        seed: "STONE-VAULT-00",
+        levelId: "maze-master",
+        labyrinthNumber: 13
+      },
+      storage
+    );
+    const admitted = saveActiveRunLocator(
+      { ...pending, pending: false },
+      storage
+    );
+
+    expect(loadActiveRunLocator(storage)).toEqual(admitted);
+    expect(admitted.pending).toBe(false);
+  });
+
   it("returns null when no locator was saved", () => {
     expect(loadActiveRunLocator(createStorage())).toBeNull();
   });
@@ -39,7 +76,7 @@ describe("Active Run Locator", () => {
   it.each([
     "{broken",
     JSON.stringify({
-      version: 2,
+      version: 3,
       seed: "STONE-VAULT-00",
       levelId: "trail-scout",
       labyrinthNumber: 1

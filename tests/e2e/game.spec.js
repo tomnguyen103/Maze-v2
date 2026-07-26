@@ -82,9 +82,14 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
     const isClerkDevelopmentKeyNotice = message
       .text()
       .startsWith("Clerk: Clerk has been loaded with development keys.");
+    const isOptionalClerkUiUnavailable =
+      message.location().url.includes(".clerk.accounts.dev/npm/@clerk/ui@") &&
+      (message.text().includes("blocked by CORS policy") ||
+        message.text() === "Failed to load resource: net::ERR_FAILED");
     if (
       (message.type() === "error" || message.type() === "warning") &&
-      !isClerkDevelopmentKeyNotice
+      !isClerkDevelopmentKeyNotice &&
+      !isOptionalClerkUiUnavailable
     ) {
       consoleProblems.push(message.text());
     }
@@ -408,12 +413,12 @@ test("requires account creation before a guest starts a second Labyrinth", async
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "Create an account to continue."
+    name: "Create an account for three free Runs."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
   await expect(
-    page.getByRole("button", { name: "Create account to continue" })
+    page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Retry Labyrinth" })).toHaveCount(0);
   await expect.poll(() =>
@@ -477,10 +482,10 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   );
   await page.getByRole("button", { name: "Use skip" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Create an account to continue." })
+    page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create account to continue" })
+    page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
 });
 
@@ -497,7 +502,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   }
 
   const dialog = page.getByRole("dialog", {
-    name: "Create an account to continue."
+    name: "Create an account for three free Runs."
   });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#result-seed")).toHaveText(WINNING_SEED);
@@ -507,7 +512,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   expect(new URL(page.url()).search).toBe("");
 
   await expect(
-    page.getByRole("button", { name: "Create account to continue" })
+    page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
   await expect.poll(() =>
     page.evaluate(() => {

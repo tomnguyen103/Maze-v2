@@ -22,8 +22,9 @@ export function createPlayerApiClient({
   /**
    * @param {string} path
    * @param {RequestInit} [options]
+   * @param {boolean} [authenticated]
    */
-  async function request(path, options = {}) {
+  async function request(path, options = {}, authenticated = true) {
     const controller = new AbortController();
     /** @type {(reason?: unknown) => void} */
     let rejectTimeout = () => {};
@@ -41,7 +42,7 @@ export function createPlayerApiClient({
     }
 
     async function performRequest() {
-      const token = await getToken();
+      const token = authenticated ? await getToken() : null;
       const headers = new Headers(options.headers);
       headers.set("accept", "application/json");
       if (options.body) {
@@ -70,6 +71,12 @@ export function createPlayerApiClient({
   }
 
   return {
+    async getRunAccessConfig() {
+      return request("/api/access/config", {}, false);
+    },
+    async getRunAccess() {
+      return request("/api/access");
+    },
     async getProfile() {
       return request("/api/profile");
     },
@@ -84,6 +91,13 @@ export function createPlayerApiClient({
     },
     async getLeaderboard() {
       return request("/api/leaderboard");
+    },
+    /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
+    async authorizeRun(run) {
+      return request("/api/access/runs", {
+        method: "POST",
+        body: JSON.stringify(run)
+      });
     },
     /** @param {Record<string, unknown>} run */
     async submitScore(run) {

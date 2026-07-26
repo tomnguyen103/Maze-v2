@@ -2,12 +2,24 @@ import { clerkMiddleware, getAuth } from "@clerk/express";
 import { createDatabasePool } from "./database.js";
 import { createPlayerApiHandler } from "./player-route.js";
 import { createPlayerStore } from "./player-store.js";
+import { createRunAccessHandler } from "./run-access-route.js";
+import { createRunAccessStore } from "./run-access-store.js";
+import { recordProductEvent } from "./product-events.js";
 import { URL } from "node:url";
 
 const PLAYER_PATHS = new Set([
   "/api/profile",
   "/api/leaderboard",
-  "/api/scores"
+  "/api/scores",
+  "/api/access",
+  "/api/access/config",
+  "/api/access/runs"
+]);
+
+const ACCESS_PATHS = new Set([
+  "/api/access",
+  "/api/access/config",
+  "/api/access/runs"
 ]);
 
 /**
@@ -53,23 +65,69 @@ export function createPlayerApi(env = process.env) {
   }
 
   const pool = createDatabasePool(connectionString);
-  const store = createPlayerStore({
+  /** @type {{
+   *   query: (
+   *     sql: string,
+   *     values?: unknown[]
+   *   ) => Promise<{ rows: Record<string, unknown>[] }>
+   * }} */
+  const queryAdapter = {
+    /**
+     * @param {string} sql
+     * @param {unknown[]} [values]
+     */
     async query(sql, values) {
       const result = await pool.query(sql, values);
-      return { rows: result.rows };
+      return {
+        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
+      };
     }
-  });
+  };
+  const store = createPlayerStore(queryAdapter);
+  const accessStore = createRunAccessStore(pool);
   const handler = createPlayerApiHandler({
     store,
     getUserId: (request) =>
       getAuth(/** @type {import("express").Request} */ (request)).userId
   });
+  const accessHandler = createRunAccessHandler({
+    store: accessStore,
+    getUserId: (request) =>
+      getAuth(/** @type {import("express").Request} */ (request)).userId,
+    enforcementEnabled: env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true",
+    recordEvent: recordProductEvent
+  });
 
   if (!env.CLERK_PUBLISHABLE_KEY || !env.CLERK_SECRET_KEY) {
-    return createPlayerApiHandler({
+    const unavailableAuthHandler = createPlayerApiHandler({
       store,
       getUserId: () => null
     });
+    const unavailableAccessHandler = createRunAccessHandler({
+      store: accessStore,
+      getUserId: () => null,
+      enforcementEnabled: false
+    });
+    /**
+     * @param {import("node:http").IncomingMessage} request
+     * @param {import("node:http").ServerResponse} response
+     * @param {(() => void) | undefined} next
+     */
+    return (request, response, next) => {
+      const pathname = new URL(request.url ?? "", "http://local").pathname;
+      if (ACCESS_PATHS.has(pathname)) {
+        void unavailableAccessHandler(request, response, next);
+        return;
+      }
+      if (pathname === "/api/access/config" && request.method === "GET") {
+        response.statusCode = 200;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader("cache-control", "no-store");
+        response.end(JSON.stringify({ enforcementEnabled: false }));
+        return;
+      }
+      void unavailableAuthHandler(request, response, next);
+    };
   }
 
   const authenticate = clerkMiddleware({
@@ -88,7 +146,14 @@ export function createPlayerApi(env = process.env) {
       next?.();
       return;
     }
-    if (pathname === "/api/leaderboard") {
+    if (
+      pathname === "/api/leaderboard" ||
+      pathname === "/api/access/config"
+    ) {
+      if (pathname === "/api/access/config") {
+        void accessHandler(request, response, next);
+        return;
+      }
       void handler(request, response, next);
       return;
     }
@@ -98,6 +163,10 @@ export function createPlayerApi(env = process.env) {
       (/** @type {unknown} */ error) => {
         if (error) {
           sendError(response, 401, "Sign in to continue.");
+          return;
+        }
+        if (ACCESS_PATHS.has(pathname)) {
+          void accessHandler(request, response, next);
           return;
         }
         void handler(request, response, next);

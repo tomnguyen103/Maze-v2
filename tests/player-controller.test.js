@@ -20,7 +20,18 @@ const client = {
   getLeaderboard: vi.fn(async () => ({ entries: [], globalMaxScore: 0 })),
   getProfile: vi.fn(async () => ({ profile: null })),
   saveProfile: vi.fn(async () => ({ profile })),
-  submitScore: vi.fn(async () => ({}))
+  submitScore: vi.fn(async () => ({})),
+  authorizeRun: vi.fn(async () => ({
+    allowed: true,
+    duplicate: false,
+    freeRunsRemaining: 2,
+    state: "free"
+  })),
+  getRunAccessConfig: vi.fn(async () => ({ enforcementEnabled: false })),
+  getRunAccess: vi.fn(async () => ({
+    freeRunsRemaining: 3,
+    state: "free"
+  }))
 };
 
 vi.mock("../src/player/clerk-browser.js", () => ({
@@ -94,5 +105,46 @@ describe("Player Profile dialog", () => {
       expect(client.saveProfile).toHaveBeenCalledOnce();
       expect(dialog.open).toBe(false);
     });
+  });
+
+  it("delegates one stable id to the authenticated admission client", async () => {
+    const controller = createPlayerController();
+
+    await expect(
+      controller.authorizeRun({
+        runId: "access_01J1MOSSWATCH",
+        seed: "MOSS-WATCH-11",
+        levelId: "trail-scout",
+        labyrinthNumber: 4
+      })
+    ).resolves.toMatchObject({
+      allowed: true,
+      freeRunsRemaining: 2
+    });
+    expect(client.authorizeRun).toHaveBeenCalledWith({
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    });
+  });
+
+  it("reads the server-owned enforcement state", async () => {
+    const controller = createPlayerController();
+
+    await expect(controller.getRunAccessConfig()).resolves.toEqual({
+      enforcementEnabled: false
+    });
+    expect(client.getRunAccessConfig).toHaveBeenCalledOnce();
+  });
+
+  it("reads the authenticated allowance status", async () => {
+    const controller = createPlayerController();
+
+    await expect(controller.getRunAccess()).resolves.toEqual({
+      freeRunsRemaining: 3,
+      state: "free"
+    });
+    expect(client.getRunAccess).toHaveBeenCalledOnce();
   });
 });
