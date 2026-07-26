@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createLanternJournal,
   mergeLanternJournals,
+  normalizeLanternJournal,
   recordLearningOutcome
 } from "../src/learning/lantern-journal.js";
 import {
@@ -70,6 +71,12 @@ describe("Lantern Journal", () => {
 
     expect(recorded.events[0].questionId).toBe("scout-developing-0");
     expect(recorded.events[0].questionId).not.toBe(dailyQuestion.id);
+    expect(
+      normalizeLanternJournal({
+        ...recorded,
+        events: [{ ...recorded.events[0], questionId: dailyQuestion.id }]
+      })
+    ).toBeNull();
   });
 
   it("aggregates repeated outcomes deterministically by learning objective", () => {
