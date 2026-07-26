@@ -31,6 +31,7 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
+import { mergeSameQuestProgress } from "./game/quest-continuity.js";
 import { projectQuestAtlas } from "./game/quest-atlas.js";
 import {
   createQuestAtlasView,
@@ -47,6 +48,10 @@ import {
 import {
   createLifetimeView
 } from "./player/lifetime-view.js";
+import { createQuestConflictView } from "./player/quest-conflict-view.js";
+import {
+  createQuestContinuityController
+} from "./player/quest-continuity-controller.js";
 import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
@@ -104,6 +109,7 @@ const elements = {
   questHeadline: requiredElement("quest-headline", HTMLElement),
   questLevelName: requiredElement("quest-level-name", HTMLElement),
   questStage: requiredElement("quest-stage", HTMLElement),
+  questSyncStatus: requiredElement("quest-sync-status", HTMLElement),
   questionHint: requiredElement("question-hint", HTMLElement),
   seedCopy: requiredElement("seed-copy", HTMLButtonElement),
   seedValue: requiredElement("seed-value", HTMLElement),
@@ -175,9 +181,35 @@ let run = createRun(
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
 run.status = "paused";
+/** @type {ReturnType<typeof createQuestContinuityController> | null} */
+let questContinuityController = null;
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
-  onAuthenticationChange: syncDemoAccountAction
+  onAuthenticationChange: handleAuthenticationChange
+});
+const questConflictView = createQuestConflictView({
+  onChoose: (choice) => {
+    void questContinuityController?.resolveConflict(choice).then((resolved) => {
+      if (
+        resolved &&
+        resumeAfterQuestConflict &&
+        run.status === "paused"
+      ) {
+        togglePause();
+      }
+      if (resolved) {
+        resumeAfterQuestConflict = false;
+      }
+    });
+  }
+});
+questContinuityController = createQuestContinuityController({
+  loadCloud: () => playerController.getCloudQuestProgress(),
+  saveCloud: (progress, revision) =>
+    playerController.saveCloudQuestProgress(progress, revision),
+  onConflict: showQuestConflict,
+  onProgress: receiveCloudQuestProgress,
+  onStatus: renderQuestSyncStatus
 });
 const lifetimeView = createLifetimeView({
   onUnlock: openLifetimeCheckout
@@ -188,6 +220,9 @@ let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterRecords = false;
+let resumeAfterQuestConflict = false;
+/** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
+let deferredCloudQuest = null;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
@@ -218,6 +253,7 @@ const atlasView = createQuestAtlasView({
 });
 
 void initializeRunEntry();
+void playerController.isAuthenticated().then(handleAuthenticationChange);
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
@@ -455,6 +491,10 @@ window.addEventListener("resize", () => {
   renderer.render(run);
 });
 
+window.addEventListener("online", () => {
+  void questContinuityController?.retry(loadQuestProgress());
+});
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && run.status === "active") {
     togglePause();
@@ -668,6 +708,7 @@ async function startNewQuest(levelId, seed) {
     return false;
   }
   questProgress = saveQuestProgress(nextProgress);
+  void questContinuityController?.queueBoundary(questProgress);
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
   startRun(locator);
@@ -694,6 +735,7 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
   questProgress = saveQuestProgress(
     createQuestProgress(levelId, labyrinthNumber)
   );
+  void questContinuityController?.queueBoundary(questProgress);
   window.history.replaceState({}, "", "/play");
   startRun(locator);
   return true;
@@ -1024,6 +1066,127 @@ function syncDemoAccountAction(signedIn) {
   elements.replay.dataset.resultAction = questComplete ? "new-quest" : "continue";
   elements.replay.textContent = questComplete ? "New Quest" : "Continue Quest";
   elements.freshRun.hidden = questComplete;
+}
+
+/** @param {boolean} signedIn */
+function handleAuthenticationChange(signedIn) {
+  syncDemoAccountAction(signedIn);
+  questContinuityController?.setAuthenticated(
+    signedIn ? playerController.getAuthenticatedUserId() : null
+  );
+  if (signedIn) {
+    void questContinuityController?.retry(loadQuestProgress());
+  }
+}
+
+/**
+ * @param {{ local: typeof questProgress, cloud: { progress: typeof questProgress, revision: number, updatedAt?: string } }} conflict
+ */
+function showQuestConflict(conflict) {
+  const trigger =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  resumeAfterQuestConflict = run.status === "active";
+  if (resumeAfterQuestConflict) {
+    togglePause();
+  }
+  if (elements.levelDialog.open) {
+    elements.levelDialog.close();
+  }
+  questConflictView.show(conflict, trigger);
+}
+
+/**
+ * @param {typeof questProgress} progress
+ * @param {"cloud" | "merged"} source
+ */
+function receiveCloudQuestProgress(progress, source) {
+  if (
+    activeRunLocator !== null &&
+    !runFinished &&
+    ["active", "paused", "challenge"].includes(run.status)
+  ) {
+    deferredCloudQuest = { progress, source };
+    return;
+  }
+  if (runFinished || run.status === "won" || run.status === "lost") {
+    installCloudQuestProgress(progress, false);
+    if (run.status === "won") {
+      saveNextBoundaryLocator();
+    }
+    return;
+  }
+  installCloudQuestProgress(progress);
+}
+
+function applyDeferredCloudQuest() {
+  if (!deferredCloudQuest) {
+    return;
+  }
+  const nextProgress =
+    deferredCloudQuest.progress.questId === questProgress.questId
+      ? mergeSameQuestProgress(questProgress, deferredCloudQuest.progress)
+      : deferredCloudQuest.progress;
+  deferredCloudQuest = null;
+  installCloudQuestProgress(nextProgress, false);
+}
+
+/**
+ * @param {typeof questProgress} progress
+ * @param {boolean} [startRecoveredRun]
+ */
+function installCloudQuestProgress(progress, startRecoveredRun = true) {
+  questProgress = saveQuestProgress(progress);
+  currentLevel = getQuestLevel(questProgress.levelId);
+  currentLabyrinthNumber = questProgress.labyrinthNumber;
+  mustChooseLevel = false;
+
+  if (!startRecoveredRun) {
+    return;
+  }
+  activeRunLocator = null;
+  clearActiveRunLocator();
+  if (elements.levelDialog.open) {
+    elements.levelDialog.close();
+  }
+  if (questProgress.complete) {
+    completedQuestIdle = true;
+    updateInterface();
+    announce("Cloud Quest restored. Your Echo Atlas is complete.");
+    showEvent("Cloud Quest restored. Start a New Quest when ready.");
+    return;
+  }
+  void startFreshRun();
+}
+
+function saveNextBoundaryLocator() {
+  activeRunLocator = questProgress.complete
+    ? null
+    : saveActiveRunLocator(
+        createFreshLocator(
+          questProgress.levelId,
+          questProgress.labyrinthNumber
+        )
+      );
+  if (questProgress.complete) {
+    clearActiveRunLocator();
+  }
+}
+
+/**
+ * @param {"local" | "syncing" | "saved" | "offline" | "conflict"} status
+ */
+function renderQuestSyncStatus(status) {
+  const copy = {
+    local: "Device save",
+    syncing: "Saving to account…",
+    saved: "Account save",
+    offline: "Offline · Device save",
+    conflict: "Choose a Quest"
+  };
+  elements.questSyncStatus.dataset.state = status;
+  elements.questSyncStatus.textContent = copy[status];
 }
 
 /** @param {Direction | undefined} direction */
@@ -1444,21 +1607,15 @@ function finishRun() {
       finishedLabyrinthNumber
     );
     questProgress = saveQuestProgress(advanceQuest(questProgress));
-    activeRunLocator = questProgress.complete
-      ? null
-      : saveActiveRunLocator(
-          createFreshLocator(
-            questProgress.levelId,
-            questProgress.labyrinthNumber
-          )
-        );
-    if (questProgress.complete) {
-      clearActiveRunLocator();
-    }
   } else {
     activeRunLocator = null;
     clearActiveRunLocator();
   }
+  applyDeferredCloudQuest();
+  if (won) {
+    saveNextBoundaryLocator();
+  }
+  void questContinuityController?.queueBoundary(questProgress);
   window.history.replaceState({}, "", "/play");
 
   const questComplete = won && questProgress.complete;

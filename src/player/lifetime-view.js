@@ -115,7 +115,7 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
     elements.details.textContent =
       "No subscription. No renewal. Every Run keeps the same fair Warden rules.";
     elements.storageNote.textContent =
-      "Quest Progress and Records stay on this device unless cloud sync is turned on.";
+      "Quest Progress follows your signed-in account at Labyrinth boundaries. Run Records stay on this device.";
     elements.primary.disabled = false;
     elements.primary.textContent = "Unlock";
     elements.primary.setAttribute(

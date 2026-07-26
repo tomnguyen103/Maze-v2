@@ -333,6 +333,91 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   );
 });
 
+test("keeps local play available when Cloud Quest storage is unavailable", async ({
+  page
+}) => {
+  await page.route("**/api/quest-progress", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Cloud Quest Progress is unavailable. Local play still works."
+      })
+    });
+  });
+
+  await page.goto("/play");
+  await chooseTrailScout(page);
+
+  await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
+  await expect(page.locator("#quest-sync-status")).toHaveText(
+    "Device save"
+  );
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#moves-value")).toHaveText(/\d{3}/);
+});
+
+test("shows an explicit keyboard-safe choice for different device Quests", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/play");
+  await page.locator("#level-dialog").evaluate(
+    /** @param {HTMLDialogElement} dialog */
+    (dialog) => dialog.close()
+  );
+  await page.evaluate(() => {
+    const local = document.getElementById("quest-conflict-local");
+    const cloud = document.getElementById("quest-conflict-cloud");
+    const intro = document.getElementById("quest-conflict-intro");
+    const dialog = document.getElementById("quest-conflict-dialog");
+    if (
+      !(local instanceof HTMLElement) ||
+      !(cloud instanceof HTMLElement) ||
+      !(intro instanceof HTMLElement) ||
+      !(dialog instanceof HTMLDialogElement)
+    ) {
+      throw new Error("Quest conflict dialog is unavailable.");
+    }
+    intro.textContent =
+      "This device and your account have different Quests. Compare both, then choose one.";
+    local.textContent = "This device Trail Scout 4 of 20 complete";
+    cloud.textContent = "Cloud Quest Maze Master 8 of 20 complete";
+    dialog.showModal();
+    document.getElementById("quest-conflict-title")?.focus();
+  });
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Trail Scout");
+  await expect(dialog).toContainText("Maze Master");
+  await expect(page.locator("#quest-conflict-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(
+    await page.evaluate(() => innerWidth)
+  );
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth
+      )
+    )
+    .toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Use Cloud Quest" }).click();
+  await expect(dialog).not.toBeVisible();
+});
+
 test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
   page
 }) => {
@@ -578,6 +663,7 @@ test("preserves native button keyboard behavior and pause timing", async ({
 }) => {
   await page.goto("/?seed=BUTTON-KEYS");
   const pulseCount = page.locator("#pulse-count");
+  await expect(page.getByLabel(/Interactive maze/)).toBeFocused();
   await page.getByRole("button", { name: "Pause" }).focus();
   await page.keyboard.press("Space");
 

@@ -39,4 +39,27 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("card_number");
     expect(sql).not.toContain("billing_address");
   });
+
+  it("adds one bounded optimistic Cloud Quest record per Clerk identity", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0004_cloud_quest_progress.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE cloud_quest_progress");
+    expect(sql).toContain(
+      "REFERENCES player_access(clerk_user_id) ON DELETE CASCADE"
+    );
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("schema_version SMALLINT NOT NULL DEFAULT 1");
+    expect(sql).toContain("quest_id VARCHAR(100) NOT NULL");
+    expect(sql).toContain("quest_id ~ '^(quest|legacy)_");
+    expect(sql).toContain("completed_labyrinths = labyrinth_number - 1");
+    expect(sql).toContain("revision INTEGER NOT NULL DEFAULT 1");
+    expect(sql).toContain("used_map_fingerprints JSONB NOT NULL");
+    expect(sql).toContain("used_question_ids JSONB NOT NULL");
+    expect(sql).not.toContain("position");
+    expect(sql).not.toContain("elapsed");
+    expect(sql).not.toContain("question_text");
+  });
 });

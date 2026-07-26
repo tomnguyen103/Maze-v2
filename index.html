@@ -72,6 +72,16 @@
             Labyrinth 1 of 20 · Foundation
           </p>
 
+          <p
+            class="quest-sync-status"
+            id="quest-sync-status"
+            data-state="local"
+            role="status"
+            aria-live="polite"
+          >
+            Device save
+          </p>
+
           <dl class="run-metrics">
             <div>
               <dt>Time</dt>
@@ -250,6 +260,37 @@
         </button>
       </div>
       <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
+    </dialog>
+
+    <dialog
+      class="quest-conflict-dialog"
+      id="quest-conflict-dialog"
+      aria-labelledby="quest-conflict-title"
+      aria-describedby="quest-conflict-intro"
+    >
+      <span class="section-label">Quest continuity</span>
+      <h2 id="quest-conflict-title" tabindex="-1">Choose which Quest to keep</h2>
+      <p class="dialog-intro" id="quest-conflict-intro"></p>
+      <div class="quest-conflict-options">
+        <section class="quest-conflict-choice" id="quest-conflict-local"></section>
+        <section class="quest-conflict-choice" id="quest-conflict-cloud"></section>
+      </div>
+      <div class="quest-conflict-dialog__actions">
+        <button
+          class="control-button"
+          id="quest-conflict-use-local"
+          type="button"
+        >
+          Keep this device
+        </button>
+        <button
+          class="primary-button"
+          id="quest-conflict-use-cloud"
+          type="button"
+        >
+          Use Cloud Quest
+        </button>
+      </div>
     </dialog>
 
     <dialog
