@@ -144,7 +144,7 @@ export function loadQuestProgress(storage = globalThis.localStorage) {
     const progress = normalizeProgress(
       JSON.parse(storage.getItem(QUEST_PROGRESS_KEY) ?? "null")
     );
-    return progress?.complete ? null : progress;
+    return progress;
   } catch {
     return null;
   }

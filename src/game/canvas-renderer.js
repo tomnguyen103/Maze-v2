@@ -3,7 +3,7 @@
  * @typedef {{ row: number, col: number }} Position
  * @typedef {Position & { vitality: number, maxVitality: number }} Explorer
  * @typedef {Position & { collected: boolean }} Echo
- * @typedef {Position & { open: boolean }} Gate
+ * @typedef {Position & { open: boolean, sealed?: boolean }} Gate
  * @typedef {Position & { id: number, mode: "patrol" | "hunt" | "intercept" }} Warden
  */
 
@@ -82,14 +82,18 @@ export function createCanvasRenderer(canvas) {
       context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
       context.fillText(
-        "WARDEN CHALLENGE",
+        run.challenge?.kind === "gate-warden"
+          ? "GATE WARDEN"
+          : "WARDEN CHALLENGE",
         canvas.width / 2,
         canvas.height / 2
       );
       context.fillStyle = palette.paper;
       context.font = `500 ${Math.max(14, canvas.width * 0.022)}px ${palette.fontBody}`;
       context.fillText(
-        "Your knowledge clears the path.",
+        run.challenge?.kind === "gate-warden"
+          ? "Break the seal with your answer."
+          : "Your knowledge clears the path.",
         canvas.width / 2,
         canvas.height / 2 + Math.max(28, canvas.width * 0.055)
       );
@@ -175,7 +179,11 @@ export function createCanvasRenderer(canvas) {
   /** @param {Gate} gate @param {number} tile */
   function drawGate(gate, tile) {
     const { x, y } = centerOf(gate, tile);
-    context.strokeStyle = gate.open ? palette.signal : palette.gate;
+    context.strokeStyle = gate.open
+      ? gate.sealed
+        ? palette.warden
+        : palette.signal
+      : palette.gate;
     context.lineWidth = Math.max(1.5, tile * 0.07);
     context.beginPath();
     context.arc(x, y, tile * 0.27, Math.PI, 0);
@@ -187,6 +195,30 @@ export function createCanvasRenderer(canvas) {
       context.lineTo(x + tile * offset, y + tile * 0.25);
     }
     context.stroke();
+    if (gate.open && gate.sealed) {
+      context.beginPath();
+      context.moveTo(x - tile * 0.22, y - tile * 0.2);
+      context.lineTo(x + tile * 0.22, y + tile * 0.22);
+      context.moveTo(x + tile * 0.22, y - tile * 0.2);
+      context.lineTo(x - tile * 0.22, y + tile * 0.22);
+      context.stroke();
+    } else if (gate.open) {
+      context.beginPath();
+      context.moveTo(x, y + tile * 0.2);
+      context.lineTo(x, y - tile * 0.12);
+      context.moveTo(x - tile * 0.12, y);
+      context.lineTo(x, y - tile * 0.14);
+      context.lineTo(x + tile * 0.12, y);
+      context.stroke();
+    } else {
+      context.fillStyle = palette.gate;
+      context.fillRect(
+        x - tile * 0.08,
+        y + tile * 0.02,
+        tile * 0.16,
+        tile * 0.16
+      );
+    }
   }
 
   /** @param {Warden} warden @param {number} tile */

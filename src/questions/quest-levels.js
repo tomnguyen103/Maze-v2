@@ -156,6 +156,11 @@ export function getDifficultyBand(labyrinthNumber) {
   };
 }
 
+/** @param {number} labyrinthNumber */
+export function isGateWardenMilestone(labyrinthNumber) {
+  return normalizeLabyrinthNumber(labyrinthNumber) % 4 === 0;
+}
+
 /**
  * @param {string | null | undefined} levelId
  * @param {number} labyrinthNumber
@@ -163,13 +168,18 @@ export function getDifficultyBand(labyrinthNumber) {
 export function getLabyrinthConfig(levelId, labyrinthNumber) {
   const level = getQuestLevel(levelId);
   const band = getDifficultyBand(labyrinthNumber);
-  return Object.freeze({
+  const config = {
     size: level.progression.sizes[band.index],
     echoCount: level.progression.echoCounts[band.index],
     wardenCount: level.progression.wardenCounts[band.index],
     vitality: level.config.vitality,
     pulses: level.config.pulses
-  });
+  };
+  return Object.freeze(
+    isGateWardenMilestone(labyrinthNumber)
+      ? { ...config, gateWarden: true }
+      : config
+  );
 }
 
 /** @param {number} labyrinthNumber */

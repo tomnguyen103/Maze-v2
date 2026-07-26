@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { applyAction, createRun } from "../../src/game/game-session.js";
+import { getBundledQuestion } from "../../src/questions/question-bank.js";
+import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 
 const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
@@ -25,6 +28,103 @@ const TEST_QUESTION = {
   difficultyRank: 21,
   explanation: "Four plus three equals seven."
 };
+
+/**
+ * @param {ReturnType<typeof createRun>} run
+ * @param {{ row: number, col: number }} goal
+ */
+function pathTo(run, goal) {
+  const key = (/** @type {{ row: number, col: number }} */ position) =>
+    `${position.row},${position.col}`;
+  const startKey = key(run.explorer);
+  const goalKey = key(goal);
+  /** @type {{ row: number, col: number }[]} */
+  const queue = [run.explorer];
+  /** @type {Map<string, { prior: string, direction: string } | null>} */
+  const previous = new Map([[startKey, null]]);
+  const moves = [
+    { direction: "up", row: -1, col: 0 },
+    { direction: "right", row: 0, col: 1 },
+    { direction: "down", row: 1, col: 0 },
+    { direction: "left", row: 0, col: -1 }
+  ];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    if (key(current) === goalKey) {
+      break;
+    }
+    for (const move of moves) {
+      const next = {
+        row: current.row + move.row,
+        col: current.col + move.col
+      };
+      const nextKey = key(next);
+      if (
+        run.labyrinth[next.row]?.[next.col] !== 1 ||
+        previous.has(nextKey)
+      ) {
+        continue;
+      }
+      previous.set(nextKey, {
+        prior: key(current),
+        direction: move.direction
+      });
+      queue.push(next);
+    }
+  }
+  /** @type {string[]} */
+  const path = [];
+  let cursor = goalKey;
+  while (cursor !== startKey) {
+    const step = previous.get(cursor);
+    if (!step) {
+      throw new Error(`No passage path to ${goalKey}.`);
+    }
+    path.unshift(step.direction);
+    cursor = step.prior;
+  }
+  return path;
+}
+
+/**
+ * @param {string} seed
+ * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[], finalRun: ReturnType<typeof createRun> }}
+ */
+function milestoneWinningPlan(seed) {
+  let run = createRun(seed, getLabyrinthConfig("trail-scout", 4));
+  /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[]} */
+  const actions = [];
+  for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
+    if (run.status === "challenge") {
+      const kind = run.challenge?.kind;
+      actions.push({ type: "answer", ...(kind ? { kind } : {}) });
+      run = applyAction(run, {
+        type: "provide-question",
+        question: TEST_QUESTION
+      });
+      run = applyAction(run, {
+        type: "answer-question",
+        answerId: TEST_QUESTION.answerId
+      });
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a move toward the next milestone objective.");
+    }
+    actions.push({ type: "move", direction });
+    run = applyAction(run, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+  }
+  if (run.status !== "won") {
+    throw new Error("Milestone plan did not reach the Gate.");
+  }
+  return { actions, finalRun: run };
+}
 
 /** @param {import("@playwright/test").Page} page */
 async function mockQuestionApi(page) {
@@ -172,6 +272,143 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await expect(page.locator("#pulse-count")).toHaveText("1");
   expect(pageErrors).toEqual([]);
   expect(consoleProblems).toEqual([]);
+});
+
+test("opens the full Echo Atlas, pauses time, and restores trigger focus", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/?seed=ATLAS-CHECK&level=trail-scout&labyrinth=4");
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+  const timeBefore = await page.locator("#time-value").textContent();
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#atlas-title")).toBeFocused();
+  await expect(page.locator("[data-atlas-region]")).toHaveCount(5);
+  await expect(page.locator("[data-atlas-node]")).toHaveCount(20);
+  await expect(page.locator("[data-atlas-node='4']")).toHaveAttribute(
+    "aria-current",
+    "step"
+  );
+  await expect(page.locator("[data-atlas-node='4']")).toContainText(
+    "Current Gate Warden milestone"
+  );
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await page.waitForTimeout(1100);
+  await expect(page.locator("#time-value")).toHaveText(timeBefore ?? "00:00");
+
+  const bounds = await atlas.boundingBox();
+  if (!bounds) {
+    throw new Error("Expected the Echo Atlas dialog.");
+  }
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  const horizontalOverflow = await atlas.evaluate(
+    (dialog) => dialog.scrollWidth - dialog.clientWidth
+  );
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  await expect(atlas.getByRole("button", { name: "Close" })).toBeVisible();
+
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(atlas).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Atlas", exact: true })
+  ).toBeFocused();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
+test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 20,
+        completedLabyrinths: 20,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: true
+      })
+    );
+  });
+  await page.reload();
+
+  await expect(page.locator("#pause-run")).toBeDisabled();
+  await expect(page.locator("#pause-run")).toHaveText("Quest complete");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#moves-value")).toHaveText("000");
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#atlas-progress")).toContainText(
+    "5 of 5 Sigils restored"
+  );
+  await expect(page.locator("[data-atlas-node='20']")).toContainText(
+    "Gate Warden milestone completed"
+  );
+  await atlas.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: "New Quest", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Choose your Quest Level" })
+  ).toBeVisible();
+});
+
+test("allows an explicit Labyrinth 20 share after restoring a completed Atlas", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 20,
+        completedLabyrinths: 20,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: true
+      })
+    );
+  });
+
+  await page.goto("/?seed=COMPLETED-SHARE-20&level=trail-scout&labyrinth=20");
+
+  await expect(page.locator("#pause-run")).toBeEnabled();
+  await expect(page.locator("#pause-run")).toHaveText("Pause");
+  await expect(page.locator("#run-state")).not.toHaveText("Quest complete");
+  for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    if ((await page.locator("#moves-value").textContent()) !== "000") {
+      break;
+    }
+  }
+  await expect(page.locator("#moves-value")).not.toHaveText("000");
 });
 
 test("keeps event messages outside the playable maze", async ({ page }) => {
@@ -628,6 +865,114 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   await page.reload();
   await expect(page.locator("#best-run")).toContainText(WINNING_SEED);
   }
+});
+
+test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
+  page
+}) => {
+  const seed = "MILESTONE-4";
+  const plan = milestoneWinningPlan(seed);
+  expect(plan.finalRun.wardensDefeated).toBe(
+    plan.finalRun.config.wardenCount
+  );
+  await page.route("**/api/question?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 503,
+      body: JSON.stringify({ error: "forced fallback" })
+    });
+  });
+  await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
+  await page.getByLabel(/Interactive maze/).focus();
+
+  let gateChallenges = 0;
+  let questionOrdinal = 0;
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      continue;
+    }
+
+    const challenge = page.locator("#challenge-dialog");
+    await expect(challenge).toBeVisible();
+    await expect(page.locator("#challenge-question")).toBeFocused();
+    if (action.kind === "gate-warden") {
+      gateChallenges += 1;
+      await expect(page.locator("#challenge-title")).toHaveText(
+        "The Gate Warden seals the way."
+      );
+      await expect(page.locator("#challenge-promise")).toContainText(
+        "break the seal"
+      );
+      await expect(page.locator("#run-state")).toHaveText("Brain battle");
+    }
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      questionOrdinal,
+      seed,
+      wardenId: questionOrdinal
+    });
+    questionOrdinal += 1;
+    await expect(page.locator("#challenge-source")).toContainText(
+      "trusty question card"
+    );
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+    if (action.kind === "gate-warden") {
+      await expect(page.locator("#run-state")).toHaveText("Gate open");
+    }
+  }
+
+  expect(gateChallenges).toBe(1);
+  await expect(page.locator("#result-seed")).toHaveText(seed);
+  await expect(
+    page.getByRole("group", { name: "Echo Atlas progress" })
+  ).toBeVisible();
+  await expect(page.locator("#result-atlas")).toContainText("Atlas 4 / 20");
+  await expect(page.locator("#result-atlas")).toContainText(
+    "Foundation Sigil restored"
+  );
+  await expect(page.locator("#result-atlas")).toContainText(
+    "Gate Warden milestone completed"
+  );
+  await expect(page.locator("#player-score")).toHaveText(
+    String(plan.finalRun.score)
+  );
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored) : null;
+    })
+  ).toMatchObject({
+    labyrinthNumber: 5,
+    completedLabyrinths: 4,
+    usedQuestionIds: expect.any(Array)
+  });
+  expect(
+    await page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored).usedQuestionIds.length : 0;
+    })
+  ).toBe(questionOrdinal);
+  await expect.poll(() =>
+    page.evaluate((expectedSeed) => {
+      const stored = localStorage.getItem("echo-maze:run-records:v1");
+      const records = /** @type {{ seed: string, labyrinthNumber: number }[]} */ (
+        stored ? JSON.parse(stored) : []
+      );
+      return records.find(
+        (record) =>
+          record.seed === expectedSeed &&
+          record.labyrinthNumber === 4
+      ) ?? null;
+    }, seed)
+  ).toMatchObject({
+    seed,
+    labyrinthNumber: 4,
+    questLevelId: "trail-scout",
+    outcome: "escaped"
+  });
 });
 
 test("reflows across required widths and keeps the game in the laptop fold", async ({

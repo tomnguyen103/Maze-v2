@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, createRun } from "../src/game/game-session.js";
+import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 
 /** @typedef {ReturnType<typeof createRun>} TestRun */
 /** @typedef {"up" | "right" | "down" | "left"} TestDirection */
@@ -176,6 +177,26 @@ describe("GameSession", () => {
 
     expect(run.echoes).toHaveLength(8);
     expect(run.wardens).toHaveLength(6);
+  });
+
+  it("reserves one configured Warden for a deterministic milestone Gate encounter", () => {
+    const config = getLabyrinthConfig("trail-scout", 4);
+    const first = createRun("TRAIL-SCOUT-4", config);
+    const second = createRun("TRAIL-SCOUT-4", config);
+
+    expect(first).toEqual(second);
+    expect(first.config.wardenCount).toBe(2);
+    expect(first.wardens).toHaveLength(1);
+    expect(first.gateWarden).toEqual({ id: 1, defeated: false });
+    expect(first.gate).toMatchObject({ open: false, sealed: true });
+    expect(first.wardens.length + Number(Boolean(first.gateWarden))).toBe(2);
+
+    const ordinary = createRun(
+      "TRAIL-SCOUT-3",
+      getLabyrinthConfig("trail-scout", 3)
+    );
+    expect(ordinary).not.toHaveProperty("gateWarden");
+    expect(ordinary.gate).not.toHaveProperty("sealed");
   });
 
   it("rejects a wall without spending a turn", () => {
@@ -424,6 +445,224 @@ describe("GameSession", () => {
     expect(run.status).toBe("won");
     expect(run.event.type).toBe("escaped");
     expect(run.score).toBe(550);
+  });
+
+  it("announces that the milestone Gate is open but sealed after the final Echo", () => {
+    let run = createRun("SEALED-ECHO-4", {
+      echoCount: 1,
+      gateWarden: true,
+      size: 9,
+      wardenCount: 1
+    });
+
+    run = follow(run, pathBetween(run, run.explorer, run.echoes[0]));
+
+    expect(run.gate).toMatchObject({ open: true, sealed: true });
+    expect(run.event.message).toContain("Gate is open but sealed");
+    expect(run.event.message).toContain("Gate Warden");
+  });
+
+  it("starts a paused Gate Warden Challenge when a sealed open Gate is attempted", () => {
+    const run = createRun("SEALED-GATE-4", {
+      echoCount: 0,
+      gateWarden: true,
+      size: 9,
+      wardenCount: 2
+    });
+    const pathToGate = pathBetween(run, run.explorer, run.gate);
+    const gateDirection = pathToGate.at(-1);
+    const gateMove = MOVES.find((move) => move.name === gateDirection);
+    if (!gateDirection || !gateMove) {
+      throw new Error("Expected a final move into the sealed Gate");
+    }
+    const staged = {
+      ...run,
+      explorer: {
+        ...run.explorer,
+        row: run.gate.row - gateMove.row,
+        col: run.gate.col - gateMove.col
+      }
+    };
+
+    const challenged = applyAction(staged, {
+      type: "move",
+      direction: gateDirection
+    });
+
+    expect(challenged.status).toBe("challenge");
+    expect(challenged.explorer).toEqual(staged.explorer);
+    expect(challenged.moves).toBe(staged.moves + 1);
+    expect(challenged.wardens).toEqual(staged.wardens);
+    expect(challenged.challenge).toEqual({
+      kind: "gate-warden",
+      wardenId: staged.gateWarden?.id,
+      question: null,
+      attempt: 0,
+      feedback: null,
+      hintRevealed: false
+    });
+    expect(challenged.event.type).toBe("gate-warden-challenge");
+  });
+
+  it("keeps the milestone Gate locked without starting its Warden before all Echoes", () => {
+    const run = createRun("LOCKED-MILESTONE-4", {
+      echoCount: 1,
+      gateWarden: true,
+      size: 9,
+      wardenCount: 1
+    });
+    const gateDirection = pathBetween(run, run.explorer, run.gate).at(-1);
+    const gateMove = MOVES.find((move) => move.name === gateDirection);
+    if (!gateDirection || !gateMove) {
+      throw new Error("Expected a final move toward the locked Gate");
+    }
+    const staged = {
+      ...run,
+      explorer: {
+        ...run.explorer,
+        row: run.gate.row - gateMove.row,
+        col: run.gate.col - gateMove.col
+      }
+    };
+
+    const visited = applyAction(staged, {
+      type: "move",
+      direction: gateDirection
+    });
+
+    expect(visited.status).toBe("active");
+    expect(visited.challenge).toBeNull();
+    expect(visited.gate).toMatchObject({ open: false, sealed: true });
+    expect(visited.event.type).toBe("gate-locked");
+  });
+
+  it("unseals the Gate after the Gate Warden is answered, then escapes on the next move", () => {
+    const run = createRun("UNSEAL-GATE-4", {
+      echoCount: 0,
+      gateWarden: true,
+      size: 9,
+      wardenCount: 2
+    });
+    const gateDirection = pathBetween(run, run.explorer, run.gate).at(-1);
+    const gateMove = MOVES.find((move) => move.name === gateDirection);
+    if (!gateDirection || !gateMove) {
+      throw new Error("Expected a final move into the sealed Gate");
+    }
+    const staged = {
+      ...run,
+      explorer: {
+        ...run.explorer,
+        row: run.gate.row - gateMove.row,
+        col: run.gate.col - gateMove.col
+      }
+    };
+    let challenged = applyAction(staged, {
+      type: "move",
+      direction: gateDirection
+    });
+    challenged = applyAction(challenged, {
+      type: "provide-question",
+      question: QUESTION
+    });
+
+    const answered = applyAction(challenged, {
+      type: "answer-question",
+      answerId: QUESTION.answerId
+    });
+
+    expect(answered.status).toBe("active");
+    expect(answered.challenge).toBeNull();
+    expect(answered.gate).toMatchObject({ open: true, sealed: false });
+    expect(answered.gateWarden).toEqual({ id: 1, defeated: true });
+    expect(answered.wardens).toEqual(staged.wardens);
+    expect(answered.pulses).toBe(staged.pulses + 1);
+    expect(answered.score).toBe(100);
+    expect(answered.wardensDefeated).toBe(1);
+    expect(answered.event.type).toBe("gate-warden-defeated");
+
+    const escaped = applyAction(answered, {
+      type: "move",
+      direction: gateDirection
+    });
+    expect(escaped.status).toBe("won");
+    expect(escaped.score).toBe(600);
+  });
+
+  it("keeps the Gate sealed while wrong answers, Hints, and Skips use normal rules", () => {
+    const run = createRun("GATE-RETRY-4", {
+      echoCount: 0,
+      gateWarden: true,
+      vitality: 3,
+      wardenCount: 2
+    });
+    const challenged = {
+      ...run,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        kind: /** @type {const} */ ("gate-warden"),
+        wardenId: run.gateWarden?.id ?? -1,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const wrong = applyAction(challenged, {
+      type: "answer-question",
+      answerId: "a"
+    });
+    expect(wrong.status).toBe("challenge");
+    expect(wrong.challenge?.kind).toBe("gate-warden");
+    expect(wrong.explorer.vitality).toBe(2);
+    expect(wrong.gate.sealed).toBe(true);
+
+    let retried = applyAction(wrong, {
+      type: "provide-question",
+      question: QUESTION
+    });
+    retried = applyAction(retried, { type: "reveal-hint" });
+    expect(retried.challenge?.kind).toBe("gate-warden");
+    expect(retried.challenge?.hintRevealed).toBe(true);
+    expect(retried.explorer.vitality).toBe(2);
+
+    const skipped = applyAction(retried, { type: "skip-question" });
+    expect(skipped.challenge?.kind).toBe("gate-warden");
+    expect(skipped.challenge?.question).toBeNull();
+    expect(skipped.freeQuestionSkipAvailable).toBe(false);
+    expect(skipped.explorer.vitality).toBe(2);
+    expect(skipped.gate.sealed).toBe(true);
+  });
+
+  it("ends the Run with the milestone Gate still sealed after final Vitality", () => {
+    const run = createRun("GATE-LAST-LIGHT-4", {
+      echoCount: 0,
+      gateWarden: true,
+      vitality: 1,
+      wardenCount: 1
+    });
+    const challenged = {
+      ...run,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        kind: /** @type {const} */ ("gate-warden"),
+        wardenId: run.gateWarden?.id ?? -1,
+        question: QUESTION,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+
+    const lost = applyAction(challenged, {
+      type: "answer-question",
+      answerId: "a"
+    });
+
+    expect(lost.status).toBe("lost");
+    expect(lost.explorer.vitality).toBe(0);
+    expect(lost.gate.sealed).toBe(true);
+    expect(lost.gateWarden?.defeated).toBe(false);
   });
 
   it("freezes elapsed time while paused", () => {
