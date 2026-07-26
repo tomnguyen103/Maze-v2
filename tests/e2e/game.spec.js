@@ -923,6 +923,7 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
     );
     return key ? localStorage.getItem(key) : null;
   });
+  expect(typeof storedJournal).toBe("string");
   expect(storedJournal).not.toContain("\"prompt\"");
   expect(storedJournal).not.toContain("answerId");
 

@@ -90,7 +90,17 @@ export function createJournalContinuity({
    * @param {() => string} [createEventId]
    */
   function record(question, outcome, createEventId) {
-    journal = recordLearningOutcome(journal, question, outcome, createEventId);
+    try {
+      journal = recordLearningOutcome(
+        journal,
+        question,
+        outcome,
+        createEventId
+      );
+    } catch {
+      onStatus("Journal could not record this outcome.");
+      return journal;
+    }
     if (!writeJournal(journalKey(selectedUserId), journal)) {
       onStatus("Journal storage is unavailable on this device.");
     }

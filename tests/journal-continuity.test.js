@@ -31,6 +31,32 @@ function createStorage() {
 }
 
 describe("Lantern Journal continuity", () => {
+  it("contains rejected outcome metadata so gameplay callers never throw", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn()
+      },
+      storage: createStorage(),
+      onStatus
+    });
+
+    await continuity.selectUser("");
+    expect(() =>
+      continuity.record(
+        { ...question(), id: "not-a-reviewed-question" },
+        "wrong",
+        () => eventId(12)
+      )
+    ).not.toThrow();
+    expect(continuity.getJournal().events).toHaveLength(0);
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal could not record this outcome."
+    );
+  });
+
   it("keeps gameplay-facing recording operable when device storage is denied", async () => {
     const onStatus = vi.fn();
     const continuity = createJournalContinuity({

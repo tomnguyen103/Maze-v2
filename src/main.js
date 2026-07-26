@@ -520,21 +520,30 @@ elements.practiceChoices.addEventListener("click", async (event) => {
       choice.disabled = true;
     }
   }
-  const { evaluatePracticeAnswer } = await loadLanternJournalUi();
-  const result = evaluatePracticeAnswer(
-    practiceQuestion,
-    button.dataset.practiceAnswer
-  );
-  playerController.recordLearningOutcome(
-    practiceQuestion,
-    result.correct ? "correct" : "wrong"
-  );
-  elements.practiceFeedback.dataset.state = result.correct
-    ? "correct"
-    : "wrong";
-  elements.practiceFeedback.textContent =
-    `${result.message} ${result.explanation}`;
-  elements.practiceClose.focus();
+  try {
+    const { evaluatePracticeAnswer } = await loadLanternJournalUi();
+    const result = evaluatePracticeAnswer(
+      practiceQuestion,
+      button.dataset.practiceAnswer
+    );
+    playerController.recordLearningOutcome(
+      practiceQuestion,
+      result.correct ? "correct" : "wrong"
+    );
+    elements.practiceFeedback.dataset.state = result.correct
+      ? "correct"
+      : "wrong";
+    elements.practiceFeedback.textContent =
+      `${result.message} ${result.explanation}`;
+    elements.practiceClose.focus();
+  } catch {
+    for (const choice of elements.practiceChoices.querySelectorAll("button")) {
+      if (choice instanceof HTMLButtonElement) {
+        choice.disabled = false;
+      }
+    }
+    reportLanternJournalUnavailable();
+  }
 });
 elements.practiceClose.addEventListener("click", () => {
   elements.practiceDialog.close();
@@ -543,9 +552,13 @@ elements.practiceDialog.addEventListener("close", async () => {
   activePracticeQuestion = null;
   if (reopenJournalAfterPractice && !elements.journalDialog.open) {
     reopenJournalAfterPractice = false;
-    await renderLanternJournal();
-    if (!elements.journalDialog.open) {
-      elements.journalDialog.showModal();
+    try {
+      await renderLanternJournal();
+      if (!elements.journalDialog.open) {
+        elements.journalDialog.showModal();
+      }
+    } catch {
+      reportLanternJournalUnavailable();
     }
   }
 });
@@ -663,8 +676,8 @@ function countItem(label, count) {
  * @param {boolean} returnToJournal
  */
 async function openPractice(triggeringQuestion, returnToJournal) {
-  const { selectPracticeQuestion } = await loadLanternJournalUi();
   try {
+    const { selectPracticeQuestion } = await loadLanternJournalUi();
     activePracticeQuestion = selectPracticeQuestion(triggeringQuestion);
   } catch {
     elements.journalStatus.textContent =

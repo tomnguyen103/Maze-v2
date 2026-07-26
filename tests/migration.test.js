@@ -47,6 +47,8 @@ describe("Run Access migration", () => {
     );
 
     expect(sql).toContain("CREATE TABLE learning_journals");
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("journal -> 'version' = '1'::jsonb");
     expect(sql).toContain("REFERENCES player_access(clerk_user_id) ON DELETE CASCADE");
     expect(sql).toContain("jsonb_array_length(journal->'events') <= 200");
     expect(sql).not.toContain("answer_text");

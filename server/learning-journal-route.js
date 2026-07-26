@@ -113,15 +113,19 @@ function hasExactShape(value) {
 
 /** @param {import("node:http").IncomingMessage} request */
 async function readJsonBody(request) {
-  let body = "";
+  /** @type {Buffer[]} */
+  const chunks = [];
+  let bodyBytes = 0;
   for await (const chunk of request) {
-    body += chunk;
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bodyBytes += buffer.length;
+    if (bodyBytes > MAX_BODY_BYTES) {
       throw new JournalInputError("Journal request is too large.");
     }
+    chunks.push(buffer);
   }
   try {
-    return JSON.parse(body);
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     throw new JournalInputError("Journal request must be valid JSON.");
   }
