@@ -333,6 +333,483 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   );
 });
 
+test("previews, saves, and resets presentation-only Explorer Access Settings", async ({
+  page
+}) => {
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  const settingsButton = page.getByRole("button", { name: "Settings" });
+  const initialRunFacts = await page.evaluate(() => ({
+    seed: document.querySelector("#seed-value")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    echoes: document.querySelector("#echo-count")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    canvasWidth: document.querySelector("#maze-canvas")?.getAttribute("width"),
+    canvasHeight: document.querySelector("#maze-canvas")?.getAttribute("height")
+  }));
+  const defaultFog = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-fog")
+      .trim()
+  );
+
+  await settingsButton.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", {
+    name: "Explorer Access Settings"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#access-settings-title")).toBeFocused();
+  const defaultQuestionFamily = await page
+    .locator(".access-question-preview")
+    .evaluate((element) => getComputedStyle(element).fontFamily);
+  const defaultAnswerLineHeight = await page
+    .locator(".access-answer-preview strong")
+    .evaluate((element) => getComputedStyle(element).lineHeight);
+
+  const contrast = page.getByLabel("Stronger Fog contrast");
+  await contrast.focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-contrast",
+    "strong"
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-marks",
+    "large"
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:explorer-access-settings:v1")
+    )
+  ).toBeNull();
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-fog")
+        .trim()
+    )
+  ).not.toBe(defaultFog);
+  expect(
+    await page.locator(".access-question-preview").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toContain("Geist");
+  expect(
+    await page.locator(".access-answer-preview strong").evaluate(
+      (element) => getComputedStyle(element).lineHeight
+    )
+  ).not.toBe(defaultAnswerLineHeight);
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(settingsButton).toBeFocused();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-contrast",
+    "default"
+  );
+  expect(
+    await page.locator(".access-question-preview").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toBe(defaultQuestionFamily);
+  expect(
+    await page.locator(".access-answer-preview strong").evaluate(
+      (element) => getComputedStyle(element).lineHeight
+    )
+  ).toBe(defaultAnswerLineHeight);
+
+  await settingsButton.click();
+  await page.getByLabel("Stronger Fog contrast").check();
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  const storedSettings = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:explorer-access-settings:v1")
+  );
+  expect(JSON.parse(storedSettings ?? "null")).toEqual({
+    version: 1,
+    highContrast: true,
+    largeMarks: true,
+    readerFriendlyQuestions: true,
+    reducedEffects: true
+  });
+  const savedRunFacts = await page.evaluate(() => ({
+    seed: document.querySelector("#seed-value")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    echoes: document.querySelector("#echo-count")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    canvasWidth: document.querySelector("#maze-canvas")?.getAttribute("width"),
+    canvasHeight: document.querySelector("#maze-canvas")?.getAttribute("height")
+  }));
+  expect(savedRunFacts).toEqual(initialRunFacts);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-type",
+    "reader"
+  );
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(page.locator("#access-settings-status")).toHaveText(
+    "Canonical design restored."
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-effects",
+    "system"
+  );
+});
+
+test("keeps a Run paused when Settings is activated twice while loading", async ({
+  page
+}) => {
+  await page.route("**/assets/access-settings-view-*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await page.getByRole("button", { name: "Settings" }).dblclick({
+    delay: 20
+  });
+  const dialog = page.getByRole("dialog", {
+    name: "Explorer Access Settings"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("retries the Settings view after its first chunk request fails", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/access-settings-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  const settingsButton = page.getByRole("button", { name: "Settings" });
+
+  await settingsButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Explorer Access Settings are unavailable. Try again."
+  );
+  await settingsButton.click();
+
+  await expect(
+    page.getByRole("dialog", { name: "Explorer Access Settings" })
+  ).toBeVisible();
+  expect(requests).toBe(2);
+});
+
+test("keeps every Access Setting readable at mobile fold and 200 percent text", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?seed=ACCESS-FOLD&level=trail-scout");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Stronger Fog contrast").check();
+  await page.getByLabel("Larger maze marks").check();
+  await page.getByLabel("Reader-friendly Question text").check();
+  await page.getByLabel("Reduce visual effects").check();
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  const mobileMaze = await page.locator("#maze-canvas").boundingBox();
+  const touchControls = await page.locator(".touch-controls").boundingBox();
+  if (!mobileMaze || !touchControls) {
+    throw new Error("Expected mobile gameplay controls.");
+  }
+  expect(mobileMaze.y + mobileMaze.height).toBeLessThanOrEqual(844);
+  expect(touchControls.y + touchControls.height).toBeLessThanOrEqual(844);
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--maze-mark-scale")
+        .trim()
+    )
+  ).toBe("1.22");
+  expect(
+    await page.locator("#challenge-question").evaluate(
+      (element) => getComputedStyle(element).fontFamily
+    )
+  ).toContain("Geist");
+
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+    document.querySelector("#canvas-frame")?.classList.add("is-hurt");
+  });
+  await page.getByRole("button", { name: "Settings" }).click();
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  const saveSettings = page.getByRole("button", { name: "Save settings" });
+  await expect(saveSettings).toBeVisible();
+  await saveSettings.scrollIntoViewIfNeeded();
+  const saveBounds = await saveSettings.boundingBox();
+  if (!saveBounds) {
+    throw new Error("Expected the Settings actions.");
+  }
+  expect(saveBounds.y).toBeGreaterThanOrEqual(0);
+  expect(saveBounds.y + saveBounds.height).toBeLessThanOrEqual(844);
+  const animationDuration = await page
+    .locator("#canvas-frame")
+    .evaluate((element) => getComputedStyle(element).animationDuration);
+  expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.001);
+});
+
+test("keeps signed-out Quest progress local and playable", async ({
+  page
+}) => {
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
+  await expect(page.locator("#quest-sync-status")).toHaveText(
+    "Device save"
+  );
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#moves-value")).toHaveText("001");
+});
+
+test("shows an explicit keyboard-safe choice for different device Quests", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_choice_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 5,
+    completedLabyrinths: 4,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_choice_456",
+      levelId: "maze-master",
+      labyrinthNumber: 9,
+      completedLabyrinths: 8
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(${JSON.stringify({ local, cloud })});
+                return Promise.resolve(false);
+              },
+              resolveConflict() { return Promise.resolve(true); }
+            };
+          }
+        `
+      });
+    }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/play");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Trail Scout");
+  await expect(dialog).toContainText("Maze Master");
+  await expect(page.locator("#quest-conflict-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(
+    await page.evaluate(() => innerWidth)
+  );
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth
+      )
+    )
+    .toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Use Cloud Quest" }).click();
+  await expect(dialog).not.toBeVisible();
+});
+
+test("retries the Cloud Quest choice view after its first chunk fails", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_retry_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 3,
+    completedLabyrinths: 2,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_retry_456",
+      labyrinthNumber: 7,
+      completedLabyrinths: 6
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            const conflict = ${JSON.stringify({ local, cloud })};
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(conflict);
+                return Promise.resolve(false);
+              },
+              resolveConflict() { return Promise.resolve(true); }
+            };
+          }
+        `
+      });
+    }
+  );
+  let requests = 0;
+  await page.route("**/assets/quest-conflict-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.locator("#live-region")).toContainText(
+    "Cloud Quest choice is unavailable. Your device Quest is safe."
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  await expect(
+    page.getByRole("dialog", { name: "Choose which Quest to keep" })
+  ).toBeVisible();
+  expect(requests).toBe(2);
+});
+
+test("resumes an active Run after a repeated Cloud Quest conflict is resolved", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_repeat_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 4,
+    completedLabyrinths: 3,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_repeat_456",
+      labyrinthNumber: 8,
+      completedLabyrinths: 7
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            let choices = 0;
+            const conflict = ${JSON.stringify({ local, cloud })};
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(conflict);
+                return Promise.resolve(false);
+              },
+              resolveConflict() {
+                choices += 1;
+                if (choices === 1) {
+                  onConflict(conflict);
+                  return Promise.resolve(false);
+                }
+                return Promise.resolve(true);
+              }
+            };
+          }
+        `
+      });
+    }
+  );
+
+  await page.goto("/?seed=REPEATED-CLOUD-CONFLICT&level=trail-scout");
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  const dialog = page.getByRole("dialog", {
+    name: "Choose which Quest to keep"
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep this device" }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Use Cloud Quest" }).click();
+
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
 test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
   page
 }) => {
@@ -442,6 +919,17 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
 
 test("keeps touch controls usable without horizontal overflow", async ({ page }) => {
   await page.goto("/?seed=TOUCH-CONTROLS&level=trail-scout");
+
+  for (const action of await page.locator(".command-bar__actions button").all()) {
+    const dimensions = await action.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth
+    }));
+    expect(
+      dimensions.scrollWidth,
+      `${await action.textContent()} must not clip`
+    ).toBeLessThanOrEqual(dimensions.clientWidth);
+  }
 
   const touchActions = page.locator("button:visible, a:visible");
   for (let index = 0; index < (await touchActions.count()); index += 1) {
@@ -578,6 +1066,7 @@ test("preserves native button keyboard behavior and pause timing", async ({
 }) => {
   await page.goto("/?seed=BUTTON-KEYS");
   const pulseCount = page.locator("#pulse-count");
+  await expect(page.getByLabel(/Interactive maze/)).toBeFocused();
   await page.getByRole("button", { name: "Pause" }).focus();
   await page.keyboard.press("Space");
 
@@ -1051,4 +1540,13 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
       .map((element) => element.id || element.className || element.tagName)
   );
   expect(overflow, `overflow sources: ${overflowSources.join(", ")}`).toBeLessThanOrEqual(1);
+
+  const heading = await page.locator(".status-deck__heading").boundingBox();
+  const syncStatus = await page.locator("#quest-sync-status").boundingBox();
+  const metrics = await page.locator(".run-metrics").boundingBox();
+  if (!heading || !syncStatus || !metrics) {
+    throw new Error("Expected status layout at 200 percent text.");
+  }
+  expect(syncStatus.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+  expect(metrics.y).toBeGreaterThanOrEqual(syncStatus.y + syncStatus.height);
 });

@@ -2,11 +2,11 @@
 
 **Opened:** 2026-07-25
 
-**Live baseline:** `cd3cc87` on `main`; signed-in allowance, lifetime
-membership, Echo Atlas, Gate Wardens, and Daily Shared Labyrinth are merged
-through PRs #49-#51 and #54. Integrated follow-on feature and release-closure
-evidence is recorded below only after its PR is merged and the final local gate
-passes.
+**Live baseline:** `1afa8a0` on `main`; signed-in allowance, lifetime
+membership, Echo Atlas, Gate Wardens, Daily Shared Labyrinth, Cloud Quest
+Continuity, and Explorer Access Settings are merged through PRs #49-#54.
+Integrated Lantern Journal and release-closure evidence is recorded below only
+after its PR is merged and the final local gate passes.
 
 **Authority:** the attached implementation approval, then `AGENTS.md`, then the
 combined master plan. A source document being marked draft or superseded does
@@ -37,11 +37,11 @@ are updated only from verified evidence.
 | C16 | Gate Wardens occur only at 4, 8, 12, 16, 20 and reuse one configured Warden without raising score ceiling | Master 7.5, 10, T13, 22.4; Roadmap 8 Tasks 1/3 | Missing | Pure milestone classifier and reserved-Warden state inside deterministic Run config | #43 | Exact milestone, fixed-seed, configured-count, score-ceiling, and non-milestone shape tests; merged PR #51 |
 | C17 | Gate Warden appears after Echo recovery; sealed/open Gate states; normal Question, Vitality, Hint, Skip, fallback, and paused timer rules | Master 10.3-10.5, T14-T15, 22.4; Roadmap 8.2-8.7 Tasks 3-6 | Missing | Extend current transition interface; reuse current Question controller and accessible presentation | #43 | Locked/correct/wrong/defeat/Hint/Skip tests plus forced-provider-fallback desktop/mobile Labyrinth 4 passages; merged PR #51 |
 | C18 | Atlas milestones create derived cosmetic sigils and memorable victory feedback, never currency or power | Master 9.7, 10.4; Roadmap 8.1-8.3 | Missing | Derive one sigil per completed four-Labyrinth region; celebrate in results and Atlas | #43 | Derived sigil counts and compact result milestone proof with no storage migration; merged PR #51 |
-| C19 | Cloud Quest Continuity syncs only boundary progress, preserves uniqueness, migrates local state, supports offline retry | Master 17/25; Roadmap 9, Release B | Missing | Versioned authenticated cloud Quest record; active Run remains device-local | #44 | Store/route/offline/two-device tests pending |
-| C20 | Same-Quest conflicts merge monotonic history; incompatible Quests require explicit player choice; no silent overwrite | Roadmap 9 Acceptance/vertical slices | Missing | Optimistic revision and explicit conflict dialog comparing Quest Level and boundary | #44 | Conflict fixtures and browser tests pending |
+| C19 | Cloud Quest Continuity syncs only boundary progress, preserves uniqueness, migrates local state, supports offline retry | Master 17/25; Roadmap 9, Release B | Missing | Versioned authenticated cloud Quest record; active Run remains device-local | #44 | Boundary allowlist, offline queue, auth-epoch isolation, empty-browser restore, reload-safe API, signed account deletion, and development-Neon revision/cascade proof pass; merged PR #52 |
+| C20 | Same-Quest conflicts merge monotonic history; incompatible Quests require explicit player choice; no silent overwrite | Roadmap 9 Acceptance/vertical slices | Missing | Optimistic revision and explicit conflict dialog comparing Quest Level and boundary | #44 | Same-Quest stale retry/divergent-ordinal uniqueness union plus keyboard/mobile explicit-choice fixtures pass; offline local choice resumes safely; merged PR #52 |
 | C21 | Lantern Journal remembers bounded reviewed learning outcomes and can be cleared separately | Master 17/25; Roadmap 10, Release D | Missing | Add allowlisted `topicId` and `learningObjectiveId`; local bounded attempt-event projection | #45 | Metadata validation/projection/clear tests pending |
 | C22 | Optional Practice uses a different reviewed card, no Warden/timer/Vitality/score/Quest effect, encouraging feedback | Roadmap 10 Acceptance/vertical slices | Missing | Result-screen Practice Lantern through reviewed Question seam | #45 | Isolation and non-repeat tests pending |
-| C23 | Explorer Access Settings: stronger contrast, larger marks, reader-friendly Questions, reduced effects, preview/save/reset | Master 17/25; Roadmap 11, Release E | Missing | Versioned local presentation-only settings adapter; default remains `design.md` | #46 | Deterministic rendering and mobile/zoom tests pending |
+| C23 | Explorer Access Settings: stronger contrast, larger marks, reader-friendly Questions, reduced effects, preview/save/reset | Master 17/25; Roadmap 11, Release E | Delivered | Versioned local presentation-only settings adapter; default remains `design.md` | #46 | Adapter/view tests and keyboard browser flows prove preview/save/cancel/reset, unchanged Run facts, 390x844 fold fit, 200% text, and OS reduced motion; merged PR #53 |
 | C24 | Daily Shared Labyrinth is date-deterministic, fair, privacy-safe, separate from Quest, casual, shareable, and expiry-safe | Master 17/25; Roadmap 12-15, Release F | Delivered | UTC-dated bundled contract, separate local Daily record, no scarce reward or global claim | #47 | Pure contract/storage fixtures plus desktop/mobile same-maze, bundled-Question, no-access, Quest-isolation, privacy-safe share, expiry, and Personal Best passages; merged PR #54 |
 | C25 | Platform trust: explicit database certificate verification, Clerk timeout fallback, bundle baseline, storage/migration characterization | Roadmap 6; Master 15/24 | Partial | Keep dynamic Clerk boundary; normalize production/preview DB SSL config; document bundle budgets and migration proof | #41 | 3 SSL tests, four budgets, Clerk fallback, and development-Neon proof; merged PR #49 |
 | C26 | Observability uses privacy-minimized allowlisted events and never logs secrets, raw webhooks, card data, or child data | Master 17, 23; Membership 10, 15 | Missing | Small structured event interface and in-memory test adapter; no new analytics vendor | #41, #48 | Access and lifetime allowlist tests exclude IDs, secrets, and commercial/card fields; membership core merged PR #50, final hardening in #48 |

@@ -40,6 +40,7 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
+import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
 import { projectQuestAtlas } from "./game/quest-atlas.js";
 import {
   createQuestAtlasView,
@@ -59,10 +60,15 @@ import {
 import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
+import {
+  applyAccessSettings,
+  loadAccessSettings
+} from "./player/access-settings.js";
 import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
+/** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
@@ -70,6 +76,7 @@ const audio = new EchoAudio();
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
+  settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
@@ -123,6 +130,7 @@ const elements = {
   questHeadline: requiredElement("quest-headline", HTMLElement),
   questLevelName: requiredElement("quest-level-name", HTMLElement),
   questStage: requiredElement("quest-stage", HTMLElement),
+  questSyncStatus: requiredElement("quest-sync-status", HTMLElement),
   questionHint: requiredElement("question-hint", HTMLElement),
   seedCopy: requiredElement("seed-copy", HTMLButtonElement),
   seedCopyHint: requiredElement("seed-copy-hint", HTMLElement),
@@ -200,10 +208,20 @@ let run = createRun(
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
 run.status = "paused";
+/** @type {QuestContinuityController | null} */
+let questContinuityController = null;
+/** @type {Promise<QuestContinuityController | null> | null} */
+let questContinuityControllerPromise = null;
+/** @type {"initial" | "new-quest" | "terminal" | "online" | null} */
+let questContinuityLoadKind = null;
+const failedQuestContinuityLoads = new Set();
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
-  onAuthenticationChange: syncDemoAccountAction
+  onAuthenticationChange: handleAuthenticationChange
 });
+/** @type {Promise<ReturnType<typeof import("./player/quest-conflict-view.js").createQuestConflictView>> | null} */
+let questConflictViewPromise = null;
+let questConflictViewRetry = false;
 const lifetimeView = createLifetimeView({
   onUnlock: openLifetimeCheckout
 });
@@ -214,6 +232,10 @@ let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterDaily = false;
 let resumeAfterRecords = false;
+let resumeAfterAccessSettings = false;
+let resumeAfterQuestConflict = false;
+/** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
+let deferredCloudQuest = null;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
@@ -250,8 +272,14 @@ const atlasView = createQuestAtlasView({
     resumeAfterAtlas = false;
   }
 });
+applyAccessSettings(loadAccessSettings());
+/** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
+let accessSettingsViewPromise = null;
+let accessSettingsOpening = false;
+let accessSettingsViewRetry = false;
 
 void initializeRunEntry();
+void playerController.isAuthenticated().then(handleAuthenticationChange);
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
@@ -394,6 +422,59 @@ elements.recordsButton.addEventListener("click", () => {
   renderRunRecords();
   elements.recordsDialog.showModal();
 });
+elements.settingsButton.addEventListener("click", async () => {
+  if (accessSettingsOpening) {
+    return;
+  }
+  accessSettingsOpening = true;
+  resumeAfterAccessSettings = run.status === "active";
+  if (resumeAfterAccessSettings) {
+    togglePause();
+  }
+  const retrying = accessSettingsViewRetry;
+  try {
+    if (!accessSettingsViewPromise) {
+      /** @type {Promise<typeof import("./player/access-settings-view.js")>} */
+      const viewModule = retrying
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("./player/access-settings-view.js?retry=1")
+        : import("./player/access-settings-view.js");
+      accessSettingsViewRetry = true;
+      accessSettingsViewPromise = viewModule.then(
+      ({ createAccessSettingsView }) =>
+        createAccessSettingsView({
+          onApply: (settings) => {
+            applyAccessSettings(settings);
+            renderer.render(run);
+          },
+          onClose: () => {
+            if (resumeAfterAccessSettings && run.status === "paused") {
+              togglePause();
+            }
+            resumeAfterAccessSettings = false;
+          },
+          onSave: () =>
+            announce("Explorer Access Settings saved on this device.")
+        })
+      );
+    }
+    const accessSettingsView = await accessSettingsViewPromise;
+    accessSettingsView.show(elements.settingsButton);
+  } catch {
+    accessSettingsViewPromise = null;
+    if (resumeAfterAccessSettings && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAccessSettings = false;
+    announce(
+      retrying
+        ? "Explorer Access Settings are unavailable. Reload to try again."
+        : "Explorer Access Settings are unavailable. Try again."
+    );
+  } finally {
+    accessSettingsOpening = false;
+  }
+});
 elements.recordsClose.addEventListener("click", () => {
   elements.recordsDialog.close();
 });
@@ -522,6 +603,12 @@ canvas.addEventListener("pointerup", (event) => {
 window.addEventListener("resize", () => {
   renderer.resize();
   renderer.render(run);
+});
+
+window.addEventListener("online", () => {
+  void loadQuestContinuityController("online").then((controller) =>
+    controller?.retry(loadQuestProgress()) ?? false
+  );
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -867,6 +954,9 @@ async function startNewQuest(levelId, seed) {
     return false;
   }
   questProgress = saveQuestProgress(nextProgress);
+  void loadQuestContinuityController("new-quest").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
+  );
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
   startRun(locator);
@@ -892,6 +982,9 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
   }
   questProgress = saveQuestProgress(
     createQuestProgress(levelId, labyrinthNumber)
+  );
+  void loadQuestContinuityController("new-quest").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
   );
   window.history.replaceState({}, "", "/play");
   startRun(locator);
@@ -1226,6 +1319,231 @@ function syncDemoAccountAction(signedIn) {
   elements.replay.dataset.resultAction = questComplete ? "new-quest" : "continue";
   elements.replay.textContent = questComplete ? "New Quest" : "Continue Quest";
   elements.freshRun.hidden = questComplete;
+}
+
+/** @param {boolean} signedIn */
+function handleAuthenticationChange(signedIn) {
+  syncDemoAccountAction(signedIn);
+  const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
+  void loadQuestContinuityController().then((controller) => {
+    if (!controller) {
+      return false;
+    }
+    controller.setAuthenticated(userId);
+    return userId ? controller.retry(loadQuestProgress()) : false;
+  });
+}
+
+/**
+ * @param {"initial" | "new-quest" | "terminal" | "online"} [loadKind]
+ * @returns {Promise<QuestContinuityController | null>}
+ */
+function loadQuestContinuityController(loadKind = "initial") {
+  if (questContinuityControllerPromise) {
+    if (loadKind === questContinuityLoadKind || loadKind === "initial") {
+      return questContinuityControllerPromise;
+    }
+    return questContinuityControllerPromise.then((controller) =>
+      controller ?? loadQuestContinuityController(loadKind)
+    );
+  }
+  if (failedQuestContinuityLoads.has(loadKind)) {
+    return Promise.resolve(null);
+  }
+  /** @type {Promise<typeof import("./player/quest-continuity-controller.js")>} */
+  let controllerModule;
+  if (loadKind === "new-quest") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=new-quest");
+  } else if (loadKind === "terminal") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=terminal");
+  } else if (loadKind === "online") {
+    // @ts-expect-error Vite treats the query as a separate retryable chunk.
+    controllerModule = import("./player/quest-continuity-controller.js?retry=online");
+  } else {
+    controllerModule = import("./player/quest-continuity-controller.js");
+  }
+  questContinuityLoadKind = loadKind;
+  const loading = controllerModule.then(({
+      createQuestContinuityController
+    }) => {
+      questContinuityController = createQuestContinuityController({
+        loadCloud: () => playerController.getCloudQuestProgress(),
+        saveCloud: (progress, revision) =>
+          playerController.saveCloudQuestProgress(progress, revision),
+        onConflict: showQuestConflict,
+        onProgress: receiveCloudQuestProgress,
+        onStatus: renderQuestSyncStatus
+      });
+      return questContinuityController;
+    }).catch(() => {
+      failedQuestContinuityLoads.add(loadKind);
+      if (questContinuityControllerPromise === loading) {
+        questContinuityControllerPromise = null;
+        questContinuityLoadKind = null;
+      }
+      renderQuestSyncStatus("offline");
+      return null;
+    });
+  questContinuityControllerPromise = loading;
+  return questContinuityControllerPromise;
+}
+
+/**
+ * @param {{ local: typeof questProgress, cloud: { progress: typeof questProgress, revision: number, updatedAt?: string } }} conflict
+ */
+function showQuestConflict(conflict) {
+  const trigger =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  const pauseActiveRun = run.status === "active";
+  resumeAfterQuestConflict ||= pauseActiveRun;
+  if (pauseActiveRun) {
+    togglePause();
+  }
+  if (elements.levelDialog.open) {
+    elements.levelDialog.close();
+  }
+  const retrying = questConflictViewRetry;
+  if (!questConflictViewPromise) {
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./player/quest-conflict-view.js?retry=1")
+      : import("./player/quest-conflict-view.js");
+    questConflictViewRetry = true;
+    questConflictViewPromise = viewModule.then(({ createQuestConflictView }) =>
+      createQuestConflictView({ onChoose: resolveQuestConflictChoice })
+    );
+  }
+  const loading = questConflictViewPromise;
+  void loading
+    .then((questConflictView) => questConflictView.show(conflict, trigger))
+    .catch(() => {
+      if (questConflictViewPromise === loading) {
+        questConflictViewPromise = null;
+      }
+      if (resumeAfterQuestConflict && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterQuestConflict = false;
+      announce(
+        retrying
+          ? "Cloud Quest choice is unavailable. Reload to try again."
+          : "Cloud Quest choice is unavailable. Your device Quest is safe."
+      );
+    });
+}
+
+/** @param {"local" | "cloud"} choice */
+function resolveQuestConflictChoice(choice) {
+  void loadQuestContinuityController().then((controller) =>
+    controller?.resolveConflict(choice) ?? false
+  ).then((resolved) => {
+    if (
+      resolved &&
+      resumeAfterQuestConflict &&
+      run.status === "paused"
+    ) {
+      togglePause();
+    }
+    if (resolved) {
+      resumeAfterQuestConflict = false;
+    }
+  });
+}
+
+/**
+ * @param {typeof questProgress} progress
+ * @param {"cloud" | "merged"} source
+ */
+function receiveCloudQuestProgress(progress, source) {
+  if (
+    dailyRequest.status !== "none" ||
+    activeDaily !== null ||
+    (activeRunLocator !== null &&
+      !runFinished &&
+      ["active", "paused", "challenge"].includes(run.status))
+  ) {
+    deferredCloudQuest = { progress, source };
+    return;
+  }
+  if (runFinished || run.status === "won" || run.status === "lost") {
+    installCloudQuestProgress(progress, false);
+    if (run.status === "won") {
+      saveNextBoundaryLocator();
+    }
+    return;
+  }
+  installCloudQuestProgress(progress);
+}
+
+function applyDeferredCloudQuest() {
+  if (!deferredCloudQuest) {
+    return;
+  }
+  const deferred = deferredCloudQuest.progress;
+  const nextProgress = selectDeferredQuestProgress(questProgress, deferred);
+  deferredCloudQuest = null;
+  installCloudQuestProgress(nextProgress, false);
+}
+
+/**
+ * @param {typeof questProgress} progress
+ * @param {boolean} [startRecoveredRun]
+ */
+function installCloudQuestProgress(progress, startRecoveredRun = true) {
+  questProgress = saveQuestProgress(progress);
+  currentLevel = getQuestLevel(questProgress.levelId);
+  currentLabyrinthNumber = questProgress.labyrinthNumber;
+  mustChooseLevel = false;
+
+  if (!startRecoveredRun) {
+    return;
+  }
+  activeRunLocator = null;
+  clearActiveRunLocator();
+  if (elements.levelDialog.open) {
+    elements.levelDialog.close();
+  }
+  if (questProgress.complete) {
+    completedQuestIdle = true;
+    updateInterface();
+    announce("Cloud Quest restored. Your Echo Atlas is complete.");
+    showEvent("Cloud Quest restored. Start a New Quest when ready.");
+    return;
+  }
+  void startFreshRun();
+}
+
+function saveNextBoundaryLocator() {
+  activeRunLocator = questProgress.complete
+    ? null
+    : saveActiveRunLocator(
+        createFreshLocator(
+          questProgress.levelId,
+          questProgress.labyrinthNumber
+        )
+      );
+  if (questProgress.complete) {
+    clearActiveRunLocator();
+  }
+}
+
+/**
+ * @param {"local" | "syncing" | "saved" | "offline" | "conflict"} status
+ */
+function renderQuestSyncStatus(status) {
+  const copy = {
+    local: "Device save",
+    syncing: "Saving to account…",
+    saved: "Account save",
+    offline: "Offline · Device save",
+    conflict: "Choose a Quest"
+  };
+  elements.questSyncStatus.dataset.state = status;
+  elements.questSyncStatus.textContent = copy[status];
 }
 
 /** @param {Direction | undefined} direction */
@@ -1599,6 +1917,7 @@ function updateInterface() {
     run.status === "challenge" || activeDaily !== null;
   elements.recordsButton.disabled =
     run.status === "challenge" || activeDaily !== null;
+  elements.settingsButton.disabled = run.status === "challenge";
   elements.newRun.textContent = activeDaily ? "Return to Quest" : "New Quest";
   elements.pause.textContent = completedQuestIdle
     ? "Quest complete"
@@ -1682,21 +2001,17 @@ function finishRun() {
       finishedLabyrinthNumber
     );
     questProgress = saveQuestProgress(advanceQuest(questProgress));
-    activeRunLocator = questProgress.complete
-      ? null
-      : saveActiveRunLocator(
-          createFreshLocator(
-            questProgress.levelId,
-            questProgress.labyrinthNumber
-          )
-        );
-    if (questProgress.complete) {
-      clearActiveRunLocator();
-    }
   } else {
     activeRunLocator = null;
     clearActiveRunLocator();
   }
+  applyDeferredCloudQuest();
+  if (won) {
+    saveNextBoundaryLocator();
+  }
+  void loadQuestContinuityController("terminal").then((controller) =>
+    controller?.queueBoundary(questProgress) ?? false
+  );
   window.history.replaceState({}, "", "/play");
 
   const questComplete = won && questProgress.complete;

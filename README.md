@@ -47,6 +47,13 @@ The original project is preserved at
   Explorers receive three server-authorized free Run starts. They can also
   claim a unique username, choose Explorer and playground colors, and submit
   escaped runs to the Global Scoreboard.
+- Signed-in Quest Progress saves to the account after a new Quest choice and
+  each escaped or defeated Labyrinth. Active position, timer, Question, and
+  Warden state never enter the cloud. Offline play keeps a local retry and
+  resumes syncing when the connection returns.
+- Same-Quest progress from two browsers merges completed boundaries and
+  Quest-wide map/Question uniqueness. Different Quests show both levels and
+  boundaries and wait for an explicit choice.
 - After the three signed-in starts, Lifetime Membership unlocks future Runs
   for `$5.99 USD` once. It is not a subscription, never renews, and never
   changes Warden difficulty, Vitality, score, or rewards.
@@ -62,7 +69,15 @@ The original project is preserved at
   Daily play never consumes Run Access or changes Quest Progress, the Echo
   Atlas, Run Records, cosmetics, or the Global Scoreboard.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
-  then moves; defeats rank by Echo progress.
+  then moves; defeats rank by Echo progress. Run Records remain device-local.
+- Open `Settings` to preview and save device-local stronger Fog contrast,
+  larger maze marks, reader-friendly Question text, or reduced visual effects.
+  These settings never alter Labyrinth geometry, timing, Questions, score, or
+  Quest Progress, and the operating-system reduced-motion preference is always
+  respected.
+- Signing out stops Cloud Quest requests but leaves the current local Quest on
+  that device. Account deletion must remove the Clerk-keyed cloud row; it
+  cannot erase local storage on another signed-out device.
 - New run guarantees a different seed and Labyrinth layout.
 - Sound is optional and never starts without player input.
 
@@ -113,6 +128,7 @@ DATABASE_URL=your-neon-pooled-connection-string
 VITE_CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_SECRET_KEY=your-clerk-secret-key
+CLERK_WEBHOOK_SIGNING_SECRET=your-clerk-webhook-signing-secret
 RUN_ACCESS_ENFORCEMENT_ENABLED=false
 STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
@@ -125,8 +141,13 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 The included `vercel.json` serves the Vite entry document for direct `/play`
 visits and refreshes; API functions remain at `/api/*`. The game remains
 playable in Guest mode when Clerk or Neon is unavailable. Guest runs continue
-to use the unchanged local Records tab. Configure all three Clerk variables and
-the database before presenting production sign-in as available.
+to use the unchanged local Records tab. Configure all Clerk variables and the
+database before presenting production sign-in as available.
+
+Configure a Clerk `user.deleted` webhook at `/api/clerk-webhook`. Its verified
+handler transactionally removes profile, score, access, purchase, Run-grant,
+and Cloud Quest rows for that Clerk identity. A missing or invalid webhook
+secret fails closed; it never accepts an unsigned deletion request.
 
 The browser reads the server-owned rollback state before admission; there is no
 client flag that can bypass it. `RUN_ACCESS_ENFORCEMENT_ENABLED=true` becomes
@@ -170,7 +191,8 @@ push.
 - `src/game/canvas-renderer.js` projects run state onto the Canvas.
 - `src/main.js` connects keyboard, touch, swipe, HUD, dialog, and timing.
 - `src/player/` owns Clerk session state, profile colors, score submission, and
-  the Global Scoreboard client.
+  the Global Scoreboard client. Its Quest continuity controller keeps an
+  offline boundary queue and resolves optimistic cloud revisions.
 - `server/player-*.js` validate profiles and escaped runs, compute scores, and
   read or write Neon without exposing Clerk IDs.
 - `server/run-access-*.js` owns row-locked, idempotent Run admission; the
@@ -183,9 +205,12 @@ push.
 - `src/learning/` and `server/learning-journal-*.js` own privacy-minimized
   Journal events, continuity, projection, and reviewed Practice.
 - `src/player/access-settings*.js` owns versioned presentation-only settings.
-- `src/game/daily-labyrinth.js` owns the UTC Daily contract and separate local
-  Personal Best record.
+- `server/clerk-webhook-route.js` verifies Clerk account-deletion events before
+  `server/user-deletion-store.js` removes all Clerk-keyed player data.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
+- `src/player/access-settings.js` owns the versioned, device-local
+  presentation contract; `src/player/access-settings-view.js` owns preview,
+  save, cancel, and canonical reset behavior.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 
 Game-rule decisions live under `docs/adr/`, including deterministic Warden

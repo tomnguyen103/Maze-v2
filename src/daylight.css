@@ -76,6 +76,21 @@ body {
   --color-pulse: var(--dusk-pulse);
 }
 
+:root[data-access-contrast="strong"] {
+  --color-fog: var(--access-fog);
+  --color-fog-soft: var(--access-fog-soft);
+  --color-fog-grid: var(--access-fog-grid);
+  --color-passage: var(--access-passage);
+  --color-wall: var(--access-wall);
+  --color-wall-grid: var(--access-wall-grid);
+  --color-wall-mark: var(--access-wall-mark);
+  --color-grid: var(--access-grid);
+}
+
+:root[data-access-marks="large"] {
+  --maze-mark-scale: 1.22;
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -375,6 +390,33 @@ a:active {
   font-family: var(--font-utility);
   font-size: 0.74rem;
   font-weight: 650;
+}
+
+.quest-sync-status {
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.66rem;
+}
+
+.quest-sync-status::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  background: var(--color-ink-muted);
+  content: "";
+}
+
+.quest-sync-status[data-state="saved"]::before {
+  background: var(--color-signal);
+}
+
+.quest-sync-status[data-state="offline"]::before,
+.quest-sync-status[data-state="conflict"]::before {
+  background: var(--color-warden);
 }
 
 .run-metrics {
@@ -761,6 +803,7 @@ kbd {
 }
 
 .atlas-dialog,
+.access-settings-dialog,
 .level-dialog,
 .daily-dialog,
 .challenge-dialog,
@@ -768,6 +811,7 @@ kbd {
 .player-dialog,
 .scoreboard-dialog,
 .lifetime-dialog,
+.quest-conflict-dialog,
 .result-dialog {
   width: min(36rem, calc(100% - 2rem));
   max-height: calc(100dvh - 2rem);
@@ -782,6 +826,7 @@ kbd {
 }
 
 .atlas-dialog::backdrop,
+.access-settings-dialog::backdrop,
 .level-dialog::backdrop,
 .daily-dialog::backdrop,
 .challenge-dialog::backdrop,
@@ -789,6 +834,7 @@ kbd {
 .player-dialog::backdrop,
 .scoreboard-dialog::backdrop,
 .lifetime-dialog::backdrop,
+.quest-conflict-dialog::backdrop,
 .result-dialog::backdrop {
   background: var(--color-overlay);
   backdrop-filter: blur(0.18rem);
@@ -796,9 +842,11 @@ kbd {
 
 .dialog-heading h2,
 .atlas-dialog h2,
+.access-settings-dialog h2,
 .player-dialog h2,
 .scoreboard-dialog h2,
 .lifetime-dialog h2,
+.quest-conflict-dialog h2,
 .result-dialog h2 {
   min-width: 0;
   margin: var(--space-1) 0 0;
@@ -819,8 +867,53 @@ kbd {
 
 .player-dialog .dialog-intro,
 .lifetime-dialog .dialog-intro,
+.quest-conflict-dialog .dialog-intro,
 .scoreboard-dialog .dialog-intro {
   font-size: 1rem;
+}
+
+.quest-conflict-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  border-width: 3px;
+}
+
+.quest-conflict-options {
+  display: grid;
+  margin-block: var(--space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.quest-conflict-choice {
+  display: flex;
+  min-width: 0;
+  min-height: 9rem;
+  padding: var(--space-4);
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 2px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.quest-conflict-choice strong {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.quest-conflict-choice > span:last-child {
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.72rem;
+}
+
+.quest-conflict-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .daily-contract {
@@ -905,6 +998,202 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   margin: var(--space-2) 0 var(--space-5);
   color: var(--color-ink-muted);
   font-size: 0.78rem;
+}
+
+.access-settings-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.access-settings-preview {
+  display: grid;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  gap: var(--space-2);
+  border: 2px solid var(--color-line);
+  background: var(--color-stone-raised);
+}
+
+.access-maze-preview {
+  position: relative;
+  display: grid;
+  min-height: 3.5rem;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-fog) 0 25%,
+      var(--color-passage) 25% 50%,
+      var(--color-wall) 50% 75%,
+      var(--color-passage) 75%
+    );
+}
+
+.access-preview-pulse {
+  position: absolute;
+  inset: 0;
+  background: var(--color-pulse);
+  animation: access-preview-pulse 1.6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.access-preview-mark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 1.35rem;
+  height: 1.35rem;
+  transform: scale(var(--maze-mark-scale));
+  transform-origin: center;
+  transition: transform var(--duration-reveal) var(--ease-out);
+}
+
+.access-preview-mark--explorer {
+  border: 0.28rem solid var(--color-explorer);
+  border-radius: 50%;
+  background: var(--color-night-deep);
+}
+
+.access-preview-mark--echo {
+  border: 0.22rem double var(--color-echo);
+  transform: rotate(45deg) scale(var(--maze-mark-scale));
+}
+
+.access-preview-mark--gate {
+  border: 0.22rem double var(--color-gate);
+  border-radius: 50% 50% 0 0;
+}
+
+.access-preview-mark--warden {
+  width: 0;
+  height: 0;
+  border-right: 0.75rem solid transparent;
+  border-bottom: 1.35rem solid var(--color-warden);
+  border-left: 0.75rem solid transparent;
+}
+
+.access-question-preview {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.access-answer-preview {
+  display: grid;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: var(--space-2);
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.access-answer-preview span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  background: var(--color-paper-deep);
+  font-family: var(--font-utility);
+}
+
+.access-answer-preview strong {
+  font-size: 0.95rem;
+}
+
+.access-settings-list {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-2);
+  border: 0;
+}
+
+.access-setting {
+  display: grid;
+  min-width: 0;
+  min-height: 4.5rem;
+  padding: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  border: 2px solid var(--color-line);
+  background: var(--color-panel);
+  cursor: pointer;
+}
+
+.access-setting:has(input:checked) {
+  background: var(--color-signal-glow);
+}
+
+.access-setting input {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: var(--space-1) 0 0;
+  accent-color: var(--color-signal-deep);
+}
+
+.access-setting strong,
+.access-setting small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.access-setting strong {
+  font-size: 0.95rem;
+}
+
+.access-setting small {
+  margin-top: var(--space-1);
+  color: var(--color-ink-muted);
+  font-size: 0.78rem;
+}
+
+.access-settings-status {
+  min-height: 1.3em;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.78rem;
+}
+
+.access-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+:root[data-access-type="reader"] .challenge-question,
+:root[data-access-type="reader"] .challenge-choice strong,
+:root[data-access-type="reader"] .challenge-feedback,
+:root[data-access-type="reader"] .challenge-source,
+:root[data-access-type="reader"] .access-question-preview,
+:root[data-access-type="reader"] .access-answer-preview strong,
+:root[data-access-type="reader"] .question-hint {
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+@keyframes access-preview-pulse {
+  from {
+    opacity: 0.12;
+  }
+
+  to {
+    opacity: 0.48;
+  }
 }
 
 .atlas-regions {
@@ -1752,7 +2041,11 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
     display: grid;
     width: 100%;
     padding: var(--space-2);
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .status-deck > * {
+    grid-column: 1 / -1;
   }
 
   .player-console {
@@ -1768,6 +2061,23 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
 
   .status-deck__heading {
     padding-inline: var(--space-1);
+  }
+
+  .quest-sync-status {
+    grid-row: 3;
+    grid-column: 2;
+    width: fit-content;
+    max-width: min(11rem, 46vw);
+    margin: var(--space-2) var(--space-1) 0 var(--space-2);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .quest-stage {
+    grid-row: 3;
+    grid-column: 1;
+    min-width: 0;
   }
 
   .run-metrics {
@@ -1907,10 +2217,13 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
 
   .command-bar button {
     min-width: 0;
+    padding-block: var(--space-1);
     padding-inline: var(--space-1);
     flex: 1 1 0;
     font-size: var(--text-compact);
+    line-height: 1.05;
     overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .play-grid {
@@ -1970,6 +2283,7 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   }
 
   .atlas-dialog,
+  .access-settings-dialog,
   .level-dialog,
   .daily-dialog,
   .challenge-dialog,
@@ -1977,12 +2291,14 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   .player-dialog,
   .scoreboard-dialog,
   .lifetime-dialog,
+  .quest-conflict-dialog,
   .result-dialog {
     padding: var(--space-4);
   }
 
   .daily-dialog__actions,
-  .lifetime-dialog__actions {
+  .lifetime-dialog__actions,
+  .quest-conflict-dialog__actions {
     flex-direction: column;
   }
 
@@ -2000,6 +2316,10 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   }
 
   .palette-options {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-conflict-options {
     grid-template-columns: 1fr;
   }
 }
@@ -2038,6 +2358,15 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+:root[data-access-effects="reduced"] *,
+:root[data-access-effects="reduced"] *::before,
+:root[data-access-effects="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
 }
 
 .landing-header,

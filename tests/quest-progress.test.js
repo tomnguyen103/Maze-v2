@@ -23,8 +23,9 @@ function createStorage() {
 
 describe("Quest Progress", () => {
   it("starts a twenty-Labyrinth Quest at the selected Quest Level", () => {
-    expect(createQuestProgress("maze-master")).toEqual({
+    expect(createQuestProgress("maze-master", 1, "quest_test_master")).toEqual({
       version: 1,
+      questId: "quest_test_master",
       levelId: "maze-master",
       labyrinthNumber: 1,
       completedLabyrinths: 0,
@@ -33,6 +34,14 @@ describe("Quest Progress", () => {
       nextQuestionOrdinal: 0,
       complete: false
     });
+  });
+
+  it("gives each intentionally started Quest a distinct opaque Quest ID", () => {
+    const first = createQuestProgress("trail-scout");
+    const second = createQuestProgress("trail-scout");
+
+    expect(first.questId).toMatch(/^quest_[a-z0-9-]+$/i);
+    expect(second.questId).not.toBe(first.questId);
   });
 
   it("remembers every generated map and rejects Quest repeats", () => {
@@ -121,6 +130,29 @@ describe("Quest Progress", () => {
       })
     );
     expect(loadQuestProgress(storage)).toBeNull();
+  });
+
+  it("migrates compatible legacy progress to one stable derived Quest ID", () => {
+    const storage = createStorage();
+    storage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 3,
+        completedLabyrinths: 2,
+        usedMapFingerprints: ["legacy-map"],
+        usedQuestionIds: ["legacy-question"],
+        nextQuestionOrdinal: 1,
+        complete: false
+      })
+    );
+
+    const first = loadQuestProgress(storage);
+    const second = loadQuestProgress(storage);
+
+    expect(first?.questId).toMatch(/^legacy_[a-z0-9]+$/);
+    expect(second?.questId).toBe(first?.questId);
   });
 
   it("restores completed Quest Progress until a new Quest is started", () => {

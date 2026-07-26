@@ -54,7 +54,7 @@ describe("Lifetime Membership dialog", () => {
     }
   );
 
-  it("shows transparent one-time pricing and local-progress disclosure", () => {
+  it("shows transparent one-time pricing and signed-in continuity disclosure", () => {
     createLifetimeView().showMembership();
 
     expect(document.getElementById("lifetime-title")?.textContent).toBe(
@@ -68,7 +68,9 @@ describe("Lifetime Membership dialog", () => {
     );
     expect(
       document.getElementById("lifetime-storage-note")?.textContent
-    ).toContain("this device");
+    ).toBe(
+      "Quest Progress follows your signed-in account at Labyrinth boundaries. Run Records stay on this device."
+    );
     expect(
       document.getElementById("lifetime-primary")?.getAttribute("aria-label")
     ).toBe("Unlock lifetime access - $5.99");

@@ -80,6 +80,9 @@ export function createPlayerApiClient({
     async getProfile() {
       return request("/api/profile");
     },
+    async getQuestProgress() {
+      return request("/api/quest-progress");
+    },
     /**
      * @param {{ username: FormDataEntryValue | string, explorerPalette: FormDataEntryValue | string, playgroundPalette: FormDataEntryValue | string }} profile
      */
@@ -97,6 +100,13 @@ export function createPlayerApiClient({
       return request("/api/access/runs", {
         method: "POST",
         body: JSON.stringify(run)
+      });
+    },
+    /** @param {Record<string, unknown>} progress @param {number} expectedRevision */
+    async saveQuestProgress(progress, expectedRevision) {
+      return request("/api/quest-progress", {
+        method: "PUT",
+        body: JSON.stringify({ progress, expectedRevision })
       });
     },
     async createLifetimeCheckout() {
