@@ -23,6 +23,17 @@ const ACTIVE_RUN_FIXTURE = {
   levelId: "maze-master",
   labyrinthNumber: 6
 };
+const CLOUD_QUEST_FIXTURE = {
+  version: 1,
+  questId: "quest_cloud_daily_123",
+  levelId: "bright-start",
+  labyrinthNumber: 12,
+  completedLabyrinths: 11,
+  usedMapFingerprints: [],
+  usedQuestionIds: [],
+  nextQuestionOrdinal: 0,
+  complete: false
+};
 const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   up: "ArrowUp",
   right: "ArrowRight",
@@ -242,6 +253,82 @@ test("reconstructs today's UTC Daily offline without spending Run Access", async
   expect(accessRequests).toEqual([]);
   expect(questionRequests).toEqual([]);
   await expectPreservedQuestState(page);
+});
+
+test("defers an asynchronous Cloud restore while a direct Daily is active", async ({
+  page
+}) => {
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
+  await preserveQuestState(page);
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onProgress }) {
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                document.documentElement.dataset.cloudRetryTest = "complete";
+                onProgress(${JSON.stringify(CLOUD_QUEST_FIXTURE)}, "cloud");
+                return Promise.resolve(true);
+              },
+              resolveConflict() { return Promise.resolve(false); }
+            };
+          }
+        `
+      });
+    }
+  );
+
+  await page.goto(`/play?daily=${daily.date}`);
+  await expect(page.locator("#seed-value")).toHaveText(daily.seed);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-cloud-retry-test",
+    "complete"
+  );
+
+  await expect(page.locator("#seed-value")).toHaveText(daily.seed);
+  await expect(page.locator("#quest-stage")).toContainText(
+    `Labyrinth ${daily.labyrinthNumber}`
+  );
+  await expect(page.locator("#quest-stage")).toContainText("Developing");
+  await expectPreservedQuestState(page);
+});
+
+test("retries the optional Cloud sync chunk after a transient load failure", async ({
+  page
+}) => {
+  /** @type {string[]} */
+  const pageErrors = [];
+  let chunkRequests = 0;
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      chunkRequests += 1;
+      if (chunkRequests <= 2) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    }
+  );
+
+  await page.goto("/play");
+  await page.locator('[data-level="trail-scout"]').click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect.poll(() => chunkRequests).toBe(2);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => chunkRequests).toBe(3);
+  expect(pageErrors).toEqual([]);
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
 });
 
 test("explains an expired UTC link and shares only today's public date", async ({

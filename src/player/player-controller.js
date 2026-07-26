@@ -74,6 +74,15 @@ export function createPlayerController({
     async getRunAccess() {
       return client.getRunAccess();
     },
+    async getCloudQuestProgress() {
+      await clerkBrowser.initialize();
+      return client.getQuestProgress();
+    },
+    /** @param {Record<string, unknown>} progress @param {number} expectedRevision */
+    async saveCloudQuestProgress(progress, expectedRevision) {
+      await clerkBrowser.initialize();
+      return client.saveQuestProgress(progress, expectedRevision);
+    },
     async createLifetimeCheckout() {
       await clerkBrowser.initialize();
       return client.createLifetimeCheckout();
@@ -85,6 +94,9 @@ export function createPlayerController({
     },
     hasAuthenticatedUser() {
       return Boolean(clerkBrowser.user);
+    },
+    getAuthenticatedUserId() {
+      return clerkBrowser.user?.id ?? null;
     },
     async isAuthenticated() {
       await clerkBrowser.initialize();
