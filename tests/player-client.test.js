@@ -149,6 +149,63 @@ describe("player client", () => {
       /^[a-z0-9_-]{12,128}$/
     );
   });
+
+  it("posts the stable Run id to the admission seam", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          allowed: true,
+          duplicate: false,
+          freeRunsRemaining: 2,
+          state: "free",
+          enforcementEnabled: true
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+
+    await expect(
+      client.authorizeRun({
+        runId: "access_01J1MOSSWATCH",
+        seed: "MOSS-WATCH-11",
+        levelId: "trail-scout",
+        labyrinthNumber: 4
+      })
+    ).resolves.toMatchObject({ allowed: true, freeRunsRemaining: 2 });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/access/runs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          runId: "access_01J1MOSSWATCH",
+          seed: "MOSS-WATCH-11",
+          levelId: "trail-scout",
+          labyrinthNumber: 4
+        })
+      })
+    );
+  });
+
+  it("reads the server enforcement flag without waiting for a Clerk token", async () => {
+    const getToken = vi.fn(() => new Promise(() => {}));
+    const client = createPlayerApiClient({
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ enforcementEnabled: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }),
+      getToken
+    });
+
+    await expect(client.getRunAccessConfig()).resolves.toEqual({
+      enforcementEnabled: false
+    });
+    expect(getToken).not.toHaveBeenCalled();
+  });
 });
 
 describe("player palettes", () => {

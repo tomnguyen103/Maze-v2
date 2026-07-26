@@ -68,6 +68,12 @@ export function createPlayerController({
   void initializeClerk();
 
   return {
+    async getRunAccessConfig() {
+      return client.getRunAccessConfig();
+    },
+    async getRunAccess() {
+      return client.getRunAccess();
+    },
     hasAuthenticatedUser() {
       return Boolean(clerkBrowser.user);
     },
@@ -80,6 +86,10 @@ export function createPlayerController({
         return true;
       }
       return clerkBrowser.openSignUp();
+    },
+    /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
+    async authorizeRun(run) {
+      return client.authorizeRun(run);
     },
     /** @param {number} nextScore */
     updateScore(nextScore) {

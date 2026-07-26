@@ -12,7 +12,16 @@ import {
   markGuestDemoPendingAuthentication,
   requiresDemoAccount
 } from "./game/demo-access.js";
-import { applyAction, createRun } from "./game/game-session.js";
+import {
+  applyAction,
+  createRun,
+  normalizeSeed
+} from "./game/game-session.js";
+import {
+  createRunAccessId,
+  runLocatorMatches,
+  withRunAccessId
+} from "./game/run-access.js";
 import {
   advanceQuest,
   createQuestProgress,
@@ -98,10 +107,25 @@ const locationSeed = seedFromLocation();
 const sharedParametersNeedNotice =
   locationSeed !== null && hasInvalidSharedParameters();
 const storedQuestProgress = loadQuestProgress();
-let activeRunLocator = locationSeed === null ? loadActiveRunLocator() : null;
+const normalizedLocationSeed =
+  locationSeed === null ? null : normalizeSeed(locationSeed);
+const sharedLocationFacts = {
+  seed: normalizedLocationSeed ?? "",
+  levelId: getQuestLevel(levelFromLocation()).id,
+  labyrinthNumber: labyrinthFromLocation() ?? 1
+};
+let activeRunLocator = loadActiveRunLocator();
+if (
+  locationSeed !== null &&
+  activeRunLocator &&
+  !runLocatorMatches(activeRunLocator, sharedLocationFacts)
+) {
+  activeRunLocator = null;
+}
 if (
   activeRunLocator &&
   storedQuestProgress &&
+  !activeRunLocator.pending &&
   (activeRunLocator.levelId !== storedQuestProgress.levelId ||
     activeRunLocator.labyrinthNumber !== storedQuestProgress.labyrinthNumber)
 ) {
@@ -129,9 +153,10 @@ let questProgress =
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
 let run = createRun(
-  locationSeed ?? activeRunLocator?.seed ?? createSeed(),
+  normalizedLocationSeed ?? activeRunLocator?.seed ?? createSeed(),
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
+run.status = "paused";
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: syncDemoAccountAction
@@ -149,7 +174,7 @@ let mustChooseLevel =
   locationSeed === null &&
   activeRunLocator === null &&
   storedQuestProgress === null;
-if (!mustChooseLevel) {
+if (!mustChooseLevel && !activeRunLocator?.pending) {
   questProgress = saveQuestProgress(questProgress);
 }
 /** @type {{ message: string, kind: string }[]} */
@@ -160,10 +185,11 @@ let touchStart = null;
 if (locationSeed !== null || activeRunLocator !== null) {
   const locator = activeRunLocator;
   void startSharedRun(
-    locationSeed ?? locator?.seed ?? createSeed(),
+    normalizedLocationSeed ?? locator?.seed ?? run.seed,
     currentLevel.id,
     currentLabyrinthNumber,
-    sharedParametersNeedNotice
+    sharedParametersNeedNotice,
+    locator?.runId
   );
 } else if (storedQuestProgress !== null) {
   void startFreshRun();
@@ -404,19 +430,20 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /**
- * @param {string} seed
- * @param {string} [levelId]
- * @param {number} [labyrinthNumber]
+ * @param {{
+ *   version: 2,
+ *   runId: string,
+ *   pending: boolean,
+ *   seed: string,
+ *   levelId: string,
+ *   labyrinthNumber: number
+ * }} locator
  */
-function startRun(
-  seed,
-  levelId = currentLevel.id,
-  labyrinthNumber = questProgress.labyrinthNumber
-) {
-  currentLevel = getQuestLevel(levelId);
-  currentLabyrinthNumber = labyrinthNumber;
+function startRun(locator) {
+  currentLevel = getQuestLevel(locator.levelId);
+  currentLabyrinthNumber = locator.labyrinthNumber;
   run = createRun(
-    seed,
+    locator.seed,
     getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
   );
   const fingerprint = labyrinthFingerprint(run);
@@ -424,10 +451,8 @@ function startRun(
     questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
   }
   activeRunLocator = saveActiveRunLocator({
-    version: 1,
-    seed: run.seed,
-    levelId: currentLevel.id,
-    labyrinthNumber: currentLabyrinthNumber
+    ...locator,
+    pending: false
   });
   lastTick = performance.now();
   questionRequestKey = "";
@@ -456,20 +481,21 @@ function startRun(
 }
 
 async function startFreshRun() {
-  if (!(await canStartAnotherLabyrinth())) {
-    return false;
-  }
   const levelId = questProgress.levelId;
   const labyrinthNumber = questProgress.labyrinthNumber;
+  let locator;
   if (
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
-    startRun(activeRunLocator.seed, levelId, labyrinthNumber);
-    return true;
+    locator = withRunAccessId(activeRunLocator);
+  } else {
+    locator = createFreshLocator(levelId, labyrinthNumber);
   }
-  const locator = createFreshLocator(levelId, labyrinthNumber);
-  startRun(locator.seed, levelId, labyrinthNumber);
+  if (!(await authorizeRunLocator(locator))) {
+    return false;
+  }
+  startRun(locator);
   return true;
 }
 
@@ -478,12 +504,26 @@ async function startFreshRun() {
  * @param {string} levelId
  * @param {number} labyrinthNumber
  * @param {boolean} [showAdjustedNotice]
+ * @param {string} [runId]
  */
-async function startSharedRun(seed, levelId, labyrinthNumber, showAdjustedNotice = false) {
-  if (!(await canStartAnotherLabyrinth())) {
+async function startSharedRun(
+  seed,
+  levelId,
+  labyrinthNumber,
+  showAdjustedNotice = false,
+  runId
+) {
+  const locator = withRunAccessId({
+    version: runId ? 2 : 1,
+    ...(runId ? { runId } : {}),
+    seed,
+    levelId,
+    labyrinthNumber
+  });
+  if (!(await authorizeRunLocator(locator))) {
     return false;
   }
-  startRun(seed, levelId, labyrinthNumber);
+  startRun(locator);
   if (showAdjustedNotice) {
     announce("This share link was adjusted to a safe Labyrinth.");
     showEvent("This share link was adjusted to a safe Labyrinth.");
@@ -506,12 +546,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     }
     const candidate = createRun(seed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
-      return {
-        version: 1,
+      return withRunAccessId({
+        version: 2,
+        runId: createRunAccessId(),
+        pending: false,
         seed: candidate.seed,
         levelId: level.id,
         labyrinthNumber
-      };
+      });
     }
   }
 
@@ -519,12 +561,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     const fallbackSeed = `EMBER-${17 + attempt}`;
     const candidate = createRun(fallbackSeed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
-      return {
-        version: 1,
+      return withRunAccessId({
+        version: 2,
+        runId: createRunAccessId(),
+        pending: false,
         seed: candidate.seed,
         levelId: level.id,
         labyrinthNumber
-      };
+      });
     }
   }
 
@@ -533,19 +577,28 @@ function createFreshLocator(levelId, labyrinthNumber) {
 
 /** @param {string} levelId @param {string} [seed] */
 async function startNewQuest(levelId, seed) {
-  if (!(await canStartAnotherLabyrinth())) {
+  const nextProgress = createQuestProgress(levelId);
+  const locator = seed
+    ? withRunAccessId({
+        version: 2,
+        runId: createRunAccessId(),
+        pending: false,
+        seed,
+        levelId: nextProgress.levelId,
+        labyrinthNumber: nextProgress.labyrinthNumber
+      })
+    : createFreshLocator(
+        nextProgress.levelId,
+        nextProgress.labyrinthNumber
+      );
+  if (!(await authorizeRunLocator(locator))) {
     return false;
   }
-  questProgress = saveQuestProgress(createQuestProgress(levelId));
+  questProgress = saveQuestProgress(nextProgress);
   currentLabyrinthNumber = questProgress.labyrinthNumber;
-  activeRunLocator = null;
-  clearActiveRunLocator();
   window.history.replaceState({}, "", "/play");
-  if (seed) {
-    startRun(seed, questProgress.levelId, currentLabyrinthNumber);
-    return true;
-  }
-  return startFreshRun();
+  startRun(locator);
+  return true;
 }
 
 /**
@@ -554,19 +607,27 @@ async function startNewQuest(levelId, seed) {
  * @param {string} seed
  */
 async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
-  if (!(await canStartAnotherLabyrinth())) {
+  const locator = withRunAccessId({
+    version: 2,
+    runId: createRunAccessId(),
+    pending: false,
+    seed,
+    levelId,
+    labyrinthNumber
+  });
+  if (!(await authorizeRunLocator(locator))) {
     return false;
   }
   questProgress = saveQuestProgress(
     createQuestProgress(levelId, labyrinthNumber)
   );
   window.history.replaceState({}, "", "/play");
-  startRun(seed, questProgress.levelId, questProgress.labyrinthNumber);
+  startRun(locator);
   return true;
 }
 
 async function openLevelPicker() {
-  if (!(await canStartAnotherLabyrinth())) {
+  if (!(await canOpenStartChoice())) {
     return false;
   }
   mustChooseLevel = false;
@@ -579,7 +640,18 @@ async function openLevelPicker() {
   return true;
 }
 
-async function canStartAnotherLabyrinth() {
+/** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number } & Record<string, unknown>} locator */
+async function authorizeRunLocator(locator) {
+  activeRunLocator = saveActiveRunLocator(
+    /** @type {Parameters<typeof saveActiveRunLocator>[0]} */ ({
+      ...locator,
+      pending: true
+    })
+  );
+  return canStartAnotherLabyrinth(locator);
+}
+
+async function canOpenStartChoice() {
   if (
     !demoAccessPending ||
     !requiresDemoAccount(playerController.hasAuthenticatedUser())
@@ -587,7 +659,10 @@ async function canStartAnotherLabyrinth() {
     demoAccessPending = false;
     return true;
   }
-  if (await playerController.isAuthenticated()) {
+  const signedIn =
+    playerController.hasAuthenticatedUser() ||
+    await playerController.isAuthenticated();
+  if (signedIn) {
     clearPendingGuestDemo();
     demoAccessPending = false;
     return true;
@@ -596,13 +671,86 @@ async function canStartAnotherLabyrinth() {
   return false;
 }
 
+/** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator */
+async function canStartAnotherLabyrinth(locator) {
+  let config;
+  try {
+    config = await playerController.getRunAccessConfig();
+  } catch {
+    const signedIn =
+      playerController.hasAuthenticatedUser() ||
+      await playerController.isAuthenticated();
+    if (!signedIn) {
+      return canOpenStartChoice();
+    }
+    announce("Run access could not be checked. Try again.");
+    showEvent("Run access could not be checked. Your Run was not consumed.");
+    return false;
+  }
+  if (!config.enforcementEnabled) {
+    return canOpenStartChoice();
+  }
+  const signedIn =
+    playerController.hasAuthenticatedUser() ||
+    await playerController.isAuthenticated();
+  if (demoAccessPending && !signedIn && requiresDemoAccount(false)) {
+    showDemoAccountGate();
+    return false;
+  }
+  if (!signedIn) {
+    demoAccessPending = false;
+    return true;
+  }
+  if (demoAccessPending) {
+    clearPendingGuestDemo();
+    demoAccessPending = false;
+  }
+  try {
+    const access = await playerController.authorizeRun(locator);
+    if (access.allowed) {
+      markGuestDemoComplete();
+      return true;
+    }
+    showRunAccessGate(access);
+    return false;
+  } catch {
+    announce("Run access could not be checked. Try again.");
+    showEvent("Run access could not be checked. Your Run was not consumed.");
+    return false;
+  }
+}
+
+/** @param {{ state: string, freeRunsRemaining: number }} access */
+function showRunAccessGate(access) {
+  elements.resultKicker.textContent = "Explorer access";
+  const membershipNeedsAttention = access.state === "membership-blocked";
+  elements.resultTitle.textContent = membershipNeedsAttention
+    ? "Lifetime access needs attention."
+    : "Your three free Runs are complete.";
+  elements.resultSummary.textContent = membershipNeedsAttention
+    ? "This account's purchase was refunded or disputed. Your current Labyrinth is saved; ask a parent or guardian to contact support."
+    : "Lifetime Membership is $5.99 once, with no subscription or renewal. Your next Labyrinth is saved.";
+  elements.replay.dataset.resultAction = "access-blocked";
+  elements.replay.textContent = "See Lifetime Membership";
+  elements.freshRun.hidden = true;
+  if (elements.levelDialog.open) {
+    elements.levelDialog.close();
+  }
+  if (!elements.resultDialog.open) {
+    elements.resultDialog.showModal();
+  }
+  announce(membershipNeedsAttention
+    ? "Lifetime access needs attention before a new Run can start."
+    : `No free Runs remain. Lifetime Membership is $5.99 once. ${access.freeRunsRemaining} free Runs remaining.`);
+}
+
 function showDemoAccountGate() {
   elements.resultKicker.textContent = "Demo complete";
-  elements.resultTitle.textContent = "Create an account to continue.";
+  elements.resultTitle.textContent = "Create an account for three free Runs.";
   elements.resultSummary.textContent =
-    "You completed your free Labyrinth. Create an account to continue your Quest.";
+    "You completed your Guest Run. Create an account to start three more Runs and continue your Quest.";
   elements.replay.dataset.resultAction = "create-account";
-  elements.replay.textContent = "Create account to continue";
+  elements.replay.textContent = "Create account for three Runs";
   elements.freshRun.hidden = true;
   if (elements.levelDialog.open) {
     elements.levelDialog.close();
@@ -613,7 +761,7 @@ function showDemoAccountGate() {
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
-  announce("Your free Labyrinth is complete. Create an account to continue.");
+  announce("Your Guest Run is complete. Create an account for three free Runs.");
 }
 
 async function requestDemoAccount() {

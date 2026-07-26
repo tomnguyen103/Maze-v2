@@ -4,7 +4,9 @@ const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
 
 /**
  * @typedef {{
- *   version: 1,
+ *   version: 1 | 2,
+ *   runId?: string,
+ *   pending?: boolean,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
  *   labyrinthNumber: number
@@ -39,7 +41,7 @@ export function loadActiveRunLocator(storage = globalThis.localStorage) {
 }
 
 /**
- * @param {{ version: number, seed: string, levelId: string, labyrinthNumber: number }} locator
+ * @param {{ version: number, runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number }} locator
  * @param {StorageLike | undefined} [storage]
  * @returns {ActiveRunLocator}
  */
@@ -75,7 +77,11 @@ function normalizeLocator(value) {
   }
   const candidate = /** @type {Partial<ActiveRunLocator>} */ (value);
   if (
-    candidate.version !== 1 ||
+    (candidate.version !== 1 && candidate.version !== 2) ||
+    (candidate.version === 2 &&
+      (typeof candidate.runId !== "string" ||
+        !/^[a-zA-Z0-9_-]{12,128}$/.test(candidate.runId) ||
+        typeof candidate.pending !== "boolean")) ||
     typeof candidate.seed !== "string" ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(candidate.seed) ||
     candidate.seed.length > 24 ||
@@ -89,7 +95,10 @@ function normalizeLocator(value) {
     return null;
   }
   return {
-    version: 1,
+    version: candidate.version,
+    ...(candidate.version === 2
+      ? { runId: candidate.runId, pending: candidate.pending }
+      : {}),
     seed: candidate.seed,
     levelId: candidate.levelId,
     labyrinthNumber: Number(candidate.labyrinthNumber)

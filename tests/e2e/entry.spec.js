@@ -72,10 +72,10 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
     )
     .toBe(JSON.stringify({ version: 1, completed: true }));
   await expect(
-    page.getByRole("dialog", { name: "Create an account to continue." })
+    page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create account to continue" })
+    page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Choose your Quest Level" })
@@ -83,12 +83,12 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
 
   await page.reload();
   await expect(
-    page.getByRole("dialog", { name: "Create an account to continue." })
+    page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
 
   await page.goto("/play?seed=DEMO-GATE&level=trail-scout&labyrinth=2");
   await expect(
-    page.getByRole("dialog", { name: "Create an account to continue." })
+    page.getByRole("dialog", { name: "Create an account for three free Runs." })
   ).toBeVisible();
 });
 
@@ -106,11 +106,11 @@ test("hands the top layer from the demo gate to Clerk account creation", async (
   await page.goto("/play");
 
   const demoGate = page.getByRole("dialog", {
-    name: "Create an account to continue."
+    name: "Create an account for three free Runs."
   });
   await expect(demoGate).toBeVisible();
   await page
-    .getByRole("button", { name: "Create account to continue" })
+    .getByRole("button", { name: "Create account for three Runs" })
     .click();
 
   await expect(demoGate).not.toBeVisible();
@@ -145,6 +145,7 @@ test("copies an explicit share link without changing normal gameplay URL", async
 }) => {
   await page.goto("/play");
   await page.getByRole("button", { name: /Trail Scout/ }).click();
+  await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();
   await page.evaluate(() => {
     Object.defineProperty(navigator, "clipboard", {
@@ -171,6 +172,20 @@ test("copies an explicit share link without changing normal gameplay URL", async
 
   await page.goto(`${shareLink.pathname}${shareLink.search}`);
   await expect(page.locator("#seed-value")).toHaveText(seed ?? "");
+  const firstAccessRunId = await page.evaluate(() => {
+    const locator = JSON.parse(
+      localStorage.getItem("echo-maze:active-run:v1") ?? "null"
+    );
+    return locator?.runId;
+  });
+  await page.reload();
+  const reloadedAccessRunId = await page.evaluate(() => {
+    const locator = JSON.parse(
+      localStorage.getItem("echo-maze:active-run:v1") ?? "null"
+    );
+    return locator?.runId;
+  });
+  expect(reloadedAccessRunId).toBe(firstAccessRunId);
   await expect(page.locator("#quest-stage")).toHaveText(
     /Labyrinth 1 of 20.*Foundation/
   );
@@ -181,6 +196,7 @@ test("restarts the same active Labyrinth after a clean play-route refresh", asyn
 }) => {
   await page.goto("/play");
   await page.getByRole("button", { name: /Trail Scout/ }).click();
+  await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();
 
   await page.reload();
