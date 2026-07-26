@@ -31,8 +31,8 @@ async function startGameplay() {
   gameRoot.replaceChildren(gameTemplate.content.cloneNode(true));
   try {
     await import("./main.js");
-  } catch (error) {
-    console.error("Echo Maze gameplay failed to load.", error);
+  } catch {
+    console.error("Echo Maze gameplay failed to load.");
     gameRoot.innerHTML = `
       <main class="landing-page" id="landing-main">
         <p class="section-label">Maze unavailable</p>

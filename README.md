@@ -21,6 +21,18 @@ The original project is preserved at
 - Open `Atlas` to inspect the five-region, twenty-Labyrinth Echo Atlas. It is
   derived from Quest Progress, pauses the Run while open, and restores one
   cosmetic region Sigil after each fourth Labyrinth.
+- Signed-in Quest Progress syncs only at Labyrinth boundaries. Offline changes
+  retry safely, same-Quest history merges monotonically, and different Quests
+  require an explicit keep-local or use-cloud choice. Active Runs stay local.
+- Open `Journal` to review bounded learning outcomes by objective, clear them
+  separately, or try a different reviewed Practice Question. Practice never
+  changes the active Run, access, score, Vitality, timer, or Quest Progress.
+- Explorer Access Settings can strengthen Fog contrast, enlarge maze marks,
+  use reader-friendly Question text, and reduce effects. Preview, Save, Cancel,
+  and Reset change presentation only.
+- Daily Shared Labyrinth offers one deterministic casual maze per UTC date.
+  Its Personal Best, share link, rollover, and expiry behavior remain separate
+  from Quest, Atlas, Run Access, Records, and global scores.
 - Wardens move after each valid action. They Patrol objectives, Hunt nearby
   Explorers, and Intercept predictable movement.
 - Meeting a Warden pauses the timer. Answer correctly to defeat it; answer
@@ -85,6 +97,8 @@ For Vercel, connect the Neon project and apply the migrations in order:
 1. `db/migrations/0001_players_and_scores.sql`
 2. `db/migrations/0002_run_access.sql`
 3. `db/migrations/0003_lifetime_membership.sql`
+4. `db/migrations/0004_cloud_quest_progress.sql`
+5. `db/migrations/0005_lantern_journal.sql`
 
 Then set:
 
@@ -155,6 +169,14 @@ push.
   browser keeps its stable opaque Run id in the active locator.
 - `server/lifetime-*.js` and `server/stripe-lifetime.js` own fixed-price
   Checkout verification, replay-safe webhooks, and durable entitlement state.
+- `src/game/quest-continuity.js`, `src/player/quest-continuity-controller.js`,
+  and `server/quest-progress-*.js` own boundary-only cloud continuity and
+  explicit conflict recovery.
+- `src/learning/` and `server/learning-journal-*.js` own privacy-minimized
+  Journal events, continuity, projection, and reviewed Practice.
+- `src/player/access-settings*.js` owns versioned presentation-only settings.
+- `src/game/daily-labyrinth.js` owns the UTC Daily contract and separate local
+  Personal Best record.
 - `src/game/audio.js` and `src/game/storage.js` isolate optional browser APIs.
 - `tokens.css` and `src/daylight.css` contain the active visual system.
 

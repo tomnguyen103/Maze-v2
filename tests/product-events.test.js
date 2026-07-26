@@ -59,4 +59,42 @@ describe("privacy-minimized product events", () => {
       outcome: "processed"
     });
   });
+
+  it("drops unsafe values even when their field names are allowlisted", () => {
+    const write = vi.fn();
+    const record = createProductEventRecorder({ write });
+
+    record("lifetime_webhook", {
+      eventType: "raw webhook body: sk_test_secret",
+      outcome: "card 4242 4242 4242 4242"
+    });
+    record("run_access_error", {
+      category: "session token: bearer-secret"
+    });
+
+    expect(write).toHaveBeenNthCalledWith(1, {
+      event: "lifetime_webhook"
+    });
+    expect(write).toHaveBeenNthCalledWith(2, {
+      event: "run_access_error"
+    });
+  });
+
+  it("keeps only bounded booleans and known access states", () => {
+    const write = vi.fn();
+    const record = createProductEventRecorder({ write });
+
+    record("run_access_decision", {
+      accessState: "must-not-leak",
+      duplicate: "true",
+      enforcementEnabled: true,
+      outcome: "admitted"
+    });
+
+    expect(write).toHaveBeenCalledWith({
+      enforcementEnabled: true,
+      event: "run_access_decision",
+      outcome: "admitted"
+    });
+  });
 });

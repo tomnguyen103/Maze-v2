@@ -4,18 +4,11 @@ import { fileURLToPath } from "node:url";
 import { createQuestionHandler } from "./server/question-route.js";
 import { createQuestionService } from "./server/question-service.js";
 import { createPlayerApi } from "./server/player-api.js";
+import { logProviderFallback } from "./server/safe-error-log.js";
 
 const app = express();
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT) || 3000;
-
-/** @param {unknown} error */
-function logProviderFallback(error) {
-  const message = error instanceof Error ? error.message : "Unknown provider error";
-  console.warn(
-    `[questions] AI provider unavailable; using bundled deck: ${message}`
-  );
-}
 
 const questionService = createQuestionService({
   onProviderError: logProviderFallback

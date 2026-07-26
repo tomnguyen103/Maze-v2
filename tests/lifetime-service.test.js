@@ -364,6 +364,47 @@ describe("Lifetime Membership service", () => {
       purchaseId: PURCHASE_ID,
       state: "disputed"
     });
+    expect(deps.recordEvent).toHaveBeenCalledWith("lifetime_webhook", {
+      eventType: "charge.dispute.created",
+      outcome: "processed"
+    });
+  });
+
+  it("records a bounded outcome when Checkout closes", async () => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_expired",
+      type: "checkout.session.expired",
+      created: 102,
+      data: { object: { id: SESSION_ID } }
+    });
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).resolves.toEqual({ outcome: "processed" });
+    expect(deps.recordEvent).toHaveBeenCalledWith("lifetime_webhook", {
+      eventType: "checkout.session.expired",
+      outcome: "processed"
+    });
+  });
+
+  it("records an ignored outcome without copying an unknown provider type", async () => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_unknown",
+      type: "customer.secret_payload",
+      created: 103,
+      data: { object: { raw: "must-not-leak" } }
+    });
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).resolves.toEqual({ outcome: "ignored" });
+    expect(deps.recordEvent).toHaveBeenCalledWith("lifetime_webhook", {
+      outcome: "ignored"
+    });
   });
 
   it("uses cumulative Stripe state before revoking split refunds", async () => {

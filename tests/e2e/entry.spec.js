@@ -119,6 +119,16 @@ test("hands the top layer from the demo gate to Clerk account creation", async (
 });
 
 test("shows a recovery action when gameplay code cannot load", async ({ page }) => {
+  /** @type {string[]} */
+  const gameplayErrors = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      message.text().startsWith("Echo Maze gameplay failed to load.")
+    ) {
+      gameplayErrors.push(message.text());
+    }
+  });
   await page.route(
     /\/(?:src\/main\.js|assets\/main-[^/]+\.js)(?:\?.*)?$/,
     (route) => route.abort()
@@ -129,6 +139,7 @@ test("shows a recovery action when gameplay code cannot load", async ({ page }) 
   await expect(
     page.getByRole("heading", { name: "Echo Maze could not load." })
   ).toBeVisible();
+  expect(gameplayErrors).toEqual(["Echo Maze gameplay failed to load."]);
   const retryLink = page.getByRole("link", { name: "Try again" });
   await expect(retryLink).toBeVisible();
   const retryUrl = new URL(

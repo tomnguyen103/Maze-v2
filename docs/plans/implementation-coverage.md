@@ -2,11 +2,10 @@
 
 **Opened:** 2026-07-25
 
-**Live baseline:** `9391e04` on `main`; signed-in allowance and lifetime
-membership are merged through PRs #49-#50. Current #43 worktree proof includes
-248 passing Vitest cases plus 60 passing Playwright cases with 4 intentional
-environment/project skips, including complete desktop/mobile Atlas and
-Labyrinth 4 Gate Warden journeys. Merge remains pending.
+**Live baseline:** `7702dff` on `main`; signed-in allowance, lifetime
+membership, Echo Atlas, and Gate Wardens are merged through PRs #49-#51.
+Integrated follow-on feature and release-closure evidence is recorded below
+only after its PR is merged and the final local gate passes.
 
 **Authority:** the attached implementation approval, then `AGENTS.md`, then the
 combined master plan. A source document being marked draft or superseded does
@@ -32,11 +31,11 @@ are updated only from verified evidence.
 | C11 | Refund, dispute, restored-funds, duplicate Checkout, outage, and account recovery behavior | Master 8.7, 15, T8-T10/T17, 22.2; Membership 5.2, 8.5, 9-12, M8-M9 | Missing | Normalize provider state; active Run may finish; gate next start; publish support runbook | #42 | Replay and same-second lifecycle tests plus `docs/lifetime-membership-operations.md`; merged PR #50 |
 | C12 | Lifetime entitlement follows Clerk account across browsers without normal Stripe calls | Master 7.7, 8.2, 13-14, 22.5; Membership 2.3, 5-7, 14 | Missing | Read durable entitlement from PostgreSQL through access API | #42 | Two independent development-Neon pools using the same Clerk identity proved `allowed=true`, `state=member` with no Stripe call on second-browser admission; merged PR #50 |
 | C13 | Purchase UI says `$5.99 once`, `lifetime access`, `no subscription`, `no renewal`; parent help; `Not now`; no dark patterns | Master 7.6, 11.3-11.6, 16, T10; Membership 8, M8 | Missing | Focused accessible dialog with transparent Atlas/value summary and no embedded card fields | #42 | View tests plus desktop/mobile, 200% text, 320/375/414/768 responsive, focus, contrast, and 58-gate Hallmark proof; merged PR #50 |
-| C14 | Five-region, twenty-node Echo Atlas derived from Quest Progress | Master 7.4, 9, 11.5, T11-T12, 22.3; Roadmap 8 Tasks 1-2/5-6 | Missing | Pure immutable Atlas projection plus focused overlay; no new progress store | #43 | `quest-atlas` projection/view tests and 5-region/20-node browser proof pass; merge pending |
-| C15 | Atlas state is non-color-only, keyboard/screen-reader discoverable, timer-pausing, mobile/zoom/reduced-motion safe | Master 9.6, 16, T12, 22.3; Roadmap 8.7 Tasks 5-6 | Missing | Dialog focus trap/return, text state labels, five region headings, responsive node grid | #43 | Text labels, accessible names, current-node focus, pause/return-focus, 320 px, 200% text, reduced-motion, desktop/mobile proof pass; merge pending |
-| C16 | Gate Wardens occur only at 4, 8, 12, 16, 20 and reuse one configured Warden without raising score ceiling | Master 7.5, 10, T13, 22.4; Roadmap 8 Tasks 1/3 | Missing | Pure milestone classifier and reserved-Warden state inside deterministic Run config | #43 | Exact milestone, fixed-seed, configured-count, score-ceiling, and non-milestone shape tests pass; merge pending |
-| C17 | Gate Warden appears after Echo recovery; sealed/open Gate states; normal Question, Vitality, Hint, Skip, fallback, and paused timer rules | Master 10.3-10.5, T14-T15, 22.4; Roadmap 8.2-8.7 Tasks 3-6 | Missing | Extend current transition interface; reuse current Question controller and accessible presentation | #43 | Locked/correct/wrong/defeat/Hint/Skip tests plus forced-provider-fallback desktop/mobile Labyrinth 4 passages pass; merge pending |
-| C18 | Atlas milestones create derived cosmetic sigils and memorable victory feedback, never currency or power | Master 9.7, 10.4; Roadmap 8.1-8.3 | Missing | Derive one sigil per completed four-Labyrinth region; celebrate in results and Atlas | #43 | Derived sigil counts and compact result milestone proof pass with no storage migration; merge pending |
+| C14 | Five-region, twenty-node Echo Atlas derived from Quest Progress | Master 7.4, 9, 11.5, T11-T12, 22.3; Roadmap 8 Tasks 1-2/5-6 | Missing | Pure immutable Atlas projection plus focused overlay; no new progress store | #43 | `quest-atlas` projection/view tests and 5-region/20-node browser proof; merged PR #51 |
+| C15 | Atlas state is non-color-only, keyboard/screen-reader discoverable, timer-pausing, mobile/zoom/reduced-motion safe | Master 9.6, 16, T12, 22.3; Roadmap 8.7 Tasks 5-6 | Missing | Dialog focus trap/return, text state labels, five region headings, responsive node grid | #43 | Text labels, accessible names, current-node focus, pause/return-focus, 320 px, 200% text, reduced-motion, desktop/mobile proof; merged PR #51 |
+| C16 | Gate Wardens occur only at 4, 8, 12, 16, 20 and reuse one configured Warden without raising score ceiling | Master 7.5, 10, T13, 22.4; Roadmap 8 Tasks 1/3 | Missing | Pure milestone classifier and reserved-Warden state inside deterministic Run config | #43 | Exact milestone, fixed-seed, configured-count, score-ceiling, and non-milestone shape tests; merged PR #51 |
+| C17 | Gate Warden appears after Echo recovery; sealed/open Gate states; normal Question, Vitality, Hint, Skip, fallback, and paused timer rules | Master 10.3-10.5, T14-T15, 22.4; Roadmap 8.2-8.7 Tasks 3-6 | Missing | Extend current transition interface; reuse current Question controller and accessible presentation | #43 | Locked/correct/wrong/defeat/Hint/Skip tests plus forced-provider-fallback desktop/mobile Labyrinth 4 passages; merged PR #51 |
+| C18 | Atlas milestones create derived cosmetic sigils and memorable victory feedback, never currency or power | Master 9.7, 10.4; Roadmap 8.1-8.3 | Missing | Derive one sigil per completed four-Labyrinth region; celebrate in results and Atlas | #43 | Derived sigil counts and compact result milestone proof with no storage migration; merged PR #51 |
 | C19 | Cloud Quest Continuity syncs only boundary progress, preserves uniqueness, migrates local state, supports offline retry | Master 17/25; Roadmap 9, Release B | Missing | Versioned authenticated cloud Quest record; active Run remains device-local | #44 | Store/route/offline/two-device tests pending |
 | C20 | Same-Quest conflicts merge monotonic history; incompatible Quests require explicit player choice; no silent overwrite | Roadmap 9 Acceptance/vertical slices | Missing | Optimistic revision and explicit conflict dialog comparing Quest Level and boundary | #44 | Conflict fixtures and browser tests pending |
 | C21 | Lantern Journal remembers bounded reviewed learning outcomes and can be cleared separately | Master 17/25; Roadmap 10, Release D | Missing | Add allowlisted `topicId` and `learningObjectiveId`; local bounded attempt-event projection | #45 | Metadata validation/projection/clear tests pending |
@@ -44,11 +43,51 @@ are updated only from verified evidence.
 | C23 | Explorer Access Settings: stronger contrast, larger marks, reader-friendly Questions, reduced effects, preview/save/reset | Master 17/25; Roadmap 11, Release E | Missing | Versioned local presentation-only settings adapter; default remains `design.md` | #46 | Deterministic rendering and mobile/zoom tests pending |
 | C24 | Daily Shared Labyrinth is date-deterministic, fair, privacy-safe, separate from Quest, casual, shareable, and expiry-safe | Master 17/25; Roadmap 12-15, Release F | Missing | UTC-dated bundled contract, separate local Daily record, no scarce reward or global claim | #47 | Same-date/time-zone/Quest-isolation/expiry tests pending |
 | C25 | Platform trust: explicit database certificate verification, Clerk timeout fallback, bundle baseline, storage/migration characterization | Roadmap 6; Master 15/24 | Partial | Keep dynamic Clerk boundary; normalize production/preview DB SSL config; document bundle budgets and migration proof | #41 | 3 SSL tests, four budgets, Clerk fallback, and development-Neon proof; merged PR #49 |
-| C26 | Observability uses privacy-minimized allowlisted events and never logs secrets, raw webhooks, card data, or child data | Master 17, 23; Membership 10, 15 | Missing | Small structured event interface and in-memory test adapter; no new analytics vendor | #41, #48 | Access and lifetime allowlist tests exclude IDs, secrets, and commercial/card fields; #42 PR pending |
+| C26 | Observability uses privacy-minimized allowlisted events and never logs secrets, raw webhooks, card data, or child data | Master 17, 23; Membership 10, 15 | Missing | Small structured event interface and in-memory test adapter; no new analytics vendor | #41, #48 | Access and lifetime allowlist tests exclude IDs, secrets, and commercial/card fields; membership core merged PR #50, final hardening in #48 |
 | C27 | Support, refund, dispute, deletion, privacy, rollback, and receipt-recovery runbooks exist before live payment | Master T17-T18, 22.6; Membership 8.5, 12, M9 | Missing | Add production setup and support runbooks; enforcement flag can disable gates without deleting entitlements | #48 | Lifetime test setup/support/recovery/privacy/rollback runbook added; final cross-feature drill pending |
 | C28 | All major journeys work at desktop/mobile, 200% text, keyboard, screen reader, and reduced motion | Master 16, T18, 22.6; Entry 6-10; Roadmap all feature gates | Partial | Extend Playwright projects and focused fixtures for every access/member/Atlas/follow-on state | #48 | Current entry/game coverage passes; new journeys pending |
 | C29 | Two or three tested small surprise improvements strengthen discovery, mastery, anticipation, celebration, learning, or return motivation | Attached approval | Missing | Select after full feature playtest; keep deterministic and local/free | #48 | Pending; reveal only at final delivery |
 | C30 | Plans, README, environment template, migrations, support docs, coverage ledger, issues, PRs, and remote `main` show truthful final state | Attached approval; Master T17-T18, 19, 22.6; Entry Task 8; Membership M9 | Partial | Update evidence after each merged PR; never mark completion from a plan label | #40, #48 | Final remote verification pending |
+
+## Final disposition
+
+The initial-status column above remains as historical baseline evidence. This
+final column is the release disposition after integrated validation. C27 is an
+external production approval rather than unfinished engineering; its test-mode
+runbooks and safety controls are delivered.
+
+| ID | Final status |
+|---|---|
+| C01 | Delivered |
+| C02 | Delivered |
+| C03 | Delivered |
+| C04 | Delivered |
+| C05 | Delivered |
+| C06 | Delivered |
+| C07 | Delivered |
+| C08 | Delivered |
+| C09 | Delivered |
+| C10 | Delivered |
+| C11 | Delivered |
+| C12 | Delivered |
+| C13 | Delivered |
+| C14 | Delivered |
+| C15 | Delivered |
+| C16 | Delivered |
+| C17 | Delivered |
+| C18 | Delivered |
+| C19 | Pending integrated validation |
+| C20 | Pending integrated validation |
+| C21 | Pending integrated validation |
+| C22 | Pending integrated validation |
+| C23 | Pending integrated validation |
+| C24 | Pending integrated validation |
+| C25 | Delivered |
+| C26 | Delivered |
+| C27 | Deferred - external approval |
+| C28 | Pending integrated validation |
+| C29 | Delivered |
+| C30 | Pending integrated validation |
 
 ## Source task crosswalk
 

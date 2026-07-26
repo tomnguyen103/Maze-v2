@@ -19,6 +19,11 @@ describe("Echo Atlas projection", () => {
       "Advanced",
       "Mastery"
     ]);
+    expect(atlas.nextMilestoneNumber).toBe(4);
+    expect(atlas.labyrinthsToNextMilestone).toBe(3);
+    expect(atlas.regions[0].sigilLabel).toBe(
+      "Sigil restores at Labyrinth 4"
+    );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
         labyrinthNumber: 1,
@@ -54,6 +59,8 @@ describe("Echo Atlas projection", () => {
     const atlas = projectQuestAtlas(progress);
 
     expect(atlas.currentLabyrinthNumber).toBe(4);
+    expect(atlas.nextMilestoneNumber).toBe(4);
+    expect(atlas.labyrinthsToNextMilestone).toBe(0);
     expect(atlas.restoredSigils).toBe(0);
     expect(atlas.regions[0].nodes[3]).toMatchObject({
       current: true,
@@ -98,6 +105,8 @@ describe("Echo Atlas projection", () => {
     });
     expect(completedAtlas.complete).toBe(true);
     expect(completedAtlas.restoredSigils).toBe(5);
+    expect(completedAtlas.nextMilestoneNumber).toBeNull();
+    expect(completedAtlas.labyrinthsToNextMilestone).toBeNull();
     expect(
       completedAtlas.regions.flatMap((region) => region.nodes)
         .filter((node) => node.state === "completed-milestone")
