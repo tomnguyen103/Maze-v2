@@ -333,28 +333,17 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   );
 });
 
-test("keeps local play available when Cloud Quest storage is unavailable", async ({
+test("keeps signed-out Quest progress local and playable", async ({
   page
 }) => {
-  await page.route("**/api/quest-progress", async (route) => {
-    await route.fulfill({
-      status: 503,
-      contentType: "application/json",
-      body: JSON.stringify({
-        error: "Cloud Quest Progress is unavailable. Local play still works."
-      })
-    });
-  });
-
-  await page.goto("/play");
-  await chooseTrailScout(page);
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
 
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#quest-sync-status")).toHaveText(
     "Device save"
   );
   await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#moves-value")).toHaveText(/\d{3}/);
+  await expect(page.locator("#moves-value")).toHaveText("001");
 });
 
 test("shows an explicit keyboard-safe choice for different device Quests", async ({
@@ -1137,4 +1126,13 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
       .map((element) => element.id || element.className || element.tagName)
   );
   expect(overflow, `overflow sources: ${overflowSources.join(", ")}`).toBeLessThanOrEqual(1);
+
+  const heading = await page.locator(".status-deck__heading").boundingBox();
+  const syncStatus = await page.locator("#quest-sync-status").boundingBox();
+  const metrics = await page.locator(".run-metrics").boundingBox();
+  if (!heading || !syncStatus || !metrics) {
+    throw new Error("Expected status layout at 200 percent text.");
+  }
+  expect(syncStatus.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+  expect(metrics.y).toBeGreaterThanOrEqual(syncStatus.y + syncStatus.height);
 });

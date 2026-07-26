@@ -68,7 +68,9 @@ describe("Lifetime Membership dialog", () => {
     );
     expect(
       document.getElementById("lifetime-storage-note")?.textContent
-    ).toContain("follows your signed-in account");
+    ).toBe(
+      "Quest Progress follows your signed-in account at Labyrinth boundaries. Run Records stay on this device."
+    );
     expect(
       document.getElementById("lifetime-primary")?.getAttribute("aria-label")
     ).toBe("Unlock lifetime access - $5.99");

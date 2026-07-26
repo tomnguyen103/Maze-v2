@@ -126,4 +126,26 @@ describe("Cloud Quest API", () => {
       });
     });
   });
+
+  it("rejects unsupported methods and malformed writes", async () => {
+    const handler = createQuestProgressHandler({
+      store: createStore(),
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      const unsupported = await fetch(`${origin}/api/quest-progress`, {
+        method: "POST"
+      });
+      expect(unsupported.status).toBe(405);
+      expect(unsupported.headers.get("allow")).toBe("GET, PUT");
+
+      const malformed = await fetch(`${origin}/api/quest-progress`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expectedRevision: -1, progress: {} })
+      });
+      expect(malformed.status).toBe(400);
+    });
+  });
 });

@@ -53,7 +53,19 @@ describe("Run Access migration", () => {
     expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
     expect(sql).toContain("schema_version SMALLINT NOT NULL DEFAULT 1");
     expect(sql).toContain("quest_id VARCHAR(100) NOT NULL");
-    expect(sql).toContain("quest_id ~ '^(quest|legacy)_");
+    expect(sql).toContain(
+      "quest_id ~ '^(quest|legacy)_[A-Za-z0-9_-]{7,92}$'"
+    );
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
+    expect(sql).toContain("labyrinth_number BETWEEN 1 AND 20");
+    expect(sql).toContain(
+      "jsonb_array_length(used_map_fingerprints) <= 1000"
+    );
+    expect(sql).toContain("jsonb_array_length(used_question_ids) <= 5000");
+    expect(sql).toContain("complete = TRUE");
+    expect(sql).toContain("revision > 0");
     expect(sql).toContain("completed_labyrinths = labyrinth_number - 1");
     expect(sql).toContain("revision INTEGER NOT NULL DEFAULT 1");
     expect(sql).toContain("used_map_fingerprints JSONB NOT NULL");

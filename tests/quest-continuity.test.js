@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   mergeSameQuestProgress,
-  reconcileQuestProgress
+  reconcileQuestProgress,
+  selectDeferredQuestProgress
 } from "../src/game/quest-continuity.js";
 import {
   createQuestProgress,
@@ -114,5 +115,20 @@ describe("Quest Continuity", () => {
         createQuestProgress("maze-master", 4, "quest_shared_123")
       )
     ).toThrow(/Quest Level/i);
+  });
+
+  it("keeps the finished local boundary when a deferred same-Quest merge fails", () => {
+    const current = rememberMap(progressAt(5), "map-local-boundary");
+    const incompatible = createQuestProgress(
+      "maze-master",
+      4,
+      "quest_shared_123"
+    );
+
+    expect(selectDeferredQuestProgress(current, incompatible)).toBe(current);
+    expect(selectDeferredQuestProgress(current, incompatible)).toMatchObject({
+      labyrinthNumber: 5,
+      usedMapFingerprints: ["map-local-boundary"]
+    });
   });
 });

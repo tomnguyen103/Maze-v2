@@ -1767,7 +1767,11 @@ kbd {
     display: grid;
     width: 100%;
     padding: var(--space-2);
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .status-deck > * {
+    grid-column: 1 / -1;
   }
 
   .player-console {
@@ -1786,13 +1790,20 @@ kbd {
   }
 
   .quest-sync-status {
-    position: relative;
-    z-index: 1;
+    grid-row: 3;
+    grid-column: 2;
     width: fit-content;
-    height: 0;
-    margin: -0.8rem var(--space-1) 0 auto;
-    line-height: 1;
-    white-space: nowrap;
+    max-width: min(11rem, 46vw);
+    margin: var(--space-2) var(--space-1) 0 var(--space-2);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .quest-stage {
+    grid-row: 3;
+    grid-column: 1;
+    min-width: 0;
   }
 
   .run-metrics {

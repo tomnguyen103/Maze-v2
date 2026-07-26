@@ -127,6 +127,40 @@ describe("Quest Continuity controller", () => {
     expect(storage.getItem("echo-maze:quest-sync-pending:v1")).toBeNull();
   });
 
+  it("recovers the sync queue after a callback rejects one task", async () => {
+    const storage = createStorage();
+    const progress = progressAt(4);
+    let rejectSyncStatus = true;
+    const onStatus = vi.fn((status) => {
+      if (status === "syncing" && rejectSyncStatus) {
+        rejectSyncStatus = false;
+        throw new Error("status callback failed");
+      }
+    });
+    const saveCloud = vi.fn(async (saved) => ({
+      record: {
+        progress: saved,
+        revision: 1,
+        updatedAt: "2026-07-26T00:00:00.000Z"
+      }
+    }));
+    const controller = createQuestContinuityController({
+      loadCloud: async () => ({ record: null }),
+      saveCloud,
+      storage,
+      onStatus
+    });
+    controller.setAuthenticated("user_123");
+
+    await expect(controller.queueBoundary(progress)).rejects.toThrow(
+      "status callback failed"
+    );
+    await expect(controller.retry(progress)).resolves.toBe(true);
+
+    expect(saveCloud).toHaveBeenCalledWith(progress, 0);
+    expect(onStatus).toHaveBeenLastCalledWith("saved");
+  });
+
   it("merges a stale same-Quest write and retries one optimistic revision", async () => {
     const local = rememberMap(progressAt(5), "map-local");
     const cloud = {

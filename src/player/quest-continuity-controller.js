@@ -110,9 +110,9 @@ export function createQuestContinuityController({
 
   /** @param {QuestProgress | null} fallbackProgress */
   function enqueue(fallbackProgress) {
-    syncChain = syncChain.then(() =>
-      synchronize(loadPending(storage) ?? fallbackProgress)
-    );
+    syncChain = syncChain
+      .catch(() => false)
+      .then(() => synchronize(loadPending(storage) ?? fallbackProgress));
     return syncChain;
   }
 

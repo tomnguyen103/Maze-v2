@@ -56,6 +56,22 @@ export function mergeSameQuestProgress(local, cloud) {
 }
 
 /**
+ * @param {QuestProgress} current
+ * @param {QuestProgress} deferred
+ * @returns {QuestProgress}
+ */
+export function selectDeferredQuestProgress(current, deferred) {
+  if (current.questId !== deferred.questId) {
+    return deferred;
+  }
+  try {
+    return mergeSameQuestProgress(current, deferred);
+  } catch {
+    return current;
+  }
+}
+
+/**
  * @param {QuestProgress | null} local
  * @param {CloudQuest | null} cloud
  * @returns {QuestReconciliation}

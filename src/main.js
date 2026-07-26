@@ -31,7 +31,7 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
-import { mergeSameQuestProgress } from "./game/quest-continuity.js";
+import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
 import { projectQuestAtlas } from "./game/quest-atlas.js";
 import {
   createQuestAtlasView,
@@ -1124,10 +1124,8 @@ function applyDeferredCloudQuest() {
   if (!deferredCloudQuest) {
     return;
   }
-  const nextProgress =
-    deferredCloudQuest.progress.questId === questProgress.questId
-      ? mergeSameQuestProgress(questProgress, deferredCloudQuest.progress)
-      : deferredCloudQuest.progress;
+  const deferred = deferredCloudQuest.progress;
+  const nextProgress = selectDeferredQuestProgress(questProgress, deferred);
   deferredCloudQuest = null;
   installCloudQuestProgress(nextProgress, false);
 }
