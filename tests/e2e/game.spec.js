@@ -464,6 +464,55 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
   );
 });
 
+test("keeps a Run paused when Settings is activated twice while loading", async ({
+  page
+}) => {
+  await page.route("**/assets/access-settings-view-*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await page.getByRole("button", { name: "Settings" }).dblclick({
+    delay: 20
+  });
+  const dialog = page.getByRole("dialog", {
+    name: "Explorer Access Settings"
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("retries the Settings view after its first chunk request fails", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/access-settings-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  const settingsButton = page.getByRole("button", { name: "Settings" });
+
+  await settingsButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Explorer Access Settings are unavailable. Try again."
+  );
+  await settingsButton.click();
+
+  await expect(
+    page.getByRole("dialog", { name: "Explorer Access Settings" })
+  ).toBeVisible();
+  expect(requests).toBe(2);
+});
+
 test("keeps every Access Setting readable at mobile fold and 200 percent text", async ({
   page
 }) => {
@@ -539,32 +588,52 @@ test("keeps signed-out Quest progress local and playable", async ({
 test("shows an explicit keyboard-safe choice for different device Quests", async ({
   page
 }) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_choice_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 5,
+    completedLabyrinths: 4,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_choice_456",
+      levelId: "maze-master",
+      labyrinthNumber: 9,
+      completedLabyrinths: 8
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(${JSON.stringify({ local, cloud })});
+                return Promise.resolve(false);
+              },
+              resolveConflict() { return Promise.resolve(true); }
+            };
+          }
+        `
+      });
+    }
+  );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/play");
-  await page.locator("#level-dialog").evaluate(
-    /** @param {HTMLDialogElement} dialog */
-    (dialog) => dialog.close()
-  );
-  await page.evaluate(() => {
-    const local = document.getElementById("quest-conflict-local");
-    const cloud = document.getElementById("quest-conflict-cloud");
-    const intro = document.getElementById("quest-conflict-intro");
-    const dialog = document.getElementById("quest-conflict-dialog");
-    if (
-      !(local instanceof HTMLElement) ||
-      !(cloud instanceof HTMLElement) ||
-      !(intro instanceof HTMLElement) ||
-      !(dialog instanceof HTMLDialogElement)
-    ) {
-      throw new Error("Quest conflict dialog is unavailable.");
-    }
-    intro.textContent =
-      "This device and your account have different Quests. Compare both, then choose one.";
-    local.textContent = "This device Trail Scout 4 of 20 complete";
-    cloud.textContent = "Cloud Quest Maze Master 8 of 20 complete";
-    dialog.showModal();
-    document.getElementById("quest-conflict-title")?.focus();
-  });
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
   const dialog = page.getByRole("dialog", {
     name: "Choose which Quest to keep"
@@ -595,6 +664,75 @@ test("shows an explicit keyboard-safe choice for different device Quests", async
     .toBeLessThanOrEqual(1);
   await page.getByRole("button", { name: "Use Cloud Quest" }).click();
   await expect(dialog).not.toBeVisible();
+});
+
+test("retries the Cloud Quest choice view after its first chunk fails", async ({
+  page
+}) => {
+  const local = {
+    version: 1,
+    questId: "quest_local_retry_123",
+    levelId: "trail-scout",
+    labyrinthNumber: 3,
+    completedLabyrinths: 2,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  const cloud = {
+    progress: {
+      ...local,
+      questId: "quest_cloud_retry_456",
+      labyrinthNumber: 7,
+      completedLabyrinths: 6
+    },
+    revision: 2,
+    updatedAt: "2026-07-26T00:00:00.000Z"
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({ onConflict }) {
+            const conflict = ${JSON.stringify({ local, cloud })};
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onConflict(conflict);
+                return Promise.resolve(false);
+              },
+              resolveConflict() { return Promise.resolve(true); }
+            };
+          }
+        `
+      });
+    }
+  );
+  let requests = 0;
+  await page.route("**/assets/quest-conflict-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.locator("#live-region")).toContainText(
+    "Cloud Quest choice is unavailable. Your device Quest is safe."
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  await expect(
+    page.getByRole("dialog", { name: "Choose which Quest to keep" })
+  ).toBeVisible();
+  expect(requests).toBe(2);
 });
 
 test("resumes an active Run after a repeated Cloud Quest conflict is resolved", async ({

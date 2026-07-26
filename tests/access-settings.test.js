@@ -49,6 +49,27 @@ describe("Explorer Access Settings", () => {
     expect(loadAccessSettings(storage)).toEqual(DEFAULT_ACCESS_SETTINGS);
   });
 
+  it("keeps defaults when the browser denies access to localStorage", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "localStorage"
+    );
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("Storage denied.", "SecurityError");
+      }
+    });
+
+    try {
+      expect(loadAccessSettings()).toEqual(DEFAULT_ACCESS_SETTINGS);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(globalThis, "localStorage", descriptor);
+      }
+    }
+  });
+
   it("persists only the versioned boolean presentation contract", () => {
     const storage = createStorage();
     const settings =

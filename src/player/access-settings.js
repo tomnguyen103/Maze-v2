@@ -24,8 +24,9 @@ export const DEFAULT_ACCESS_SETTINGS = Object.freeze({
  * @param {AccessSettingsStorage} [storage]
  * @returns {AccessSettings}
  */
-export function loadAccessSettings(storage = globalThis.localStorage) {
+export function loadAccessSettings(storage) {
   try {
+    storage ??= globalThis.localStorage;
     return normalizeAccessSettings(
       JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
     );
@@ -41,8 +42,9 @@ export function loadAccessSettings(storage = globalThis.localStorage) {
  */
 export function saveAccessSettings(
   settings,
-  storage = globalThis.localStorage
+  storage
 ) {
+  storage ??= globalThis.localStorage;
   const normalized = normalizeAccessSettings(settings);
   storage.setItem(ACCESS_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
