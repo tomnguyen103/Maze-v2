@@ -18,7 +18,7 @@ the matching `tests/*.test.js`,
 
 **Date:** 2026-07-25
 
-**Reviewed commit:** `85c485f` on `main`
+**Historical reviewed baseline (2026-07-25):** `85c485f` on `main`
 
 **Document scope at authorship:** Documentation only
 

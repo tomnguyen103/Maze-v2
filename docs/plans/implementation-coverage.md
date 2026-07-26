@@ -61,7 +61,7 @@ runbooks and safety controls are delivered.
 |---|---|
 | C01 | Delivered |
 | C02 | Delivered |
-| C03 | Delivered |
+| C03 | Pending remote-main proof |
 | C04 | Delivered |
 | C05 | Delivered |
 | C06 | Delivered |

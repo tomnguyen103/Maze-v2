@@ -5,6 +5,7 @@ const coverage = readFileSync(
   "docs/plans/implementation-coverage.md",
   "utf8"
 );
+const releaseReadiness = readFileSync("docs/release-readiness.md", "utf8");
 const sourcePlans = [
   "docs/plans/echo-maze-lifetime-membership-and-echo-atlas-master-plan.md",
   "docs/plans/entry-experience-implementation-plan.md",
@@ -32,11 +33,11 @@ describe("release readiness evidence", () => {
     const rows = lines
       .slice(headerLineIndex + 2)
       .filter((line) => /^\| C\d{2} \|/.test(line))
-      .slice(0, 30)
       .map(tableCells);
 
     expect(headerLineIndex).toBeGreaterThanOrEqual(0);
     expect(statusIndex).toBeGreaterThanOrEqual(0);
+    expect(rows).toHaveLength(30);
     expect(rows.map(([id]) => id)).toEqual(
       Array.from({ length: 30 }, (_, index) =>
         `C${String(index + 1).padStart(2, "0")}`
@@ -63,5 +64,17 @@ describe("release readiness evidence", () => {
       expect(plan, path).toContain("PR #56");
       expect(plan, path).toMatch(/`tests\//);
     }
+  });
+
+  it("locks the test-mode decision and remote-main evidence fields", () => {
+    expect(releaseReadiness).toContain(
+      "**Release decision:** test-mode engineering candidate only."
+    );
+    expect(releaseReadiness).toContain(
+      "No live charge, live Product, live Price, or"
+    );
+    expect(releaseReadiness).toContain("## Remote-main proof");
+    expect(releaseReadiness).toMatch(/- closure PR: .+/);
+    expect(releaseReadiness).toMatch(/- remote `main` commit: .+/);
   });
 });

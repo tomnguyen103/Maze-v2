@@ -66,7 +66,7 @@ describe("privacy-minimized product events", () => {
 
     record("lifetime_webhook", {
       eventType: "raw webhook body: sk_test_secret",
-      outcome: "card 4242 4242 4242 4242"
+      outcome: "simulated-card-secret"
     });
     record("run_access_error", {
       category: "session token: bearer-secret"
