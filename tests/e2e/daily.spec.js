@@ -133,6 +133,25 @@ function dailyWinningPlan(daily) {
   return actions;
 }
 
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {ReturnType<typeof createDailyContract>} daily
+ */
+async function completeDaily(page, daily) {
+  for (const action of dailyWinningPlan(daily)) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      continue;
+    }
+    const challenge = page.getByRole("dialog", {
+      name: /Warden blocks the path/i
+    });
+    await expect(challenge).toBeVisible();
+    await expect(page.locator("#challenge-question")).toHaveText(action.prompt);
+    await page.locator(`[data-answer="${action.answerId}"]`).click();
+  }
+}
+
 /** @param {import("@playwright/test").Page} page */
 async function preserveQuestState(page) {
   await page.addInitScript(
@@ -353,7 +372,6 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
 }) => {
   await page.clock.install({ time: FIXED_DAILY_NOW });
   const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
-  const actions = dailyWinningPlan(daily);
   /** @type {string[]} */
   const accessRequests = [];
   /** @type {string[]} */
@@ -377,18 +395,7 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
 
   await page.goto(`/play?daily=${daily.date}`);
   await expect(page.getByRole("button", { name: "Records" })).toBeDisabled();
-  for (const action of actions) {
-    if (action.type === "move") {
-      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
-      continue;
-    }
-    const challenge = page.getByRole("dialog", {
-      name: /Warden blocks the path/i
-    });
-    await expect(challenge).toBeVisible();
-    await expect(page.locator("#challenge-question")).toHaveText(action.prompt);
-    await page.locator(`[data-answer="${action.answerId}"]`).click();
-  }
+  await completeDaily(page, daily);
 
   const result = page.getByRole("dialog", {
     name: "Daily Labyrinth complete."
@@ -424,4 +431,38 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
   ]);
   expect(accessRequests).toEqual([]);
   expect(scoreRequests).toEqual([]);
+});
+
+test("does not claim an unsaved Daily result is a Personal Best", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One storage-failure browser check is sufficient."
+  );
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setDailyStorage(key, value) {
+      if (key === "echo-maze:daily-records:v1") {
+        throw new DOMException("Storage unavailable", "QuotaExceededError");
+      }
+      return setItem.call(this, key, value);
+    };
+  });
+
+  await page.goto(`/play?daily=${daily.date}`);
+  await completeDaily(page, daily);
+
+  const result = page.getByRole("dialog", {
+    name: "Daily Labyrinth complete."
+  });
+  await expect(result).toContainText("storage unavailable");
+  await expect(result).toContainText(
+    "This result could not be saved on this device."
+  );
+  await expect(result).toContainText("Not saved");
+  await expect(result).not.toContainText("stored locally");
+  await expect(result).not.toContainText("Personal Best");
 });

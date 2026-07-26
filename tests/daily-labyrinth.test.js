@@ -90,11 +90,13 @@ describe("Daily Shared Labyrinth", () => {
     const storage = createStorage();
     const daily = createDailyContract("2026-07-26");
 
-    saveDailyResult(
-      daily,
-      { outcome: "defeated", elapsedMs: 9000, moves: 14 },
-      storage
-    );
+    expect(
+      saveDailyResult(
+        daily,
+        { outcome: "defeated", elapsedMs: 9000, moves: 14 },
+        storage
+      ).persisted
+    ).toBe(true);
     expect(loadDailyRecord(daily.date, storage)).toEqual({
       version: 1,
       date: "2026-07-26",
@@ -125,6 +127,34 @@ describe("Daily Shared Labyrinth", () => {
     expect(storage.getItem("echo-maze:daily-records:v1")).not.toMatch(
       /name|email|username|score|quest/i
     );
+  });
+
+  it("reports when a Daily result could not be stored locally", () => {
+    const daily = createDailyContract("2026-07-26");
+    const storage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("storage unavailable");
+      }
+    };
+
+    expect(
+      saveDailyResult(
+        daily,
+        { outcome: "escaped", elapsedMs: 8000, moves: 12 },
+        storage
+      )
+    ).toEqual({
+      persisted: false,
+      record: {
+        version: 1,
+        date: "2026-07-26",
+        seed: "DAILY-20260726",
+        completed: true,
+        bestElapsedMs: 8000,
+        bestMoves: 12
+      }
+    });
   });
 
   it("recovers safely from malformed Daily storage", () => {

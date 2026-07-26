@@ -1790,7 +1790,7 @@ function finishDailyRun(daily, won) {
     return;
   }
   const previous = loadDailyRecord(daily.date);
-  const record = saveDailyResult(daily, {
+  const { record, persisted } = saveDailyResult(daily, {
     outcome: won ? "escaped" : "defeated",
     elapsedMs: run.elapsedMs,
     moves: run.moves
@@ -1803,13 +1803,18 @@ function finishDailyRun(daily, won) {
       run.elapsedMs === previous.bestElapsedMs &&
         (previous.bestMoves === null || run.moves < previous.bestMoves));
 
-  elements.resultKicker.textContent = "Casual Daily · stored locally";
+  elements.resultKicker.textContent = persisted
+    ? "Casual Daily · stored locally"
+    : "Casual Daily · storage unavailable";
   elements.resultTitle.textContent = won
     ? "Daily Labyrinth complete."
     : "Today’s Daily ended.";
-  elements.resultSummary.textContent = won
+  const resultSummary = won
     ? "You escaped today’s shared maze. Your Quest, Atlas, Run Access, and Global Scoreboard did not change."
     : "You can try today’s shared maze again. Your Quest, Atlas, Run Access, and Global Scoreboard did not change.";
+  elements.resultSummary.textContent = persisted
+    ? resultSummary
+    : `${resultSummary} This result could not be saved on this device.`;
   elements.resultAtlas.hidden = true;
   elements.resultAccessNote.hidden = true;
   elements.resultAccessNote.textContent = "";
@@ -1820,11 +1825,13 @@ function finishDailyRun(daily, won) {
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
   elements.resultSeed.textContent = daily.seed;
-  elements.resultRank.textContent = won
-    ? newBest
-      ? "Personal Best"
-      : `Best ${formatTime(record.bestElapsedMs ?? 0)}`
-    : "Not complete";
+  elements.resultRank.textContent = !persisted
+    ? "Not saved"
+    : won
+      ? newBest
+        ? "Personal Best"
+        : `Best ${formatTime(record.bestElapsedMs ?? 0)}`
+      : "Not complete";
   updateInterface();
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();

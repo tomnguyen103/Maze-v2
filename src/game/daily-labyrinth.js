@@ -116,7 +116,7 @@ export function loadDailyRecord(date, storage = globalThis.localStorage) {
  * @param {DailyContract} daily
  * @param {{ outcome: "escaped" | "defeated", elapsedMs: number, moves: number }} result
  * @param {StorageLike | undefined} [storage]
- * @returns {DailyRecord}
+ * @returns {{ record: DailyRecord, persisted: boolean }}
  */
 export function saveDailyResult(
   daily,
@@ -167,12 +167,15 @@ export function saveDailyResult(
     .sort((left, right) => right.date.localeCompare(left.date))
     .slice(0, DAILY_RECORD_LIMIT);
 
-  try {
-    storage?.setItem(DAILY_RECORDS_KEY, JSON.stringify(updated));
-  } catch {
-    return next;
+  if (!storage) {
+    return { record: next, persisted: false };
   }
-  return next;
+  try {
+    storage.setItem(DAILY_RECORDS_KEY, JSON.stringify(updated));
+    return { record: next, persisted: true };
+  } catch {
+    return { record: next, persisted: false };
+  }
 }
 
 /** @param {StorageLike | undefined} storage @returns {DailyRecord[]} */
