@@ -31,6 +31,14 @@ const client = {
   getRunAccess: vi.fn(async () => ({
     freeRunsRemaining: 3,
     state: "free"
+  })),
+  createLifetimeCheckout: vi.fn(async () => ({
+    checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_echo",
+    state: "checkout_open"
+  })),
+  confirmLifetimeCheckout: vi.fn(async () => ({
+    lifetime: true,
+    state: "lifetime_active"
   }))
 };
 

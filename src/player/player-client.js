@@ -99,6 +99,18 @@ export function createPlayerApiClient({
         body: JSON.stringify(run)
       });
     },
+    async createLifetimeCheckout() {
+      return request("/api/lifetime-checkout", {
+        method: "POST"
+      });
+    },
+    /** @param {string} sessionId */
+    async confirmLifetimeCheckout(sessionId) {
+      return request("/api/lifetime-confirm", {
+        method: "POST",
+        body: JSON.stringify({ sessionId })
+      });
+    },
     /** @param {Record<string, unknown>} run */
     async submitScore(run) {
       return request("/api/scores", {

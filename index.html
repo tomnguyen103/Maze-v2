@@ -376,6 +376,48 @@
     </dialog>
 
     <dialog
+      class="lifetime-dialog"
+      id="lifetime-dialog"
+      aria-labelledby="lifetime-title"
+      aria-describedby="lifetime-intro lifetime-details lifetime-storage-note"
+    >
+      <span class="section-label" id="lifetime-kicker">Lifetime Membership</span>
+      <h2 id="lifetime-title">Unlock every future Run</h2>
+      <p class="dialog-intro" id="lifetime-intro">
+        Ask a parent or grown-up for help before opening secure Stripe Checkout.
+      </p>
+      <div class="lifetime-offer" id="lifetime-offer">
+        <strong id="lifetime-price">$5.99 once</strong>
+        <span id="lifetime-price-note">Lifetime access for this account</span>
+      </div>
+      <p id="lifetime-details">
+        No subscription. No renewal. Every Run keeps the same fair Warden rules.
+      </p>
+      <p class="lifetime-storage-note" id="lifetime-storage-note">
+        Quest Progress and Records stay on this device unless cloud sync is turned on.
+      </p>
+      <p
+        class="lifetime-status"
+        id="lifetime-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <div class="lifetime-dialog__actions">
+        <button
+          class="primary-button"
+          id="lifetime-primary"
+          type="button"
+          aria-label="Unlock lifetime access - $5.99"
+        >
+          Unlock
+        </button>
+        <button class="control-button" id="lifetime-close" type="button">
+          Not now
+        </button>
+      </div>
+    </dialog>
+
+    <dialog
       class="result-dialog"
       id="result-dialog"
       aria-labelledby="result-title"
@@ -384,6 +426,7 @@
       <span class="section-label" id="result-kicker">Run complete</span>
       <h2 id="result-title">Gate reached.</h2>
       <p id="result-summary"></p>
+      <p class="result-access-note" id="result-access-note" hidden></p>
       <div class="result-dialog__stats">
         <span><strong id="result-time">00:00</strong> time</span>
         <span><strong id="result-moves">000</strong> moves</span>

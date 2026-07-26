@@ -1,0 +1,192 @@
+import { randomUUID } from "node:crypto";
+import {
+  LifetimeVerificationError,
+  normalizeLifetimeProviderEvent,
+  verifyLifetimeCheckout
+} from "./lifetime-domain.js";
+
+export class LifetimeOwnershipError extends Error {
+  constructor() {
+    super("Checkout Session does not belong to this account.");
+    this.name = "LifetimeOwnershipError";
+  }
+}
+
+/**
+ * @param {{
+ *   config: { priceId: string },
+ *   createId?: () => string,
+ *   provider: {
+ *     constructWebhookEvent: (body: Buffer, signature: string) => unknown,
+ *     createCheckout: (purchase: { purchaseId: string, userId: string }) => Promise<{ checkoutUrl: string, sessionId: string }>,
+ *     retrieveCheckout: (sessionId: string) => Promise<Record<string, unknown>>,
+ *     retrieveCheckoutLink: (sessionId: string) => Promise<string>,
+ *     retrievePaymentReference: (paymentIntentId: string) => Promise<{ ownerId: string, purchaseId: string, state: string }>
+ *   },
+ *   recordEvent?: (eventName: string, fields: Record<string, unknown>) => void,
+ *   store: {
+ *     activatePurchase: (checkout: Record<string, unknown>, event: null | { eventCreated: number, eventId: string, eventType: string }) => Promise<Record<string, unknown>>,
+ *     attachCheckout: (purchaseId: string, sessionId: string) => Promise<void>,
+ *     closeCheckout: (event: Record<string, unknown>) => Promise<Record<string, unknown>>,
+ *     findPurchaseBySession: (sessionId: string) => Promise<null | { playerId: string, priceId: string, purchaseId: string, sessionId: string, status: string }>,
+ *     reservePurchase: (userId: string, purchaseId: string, priceId: string) => Promise<{ purchaseId: string, sessionId: string | null, state: string }>,
+ *     transitionEntitlement: (event: Record<string, unknown>) => Promise<Record<string, unknown>>
+ *   }
+ * }} dependencies
+ */
+export function createLifetimeService({
+  config,
+  createId = randomUUID,
+  provider,
+  recordEvent = () => {},
+  store
+}) {
+  return {
+    /** @param {string} userId */
+    async createCheckout(userId) {
+      const reservation = await store.reservePurchase(
+        userId,
+        createId(),
+        config.priceId
+      );
+      if (reservation.state === "member") {
+        return {
+          checkoutUrl: null,
+          purchaseId: reservation.purchaseId,
+          state: "lifetime_active"
+        };
+      }
+      if (reservation.sessionId) {
+        const checkoutUrl = await provider.retrieveCheckoutLink(
+          reservation.sessionId
+        );
+        recordEvent("lifetime_checkout", { outcome: "reused" });
+        return {
+          checkoutUrl,
+          purchaseId: reservation.purchaseId,
+          state: "checkout_open"
+        };
+      }
+      const checkout = await provider.createCheckout({
+        purchaseId: reservation.purchaseId,
+        userId
+      });
+      await store.attachCheckout(
+        reservation.purchaseId,
+        checkout.sessionId
+      );
+      recordEvent("lifetime_checkout", { outcome: "created" });
+      return {
+        checkoutUrl: checkout.checkoutUrl,
+        purchaseId: reservation.purchaseId,
+        state: "checkout_open"
+      };
+    },
+
+    /** @param {string} userId @param {string} sessionId */
+    async confirmCheckout(userId, sessionId) {
+      const purchase = await store.findPurchaseBySession(sessionId);
+      if (!purchase || purchase.playerId !== userId) {
+        throw new LifetimeOwnershipError();
+      }
+      const checkout = await provider.retrieveCheckout(sessionId);
+      verifyLifetimeCheckout(checkout, {
+        priceId: purchase.priceId,
+        purchaseId: purchase.purchaseId,
+        userId
+      });
+      const payment = await provider.retrievePaymentReference(
+        String(checkout.paymentIntentId)
+      );
+      verifyPaymentIdentity(checkout, payment);
+      if (payment.state !== "paid") {
+        throw new LifetimeVerificationError(
+          "Payment is no longer eligible for Lifetime Membership."
+        );
+      }
+      const result = await store.activatePurchase(checkout, null);
+      recordEvent("lifetime_confirmation", {
+        outcome: result.outcome ?? "activated"
+      });
+      return result;
+    },
+
+    /** @param {Buffer} rawBody @param {string} signature */
+    async processWebhook(rawBody, signature) {
+      const verified = provider.constructWebhookEvent(rawBody, signature);
+      const normalized = normalizeLifetimeProviderEvent(
+        /** @type {Parameters<typeof normalizeLifetimeProviderEvent>[0]} */ (
+          verified
+        )
+      );
+      if (!normalized) {
+        return { outcome: "ignored" };
+      }
+      if (
+        normalized.kind === "checkout-closed" &&
+        "sessionId" in normalized
+      ) {
+        return store.closeCheckout({
+          eventCreated: normalized.eventCreated,
+          eventId: normalized.eventId,
+          eventType: normalized.eventType,
+          sessionId: normalized.sessionId
+        });
+      }
+      if ("paymentIntentId" in normalized) {
+        const reference = await provider.retrievePaymentReference(
+          normalized.paymentIntentId
+        );
+        return store.transitionEntitlement({
+          eventCreated: normalized.eventCreated,
+          eventId: normalized.eventId,
+          eventType: normalized.eventType,
+          ownerId: reference.ownerId,
+          paymentIntentId: normalized.paymentIntentId,
+          purchaseId: reference.purchaseId,
+          state: normalized.state
+        });
+      }
+      const checkout = await provider.retrieveCheckout(
+        normalized.sessionId
+      );
+      verifyLifetimeCheckout(checkout, {
+        priceId: config.priceId,
+        purchaseId: String(checkout.purchaseId),
+        userId: String(checkout.ownerId)
+      });
+      const payment = await provider.retrievePaymentReference(
+        String(checkout.paymentIntentId)
+      );
+      verifyPaymentIdentity(checkout, payment);
+      const result = await store.activatePurchase({
+        ...checkout,
+        paymentState: payment.state
+      }, {
+        eventCreated: normalized.eventCreated,
+        eventId: normalized.eventId,
+        eventType: normalized.eventType
+      });
+      recordEvent("lifetime_webhook", {
+        eventType: normalized.eventType,
+        outcome: result.outcome
+      });
+      return result;
+    }
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} checkout
+ * @param {{ ownerId: string, purchaseId: string }} payment
+ */
+function verifyPaymentIdentity(checkout, payment) {
+  if (
+    payment.ownerId !== checkout.ownerId ||
+    payment.purchaseId !== checkout.purchaseId
+  ) {
+    throw new LifetimeVerificationError(
+      "Checkout and PaymentIntent identities do not match."
+    );
+  }
+}

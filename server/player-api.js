@@ -1,25 +1,30 @@
 import { clerkMiddleware, getAuth } from "@clerk/express";
+import Stripe from "stripe";
 import { createDatabasePool } from "./database.js";
+import { loadLifetimeConfig } from "./lifetime-config.js";
+import {
+  createLifetimeHandler,
+  LIFETIME_PATHS
+} from "./lifetime-route.js";
+import { createLifetimeService } from "./lifetime-service.js";
+import { createLifetimeStore } from "./lifetime-store.js";
 import { createPlayerApiHandler } from "./player-route.js";
 import { createPlayerStore } from "./player-store.js";
-import { createRunAccessHandler } from "./run-access-route.js";
+import {
+  ACCESS_PATHS,
+  createRunAccessHandler
+} from "./run-access-route.js";
 import { createRunAccessStore } from "./run-access-store.js";
 import { recordProductEvent } from "./product-events.js";
+import { createStripeLifetimeProvider } from "./stripe-lifetime.js";
 import { URL } from "node:url";
 
 const PLAYER_PATHS = new Set([
   "/api/profile",
   "/api/leaderboard",
   "/api/scores",
-  "/api/access",
-  "/api/access/config",
-  "/api/access/runs"
-]);
-
-const ACCESS_PATHS = new Set([
-  "/api/access",
-  "/api/access/config",
-  "/api/access/runs"
+  ...ACCESS_PATHS,
+  ...LIFETIME_PATHS
 ]);
 
 /**
@@ -47,6 +52,13 @@ export function createPlayerApi(env = process.env) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
       if (!PLAYER_PATHS.has(pathname)) {
         next?.();
+        return;
+      }
+      if (pathname === "/api/access/config" && request.method === "GET") {
+        response.statusCode = 200;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader("cache-control", "no-store");
+        response.end(JSON.stringify({ enforcementEnabled: false }));
         return;
       }
       if (pathname === "/api/leaderboard" && request.method === "GET") {
@@ -85,16 +97,39 @@ export function createPlayerApi(env = process.env) {
   };
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
+  const lifetimeStore = createLifetimeStore(pool);
+  const lifetimeConfig = loadLifetimeConfig(env);
+  const getUserId = (
+    /** @type {import("node:http").IncomingMessage} */ request
+  ) => getAuth(
+    /** @type {import("express").Request} */ (request)
+  ).userId;
   const handler = createPlayerApiHandler({
     store,
-    getUserId: (request) =>
-      getAuth(/** @type {import("express").Request} */ (request)).userId
+    getUserId
+  });
+  const lifetimeHandler = createLifetimeHandler({
+    getUserId,
+    service: lifetimeConfig
+      ? createLifetimeService({
+          config: lifetimeConfig,
+          provider: createStripeLifetimeProvider({
+            appOrigin: lifetimeConfig.appOrigin,
+            priceId: lifetimeConfig.priceId,
+            stripe: new Stripe(lifetimeConfig.secretKey),
+            webhookSecret: lifetimeConfig.webhookSecret
+          }),
+          recordEvent: recordProductEvent,
+          store: lifetimeStore
+        })
+      : unavailableLifetimeService()
   });
   const accessHandler = createRunAccessHandler({
     store: accessStore,
-    getUserId: (request) =>
-      getAuth(/** @type {import("express").Request} */ (request)).userId,
-    enforcementEnabled: env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true",
+    getUserId,
+    enforcementEnabled:
+      env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true" &&
+      lifetimeConfig !== null,
     recordEvent: recordProductEvent
   });
 
@@ -108,6 +143,22 @@ export function createPlayerApi(env = process.env) {
       getUserId: () => null,
       enforcementEnabled: false
     });
+    const unavailableLifetimeHandler = createLifetimeHandler({
+      getUserId: () => null,
+      service: lifetimeConfig
+        ? createLifetimeService({
+            config: lifetimeConfig,
+            provider: createStripeLifetimeProvider({
+              appOrigin: lifetimeConfig.appOrigin,
+              priceId: lifetimeConfig.priceId,
+              stripe: new Stripe(lifetimeConfig.secretKey),
+              webhookSecret: lifetimeConfig.webhookSecret
+            }),
+            recordEvent: recordProductEvent,
+            store: lifetimeStore
+          })
+        : unavailableLifetimeService()
+    });
     /**
      * @param {import("node:http").IncomingMessage} request
      * @param {import("node:http").ServerResponse} response
@@ -115,15 +166,16 @@ export function createPlayerApi(env = process.env) {
      */
     return (request, response, next) => {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
+      if (pathname === "/api/stripe-webhook") {
+        void unavailableLifetimeHandler(request, response, next);
+        return;
+      }
       if (ACCESS_PATHS.has(pathname)) {
         void unavailableAccessHandler(request, response, next);
         return;
       }
-      if (pathname === "/api/access/config" && request.method === "GET") {
-        response.statusCode = 200;
-        response.setHeader("content-type", "application/json; charset=utf-8");
-        response.setHeader("cache-control", "no-store");
-        response.end(JSON.stringify({ enforcementEnabled: false }));
+      if (LIFETIME_PATHS.has(pathname)) {
+        void unavailableLifetimeHandler(request, response, next);
         return;
       }
       void unavailableAuthHandler(request, response, next);
@@ -144,6 +196,10 @@ export function createPlayerApi(env = process.env) {
     const pathname = new URL(request.url ?? "", "http://local").pathname;
     if (!PLAYER_PATHS.has(pathname)) {
       next?.();
+      return;
+    }
+    if (pathname === "/api/stripe-webhook") {
+      void lifetimeHandler(request, response, next);
       return;
     }
     if (
@@ -169,8 +225,23 @@ export function createPlayerApi(env = process.env) {
           void accessHandler(request, response, next);
           return;
         }
+        if (LIFETIME_PATHS.has(pathname)) {
+          void lifetimeHandler(request, response, next);
+          return;
+        }
         void handler(request, response, next);
       }
     );
+  };
+}
+
+function unavailableLifetimeService() {
+  const unavailable = async () => {
+    throw new Error("Lifetime Membership is not configured.");
+  };
+  return {
+    confirmCheckout: unavailable,
+    createCheckout: unavailable,
+    processWebhook: unavailable
   };
 }

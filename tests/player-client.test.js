@@ -206,6 +206,63 @@ describe("player client", () => {
     });
     expect(getToken).not.toHaveBeenCalled();
   });
+
+  it("opens the fixed lifetime Checkout without browser commercial fields", async () => {
+    const fetchImpl = vi.fn(
+      /** @param {string | URL | Request} _path @param {RequestInit} [_options] */
+      async (_path, _options) => {
+        void _path;
+        void _options;
+        return new Response(
+          JSON.stringify({
+            checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_echo",
+            purchaseId: "purchase_123",
+            state: "checkout_open"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+
+    await client.createLifetimeCheckout();
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/lifetime-checkout",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchImpl.mock.calls[0][1]?.body).toBeUndefined();
+  });
+
+  it("confirms only the returned Stripe Checkout Session", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          canStartRun: true,
+          lifetime: true,
+          state: "lifetime_active"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+
+    await client.confirmLifetimeCheckout("cs_test_echo_123");
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/lifetime-confirm",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ sessionId: "cs_test_echo_123" })
+      })
+    );
+  });
 });
 
 describe("player palettes", () => {
