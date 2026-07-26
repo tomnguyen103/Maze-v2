@@ -318,7 +318,7 @@ let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
 let accessSettingsViewRetry = false;
 
-void initializeRunEntry();
+export const gameReady = initializeRunEntry();
 void playerController.isAuthenticated().then(handleAuthenticationChange);
 requestAnimationFrame(tick);
 

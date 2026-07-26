@@ -5,7 +5,18 @@
 > on 2026-07-25. Retain this file as technical source detail, but use the
 > combined master plan as the only implementation contract.
 
-**Status:** Superseded by the combined master plan
+**Planning status:** Superseded by the combined master plan
+
+**Implementation status (2026-07-26):** Test-mode engineering implementation is
+complete through merged PR #49 for server-authoritative free Run access and
+merged PR #50 for one-time lifetime membership. PR #56 adds integrated landing
+and validation evidence and remains pending mandatory review and merge; that
+merge is still required for remote-main proof. Enforcement remains off and no
+live charge is claimed. Access, Checkout, fulfillment, refund/dispute, deletion,
+and recovery behavior is exercised by the matching `tests/*access*.test.js`,
+`tests/lifetime-*.test.js`,
+`tests/e2e/game.spec.js`, and live PostgreSQL store suites indexed in
+[`implementation-coverage.md`](implementation-coverage.md).
 
 **Date:** 2026-07-25
 

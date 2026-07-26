@@ -91,9 +91,16 @@ export function renderQuestAtlasSummary(
  * @param {QuestAtlas} atlas
  */
 function renderAtlas(elements, atlas) {
+  const milestoneGuidance = atlas.complete
+    ? "All five Sigils restored. Quest complete."
+    : atlas.labyrinthsToNextMilestone === 0
+      ? `Gate Warden here at Labyrinth ${atlas.nextMilestoneNumber}.`
+      : `Gate Warden in ${atlas.labyrinthsToNextMilestone} Labyrinths at ` +
+        `Labyrinth ${atlas.nextMilestoneNumber}.`;
   elements.progress.textContent =
-    `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped · ` +
-    `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored.`;
+    `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped. ` +
+    `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored. ` +
+    milestoneGuidance;
   elements.regions.replaceChildren(
     ...atlas.regions.map((region) => {
       const section = document.createElement("section");
@@ -111,9 +118,7 @@ function renderAtlas(elements, atlas) {
       const sigil = document.createElement("p");
       sigil.className = "atlas-sigil";
       sigil.dataset.restored = String(region.sigilRestored);
-      sigil.textContent = region.sigilRestored
-        ? "Sigil restored"
-        : "Sigil sealed";
+      sigil.textContent = region.sigilLabel;
 
       const nodes = document.createElement("ol");
       nodes.className = "atlas-nodes";

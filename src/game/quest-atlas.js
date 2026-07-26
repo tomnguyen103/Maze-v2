@@ -27,15 +27,22 @@ export function projectQuestAtlas(progress) {
     const nodes = Array.from({ length: 4 }, (_, offset) =>
       projectNode(progress, start + offset)
     );
+    const sigilRestored = progress.completedLabyrinths >= end;
     return {
       id: band.id,
       index: regionIndex,
       label: band.label,
       rangeLabel: `Labyrinths ${start}-${end}`,
-      sigilRestored: progress.completedLabyrinths >= end,
+      sigilRestored,
+      sigilLabel: sigilRestored
+        ? "Sigil restored"
+        : `Sigil restores at Labyrinth ${end}`,
       nodes
     };
   });
+  const nextMilestoneNumber = progress.complete
+    ? null
+    : Math.ceil(progress.labyrinthNumber / 4) * 4;
 
   return {
     version: 1,
@@ -46,6 +53,10 @@ export function projectQuestAtlas(progress) {
       : progress.labyrinthNumber,
     completedLabyrinths: progress.completedLabyrinths,
     restoredSigils: regions.filter((region) => region.sigilRestored).length,
+    nextMilestoneNumber,
+    labyrinthsToNextMilestone: nextMilestoneNumber === null
+      ? null
+      : nextMilestoneNumber - progress.labyrinthNumber,
     totalLabyrinths: QUEST_LABYRINTH_COUNT,
     regions
   };

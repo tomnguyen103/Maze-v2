@@ -5,6 +5,7 @@ import {
 import {
   LifetimeOwnershipError
 } from "./lifetime-service.js";
+import { safeErrorName } from "./safe-error-log.js";
 
 export const LIFETIME_PATHS = new Set([
   "/api/lifetime-checkout",
@@ -99,7 +100,7 @@ export function createLifetimeHandler({ getUserId, service }) {
         return;
       }
       console.error("[lifetime] browser request failed", {
-        name: error instanceof Error ? error.name : "UnknownError"
+        name: safeErrorName(error)
       });
       sendJson(response, 503, {
         error: "Lifetime Membership is unavailable. Your progress is safe."
@@ -127,7 +128,7 @@ export function createLifetimeHandler({ getUserId, service }) {
         return;
       }
       console.error("[lifetime] webhook processing failed", {
-        name: error instanceof Error ? error.name : "UnknownError"
+        name: safeErrorName(error)
       });
       sendJson(response, 503, { error: "Webhook unavailable." });
     }

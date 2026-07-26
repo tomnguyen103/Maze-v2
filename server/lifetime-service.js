@@ -173,18 +173,24 @@ export function createLifetimeService({
         )
       );
       if (!normalized) {
+        recordEvent("lifetime_webhook", { outcome: "ignored" });
         return { outcome: "ignored" };
       }
       if (
         normalized.kind === "checkout-closed" &&
         "sessionId" in normalized
       ) {
-        return store.closeCheckout({
+        const result = await store.closeCheckout({
           eventCreated: normalized.eventCreated,
           eventId: normalized.eventId,
           eventType: normalized.eventType,
           sessionId: normalized.sessionId
         });
+        recordEvent("lifetime_webhook", {
+          eventType: normalized.eventType,
+          outcome: result.outcome
+        });
+        return result;
       }
       if ("paymentIntentId" in normalized) {
         const reference = await provider.retrievePaymentReference(
@@ -197,7 +203,7 @@ export function createLifetimeService({
           : "state" in normalized
             ? normalized.state
             : null;
-        return store.transitionEntitlement({
+        const result = await store.transitionEntitlement({
           eventCreated: normalized.eventCreated,
           eventId: normalized.eventId,
           eventType: normalized.eventType,
@@ -206,6 +212,11 @@ export function createLifetimeService({
           purchaseId: reference.purchaseId,
           state
         });
+        recordEvent("lifetime_webhook", {
+          eventType: normalized.eventType,
+          outcome: result.outcome
+        });
+        return result;
       }
       const checkout = await provider.retrieveCheckout(
         normalized.sessionId

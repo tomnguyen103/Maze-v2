@@ -3,6 +3,7 @@ import {
   validateProfileInput,
   validateScoreInput
 } from "./player-validation.js";
+import { safeErrorName } from "./safe-error-log.js";
 import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -194,7 +195,9 @@ export function createPlayerApiHandler({ store, getUserId }) {
         });
         return;
       }
-      console.error("[players] API request failed", error);
+      console.error("[players] API request failed", {
+        name: safeErrorName(error)
+      });
       sendJson(response, 500, {
         error: "Player services are unavailable. Guest play still works."
       });

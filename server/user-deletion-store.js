@@ -3,7 +3,10 @@ import { deletedUserHash } from "./deleted-user-guard.js";
 /**
  * @param {{
  *   connect: () => Promise<{
- *     query: (sql: string, values?: unknown[]) => Promise<unknown>,
+ *     query: (
+ *       sql: string,
+ *       values?: unknown[]
+ *     ) => Promise<{ rows?: Record<string, unknown>[] }>,
  *     release: () => void
  *   }>
  * }} pool
@@ -41,6 +44,45 @@ export function createUserDeletionStore(pool) {
            WHERE clerk_user_id = $1`,
           [userId]
         );
+        const verification = await client.query(
+          `SELECT
+             EXISTS (
+               SELECT 1 FROM deleted_user_tombstones
+               WHERE clerk_user_id_hash = $2
+             ) AS tombstone_present,
+             NOT EXISTS (
+               SELECT 1 FROM cloud_quest_progress
+               WHERE clerk_user_id = $1
+             ) AS cloud_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM players
+               WHERE clerk_user_id = $1
+             ) AS player_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM score_entries
+               WHERE player_id = $1
+             ) AS scores_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM player_access
+               WHERE clerk_user_id = $1
+             ) AS access_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM run_access_grants
+               WHERE player_id = $1
+             ) AS grants_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM lifetime_purchases
+               WHERE player_id = $1
+             ) AS purchases_deleted,
+             NOT EXISTS (
+               SELECT 1 FROM learning_journals
+               WHERE clerk_user_id = $1
+             ) AS journal_deleted`,
+          [userId, deletedUserHash(userId)]
+        );
+        if (!deletionVerified(verification.rows?.[0])) {
+          throw new Error("Account deletion verification failed.");
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -50,4 +92,14 @@ export function createUserDeletionStore(pool) {
       }
     }
   };
+}
+
+/** @param {unknown} row */
+function deletionVerified(row) {
+  return Boolean(
+    row &&
+    typeof row === "object" &&
+    Object.values(row).length === 8 &&
+    Object.values(row).every((value) => value === true)
+  );
 }

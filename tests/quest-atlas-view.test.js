@@ -51,8 +51,39 @@ describe("Echo Atlas view", () => {
     expect(document.querySelector("[data-atlas-node='4'] [data-milestone-mark]")
       ?.textContent).toBe("◆");
     expect(document.querySelector("[data-atlas-region='foundation']")
-      ?.textContent).toContain("Sigil sealed");
+      ?.textContent).toContain("Sigil restores at Labyrinth 4");
+    expect(document.getElementById("atlas-progress")?.textContent).toContain(
+      "Gate Warden here at Labyrinth 4"
+    );
     expect(document.activeElement?.id).toBe("atlas-title");
+  });
+
+  it("reveals the next Gate Warden and celebrates a completed Atlas", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout")),
+      trigger
+    );
+    expect(document.getElementById("atlas-progress")?.textContent).toContain(
+      "Gate Warden in 3 Labyrinths at Labyrinth 4"
+    );
+    view.close();
+
+    view.show(
+      projectQuestAtlas({
+        ...createQuestProgress("trail-scout", 20),
+        completedLabyrinths: 20,
+        complete: true
+      }),
+      trigger
+    );
+    expect(document.getElementById("atlas-progress")?.textContent).toContain(
+      "All five Sigils restored. Quest complete."
+    );
   });
 
   it("restores focus and reports closure through the view boundary", () => {

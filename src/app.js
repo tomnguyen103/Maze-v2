@@ -28,11 +28,16 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
 }
 
 async function startGameplay() {
+  delete gameRoot.dataset.gameReady;
+  gameRoot.inert = true;
+  gameRoot.setAttribute("aria-busy", "true");
   gameRoot.replaceChildren(gameTemplate.content.cloneNode(true));
   try {
-    await import("./main.js");
-  } catch (error) {
-    console.error("Echo Maze gameplay failed to load.", error);
+    const { gameReady } = await import("./main.js");
+    await gameReady;
+    gameRoot.dataset.gameReady = "true";
+  } catch {
+    console.error("Echo Maze gameplay failed to load.");
     gameRoot.innerHTML = `
       <main class="landing-page" id="landing-main">
         <p class="section-label">Maze unavailable</p>
@@ -44,6 +49,18 @@ async function startGameplay() {
     const retryLink = gameRoot.querySelector(".primary-button");
     if (retryLink instanceof HTMLAnchorElement) {
       retryLink.href = window.location.href;
+    }
+  } finally {
+    gameRoot.inert = false;
+    gameRoot.removeAttribute("aria-busy");
+    const canvas = gameRoot.querySelector("#maze-canvas");
+    if (
+      gameRoot.dataset.gameReady === "true" &&
+      document.activeElement === document.body &&
+      !gameRoot.querySelector("dialog[open]") &&
+      canvas instanceof HTMLCanvasElement
+    ) {
+      canvas.focus({ preventScroll: true });
     }
   }
 }

@@ -5,7 +5,17 @@
 > on 2026-07-25. Retain this file as review evidence, but use the combined
 > master plan as the only implementation contract.
 
-**Status:** Superseded by the combined master plan
+**Planning status:** Superseded by the combined master plan
+
+**Implementation status (2026-07-26):** Engineering implementation is complete
+through merged PRs #49-#55: access and lifetime membership, Echo Atlas and Gate
+Wardens, Cloud Quest Continuity, Explorer Access Settings, Daily Shared
+Labyrinth, and Lantern Journal. PR #56 adds integrated release-closure evidence
+and remains pending mandatory review and merge; that merge is still required for
+remote-main proof. Feature behavior is exercised by the matching
+`tests/*.test.js`, `tests/e2e/game.spec.js`,
+`tests/e2e/daily.spec.js`, and live PostgreSQL store suites indexed in
+[`implementation-coverage.md`](implementation-coverage.md).
 
 **Date:** 2026-07-25
 

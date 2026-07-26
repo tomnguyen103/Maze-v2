@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { createPlayerApiHandler } from "../server/player-route.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const PROFILE = {
   username: "Moss Runner",
@@ -110,6 +110,42 @@ describe("player API", () => {
       const response = await fetch(`${origin}/api/profile`);
       expect(response.status).toBe(401);
     });
+  });
+
+  it("does not log raw player-service error details", async () => {
+    const store = createStore();
+    store.getLeaderboard = async () => {
+      const error = new Error(
+        "postgres://child-name:secret@private-host/database"
+      );
+      error.name = "secret-database-error";
+      throw error;
+    };
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = createPlayerApiHandler({
+      store,
+      getUserId: () => null
+    });
+
+    try {
+      await withServer(handler, async (origin) => {
+        const response = await fetch(`${origin}/api/leaderboard`);
+
+        expect(response.status).toBe(500);
+        expect(errorLog).toHaveBeenCalledWith(
+          "[players] API request failed",
+          { name: "Error" }
+        );
+        expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+          "child-name"
+        );
+        expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+          "secret"
+        );
+      });
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it("creates and reads the authenticated player's profile", async () => {
