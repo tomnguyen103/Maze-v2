@@ -1648,6 +1648,8 @@ function updateInterface() {
 
 function finishRun() {
   runFinished = true;
+  elements.resultAtlas.hidden = false;
+  elements.freshRun.textContent = "New Quest";
   const won = run.status === "won";
   if (activeDaily) {
     finishDailyRun(activeDaily, won);

@@ -3,6 +3,7 @@ import { getBundledQuestion } from "../questions/question-bank.js";
 const DAILY_RECORDS_KEY = "echo-maze:daily-records:v1";
 const DAILY_RECORD_LIMIT = 31;
 const DAY_MS = 86_400_000;
+const DAILY_QUESTION_STRIDE = 64;
 
 export const DAILY_LEVEL_ID = "trail-scout";
 export const DAILY_LABYRINTH_NUMBER = 5;
@@ -56,7 +57,7 @@ export function createDailyContract(date) {
     seed: `DAILY-${compactDate}`,
     levelId: DAILY_LEVEL_ID,
     labyrinthNumber: DAILY_LABYRINTH_NUMBER,
-    questionStartOrdinal: epochDay * 8
+    questionStartOrdinal: epochDay * DAILY_QUESTION_STRIDE
   };
 }
 

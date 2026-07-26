@@ -29,6 +29,7 @@ const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   down: "ArrowDown",
   left: "ArrowLeft"
 });
+const FIXED_DAILY_NOW = new Date("2026-07-26T12:00:00.000Z");
 
 /**
  * @param {ReturnType<typeof createRun>} run
@@ -136,6 +137,9 @@ function dailyWinningPlan(daily) {
 async function preserveQuestState(page) {
   await page.addInitScript(
     ({ quest, locator }) => {
+      if (sessionStorage.getItem("echo-maze:daily-fixture-seeded") === "true") {
+        return;
+      }
       localStorage.setItem(
         "echo-maze:quest-progress:v1",
         JSON.stringify(quest)
@@ -144,15 +148,48 @@ async function preserveQuestState(page) {
         "echo-maze:active-run:v1",
         JSON.stringify(locator)
       );
+      sessionStorage.setItem("echo-maze:daily-fixture-seeded", "true");
     },
     { quest: QUEST_FIXTURE, locator: ACTIVE_RUN_FIXTURE }
   );
 }
 
+/** @param {import("@playwright/test").Page} page */
+async function expectPreservedQuestState(page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        quest: localStorage.getItem("echo-maze:quest-progress:v1"),
+        active: localStorage.getItem("echo-maze:active-run:v1")
+      }))
+    )
+    .toEqual({
+      quest: JSON.stringify(QUEST_FIXTURE),
+      active: JSON.stringify(ACTIVE_RUN_FIXTURE)
+    });
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function stableCanvasData(page) {
+  let previous = "";
+  await expect
+    .poll(async () => {
+      const current = await page.locator("#maze-canvas").evaluate(
+        (/** @type {HTMLCanvasElement} */ canvas) => canvas.toDataURL()
+      );
+      const stable = current.length > 0 && current === previous;
+      previous = current;
+      return stable;
+    })
+    .toBe(true);
+  return previous;
+}
+
 test("reconstructs today's UTC Daily offline without spending Run Access", async ({
   page
 }) => {
-  const daily = createDailyContract(utcDateKey());
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
   /** @type {string[]} */
   const accessRequests = [];
   /** @type {string[]} */
@@ -175,39 +212,27 @@ test("reconstructs today's UTC Daily offline without spending Run Access", async
   ).toBeVisible();
   await expect(page.locator("#seed-value")).toHaveText(daily.seed);
   await expect(page.locator("#quest-stage")).toContainText(
-    "Labyrinth 5 · Developing"
+    `Labyrinth ${daily.labyrinthNumber} · Developing`
   );
-  const firstCanvas = await page.locator("#maze-canvas").evaluate(
-    (/** @type {HTMLCanvasElement} */ canvas) => canvas.toDataURL()
-  );
+  const firstCanvas = await stableCanvasData(page);
+  await expectPreservedQuestState(page);
 
   await page.reload();
 
-  expect(
-    await page.locator("#maze-canvas").evaluate(
-      (/** @type {HTMLCanvasElement} */ canvas) => canvas.toDataURL()
-    )
-  ).toBe(firstCanvas);
+  expect(await stableCanvasData(page)).toBe(firstCanvas);
   expect(accessRequests).toEqual([]);
   expect(questionRequests).toEqual([]);
-  await expect
-    .poll(() =>
-      page.evaluate(() => ({
-        quest: localStorage.getItem("echo-maze:quest-progress:v1"),
-        active: localStorage.getItem("echo-maze:active-run:v1")
-      }))
-    )
-    .toEqual({
-      quest: JSON.stringify(QUEST_FIXTURE),
-      active: JSON.stringify(ACTIVE_RUN_FIXTURE)
-    });
+  await expectPreservedQuestState(page);
 });
 
 test("explains an expired UTC link and shares only today's public date", async ({
   page
 }) => {
-  const current = createDailyContract(utcDateKey());
-  const expired = utcDateKey(new Date(Date.now() - 86_400_000));
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const current = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
+  const expired = utcDateKey(
+    new Date(FIXED_DAILY_NOW.getTime() - 86_400_000)
+  );
   await preserveQuestState(page);
   await page.addInitScript(() => {
     Reflect.set(window, "__copiedDaily", "");
@@ -251,7 +276,10 @@ test("explains an expired UTC link and shares only today's public date", async (
 test("keeps the Daily choice operable at 390px and 200 percent text", async ({
   page
 }) => {
-  const expired = utcDateKey(new Date(Date.now() - 86_400_000));
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const expired = utcDateKey(
+    new Date(FIXED_DAILY_NOW.getTime() - 86_400_000)
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/play?daily=${expired}`);
   await page.evaluate(() => {
@@ -284,7 +312,7 @@ test("switches an open tab to the new UTC Daily at midnight", async ({
   page
 }) => {
   await page.clock.install({
-    time: new Date("2026-07-26T23:59:59.000Z")
+    time: new Date("2026-07-26T23:59:00.000Z")
   });
   await page.addInitScript(() => {
     Reflect.set(window, "__copiedDaily", "");
@@ -300,7 +328,7 @@ test("switches an open tab to the new UTC Daily at midnight", async ({
   await page.goto("/play?daily=2026-07-26");
   await expect(page.locator("#seed-value")).toHaveText("DAILY-20260726");
 
-  await page.clock.fastForward("00:00:02");
+  await page.clock.fastForward("00:01:02");
   await page.getByRole("button", { name: "Daily", exact: true }).click();
 
   const dialog = page.getByRole("dialog", {
@@ -323,7 +351,8 @@ test("switches an open tab to the new UTC Daily at midnight", async ({
 test("saves a Daily Personal Best without changing Quest, Records, or demo state", async ({
   page
 }) => {
-  const daily = createDailyContract(utcDateKey());
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
   const actions = dailyWinningPlan(daily);
   /** @type {string[]} */
   const accessRequests = [];
@@ -388,7 +417,9 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
       version: 1,
       date: daily.date,
       seed: daily.seed,
-      completed: true
+      completed: true,
+      bestElapsedMs: expect.any(Number),
+      bestMoves: expect.any(Number)
     })
   ]);
   expect(accessRequests).toEqual([]);

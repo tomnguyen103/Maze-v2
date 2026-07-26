@@ -28,7 +28,7 @@ describe("Daily Shared Labyrinth", () => {
       seed: "DAILY-20260726",
       levelId: "trail-scout",
       labyrinthNumber: 5,
-      questionStartOrdinal: 165280
+      questionStartOrdinal: 1322240
     });
     expect(utcDateKey(new Date("2026-07-26T23:59:59.999-05:00"))).toBe(
       "2026-07-27"
@@ -39,10 +39,14 @@ describe("Daily Shared Labyrinth", () => {
     const daily = createDailyContract("2026-07-26");
 
     expect([0, 1, 2].map((index) => getDailyQuestion(daily, index).id)).toEqual([
-      "scout-developing-165280",
-      "scout-developing-165281",
-      "scout-developing-165282"
+      "scout-developing-1322240",
+      "scout-developing-1322241",
+      "scout-developing-1322242"
     ]);
+    expect(
+      createDailyContract("2026-07-27").questionStartOrdinal -
+        daily.questionStartOrdinal
+    ).toBe(64);
   });
 
   it("accepts only today's UTC link and explains every other date as expired", () => {

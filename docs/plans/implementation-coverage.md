@@ -2,11 +2,11 @@
 
 **Opened:** 2026-07-25
 
-**Live baseline:** `9391e04` on `main`; signed-in allowance and lifetime
-membership are merged through PRs #49-#50. Current #43 worktree proof includes
-248 passing Vitest cases plus 60 passing Playwright cases with 4 intentional
-environment/project skips, including complete desktop/mobile Atlas and
-Labyrinth 4 Gate Warden journeys. Merge remains pending.
+**Live baseline:** `7702dff` on `main`; signed-in allowance, lifetime
+membership, Echo Atlas, and Gate Warden milestones are merged through PRs
+#49-#51. Current #47 worktree proof includes 256 passing Vitest cases plus 74
+passing Playwright cases with 4 intentional Clerk-environment skips, including
+complete desktop/mobile Daily Shared Labyrinth journeys. Merge remains pending.
 
 **Authority:** the attached implementation approval, then `AGENTS.md`, then the
 combined master plan. A source document being marked draft or superseded does

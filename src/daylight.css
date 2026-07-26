@@ -857,7 +857,7 @@ kbd {
   overflow-wrap: anywhere;
 }
 
-.daily-expired {
+#daily-expired.daily-expired {
   padding: var(--space-3);
   color: var(--color-ink);
   border-left: 0.3rem solid var(--color-warden);
