@@ -1,5 +1,12 @@
-export const LIFETIME_AMOUNT = 599;
-export const LIFETIME_CURRENCY = "usd";
+import {
+  LIFETIME_AMOUNT,
+  LIFETIME_CURRENCY
+} from "../shared/lifetime-product.js";
+
+export {
+  LIFETIME_AMOUNT,
+  LIFETIME_CURRENCY
+} from "../shared/lifetime-product.js";
 
 export class LifetimeVerificationError extends Error {
   /** @param {string} message */
@@ -89,14 +96,12 @@ export function normalizeLifetimeProviderEvent(event) {
   }
   if (
     (event.type === "refund.created" || event.type === "refund.updated") &&
-    Number(object.amount) === LIFETIME_AMOUNT &&
     object.status === "succeeded"
   ) {
     return {
       ...base,
-      kind: "entitlement",
-      paymentIntentId,
-      state: "refunded"
+      kind: "refund",
+      paymentIntentId
     };
   }
   if (event.type === "charge.dispute.created") {

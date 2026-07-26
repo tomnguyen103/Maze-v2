@@ -75,6 +75,7 @@ export function createPlayerController({
       return client.getRunAccess();
     },
     async createLifetimeCheckout() {
+      await clerkBrowser.initialize();
       return client.createLifetimeCheckout();
     },
     /** @param {string} sessionId */

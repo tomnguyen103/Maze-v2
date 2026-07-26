@@ -1,3 +1,8 @@
+import {
+  LIFETIME_PRICE_LABEL,
+  LIFETIME_PRICE_ONCE
+} from "../../shared/lifetime-product.js";
+
 /**
  * @param {{
  *   onUnlock?: () => Promise<void>
@@ -44,9 +49,14 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
     }
     elements.dialog.close();
   });
+  renderMembershipCopy();
 
   return {
     close() {
+      if (resolveLastFreeRun) {
+        settleLastFreeRun(false);
+        return;
+      }
       if (elements.dialog.open) {
         elements.dialog.close();
       }
@@ -85,27 +95,34 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
    * @param {"idle" | "success" | "error"} [state]
    */
   function showMembership(message = "", state = "idle") {
+    if (resolveLastFreeRun) {
+      settleLastFreeRun(false);
+    }
     mode = "membership";
+    renderMembershipCopy();
+    setStatus(message, state);
+    openDialog();
+  }
+
+  function renderMembershipCopy() {
     elements.kicker.textContent = "Lifetime Membership";
     elements.title.textContent = "Unlock every future Run";
     elements.intro.textContent =
       "Ask a parent or grown-up for help before opening secure Stripe Checkout.";
     elements.offer.hidden = false;
-    elements.price.textContent = "$5.99 once";
+    elements.price.textContent = LIFETIME_PRICE_ONCE;
     elements.priceNote.textContent = "Lifetime access for this account";
     elements.details.textContent =
       "No subscription. No renewal. Every Run keeps the same fair Warden rules.";
     elements.storageNote.textContent =
       "Quest Progress and Records stay on this device unless cloud sync is turned on.";
-    setStatus(message, state);
     elements.primary.disabled = false;
     elements.primary.textContent = "Unlock";
     elements.primary.setAttribute(
       "aria-label",
-      "Unlock lifetime access - $5.99"
+      `Unlock lifetime access - ${LIFETIME_PRICE_LABEL}`
     );
     elements.close.textContent = "Not now";
-    openDialog();
   }
 
   /**

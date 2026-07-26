@@ -22,6 +22,7 @@ function paidCheckout(overrides = {}) {
     priceId: CONFIG.priceId,
     purchaseId: PURCHASE_ID,
     quantity: 1,
+    sessionStatus: "complete",
     sessionId: SESSION_ID,
     ...overrides
   };
@@ -29,6 +30,7 @@ function paidCheckout(overrides = {}) {
 
 function dependencies(overrides = {}) {
   const store = {
+    abandonCheckout: vi.fn().mockResolvedValue(true),
     activatePurchase: vi.fn().mockImplementation(async (_checkout, event) =>
       event
         ? { outcome: "processed" }
@@ -119,6 +121,78 @@ describe("Lifetime Membership service", () => {
     await service.createCheckout(USER_ID);
 
     expect(deps.provider.retrieveCheckoutLink).toHaveBeenCalledWith(SESSION_ID);
+    expect(deps.provider.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("replaces a closed unpaid Checkout instead of dead-ending retries", async () => {
+    const deps = dependencies({
+      createId: vi.fn()
+        .mockReturnValueOnce(PURCHASE_ID)
+        .mockReturnValueOnce("purchase_456")
+    });
+    deps.store.reservePurchase
+      .mockResolvedValueOnce({
+        purchaseId: PURCHASE_ID,
+        sessionId: SESSION_ID,
+        state: "open"
+      })
+      .mockResolvedValueOnce({
+        purchaseId: "purchase_456",
+        sessionId: null,
+        state: "reserved"
+      });
+    deps.provider.retrieveCheckoutLink.mockRejectedValue(
+      new LifetimeVerificationError("Checkout closed.")
+    );
+    deps.provider.retrieveCheckout.mockResolvedValue(
+      paidCheckout({
+        paymentStatus: "unpaid",
+        sessionStatus: "expired"
+      })
+    );
+    deps.provider.createCheckout.mockResolvedValue({
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_new",
+      sessionId: "cs_test_new"
+    });
+    const service = createLifetimeService(deps);
+
+    await expect(service.createCheckout(USER_ID)).resolves.toEqual({
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_new",
+      purchaseId: "purchase_456",
+      state: "checkout_open"
+    });
+    expect(deps.store.abandonCheckout).toHaveBeenCalledWith(
+      PURCHASE_ID,
+      SESSION_ID
+    );
+    expect(deps.store.attachCheckout).toHaveBeenCalledWith(
+      "purchase_456",
+      "cs_test_new"
+    );
+  });
+
+  it("does not replace a completed Checkout while async payment is pending", async () => {
+    const deps = dependencies();
+    deps.store.reservePurchase.mockResolvedValue({
+      purchaseId: PURCHASE_ID,
+      sessionId: SESSION_ID,
+      state: "open"
+    });
+    deps.provider.retrieveCheckoutLink.mockRejectedValue(
+      new LifetimeVerificationError("Checkout closed.")
+    );
+    deps.provider.retrieveCheckout.mockResolvedValue(
+      paidCheckout({
+        paymentStatus: "unpaid",
+        sessionStatus: "complete"
+      })
+    );
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.createCheckout(USER_ID)
+    ).rejects.toThrow("Checkout closed.");
+    expect(deps.store.abandonCheckout).not.toHaveBeenCalled();
     expect(deps.provider.createCheckout).not.toHaveBeenCalled();
   });
 
@@ -290,5 +364,63 @@ describe("Lifetime Membership service", () => {
       purchaseId: PURCHASE_ID,
       state: "disputed"
     });
+  });
+
+  it("uses cumulative Stripe state before revoking split refunds", async () => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_partial",
+      type: "refund.updated",
+      created: 102,
+      data: {
+        object: {
+          amount: 300,
+          payment_intent: "pi_echo",
+          status: "succeeded"
+        }
+      }
+    });
+    deps.provider.retrievePaymentReference.mockResolvedValue({
+      ownerId: USER_ID,
+      purchaseId: PURCHASE_ID,
+      state: "paid"
+    });
+    deps.store.transitionEntitlement.mockResolvedValue({
+      outcome: "ignored"
+    });
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).resolves.toEqual({ outcome: "ignored" });
+    expect(deps.store.transitionEntitlement).toHaveBeenCalledWith(
+      expect.objectContaining({ state: null })
+    );
+
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_split_complete",
+      type: "refund.updated",
+      created: 103,
+      data: {
+        object: {
+          amount: 299,
+          payment_intent: "pi_echo",
+          status: "succeeded"
+        }
+      }
+    });
+    deps.provider.retrievePaymentReference.mockResolvedValue({
+      ownerId: USER_ID,
+      purchaseId: PURCHASE_ID,
+      state: "refunded"
+    });
+    deps.store.transitionEntitlement.mockResolvedValue({
+      outcome: "processed"
+    });
+
+    await service.processWebhook(Buffer.from("{}"), "t=1,v1=signed");
+    expect(deps.store.transitionEntitlement).toHaveBeenLastCalledWith(
+      expect.objectContaining({ state: "refunded" })
+    );
   });
 });

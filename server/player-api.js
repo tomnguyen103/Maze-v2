@@ -166,10 +166,6 @@ export function createPlayerApi(env = process.env) {
      */
     return (request, response, next) => {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
-      if (pathname === "/api/stripe-webhook") {
-        void unavailableLifetimeHandler(request, response, next);
-        return;
-      }
       if (ACCESS_PATHS.has(pathname)) {
         void unavailableAccessHandler(request, response, next);
         return;

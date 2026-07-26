@@ -10,7 +10,7 @@ Run `npm run build` followed by `npm run check:bundle`.
 | Asset | 2026-07-25 baseline | Budget |
 |---|---:|---:|
 | Landing JavaScript | 5.79 KB gzip | 8 KB gzip |
-| Game JavaScript | 24.32 KB gzip | 30 KB gzip |
+| Game JavaScript | 24.39 KB gzip | 30 KB gzip |
 | Shared styles | 7.92 KB gzip | 12 KB gzip |
 | Optional Clerk chunk | 544.21 KB gzip | 600 KB gzip |
 

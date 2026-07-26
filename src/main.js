@@ -39,7 +39,12 @@ import {
   getLabyrinthConfig,
   getQuestLevel
 } from "./questions/quest-levels.js";
-import { createLifetimeView } from "./player/lifetime-view.js";
+import {
+  createLifetimeView
+} from "./player/lifetime-view.js";
+import {
+  LIFETIME_PRICE_ONCE
+} from "../shared/lifetime-product.js";
 import { createPlayerController } from "./player/player-controller.js";
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
@@ -489,6 +494,10 @@ async function initializeRunEntry() {
   if (!(await resolveLifetimeReturn())) {
     return;
   }
+  if (lifetimeReturnConfirmed && activeRunLocator !== null) {
+    await resumePendingRun();
+    return;
+  }
   if (locationSeed !== null || activeRunLocator !== null) {
     const locator = activeRunLocator;
     await startSharedRun(
@@ -783,7 +792,7 @@ function showRunAccessGate(access) {
     }
     lifetimeView.showMembership();
     announce(
-      `No free Runs remain. Lifetime Membership is $5.99 once. ${access.freeRunsRemaining} free Runs remaining.`
+      `No free Runs remain. Lifetime Membership is ${LIFETIME_PRICE_ONCE}. ${access.freeRunsRemaining} free Runs remaining.`
     );
     return;
   }
@@ -809,7 +818,6 @@ async function openLifetimeCheckout() {
     await confirmLifetimeSession(pendingLifetimeSessionId);
     pendingLifetimeSessionId = "";
     removeCheckoutParameters(new URL(window.location.href));
-    lifetimeReturnConfirmed = true;
     lifetimeView.close();
     await resumePendingRun();
     return;
@@ -820,7 +828,6 @@ async function openLifetimeCheckout() {
       "Lifetime access is already active. Resuming your saved Run.",
       "success"
     );
-    lifetimeReturnConfirmed = true;
     lifetimeView.close();
     await resumePendingRun();
     return;
@@ -872,7 +879,7 @@ async function resolveLifetimeReturn() {
     await confirmLifetimeSession(sessionId);
     pendingLifetimeSessionId = "";
     removeCheckoutParameters(url);
-    lifetimeReturnConfirmed = true;
+    lifetimeReturnConfirmed = activeRunLocator !== null;
     return true;
   } catch {
     lifetimeView.showMembership(
@@ -911,15 +918,21 @@ function removeCheckoutParameters(url) {
 
 async function resumePendingRun() {
   if (!activeRunLocator) {
-    return;
+    lifetimeReturnConfirmed = false;
+    return false;
   }
-  await startSharedRun(
+  lifetimeReturnConfirmed = true;
+  const started = await startSharedRun(
     activeRunLocator.seed,
     activeRunLocator.levelId,
     activeRunLocator.labyrinthNumber,
     false,
     activeRunLocator.runId
   );
+  if (!started) {
+    lifetimeReturnConfirmed = false;
+  }
+  return started;
 }
 
 function showDemoAccountGate() {

@@ -40,7 +40,11 @@ ALTER TABLE player_access
   ADD CONSTRAINT player_access_active_purchase_fk
   FOREIGN KEY (active_purchase_id)
   REFERENCES lifetime_purchases(id)
-  ON DELETE SET NULL;
+  ON DELETE SET NULL
+  NOT VALID;
+
+ALTER TABLE player_access
+  VALIDATE CONSTRAINT player_access_active_purchase_fk;
 
 CREATE TABLE stripe_webhook_events (
   event_id TEXT PRIMARY KEY,

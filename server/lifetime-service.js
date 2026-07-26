@@ -25,6 +25,7 @@ export class LifetimeOwnershipError extends Error {
  *   },
  *   recordEvent?: (eventName: string, fields: Record<string, unknown>) => void,
  *   store: {
+ *     abandonCheckout: (purchaseId: string, sessionId: string) => Promise<boolean>,
  *     activatePurchase: (checkout: Record<string, unknown>, event: null | { eventCreated: number, eventId: string, eventType: string }) => Promise<Record<string, unknown>>,
  *     attachCheckout: (purchaseId: string, sessionId: string) => Promise<void>,
  *     closeCheckout: (event: Record<string, unknown>) => Promise<Record<string, unknown>>,
@@ -44,43 +45,95 @@ export function createLifetimeService({
   return {
     /** @param {string} userId */
     async createCheckout(userId) {
-      const reservation = await store.reservePurchase(
-        userId,
-        createId(),
-        config.priceId
-      );
-      if (reservation.state === "member") {
-        return {
-          checkoutUrl: null,
-          purchaseId: reservation.purchaseId,
-          state: "lifetime_active"
-        };
-      }
-      if (reservation.sessionId) {
-        const checkoutUrl = await provider.retrieveCheckoutLink(
-          reservation.sessionId
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const reservation = await store.reservePurchase(
+          userId,
+          createId(),
+          config.priceId
         );
-        recordEvent("lifetime_checkout", { outcome: "reused" });
+        if (reservation.state === "member") {
+          return {
+            checkoutUrl: null,
+            purchaseId: reservation.purchaseId,
+            state: "lifetime_active"
+          };
+        }
+        if (reservation.sessionId) {
+          try {
+            const checkoutUrl = await provider.retrieveCheckoutLink(
+              reservation.sessionId
+            );
+            recordEvent("lifetime_checkout", { outcome: "reused" });
+            return {
+              checkoutUrl,
+              purchaseId: reservation.purchaseId,
+              state: "checkout_open"
+            };
+          } catch (error) {
+            if (!(error instanceof LifetimeVerificationError)) {
+              throw error;
+            }
+            const existing = await provider.retrieveCheckout(
+              reservation.sessionId
+            );
+            if (existing.paymentStatus === "paid") {
+              verifyLifetimeCheckout(existing, {
+                priceId: config.priceId,
+                purchaseId: reservation.purchaseId,
+                userId
+              });
+              const payment = await provider.retrievePaymentReference(
+                String(existing.paymentIntentId)
+              );
+              verifyPaymentIdentity(existing, payment);
+              if (payment.state !== "paid") {
+                throw new LifetimeVerificationError(
+                  "Payment is no longer eligible for Lifetime Membership."
+                );
+              }
+              const result = await store.activatePurchase(existing, null);
+              if (result.lifetime === true) {
+                return {
+                  checkoutUrl: null,
+                  purchaseId: reservation.purchaseId,
+                  state: "lifetime_active"
+                };
+              }
+              throw new LifetimeVerificationError(
+                "Checkout could not be recovered."
+              );
+            }
+            if (existing.sessionStatus !== "expired") {
+              throw error;
+            }
+            await store.abandonCheckout(
+              reservation.purchaseId,
+              reservation.sessionId
+            );
+            if (attempt === 1) {
+              throw error;
+            }
+            continue;
+          }
+        }
+        const checkout = await provider.createCheckout({
+          purchaseId: reservation.purchaseId,
+          userId
+        });
+        await store.attachCheckout(
+          reservation.purchaseId,
+          checkout.sessionId
+        );
+        recordEvent("lifetime_checkout", { outcome: "created" });
         return {
-          checkoutUrl,
+          checkoutUrl: checkout.checkoutUrl,
           purchaseId: reservation.purchaseId,
           state: "checkout_open"
         };
       }
-      const checkout = await provider.createCheckout({
-        purchaseId: reservation.purchaseId,
-        userId
-      });
-      await store.attachCheckout(
-        reservation.purchaseId,
-        checkout.sessionId
+      throw new LifetimeVerificationError(
+        "Checkout could not be recovered."
       );
-      recordEvent("lifetime_checkout", { outcome: "created" });
-      return {
-        checkoutUrl: checkout.checkoutUrl,
-        purchaseId: reservation.purchaseId,
-        state: "checkout_open"
-      };
     },
 
     /** @param {string} userId @param {string} sessionId */
@@ -137,6 +190,13 @@ export function createLifetimeService({
         const reference = await provider.retrievePaymentReference(
           normalized.paymentIntentId
         );
+        const state = normalized.kind === "refund"
+          ? reference.state === "refunded"
+            ? "refunded"
+            : null
+          : "state" in normalized
+            ? normalized.state
+            : null;
         return store.transitionEntitlement({
           eventCreated: normalized.eventCreated,
           eventId: normalized.eventId,
@@ -144,7 +204,7 @@ export function createLifetimeService({
           ownerId: reference.ownerId,
           paymentIntentId: normalized.paymentIntentId,
           purchaseId: reference.purchaseId,
-          state: normalized.state
+          state
         });
       }
       const checkout = await provider.retrieveCheckout(

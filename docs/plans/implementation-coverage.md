@@ -4,7 +4,7 @@
 
 **Live baseline:** `69605d8` on `main`; 147 Vitest tests and 55 Playwright
 tests pass, with 3 intentional Playwright skips. Current #42 worktree proof:
-222 Vitest tests and 56 Playwright tests pass, with 4 intentional
+234 Vitest tests and 56 Playwright tests pass, with 4 intentional
 environment/project skips.
 
 **Authority:** the attached implementation approval, then `AGENTS.md`, then the

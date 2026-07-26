@@ -96,6 +96,21 @@ export function createLifetimeStore(pool) {
       }
     },
 
+    /** @param {string} purchaseId @param {string} sessionId */
+    async abandonCheckout(purchaseId, sessionId) {
+      const result = await pool.query(
+        `UPDATE lifetime_purchases
+         SET status = 'failed',
+             updated_at = NOW()
+         WHERE id = $1
+           AND checkout_session_id = $2
+           AND status IN ('pending', 'open')
+         RETURNING id`,
+        [purchaseId, sessionId]
+      );
+      return Boolean(result.rows[0]);
+    },
+
     /** @param {string} sessionId */
     async findPurchaseBySession(sessionId) {
       const result = await pool.query(
@@ -254,6 +269,14 @@ export function createLifetimeStore(pool) {
         if (!(await beginWebhookEvent(client, event))) {
           return { outcome: "duplicate" };
         }
+        if (
+          event.state !== "active" &&
+          event.state !== "refunded" &&
+          event.state !== "disputed"
+        ) {
+          await finishWebhookEvent(client, String(event.eventId), "ignored");
+          return { outcome: "ignored" };
+        }
         const purchaseResult = await client.query(
           `SELECT
              id,
@@ -302,7 +325,10 @@ export function createLifetimeStore(pool) {
             `UPDATE lifetime_purchases
              SET payment_intent_id = COALESCE(payment_intent_id, $2),
                  status = $3,
-                 provider_event_created = $4,
+                 provider_event_created = GREATEST(
+                   provider_event_created,
+                   $4
+                 ),
                  refunded_at = CASE
                    WHEN $3 = 'refunded' THEN NOW()
                    ELSE refunded_at

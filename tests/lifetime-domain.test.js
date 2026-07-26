@@ -23,6 +23,7 @@ function paidCheckout(overrides = {}) {
     priceId: EXPECTED.priceId,
     purchaseId: EXPECTED.purchaseId,
     quantity: 1,
+    sessionStatus: "complete",
     sessionId: "cs_test_echo_maze",
     ...overrides
   };
@@ -87,18 +88,16 @@ describe("lifetime provider event normalization", () => {
       "refund.created",
       { amount: 599, payment_intent: "pi_refunded", status: "succeeded" },
       {
-        kind: "entitlement",
-        paymentIntentId: "pi_refunded",
-        state: "refunded"
+        kind: "refund",
+        paymentIntentId: "pi_refunded"
       }
     ],
     [
       "refund.updated",
       { amount: 599, payment_intent: "pi_refunded", status: "succeeded" },
       {
-        kind: "entitlement",
-        paymentIntentId: "pi_refunded",
-        state: "refunded"
+        kind: "refund",
+        paymentIntentId: "pi_refunded"
       }
     ],
     [
@@ -153,20 +152,26 @@ describe("lifetime provider event normalization", () => {
     });
   });
 
-  it("ignores partial or incomplete refunds, lost disputes, and unknown events", () => {
-    const events = [
-      {
-        id: "evt_partial",
-        type: "refund.created",
-        created: 1,
-        data: {
-          object: {
-            amount: 100,
-            payment_intent: "pi_partial",
-            status: "succeeded"
-          }
+  it("normalizes partial refunds for cumulative provider verification", () => {
+    expect(normalizeLifetimeProviderEvent({
+      id: "evt_partial",
+      type: "refund.created",
+      created: 1,
+      data: {
+        object: {
+          amount: 100,
+          payment_intent: "pi_partial",
+          status: "succeeded"
         }
-      },
+      }
+    })).toMatchObject({
+      kind: "refund",
+      paymentIntentId: "pi_partial"
+    });
+  });
+
+  it("ignores incomplete refunds, lost disputes, and unknown events", () => {
+    const events = [
       {
         id: "evt_failed",
         type: "refund.created",

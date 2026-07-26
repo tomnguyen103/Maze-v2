@@ -155,4 +155,17 @@ describe("Player Profile dialog", () => {
     });
     expect(client.getRunAccess).toHaveBeenCalledOnce();
   });
+
+  it("initializes Clerk before creating authenticated Checkout", async () => {
+    const controller = createPlayerController();
+
+    await controller.createLifetimeCheckout();
+
+    expect(clerkBrowser.initialize).toHaveBeenCalled();
+    expect(
+      clerkBrowser.initialize.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      client.createLifetimeCheckout.mock.invocationCallOrder[0]
+    );
+  });
 });

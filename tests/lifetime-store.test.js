@@ -123,6 +123,24 @@ describe("Lifetime Membership store", () => {
     expect(sql).not.toContain("status = 'open'");
   });
 
+  it("releases a closed unpaid Checkout reservation for a fresh purchase", async () => {
+    const pool = {
+      connect: vi.fn(),
+      query: vi.fn().mockResolvedValue({
+        rows: [{ id: "purchase_123" }]
+      })
+    };
+    const store = createLifetimeStore(pool);
+
+    await expect(
+      store.abandonCheckout("purchase_123", "cs_test_closed")
+    ).resolves.toBe(true);
+    const sql = String(pool.query.mock.calls[0][0]).replace(/\s+/g, " ");
+    expect(sql).toContain("status = 'failed'");
+    expect(sql).toContain("checkout_session_id = $2");
+    expect(sql).toContain("status IN ('pending', 'open')");
+  });
+
   it("activates direct confirmation without a webhook watermark", async () => {
     const { client, pool } = transactionalPool([
       [],
@@ -271,6 +289,31 @@ describe("Lifetime Membership store", () => {
         }
       )
     ).resolves.toEqual({ outcome: "ignored" });
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        String(sql).includes("FROM lifetime_purchases")
+      )
+    ).toBe(false);
+  });
+
+  it("records a partial refund without changing entitlement", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_partial" }],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool);
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 102,
+      eventId: "evt_partial",
+      eventType: "refund.updated",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123",
+      state: null
+    })).resolves.toEqual({ outcome: "ignored" });
     expect(
       client.query.mock.calls.some(([sql]) =>
         String(sql).includes("FROM lifetime_purchases")

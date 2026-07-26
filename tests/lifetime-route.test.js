@@ -3,8 +3,10 @@ import {
   createLifetimeHandler
 } from "../server/lifetime-route.js";
 import {
+  LifetimeVerificationError,
   LifetimeWebhookVerificationError
 } from "../server/lifetime-domain.js";
+import { LifetimeOwnershipError } from "../server/lifetime-service.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const servers = new Set();
@@ -160,6 +162,44 @@ describe("Lifetime Membership HTTP boundary", () => {
         method: "POST"
       });
       expect(response.status).toBe(401);
+    });
+  });
+
+  it("advertises POST for unsupported methods", async () => {
+    const handler = createLifetimeHandler({
+      getUserId: () => "user_explorer",
+      service: service()
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-checkout`);
+      expect(response.status).toBe(405);
+      expect(response.headers.get("allow")).toBe("POST");
+    });
+  });
+
+  it.each([
+    [new LifetimeOwnershipError(), 403],
+    [new LifetimeVerificationError("Mismatch."), 400]
+  ])("maps purchase verification failures without leaking details", async (
+    error,
+    expectedStatus
+  ) => {
+    const payment = service();
+    payment.confirmCheckout.mockRejectedValue(error);
+    const handler = createLifetimeHandler({
+      getUserId: () => "user_explorer",
+      service: payment
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-confirm`, {
+        body: JSON.stringify({ sessionId: "cs_test_echo" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      });
+      expect(response.status).toBe(expectedStatus);
+      await expect(response.json()).resolves.toHaveProperty("error");
     });
   });
 

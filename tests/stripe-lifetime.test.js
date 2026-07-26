@@ -21,6 +21,7 @@ function stripeSession(overrides = {}) {
     mode: "payment",
     payment_intent: "pi_echo",
     payment_status: "paid",
+    status: "complete",
     url: "https://checkout.stripe.com/c/pay/cs_test_echo",
     ...overrides
   };
@@ -29,7 +30,11 @@ function stripeSession(overrides = {}) {
 describe("Stripe lifetime adapter", () => {
   it("creates only the fixed one-time Checkout contract with an idempotency key", async () => {
     const create = vi.fn().mockResolvedValue(
-      stripeSession({ payment_intent: null, payment_status: "unpaid" })
+      stripeSession({
+        payment_intent: null,
+        payment_status: "unpaid",
+        status: "open"
+      })
     );
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
@@ -115,6 +120,7 @@ describe("Stripe lifetime adapter", () => {
       priceId: "price_echo_test",
       purchaseId: "purchase_123",
       quantity: 1,
+      sessionStatus: "complete",
       sessionId: "cs_test_echo"
     });
     expect(retrieve).toHaveBeenCalledWith("cs_test_echo", {

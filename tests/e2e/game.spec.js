@@ -104,11 +104,13 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   });
   await unlock.focus();
   await expect(unlock).toBeFocused();
+  const dialogWidth = await page.locator("#lifetime-dialog").evaluate(
+    (dialog) => dialog.clientWidth
+  );
+  expect(dialogWidth).toBeGreaterThan(0);
   await expect(page.locator("#lifetime-dialog")).toHaveJSProperty(
     "scrollWidth",
-    await page.locator("#lifetime-dialog").evaluate(
-      (dialog) => dialog.clientWidth
-    )
+    dialogWidth
   );
 });
 

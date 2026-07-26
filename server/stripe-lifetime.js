@@ -162,7 +162,8 @@ export function normalizeStripeCheckoutSession(session) {
         ? Reflect.get(lineItem, "quantity")
         : Number.NaN
     ),
-    sessionId: String(session.id ?? "")
+    sessionId: String(session.id ?? ""),
+    sessionStatus: String(session.status ?? "")
   };
 }
 
@@ -181,6 +182,7 @@ function validateCreatedCheckout(checkout, purchase, priceId) {
     checkout.quantity !== 1 ||
     checkout.purchaseId !== purchase.purchaseId ||
     checkout.ownerId !== purchase.userId ||
+    checkout.sessionStatus !== "open" ||
     !checkout.sessionId
   ) {
     throw new LifetimeVerificationError(

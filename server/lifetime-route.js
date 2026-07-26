@@ -47,6 +47,7 @@ export function createLifetimeHandler({ getUserId, service }) {
       return;
     }
     if (request.method !== "POST") {
+      response.setHeader("allow", "POST");
       sendJson(response, 405, { error: "Method not allowed." });
       return;
     }

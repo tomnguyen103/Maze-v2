@@ -38,6 +38,22 @@ describe("Lifetime Membership dialog", () => {
     await expect(choice).resolves.toBe(true);
   });
 
+  it.each(["close", "membership"])(
+    "settles a pending last-free confirmation when switching via %s",
+    async (action) => {
+      const view = createLifetimeView();
+      const choice = view.confirmLastFreeRun();
+
+      if (action === "close") {
+        view.close();
+      } else {
+        view.showMembership();
+      }
+
+      await expect(choice).resolves.toBe(false);
+    }
+  );
+
   it("shows transparent one-time pricing and local-progress disclosure", () => {
     createLifetimeView().showMembership();
 
