@@ -43,6 +43,12 @@ The original project is preserved at
 - Use `Copy Share Link` to copy the exact seed, Quest Level, and Labyrinth
   Number without changing the normal `/play` URL. Refreshing `/play` restarts
   the same active Labyrinth from its device-local locator.
+- Open `Daily` for one casual Trail Scout Labyrinth shared by UTC date. Daily
+  links contain only that public date, expire at `00:00 UTC`, and offer the
+  current maze when old. Daily Questions always come from the bundled reviewed
+  deck; completion and Personal Best stay in separate device-local storage.
+  Daily play never consumes Run Access or changes Quest Progress, the Echo
+  Atlas, Run Records, cosmetics, or the Global Scoreboard.
 - Escapes and defeats persist in local Run Records. Escapes rank first by time,
   then moves; defeats rank by Echo progress.
 - New run guarantees a different seed and Labyrinth layout.
@@ -138,6 +144,8 @@ push.
 ## Architecture
 
 - `src/game/game-session.js` contains deterministic generation and pure rules.
+- `src/game/daily-labyrinth.js` owns the UTC-date Daily contract, bundled
+  Question order, expiry rule, and separate privacy-minimized Personal Best.
 - `src/game/quest-atlas.js` derives Atlas regions, nodes, milestone states, and
   cosmetic Sigils from version-1 Quest Progress without a second progress
   store; `src/game/quest-atlas-view.js` owns its accessible presentation.
