@@ -115,40 +115,59 @@ local purchase projections, and the cloud Journal). The tombstone prevents a
 late or retried writer from recreating deleted application data. Never accept
 an unsigned deletion request.
 
-Use the SQL below only as an approved break-glass recovery after independently
-authenticating the account-deletion request. Keep the opaque Clerk user id and
-its lowercase hexadecimal SHA-256 digest in operator-local bound parameters;
-never paste either value into logs, issues, screenshots, or chat.
+Use `scripts/delete-user-data.mjs` only as an approved break-glass recovery
+after independently authenticating the account-deletion request. It reuses the
+same reviewed deletion store as the signed webhook instead of asking an
+operator to reconstruct a transaction in `psql`. Keep the opaque Clerk user id
+and its lowercase hexadecimal SHA-256 digest in process-local environment
+variables; never paste either value into logs, issues, screenshots, or chat.
 
-Bind `$1` to the opaque Clerk user id and `$2` to its 64-character SHA-256
-digest. Run the following as one parameterized transaction:
+From a PowerShell session with the approved database available through
+`DATABASE_URL` or `.env.local`, run:
 
-```sql
-BEGIN;
-SELECT pg_advisory_xact_lock(hashtextextended($1, 0));
-INSERT INTO deleted_user_tombstones (clerk_user_id_hash)
-VALUES ($2)
-ON CONFLICT (clerk_user_id_hash) DO UPDATE SET deleted_at = NOW();
-DELETE FROM cloud_quest_progress WHERE clerk_user_id = $1;
-DELETE FROM players WHERE clerk_user_id = $1;
-DELETE FROM player_access WHERE clerk_user_id = $1;
-COMMIT;
+```powershell
+$env:ECHO_MAZE_DELETE_USER_ID = Read-Host "Verified Clerk user id"
+$sha256 = [Security.Cryptography.SHA256]::Create()
+try {
+  $bytes = [Text.Encoding]::UTF8.GetBytes(
+    $env:ECHO_MAZE_DELETE_USER_ID
+  )
+  $digest = $sha256.ComputeHash($bytes)
+  $env:ECHO_MAZE_DELETE_CONFIRM_SHA256 = -join (
+    $digest | ForEach-Object { $_.ToString("x2") }
+  )
+} finally {
+  $sha256.Dispose()
+}
+$env:ECHO_MAZE_DELETE_CONFIRM = "DELETE APPLICATION DATA"
+try {
+  node --env-file-if-exists=.env.local scripts/delete-user-data.mjs
+  if ($LASTEXITCODE -ne 0) {
+    throw "Application data deletion did not verify."
+  }
+} finally {
+  Remove-Item Env:ECHO_MAZE_DELETE_USER_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM_SHA256 -ErrorAction SilentlyContinue
+  Remove-Item Env:ECHO_MAZE_DELETE_CONFIRM -ErrorAction SilentlyContinue
+}
 ```
 
 The Player Profile deletion cascades to Score Entries. The Run Access deletion
 cascades to Run Grants, local purchase projections, Cloud Quest Progress, and
-the cloud Journal. Verify that
+the cloud Journal. Before commit, the tool verifies that
 `cloud_quest_progress`, `players`, `score_entries`, `player_access`,
 `run_access_grants`, `lifetime_purchases`, and `learning_journals` contain zero
 rows for the bound identity, and that `deleted_user_tombstones` contains exactly
-one row for the bound digest. Stripe financial records follow Stripe and legal
-retention rules and must not be erased by direct database edits. Device-local
+one row for the bound digest. A failed deletion or verification rolls back the
+transaction and prints only a bounded failure message. Stripe financial
+records follow Stripe and legal retention rules and must not be erased by direct
+database edits. Device-local
 Quest Progress, Run Records, Journal, settings, Daily records, and active Run
 state remain on the player's devices; support must explain how the player can
 clear site data separately.
 
-If any statement fails, roll back the whole transaction and investigate. Never
-partially delete one application identity.
+If the tool fails, investigate without attempting partial manual cleanup.
+Never partially delete one application identity.
 
 ## Billing disable
 

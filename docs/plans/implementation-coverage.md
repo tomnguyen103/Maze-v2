@@ -77,18 +77,18 @@ runbooks and safety controls are delivered.
 | C16 | Delivered |
 | C17 | Delivered |
 | C18 | Delivered |
-| C19 | Pending integrated validation |
-| C20 | Pending integrated validation |
-| C21 | Pending integrated validation |
-| C22 | Pending integrated validation |
-| C23 | Pending integrated validation |
+| C19 | Pending mandatory review |
+| C20 | Pending mandatory review |
+| C21 | Pending mandatory review |
+| C22 | Pending mandatory review |
+| C23 | Pending mandatory review |
 | C24 | Delivered |
 | C25 | Delivered |
 | C26 | Delivered |
 | C27 | Deferred - external approval |
 | C28 | Delivered |
 | C29 | Delivered |
-| C30 | Pending integrated validation |
+| C30 | Pending remote-main proof |
 
 ## Source task crosswalk
 

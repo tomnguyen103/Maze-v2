@@ -41,7 +41,8 @@ describe("release readiness evidence", () => {
         "Delivered",
         "Deferred - external approval",
         "Not applicable",
-        "Pending integrated validation"
+        "Pending mandatory review",
+        "Pending remote-main proof"
       ]).toContain(row[statusIndex]);
     }
     expect(
