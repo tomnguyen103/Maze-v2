@@ -1,5 +1,9 @@
 import { clerkMiddleware, getAuth } from "@clerk/express";
 import Stripe from "stripe";
+import {
+  CLERK_WEBHOOK_PATH,
+  createClerkWebhookHandler
+} from "./clerk-webhook-route.js";
 import { createDatabasePool } from "./database.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
@@ -16,12 +20,18 @@ import { createLearningJournalStore } from "./learning-journal-store.js";
 import { createPlayerApiHandler } from "./player-route.js";
 import { createPlayerStore } from "./player-store.js";
 import {
+  createQuestProgressHandler,
+  QUEST_PROGRESS_PATHS
+} from "./quest-progress-route.js";
+import { createQuestProgressStore } from "./quest-progress-store.js";
+import {
   ACCESS_PATHS,
   createRunAccessHandler
 } from "./run-access-route.js";
 import { createRunAccessStore } from "./run-access-store.js";
 import { recordProductEvent } from "./product-events.js";
 import { createStripeLifetimeProvider } from "./stripe-lifetime.js";
+import { createUserDeletionStore } from "./user-deletion-store.js";
 import { URL } from "node:url";
 
 const PLAYER_PATHS = new Set([
@@ -29,8 +39,10 @@ const PLAYER_PATHS = new Set([
   "/api/leaderboard",
   "/api/scores",
   LEARNING_JOURNAL_PATH,
+  ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
-  ...LIFETIME_PATHS
+  ...LIFETIME_PATHS,
+  CLERK_WEBHOOK_PATH
 ]);
 
 /**
@@ -105,6 +117,8 @@ export function createPlayerApi(env = process.env) {
   const accessStore = createRunAccessStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
   const learningJournalStore = createLearningJournalStore(queryAdapter);
+  const questProgressStore = createQuestProgressStore(queryAdapter);
+  const userDeletionStore = createUserDeletionStore(pool);
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request
@@ -134,6 +148,14 @@ export function createPlayerApi(env = process.env) {
           store: lifetimeStore
         })
       : unavailableLifetimeService()
+  });
+  const questProgressHandler = createQuestProgressHandler({
+    store: questProgressStore,
+    getUserId
+  });
+  const clerkWebhookHandler = createClerkWebhookHandler({
+    deleteUser: (userId) => userDeletionStore.deleteUser(userId),
+    signingSecret: env.CLERK_WEBHOOK_SIGNING_SECRET
   });
   const accessHandler = createRunAccessHandler({
     store: accessStore,
@@ -174,6 +196,10 @@ export function createPlayerApi(env = process.env) {
       store: learningJournalStore,
       getUserId: () => null
     });
+    const unavailableQuestProgressHandler = createQuestProgressHandler({
+      store: questProgressStore,
+      getUserId: () => null
+    });
     /**
      * @param {import("node:http").IncomingMessage} request
      * @param {import("node:http").ServerResponse} response
@@ -181,6 +207,10 @@ export function createPlayerApi(env = process.env) {
      */
     return (request, response, next) => {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
+      if (pathname === CLERK_WEBHOOK_PATH) {
+        void clerkWebhookHandler(request, response, next);
+        return;
+      }
       if (ACCESS_PATHS.has(pathname)) {
         void unavailableAccessHandler(request, response, next);
         return;
@@ -191,6 +221,10 @@ export function createPlayerApi(env = process.env) {
       }
       if (pathname === LEARNING_JOURNAL_PATH) {
         void unavailableLearningJournalHandler(request, response, next);
+        return;
+      }
+      if (QUEST_PROGRESS_PATHS.has(pathname)) {
+        void unavailableQuestProgressHandler(request, response, next);
         return;
       }
       void unavailableAuthHandler(request, response, next);
@@ -215,6 +249,10 @@ export function createPlayerApi(env = process.env) {
     }
     if (pathname === "/api/stripe-webhook") {
       void lifetimeHandler(request, response, next);
+      return;
+    }
+    if (pathname === CLERK_WEBHOOK_PATH) {
+      void clerkWebhookHandler(request, response, next);
       return;
     }
     if (
@@ -246,6 +284,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (pathname === LEARNING_JOURNAL_PATH) {
           void learningJournalHandler(request, response, next);
+          return;
+        }
+        if (QUEST_PROGRESS_PATHS.has(pathname)) {
+          void questProgressHandler(request, response, next);
           return;
         }
         void handler(request, response, next);

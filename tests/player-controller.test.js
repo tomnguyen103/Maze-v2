@@ -19,7 +19,11 @@ const clerkBrowser = {
 const client = {
   getLeaderboard: vi.fn(async () => ({ entries: [], globalMaxScore: 0 })),
   getProfile: vi.fn(async () => ({ profile: null })),
+  getQuestProgress: vi.fn(async () => ({ record: null })),
   saveProfile: vi.fn(async () => ({ profile })),
+  saveQuestProgress: vi.fn(async () => ({
+    record: { progress: { questId: "quest_cloud_123" }, revision: 1 }
+  })),
   submitScore: vi.fn(async () => ({})),
   authorizeRun: vi.fn(async () => ({
     allowed: true,
@@ -70,6 +74,7 @@ const { createPlayerController } = await import(
 describe("Player Profile dialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     document.body.innerHTML = `
       <button id="player-auth-button"></button>
       <button id="player-close"></button>
@@ -159,6 +164,39 @@ describe("Player Profile dialog", () => {
       state: "free"
     });
     expect(client.getRunAccess).toHaveBeenCalledOnce();
+  });
+
+  it("retries a pending authenticated Journal clear after reconnect", async () => {
+    client.clearLearningJournal
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce();
+    const controller = createPlayerController();
+    await vi.waitFor(() =>
+      expect(client.getLearningJournal).toHaveBeenCalledOnce()
+    );
+
+    controller.clearLanternJournal();
+    await vi.waitFor(() =>
+      expect(client.clearLearningJournal).toHaveBeenCalledOnce()
+    );
+
+    await controller.retryLanternJournalSync();
+
+    expect(client.clearLearningJournal).toHaveBeenCalledTimes(2);
+  });
+
+  it("initializes Clerk before reading and saving Cloud Quest Progress", async () => {
+    const controller = createPlayerController();
+    const progress = { questId: "quest_cloud_123" };
+
+    await expect(controller.getCloudQuestProgress()).resolves.toEqual({
+      record: null
+    });
+    await controller.saveCloudQuestProgress(progress, 0);
+
+    expect(clerkBrowser.initialize).toHaveBeenCalled();
+    expect(client.getQuestProgress).toHaveBeenCalledOnce();
+    expect(client.saveQuestProgress).toHaveBeenCalledWith(progress, 0);
   });
 
   it("initializes Clerk before creating authenticated Checkout", async () => {

@@ -10,9 +10,9 @@ const STORAGE_PREFIX = "echo-maze:lantern-journal";
 /**
  * @param {{
  *   client: {
- *     getLearningJournal: () => Promise<{ journal: unknown }>,
- *     saveLearningJournal: (journal: unknown) => Promise<{ journal: unknown }>,
- *     clearLearningJournal: () => Promise<unknown>
+ *     getLearningJournal: () => Promise<{ journal: unknown, clearGeneration?: unknown }>,
+ *     saveLearningJournal: (journal: unknown, clearGeneration: number) => Promise<{ journal: unknown, clearGeneration?: unknown }>,
+ *     clearLearningJournal: () => Promise<{ journal?: unknown, clearGeneration?: unknown } | void>
  *   },
  *   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">,
  *   onChange?: (journal: ReturnType<typeof createLanternJournal>) => void,
@@ -29,6 +29,8 @@ export function createJournalContinuity({
   let selectedUserId = "";
   let authEpoch = 0;
   let journal = createLanternJournal();
+  let clearGeneration = 0;
+  let devicePersistenceAvailable = true;
   const pendingClearUsers = new Set();
   /** @type {Promise<void>} */
   let idle = Promise.resolve();
@@ -52,30 +54,35 @@ export function createJournalContinuity({
     const selectedKey = journalKey(userId);
     const selectedStored = readJournal(selectedKey);
     journal = selectedStored ?? createLanternJournal();
+    clearGeneration = readGeneration(userId);
 
+    let guest = null;
     if (userId && !selectedStored) {
       const storedGuest = readJournal(journalKey(""));
-      const guest =
+      guest =
         previousUserId === ""
           ? mergeLanternJournals(
               previousJournal,
               storedGuest ?? createLanternJournal()
             )
           : storedGuest;
-      if (guest?.events.length) {
-        journal = mergeLanternJournals(journal, guest);
-        if (
-          writeJournal(selectedKey, journal) &&
-          removeItem(journalKey(""))
-        ) {
-          onStatus("");
-        } else {
-          onStatus("Journal storage is unavailable on this device.");
-        }
-      }
     }
     emit();
     idle = queueCloudSync(epoch, userId);
+    await idle;
+    if (!isCurrent(epoch, userId) || !guest?.events.length) return;
+    journal = mergeLanternJournals(journal, guest);
+    if (
+      writeJournal(selectedKey, journal) &&
+      removeItem(journalKey(""))
+    ) {
+      onStatus("");
+    } else {
+      onStatus("Journal storage is unavailable on this device.");
+    }
+    emit();
+    authEpoch += 1;
+    idle = queueCloudSync(authEpoch, userId);
     await idle;
   }
 
@@ -158,48 +165,72 @@ export function createJournalContinuity({
         pendingClearUsers.has(userId) ||
         getItem(clearKey(userId)) === "pending";
       if (pendingClear) {
-        await client.clearLearningJournal();
+        const cleared = await client.clearLearningJournal();
         if (!isCurrent(epoch, userId)) return;
+        const clearedState = cloudState(cleared, clearGeneration + 1);
+        clearGeneration = clearedState.clearGeneration;
+        persistGeneration(userId);
         pendingClearUsers.delete(userId);
         removeItem(clearKey(userId));
         if (journal.events.length === 0) {
           onStatus("");
           return;
         }
-        const saved = await client.saveLearningJournal(journal);
+        const saved = await client.saveLearningJournal(
+          journal,
+          clearGeneration
+        );
         if (!isCurrent(epoch, userId)) return;
-        adoptCloudResult(saved.journal, userId);
+        adoptCloudResult(saved, userId);
         onStatus("");
         return;
       }
 
       const cloud = await client.getLearningJournal();
       if (!isCurrent(epoch, userId)) return;
-      const cloudJournal =
-        normalizeLanternJournal(cloud.journal) ?? createLanternJournal();
+      const cloudResult = cloudState(cloud, 0);
+      const cloudJournal = cloudResult.journal;
+      if (cloudResult.clearGeneration > clearGeneration) {
+        clearGeneration = cloudResult.clearGeneration;
+        journal = cloudJournal;
+        persistState(userId);
+        emit();
+        onStatus("");
+        return;
+      }
+      if (cloudResult.clearGeneration < clearGeneration) {
+        throw new Error("Cloud Journal clear generation moved backwards.");
+      }
       const merged = mergeLanternJournals(journal, cloudJournal);
       journal = merged;
       writeJournal(journalKey(userId), journal);
       emit();
       if (JSON.stringify(merged) !== JSON.stringify(cloudJournal)) {
-        const saved = await client.saveLearningJournal(merged);
+        const saved = await client.saveLearningJournal(
+          merged,
+          clearGeneration
+        );
         if (!isCurrent(epoch, userId)) return;
-        adoptCloudResult(saved.journal, userId);
+        adoptCloudResult(saved, userId);
       }
       onStatus("");
     } catch {
       if (isCurrent(epoch, userId)) {
-        onStatus("Journal saved on this device. Cloud sync will retry.");
+        onStatus(
+          devicePersistenceAvailable
+            ? "Journal saved on this device. Cloud sync will retry."
+            : "Journal is kept in this tab. Keep it open while cloud sync retries."
+        );
       }
     }
   }
 
   /** @param {unknown} value @param {string} userId */
   function adoptCloudResult(value, userId) {
-    const normalized = normalizeLanternJournal(value);
-    if (!normalized) return;
-    journal = normalized;
-    if (!writeJournal(journalKey(userId), journal)) {
+    const state = cloudState(value, clearGeneration);
+    journal = state.journal;
+    clearGeneration = state.clearGeneration;
+    if (!persistState(userId)) {
       onStatus("Journal storage is unavailable on this device.");
     }
     emit();
@@ -226,11 +257,33 @@ export function createJournalContinuity({
     return setItem(key, JSON.stringify(value));
   }
 
+  /** @param {string} userId */
+  function readGeneration(userId) {
+    if (!userId) return 0;
+    const value = Number(getItem(generationKey(userId)));
+    return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  }
+
+  /** @param {string} userId */
+  function persistGeneration(userId) {
+    return !userId ||
+      setItem(generationKey(userId), String(clearGeneration));
+  }
+
+  /** @param {string} userId */
+  function persistState(userId) {
+    return (
+      writeJournal(journalKey(userId), journal) &&
+      persistGeneration(userId)
+    );
+  }
+
   /** @param {string} key */
   function getItem(key) {
     try {
       return deviceStorage.getItem(key);
     } catch {
+      devicePersistenceAvailable = false;
       return null;
     }
   }
@@ -241,6 +294,7 @@ export function createJournalContinuity({
       deviceStorage.setItem(key, value);
       return true;
     } catch {
+      devicePersistenceAvailable = false;
       return false;
     }
   }
@@ -251,6 +305,7 @@ export function createJournalContinuity({
       deviceStorage.removeItem(key);
       return true;
     } catch {
+      devicePersistenceAvailable = false;
       return false;
     }
   }
@@ -290,4 +345,26 @@ function journalKey(userId) {
 /** @param {string} userId */
 function clearKey(userId) {
   return `${journalKey(userId)}:clear`;
+}
+
+/** @param {string} userId */
+function generationKey(userId) {
+  return `${journalKey(userId)}:clear-generation`;
+}
+
+/** @param {unknown} value @param {number} fallbackGeneration */
+function cloudState(value, fallbackGeneration) {
+  const state =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? /** @type {Record<string, unknown>} */ (value)
+      : {};
+  const normalized = normalizeLanternJournal(state.journal);
+  const generation = Number(state.clearGeneration);
+  return {
+    journal: normalized ?? createLanternJournal(),
+    clearGeneration:
+      Number.isSafeInteger(generation) && generation >= 0
+        ? generation
+        : fallbackGeneration
+  };
 }

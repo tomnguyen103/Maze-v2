@@ -47,11 +47,49 @@ describe("Run Access migration", () => {
     );
 
     expect(sql).toContain("CREATE TABLE learning_journals");
+    expect(sql).toContain("CREATE TABLE deleted_user_tombstones");
+    expect(sql).toContain("clerk_user_id_hash CHAR(64) PRIMARY KEY");
     expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("clear_generation INTEGER NOT NULL DEFAULT 0");
     expect(sql).toContain("journal -> 'version' = '1'::jsonb");
     expect(sql).toContain("REFERENCES player_access(clerk_user_id) ON DELETE CASCADE");
     expect(sql).toContain("jsonb_array_length(journal->'events') <= 200");
     expect(sql).not.toContain("answer_text");
     expect(sql).not.toContain("child_name");
+  });
+
+  it("adds one bounded optimistic Cloud Quest record per Clerk identity", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0004_cloud_quest_progress.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE cloud_quest_progress");
+    expect(sql).toContain(
+      "REFERENCES player_access(clerk_user_id) ON DELETE CASCADE"
+    );
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("schema_version SMALLINT NOT NULL DEFAULT 1");
+    expect(sql).toContain("quest_id VARCHAR(100) NOT NULL");
+    expect(sql).toContain(
+      "quest_id ~ '^(quest|legacy)_[A-Za-z0-9_-]{7,92}$'"
+    );
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
+    expect(sql).toContain("labyrinth_number BETWEEN 1 AND 20");
+    expect(sql).toContain(
+      "jsonb_array_length(used_map_fingerprints) <= 1000"
+    );
+    expect(sql).toContain("jsonb_array_length(used_question_ids) <= 5000");
+    expect(sql).toContain("complete = TRUE");
+    expect(sql).toContain("revision > 0");
+    expect(sql).toContain("completed_labyrinths = labyrinth_number - 1");
+    expect(sql).toContain("revision INTEGER NOT NULL DEFAULT 1");
+    expect(sql).toContain("used_map_fingerprints JSONB NOT NULL");
+    expect(sql).toContain("used_question_ids JSONB NOT NULL");
+    expect(sql).not.toContain("position");
+    expect(sql).not.toContain("elapsed");
+    expect(sql).not.toContain("question_text");
   });
 });

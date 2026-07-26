@@ -35,6 +35,9 @@
         <button class="control-button" id="records-button" type="button">
           Records
         </button>
+        <button class="control-button" id="settings-button" type="button">
+          Settings
+        </button>
         <button class="control-button" id="sound-toggle" type="button" aria-pressed="false">
           Sound off
         </button>
@@ -76,6 +79,16 @@
           </div>
           <p class="quest-stage" id="quest-stage">
             Labyrinth 1 of 20 · Foundation
+          </p>
+
+          <p
+            class="quest-sync-status"
+            id="quest-sync-status"
+            data-state="local"
+            role="status"
+            aria-live="polite"
+          >
+            Device save
           </p>
 
           <dl class="run-metrics">
@@ -226,6 +239,90 @@
       <div class="atlas-regions" id="atlas-regions"></div>
     </dialog>
 
+    <dialog
+      class="access-settings-dialog"
+      id="access-settings-dialog"
+      aria-labelledby="access-settings-title"
+      aria-describedby="access-settings-intro access-settings-status"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">Readable your way</span>
+          <h2 id="access-settings-title" tabindex="-1">Explorer Access Settings</h2>
+        </div>
+      </div>
+      <p class="dialog-intro" id="access-settings-intro">
+        Changes preview right away. They change presentation only, never maze rules or score.
+      </p>
+      <section class="access-settings-preview" aria-labelledby="access-preview-title">
+        <span class="section-label" id="access-preview-title">Live preview</span>
+        <div class="access-maze-preview" aria-hidden="true">
+          <span class="access-preview-pulse"></span>
+          <span class="access-preview-mark access-preview-mark--explorer"></span>
+          <span class="access-preview-mark access-preview-mark--echo"></span>
+          <span class="access-preview-mark access-preview-mark--gate"></span>
+          <span class="access-preview-mark access-preview-mark--warden"></span>
+        </div>
+        <p class="access-question-preview">
+          Question preview: What is 7 + 5?
+        </p>
+        <p class="access-answer-preview" aria-label="Sample answer: 12">
+          <span aria-hidden="true">A</span>
+          <strong aria-hidden="true">12</strong>
+        </p>
+      </section>
+      <form class="access-settings-form" id="access-settings-form">
+        <fieldset class="access-settings-list">
+          <legend class="sr-only">Presentation settings</legend>
+          <label class="access-setting">
+            <input id="access-high-contrast" name="highContrast" type="checkbox" />
+            <span>
+              <strong>Stronger Fog contrast</strong>
+              <small>Separates hidden Fog, open passages, and walls more clearly.</small>
+            </span>
+          </label>
+          <label class="access-setting">
+            <input id="access-large-marks" name="largeMarks" type="checkbox" />
+            <span>
+              <strong>Larger maze marks</strong>
+              <small>Enlarges Explorer, Echo, Gate, and Warden shapes.</small>
+            </span>
+          </label>
+          <label class="access-setting">
+            <input id="access-reader-type" name="readerFriendlyQuestions" type="checkbox" />
+            <span>
+              <strong>Reader-friendly Question text</strong>
+              <small>Uses calmer spacing and the body typeface for Questions.</small>
+            </span>
+          </label>
+          <label class="access-setting">
+            <input id="access-reduced-effects" name="reducedEffects" type="checkbox" />
+            <span>
+              <strong>Reduce visual effects</strong>
+              <small>Your device reduced-motion preference is always respected.</small>
+            </span>
+          </label>
+        </fieldset>
+        <p
+          class="access-settings-status"
+          id="access-settings-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="access-settings-actions">
+          <button class="primary-button" id="access-settings-save" type="submit">
+            Save settings
+          </button>
+          <button class="control-button" id="access-settings-reset" type="button">
+            Reset to defaults
+          </button>
+          <button class="control-button" id="access-settings-close" type="button">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="level-dialog" id="level-dialog" aria-labelledby="level-title">
       <div class="level-dialog__intro">
         <span class="section-label">Start an adventure</span>
@@ -256,6 +353,37 @@
         </button>
       </div>
       <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
+    </dialog>
+
+    <dialog
+      class="quest-conflict-dialog"
+      id="quest-conflict-dialog"
+      aria-labelledby="quest-conflict-title"
+      aria-describedby="quest-conflict-intro"
+    >
+      <span class="section-label">Quest continuity</span>
+      <h2 id="quest-conflict-title" tabindex="-1">Choose which Quest to keep</h2>
+      <p class="dialog-intro" id="quest-conflict-intro"></p>
+      <div class="quest-conflict-options">
+        <section class="quest-conflict-choice" id="quest-conflict-local"></section>
+        <section class="quest-conflict-choice" id="quest-conflict-cloud"></section>
+      </div>
+      <div class="quest-conflict-dialog__actions">
+        <button
+          class="control-button"
+          id="quest-conflict-use-local"
+          type="button"
+        >
+          Keep this device
+        </button>
+        <button
+          class="primary-button"
+          id="quest-conflict-use-cloud"
+          type="button"
+        >
+          Use Cloud Quest
+        </button>
+      </div>
     </dialog>
 
     <dialog

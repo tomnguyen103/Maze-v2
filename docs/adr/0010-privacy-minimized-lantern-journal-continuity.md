@@ -38,11 +38,19 @@ unions events atomically, so simultaneous devices cannot replace each other's
 unique outcomes.
 
 Clearing is immediate locally. For an authenticated account, the client also
-deletes the cloud copy. If that delete cannot complete, the account remains in
-a pending-clear state so an older cloud copy cannot restore the cleared events;
-the delete is retried later. The cloud row references `player_access` with
-`ON DELETE CASCADE`, so the existing signed Clerk account-deletion path removes
-the Journal with the rest of the account-bound data.
+replaces the cloud copy with an empty Journal and advances an account-scoped
+clear generation. The generation is sync metadata outside every learning event;
+it contains no child response, time, Run position, or learning fact. A device
+whose generation is older must adopt the cleared cloud state rather than union
+or upload its stale local events. If the clear cannot complete, the account
+remains in a pending-clear state and retries later.
+
+The cloud row references `player_access` with `ON DELETE CASCADE`. The signed
+Clerk account-deletion transaction first takes the same per-user database lock
+as account-creating writes and records a SHA-256 tombstone, then removes all
+account-bound rows. The tombstone retains no raw Clerk identity and prevents an
+authenticated request that was already in flight from recreating data after
+deletion.
 
 Practice is optional and uses a different bundled, reviewed Question for the
 same learning objective. Practice records only another coarse Journal outcome.
@@ -54,7 +62,8 @@ access, Quest progress, or Echo Atlas progress.
 - Families get a readable learning summary without a transcript of child input.
 - Guests keep a useful local Journal, while signed-in players get documented
   per-account continuity.
-- Clearing remains trustworthy during temporary network failures.
+- Clearing remains trustworthy across devices and during temporary network
+  failures.
 - Aggregate counts can be rebuilt and tested from the bounded event set.
 - Browser storage denial cannot block a deterministic Warden action; the
   Journal remains available in memory for the current tab and reports that

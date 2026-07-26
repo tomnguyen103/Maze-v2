@@ -190,6 +190,43 @@ describe("player client", () => {
     );
   });
 
+  it("reads and revision-saves Cloud Quest Progress", async () => {
+    const progress = {
+      version: 1,
+      questId: "quest_client_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      completedLabyrinths: 3,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    };
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ record: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+
+    await client.getQuestProgress();
+    await client.saveQuestProgress(progress, 3);
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(calls[0][0]).toBe("/api/quest-progress");
+    expect(calls[1]).toEqual([
+      "/api/quest-progress",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ progress, expectedRevision: 3 })
+      })
+    ]);
+  });
+
   it("reads the server enforcement flag without waiting for a Clerk token", async () => {
     const getToken = vi.fn(() => new Promise(() => {}));
     const client = createPlayerApiClient({
@@ -283,7 +320,7 @@ describe("player client", () => {
     const journal = { version: 1, events: [] };
 
     await client.getLearningJournal();
-    await client.saveLearningJournal(journal);
+    await client.saveLearningJournal(journal, 2);
     await client.clearLearningJournal();
 
     expect(fetchImpl.mock.calls.map(([path]) => path)).toEqual([
@@ -294,7 +331,7 @@ describe("player client", () => {
     expect(fetchImpl.mock.calls[1][1]).toEqual(
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify(journal)
+        body: JSON.stringify({ journal, clearGeneration: 2 })
       })
     );
     expect(fetchImpl.mock.calls[2][1]).toEqual(

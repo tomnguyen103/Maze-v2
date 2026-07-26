@@ -21,8 +21,11 @@ describe("learning Journal store", () => {
     const store = createLearningJournalStore({ query });
 
     await expect(store.getJournal("user_123")).resolves.toEqual({
-      version: 1,
-      events: []
+      journal: {
+        version: 1,
+        events: []
+      },
+      clearGeneration: 0
     });
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("FROM learning_journals"),
@@ -31,35 +34,68 @@ describe("learning Journal store", () => {
   });
 
   it("ensures account access and upserts one bounded JSON Journal", async () => {
-    const query = vi.fn(async () => ({ rows: [{ journal: JOURNAL }] }));
+    const query = vi.fn(async () => ({
+      rows: [{ journal: JOURNAL, clear_generation: 0 }]
+    }));
     const store = createLearningJournalStore({ query });
 
-    await expect(store.saveJournal("user_123", JOURNAL)).resolves.toEqual(
-      JOURNAL
-    );
+    await expect(
+      store.saveJournal("user_123", JOURNAL, 0)
+    ).resolves.toEqual({
+      journal: JOURNAL,
+      clearGeneration: 0
+    });
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
         /INSERT INTO player_access[\s\S]+INSERT INTO learning_journals[\s\S]+ON CONFLICT[\s\S]+DISTINCT ON[\s\S]+jsonb_array_elements[\s\S]+LIMIT 200/
       ),
-      ["user_123", JSON.stringify(JOURNAL)]
+      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String)]
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
         /\(learning_journals\.journal->'events'\)\s*\|\|\s*\(EXCLUDED\.journal->'events'\)/
       ),
-      ["user_123", JSON.stringify(JOURNAL)]
+      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String)]
     );
   });
 
-  it("deletes only the selected account Journal", async () => {
-    const query = vi.fn(async () => ({ rows: [] }));
+  it("keeps an empty clear tombstone and advances its generation", async () => {
+    const query = vi.fn(async () => ({
+      rows: [{
+        journal: { version: 1, events: [] },
+        clear_generation: 3
+      }]
+    }));
     const store = createLearningJournalStore({ query });
 
-    await store.clearJournal("user_123");
+    await expect(store.clearJournal("user_123")).resolves.toEqual({
+      journal: { version: 1, events: [] },
+      clearGeneration: 3
+    });
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("DELETE FROM learning_journals"),
-      ["user_123"]
+      expect.stringMatching(
+        /INSERT INTO learning_journals[\s\S]+clear_generation[\s\S]+\+ 1/
+      ),
+      ["user_123", expect.any(String)]
     );
+  });
+
+  it("rejects a save from an older clear generation", async () => {
+    const query = vi.fn(async () => ({
+      rows: [{
+        journal: { version: 1, events: [] },
+        clear_generation: 2,
+        conflict: true
+      }]
+    }));
+    const store = createLearningJournalStore({ query });
+
+    await expect(
+      store.saveJournal("user_123", JOURNAL, 1)
+    ).rejects.toMatchObject({
+      name: "JournalClearConflictError",
+      clearGeneration: 2
+    });
   });
 });

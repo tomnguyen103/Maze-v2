@@ -54,6 +54,15 @@
   --color-wall-mark: oklch(84% 0.025 190 / 68%);
   --color-grid: oklch(25% 0.035 215 / 48%);
   --color-pulse: oklch(68% 0.13 205 / 32%);
+  --access-fog: oklch(64% 0.045 205);
+  --access-fog-soft: oklch(70% 0.035 202);
+  --access-fog-grid: oklch(18% 0.04 215 / 72%);
+  --access-passage: oklch(99% 0.012 165);
+  --access-wall: oklch(18% 0.045 215);
+  --access-wall-grid: oklch(88% 0.02 198 / 72%);
+  --access-wall-mark: oklch(96% 0.012 190 / 92%);
+  --access-grid: oklch(15% 0.035 215 / 78%);
+  --maze-mark-scale: 1;
   --color-playground-daylight: oklch(82% 0.04 205);
   --color-playground-twilight: oklch(62% 0.08 276);
   --color-playground-sea-glass: oklch(80% 0.09 176);

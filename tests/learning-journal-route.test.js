@@ -18,23 +18,34 @@ const JOURNAL = {
 
 /** @returns {{
  *   journal: unknown,
+ *   clearGeneration: number,
  *   getJournal: () => Promise<unknown>,
- *   saveJournal: (userId: string, journal: unknown) => Promise<unknown>,
- *   clearJournal: () => Promise<void>
+ *   saveJournal: (userId: string, journal: unknown, clearGeneration: number) => Promise<unknown>,
+ *   clearJournal: () => Promise<unknown>
  * }} */
 function createStore() {
   return {
     journal: { version: 1, events: [] },
+    clearGeneration: 0,
     async getJournal() {
-      return this.journal;
+      return {
+        journal: this.journal,
+        clearGeneration: this.clearGeneration
+      };
     },
-    /** @param {string} _userId @param {unknown} journal */
-    async saveJournal(_userId, journal) {
+    /** @param {string} _userId @param {unknown} journal @param {number} clearGeneration */
+    async saveJournal(_userId, journal, clearGeneration) {
       this.journal = journal;
-      return journal;
+      this.clearGeneration = clearGeneration;
+      return { journal, clearGeneration };
     },
     async clearJournal() {
       this.journal = { version: 1, events: [] };
+      this.clearGeneration += 1;
+      return {
+        journal: this.journal,
+        clearGeneration: this.clearGeneration
+      };
     }
   };
 }
@@ -82,18 +93,28 @@ describe("learning Journal API", () => {
       const saved = await fetch(`${origin}/api/learning-journal`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(JOURNAL)
+        body: JSON.stringify({ journal: JOURNAL, clearGeneration: 0 })
       });
       expect(saved.status).toBe(200);
-      expect(await saved.json()).toEqual({ journal: JOURNAL });
+      expect(await saved.json()).toEqual({
+        journal: JOURNAL,
+        clearGeneration: 0
+      });
 
       const read = await fetch(`${origin}/api/learning-journal`);
-      expect(await read.json()).toEqual({ journal: JOURNAL });
+      expect(await read.json()).toEqual({
+        journal: JOURNAL,
+        clearGeneration: 0
+      });
 
       const cleared = await fetch(`${origin}/api/learning-journal`, {
         method: "DELETE"
       });
-      expect(cleared.status).toBe(204);
+      expect(cleared.status).toBe(200);
+      expect(await cleared.json()).toEqual({
+        journal: { version: 1, events: [] },
+        clearGeneration: 1
+      });
       expect(store.journal).toMatchObject({ events: [] });
     });
   });
@@ -108,8 +129,11 @@ describe("learning Journal API", () => {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...JOURNAL,
-          events: [{ ...JOURNAL.events[0], answerText: "child response" }]
+          journal: {
+            ...JOURNAL,
+            events: [{ ...JOURNAL.events[0], answerText: "child response" }]
+          },
+          clearGeneration: 0
         })
       });
       expect(response.status).toBe(400);
@@ -133,7 +157,10 @@ describe("learning Journal API", () => {
         const response = await fetch(`${origin}/api/learning-journal`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...JOURNAL, events: [event] })
+          body: JSON.stringify({
+            journal: { ...JOURNAL, events: [event] },
+            clearGeneration: 0
+          })
         });
         expect(response.status).toBe(400);
       }

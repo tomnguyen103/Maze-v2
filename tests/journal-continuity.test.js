@@ -127,6 +127,42 @@ describe("Lantern Journal continuity", () => {
     expect(cloudJournal.events).toHaveLength(0);
   });
 
+  it("does not claim an offline clear was saved when device storage is denied", async () => {
+    const onStatus = vi.fn();
+    const continuity = createJournalContinuity({
+      client: {
+        getLearningJournal: vi.fn(async () => ({
+          journal: createLanternJournal(),
+          clearGeneration: 0
+        })),
+        saveLearningJournal: vi.fn(),
+        clearLearningJournal: vi.fn(async () => {
+          throw new Error("offline");
+        })
+      },
+      storage: {
+        getItem: () => {
+          throw new Error("storage denied");
+        },
+        removeItem: () => {
+          throw new Error("storage denied");
+        },
+        setItem: () => {
+          throw new Error("storage denied");
+        }
+      },
+      onStatus
+    });
+
+    await continuity.selectUser("user_a");
+    continuity.clear();
+    await continuity.whenIdle();
+
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "Journal is kept in this tab. Keep it open while cloud sync retries."
+    );
+  });
+
   it("migrates an in-memory guest Journal when storage is denied at sign-in", async () => {
     const client = {
       getLearningJournal: vi.fn(async () => ({
@@ -159,7 +195,8 @@ describe("Lantern Journal continuity", () => {
     expect(client.saveLearningJournal).toHaveBeenCalledWith(
       expect.objectContaining({
         events: [expect.objectContaining({ eventId: eventId(11) })]
-      })
+      }),
+      0
     );
   });
 
@@ -181,7 +218,8 @@ describe("Lantern Journal continuity", () => {
     expect(client.saveLearningJournal).toHaveBeenCalledWith(
       expect.objectContaining({
         events: [expect.objectContaining({ eventId: eventId(1) })]
-      })
+      }),
+      0
     );
 
     await continuity.selectUser("");
@@ -347,5 +385,63 @@ describe("Lantern Journal continuity", () => {
     await continuity.retry();
     await continuity.whenIdle();
     expect(cloud.journal.events).toHaveLength(0);
+  });
+
+  it("does not let a stale second device restore Journal events after a clear", async () => {
+    let cloud = {
+      journal: {
+        version: 1,
+        events: [
+          {
+            eventId: eventId(13),
+            questionId: question().id,
+            topicId: question().topicId,
+            learningObjectiveId: question().learningObjectiveId,
+            difficultyBand: question().difficultyBand,
+            outcome: "wrong"
+          }
+        ]
+      },
+      clearGeneration: 0
+    };
+    const client = {
+      getLearningJournal: vi.fn(async () => cloud),
+      saveLearningJournal: vi.fn(async (journal, clearGeneration) => {
+        cloud = { journal, clearGeneration };
+        return cloud;
+      }),
+      clearLearningJournal: vi.fn(async () => {
+        cloud = {
+          journal: createLanternJournal(),
+          clearGeneration: cloud.clearGeneration + 1
+        };
+        return cloud;
+      })
+    };
+    const deviceA = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+    const deviceB = createJournalContinuity({
+      client,
+      storage: createStorage()
+    });
+
+    await deviceA.selectUser("user_a");
+    await deviceB.selectUser("user_a");
+    expect(deviceB.getJournal().events).toHaveLength(1);
+
+    deviceA.clear();
+    await deviceA.whenIdle();
+    client.saveLearningJournal.mockClear();
+
+    await deviceB.retry();
+
+    expect(deviceB.getJournal().events).toHaveLength(0);
+    expect(client.saveLearningJournal).not.toHaveBeenCalled();
+    expect(cloud).toEqual({
+      journal: createLanternJournal(),
+      clearGeneration: 1
+    });
   });
 });

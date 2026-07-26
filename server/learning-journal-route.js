@@ -4,6 +4,10 @@ import {
 } from "../src/learning/lantern-journal.js";
 import { URL } from "node:url";
 import { safeErrorName } from "./safe-error-log.js";
+import {
+  JournalClearConflictError
+} from "./learning-journal-store.js";
+import { DeletedUserError } from "./deleted-user-guard.js";
 
 export const LEARNING_JOURNAL_PATH = "/api/learning-journal";
 const MAX_BODY_BYTES = 128 * 1024;
@@ -20,8 +24,8 @@ const EVENT_KEYS = [
  * @param {{
  *   store: {
  *     getJournal: (userId: string) => Promise<unknown>,
- *     saveJournal: (userId: string, journal: unknown) => Promise<unknown>,
- *     clearJournal: (userId: string) => Promise<void>
+ *     saveJournal: (userId: string, journal: unknown, clearGeneration: number) => Promise<unknown>,
+ *     clearJournal: (userId: string) => Promise<unknown>
  *   },
  *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>
  * }} dependencies
@@ -45,32 +49,38 @@ export function createLearningJournalHandler({ store, getUserId }) {
         return;
       }
       if (request.method === "GET") {
-        const journal =
-          normalizeLanternJournal(await store.getJournal(userId)) ??
-          createLanternJournal();
-        sendJson(response, 200, { journal });
+        sendJson(response, 200, normalizeState(await store.getJournal(userId)));
         return;
       }
       if (request.method === "PUT") {
         const raw = await readJsonBody(request);
-        const journal = hasExactShape(raw) ? normalizeLanternJournal(raw) : null;
-        if (!journal) {
+        const input = normalizeInput(raw);
+        if (!input) {
           sendJson(response, 400, {
             error: "Journal must contain only reviewed coarse learning outcomes."
           });
           return;
         }
-        const saved =
-          normalizeLanternJournal(await store.saveJournal(userId, journal)) ??
-          journal;
-        sendJson(response, 200, { journal: saved });
+        const journal = input.journal;
+        sendJson(
+          response,
+          200,
+          normalizeState(
+            await store.saveJournal(
+              userId,
+              journal,
+              input.clearGeneration
+            )
+          )
+        );
         return;
       }
       if (request.method === "DELETE") {
-        await store.clearJournal(userId);
-        response.statusCode = 204;
-        response.setHeader("cache-control", "no-store");
-        response.end();
+        sendJson(
+          response,
+          200,
+          normalizeState(await store.clearJournal(userId))
+        );
         return;
       }
       response.setHeader("allow", "GET, PUT, DELETE");
@@ -80,6 +90,19 @@ export function createLearningJournalHandler({ store, getUserId }) {
     } catch (error) {
       if (error instanceof JournalInputError) {
         sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof JournalClearConflictError) {
+        sendJson(response, 409, {
+          error: error.message,
+          clearGeneration: error.clearGeneration
+        });
+        return;
+      }
+      if (error instanceof DeletedUserError) {
+        sendJson(response, 410, {
+          error: "This account has been deleted."
+        });
         return;
       }
       console.error("[learning-journal] API request failed", {
@@ -93,7 +116,7 @@ export function createLearningJournalHandler({ store, getUserId }) {
 }
 
 /** @param {unknown} value */
-function hasExactShape(value) {
+function hasExactJournalShape(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const journal = /** @type {Record<string, unknown>} */ (value);
   if (
@@ -109,6 +132,41 @@ function hasExactShape(value) {
       !Array.isArray(event) &&
       Object.keys(event).sort().join(",") === EVENT_KEYS.join(",")
   );
+}
+
+/** @param {unknown} value */
+function normalizeInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = /** @type {Record<string, unknown>} */ (value);
+  if (
+    Object.keys(input).sort().join(",") !== "clearGeneration,journal" ||
+    !Number.isSafeInteger(input.clearGeneration) ||
+    Number(input.clearGeneration) < 0 ||
+    !hasExactJournalShape(input.journal)
+  ) {
+    return null;
+  }
+  const journal = normalizeLanternJournal(input.journal);
+  return journal
+    ? { journal, clearGeneration: Number(input.clearGeneration) }
+    : null;
+}
+
+/** @param {unknown} value */
+function normalizeState(value) {
+  const state =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? /** @type {Record<string, unknown>} */ (value)
+      : {};
+  return {
+    journal:
+      normalizeLanternJournal(state.journal) ?? createLanternJournal(),
+    clearGeneration:
+      Number.isSafeInteger(state.clearGeneration) &&
+      Number(state.clearGeneration) >= 0
+        ? Number(state.clearGeneration)
+        : 0
+  };
 }
 
 /** @param {import("node:http").IncomingMessage} request */

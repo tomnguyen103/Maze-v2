@@ -144,8 +144,16 @@ export function createCanvasRenderer(canvas) {
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
-    const radius = tile * 0.28;
-    const glow = context.createRadialGradient(x, y, 0, x, y, tile * 0.72);
+    const scale = palette.markScale;
+    const radius = tile * 0.28 * scale;
+    const glow = context.createRadialGradient(
+      x,
+      y,
+      0,
+      x,
+      y,
+      tile * 0.72 * scale
+    );
     glow.addColorStop(0, palette.signalGlow);
     glow.addColorStop(1, palette.transparent);
     context.fillStyle = glow;
@@ -154,11 +162,11 @@ export function createCanvasRenderer(canvas) {
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.fillStyle = palette.night;
     context.fill();
-    context.lineWidth = Math.max(2, tile * 0.11);
+    context.lineWidth = Math.max(2, tile * 0.11 * scale);
     context.strokeStyle = palette.signal;
     context.stroke();
     context.beginPath();
-    context.arc(x, y, tile * 0.07, 0, Math.PI * 2);
+    context.arc(x, y, tile * 0.07 * scale, 0, Math.PI * 2);
     context.fillStyle = palette.signalBright;
     context.fill();
   }
@@ -166,57 +174,69 @@ export function createCanvasRenderer(canvas) {
   /** @param {Echo} echo @param {number} tile */
   function drawEcho(echo, tile) {
     const { x, y } = centerOf(echo, tile);
+    const scale = palette.markScale;
     context.save();
     context.translate(x, y);
     context.rotate(Math.PI / 4);
     context.strokeStyle = palette.echo;
-    context.lineWidth = Math.max(1.5, tile * 0.07);
-    context.strokeRect(-tile * 0.19, -tile * 0.19, tile * 0.38, tile * 0.38);
-    context.strokeRect(-tile * 0.1, -tile * 0.1, tile * 0.2, tile * 0.2);
+    context.lineWidth = Math.max(1.5, tile * 0.07 * scale);
+    context.strokeRect(
+      -tile * 0.19 * scale,
+      -tile * 0.19 * scale,
+      tile * 0.38 * scale,
+      tile * 0.38 * scale
+    );
+    context.strokeRect(
+      -tile * 0.1 * scale,
+      -tile * 0.1 * scale,
+      tile * 0.2 * scale,
+      tile * 0.2 * scale
+    );
     context.restore();
   }
 
   /** @param {Gate} gate @param {number} tile */
   function drawGate(gate, tile) {
     const { x, y } = centerOf(gate, tile);
+    const scale = palette.markScale;
     context.strokeStyle = gate.open
       ? gate.sealed
         ? palette.warden
         : palette.signal
       : palette.gate;
-    context.lineWidth = Math.max(1.5, tile * 0.07);
+    context.lineWidth = Math.max(1.5, tile * 0.07 * scale);
     context.beginPath();
-    context.arc(x, y, tile * 0.27, Math.PI, 0);
-    context.lineTo(x + tile * 0.27, y + tile * 0.27);
-    context.moveTo(x - tile * 0.27, y);
-    context.lineTo(x - tile * 0.27, y + tile * 0.27);
+    context.arc(x, y, tile * 0.27 * scale, Math.PI, 0);
+    context.lineTo(x + tile * 0.27 * scale, y + tile * 0.27 * scale);
+    context.moveTo(x - tile * 0.27 * scale, y);
+    context.lineTo(x - tile * 0.27 * scale, y + tile * 0.27 * scale);
     for (const offset of [-0.13, 0, 0.13]) {
-      context.moveTo(x + tile * offset, y - tile * 0.23);
-      context.lineTo(x + tile * offset, y + tile * 0.25);
+      context.moveTo(x + tile * offset * scale, y - tile * 0.23 * scale);
+      context.lineTo(x + tile * offset * scale, y + tile * 0.25 * scale);
     }
     context.stroke();
     if (gate.open && gate.sealed) {
       context.beginPath();
-      context.moveTo(x - tile * 0.22, y - tile * 0.2);
-      context.lineTo(x + tile * 0.22, y + tile * 0.22);
-      context.moveTo(x + tile * 0.22, y - tile * 0.2);
-      context.lineTo(x - tile * 0.22, y + tile * 0.22);
+      context.moveTo(x - tile * 0.22 * scale, y - tile * 0.2 * scale);
+      context.lineTo(x + tile * 0.22 * scale, y + tile * 0.22 * scale);
+      context.moveTo(x + tile * 0.22 * scale, y - tile * 0.2 * scale);
+      context.lineTo(x - tile * 0.22 * scale, y + tile * 0.22 * scale);
       context.stroke();
     } else if (gate.open) {
       context.beginPath();
-      context.moveTo(x, y + tile * 0.2);
-      context.lineTo(x, y - tile * 0.12);
-      context.moveTo(x - tile * 0.12, y);
-      context.lineTo(x, y - tile * 0.14);
-      context.lineTo(x + tile * 0.12, y);
+      context.moveTo(x, y + tile * 0.2 * scale);
+      context.lineTo(x, y - tile * 0.12 * scale);
+      context.moveTo(x - tile * 0.12 * scale, y);
+      context.lineTo(x, y - tile * 0.14 * scale);
+      context.lineTo(x + tile * 0.12 * scale, y);
       context.stroke();
     } else {
       context.fillStyle = palette.gate;
       context.fillRect(
-        x - tile * 0.08,
-        y + tile * 0.02,
-        tile * 0.16,
-        tile * 0.16
+        x - tile * 0.08 * scale,
+        y + tile * 0.02 * scale,
+        tile * 0.16 * scale,
+        tile * 0.16 * scale
       );
     }
   }
@@ -224,10 +244,11 @@ export function createCanvasRenderer(canvas) {
   /** @param {Warden} warden @param {number} tile */
   function drawWarden(warden, tile) {
     const { x, y } = centerOf(warden, tile);
+    const scale = palette.markScale;
     context.beginPath();
-    context.moveTo(x, y - tile * 0.3);
-    context.lineTo(x + tile * 0.29, y + tile * 0.26);
-    context.lineTo(x - tile * 0.29, y + tile * 0.26);
+    context.moveTo(x, y - tile * 0.3 * scale);
+    context.lineTo(x + tile * 0.29 * scale, y + tile * 0.26 * scale);
+    context.lineTo(x - tile * 0.29 * scale, y + tile * 0.26 * scale);
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
@@ -237,9 +258,9 @@ export function createCanvasRenderer(canvas) {
       for (const offset of [-0.09, 0.09]) {
         context.beginPath();
         context.arc(
-          x + tile * offset,
-          y + tile * 0.04,
-          tile * 0.045,
+          x + tile * offset * scale,
+          y + tile * 0.04 * scale,
+          tile * 0.045 * scale,
           0,
           Math.PI * 2
         );
@@ -250,22 +271,28 @@ export function createCanvasRenderer(canvas) {
 
     if (warden.mode === "intercept") {
       context.fillRect(
-        x - tile * 0.14,
-        y - tile * 0.01,
-        tile * 0.28,
-        Math.max(2, tile * 0.07)
+        x - tile * 0.14 * scale,
+        y - tile * 0.01 * scale,
+        tile * 0.28 * scale,
+        Math.max(2, tile * 0.07 * scale)
       );
       context.fillRect(
-        x - tile * 0.06,
-        y - tile * 0.11,
-        Math.max(2, tile * 0.07),
-        tile * 0.27
+        x - tile * 0.06 * scale,
+        y - tile * 0.11 * scale,
+        Math.max(2, tile * 0.07 * scale),
+        tile * 0.27 * scale
       );
       return;
     }
 
     context.beginPath();
-    context.arc(x, y + tile * 0.03, tile * 0.055, 0, Math.PI * 2);
+    context.arc(
+      x,
+      y + tile * 0.03 * scale,
+      tile * 0.055 * scale,
+      0,
+      Math.PI * 2
+    );
     context.fill();
   }
 
@@ -302,6 +329,7 @@ function readPalette() {
     gate: color("--color-gate"),
     grid: color("--color-grid"),
     ink: color("--color-ink"),
+    markScale: Number.parseFloat(color("--maze-mark-scale")) || 1,
     night: color("--color-night-deep"),
     overlay: color("--color-overlay"),
     paper: color("--color-paper"),
