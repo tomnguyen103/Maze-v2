@@ -22,7 +22,8 @@ export function scrubTelemetryEvent(event) {
     delete event.request.data;
     delete event.request.query_string;
     if (typeof event.request.url === "string") {
-      event.request.url = event.request.url.split("?")[0];
+      // Both delimiters: fragments can carry tokens too (#access_token=…).
+      event.request.url = event.request.url.split(/[?#]/, 1)[0];
     }
   }
   return event;

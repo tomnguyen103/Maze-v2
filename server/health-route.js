@@ -67,16 +67,18 @@ export function createHealthHandler({
         // Bounded: a database that accepts the connection but stalls must
         // surface as a 503 with detail, not hold this endpoint open until
         // the platform timeout.
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let timer;
         await Promise.race([
           checkDatabase(),
           new Promise((_resolve, reject) => {
-            const timer = setTimeout(
+            timer = setTimeout(
               () => reject(new Error("readiness check timed out")),
               checkTimeoutMs
             );
             timer.unref?.();
           })
-        ]);
+        ]).finally(() => clearTimeout(timer));
         database = "ok";
       } catch {
         // The failure reason may quote connection details; the per-check

@@ -47,6 +47,13 @@ describe("telemetry event scrubbing", () => {
     expect(JSON.stringify(event)).not.toContain("secret");
   });
 
+  it("strips URL fragments, which can carry tokens", () => {
+    const event = scrubTelemetryEvent({
+      request: { url: "https://echo.example/callback#access_token=secret" }
+    });
+    expect(event.request).toEqual({ url: "https://echo.example/callback" });
+  });
+
   it("leaves events without user or request untouched", () => {
     expect(scrubTelemetryEvent({ message: "boom" })).toEqual({
       message: "boom"

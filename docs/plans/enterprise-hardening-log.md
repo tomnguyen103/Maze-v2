@@ -8,7 +8,7 @@ reason.
 
 ## Test infrastructure — stabilise the test gate
 
-- **PR**: _pending_
+- **PR**: #61 (merged)
 - **Branch**: `fix/stabilise-test-gate`
 - **ADR**: none — not a plan phase.
 
@@ -117,7 +117,7 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ## Phase 5 — Observability
 
-- **PR**: _pending_
+- **PR**: #62
 - **Branch**: `feat/observability`
 - **ADR**: `docs/adr/0017-env-gated-observability.md`
 - **Migration**: none.
@@ -145,7 +145,9 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ### Gate
 
-- _pending_
+- `npm run check`: green (635 unit tests / 11 skipped — 29 new; bundle
+  budget passes with `SKIP optional Sentry: not built` by default).
+- `npm run check:full`: green (111 e2e / 5 skipped).
 
 ### Deviations
 
