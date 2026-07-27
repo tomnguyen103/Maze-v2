@@ -1,4 +1,18 @@
 #!/bin/sh
 set -eu
 
-npm run check
+# `npm run check` chains these behind a single exit code, so a blocked push said
+# only that the gate was red, never which step to go fix. Running them one at a
+# time costs the same and names the failure.
+#
+# Kept in step with the `check` script by tests/pre-push-hook.test.js.
+STEPS="lint typecheck test build check:bundle"
+
+for step in $STEPS; do
+  printf 'pre-push: %s\n' "$step"
+  if ! npm run "$step"; then
+    printf '\npre-push FAILED at: %s\n' "$step" >&2
+    printf 'Re-run just that step with: npm run %s\n' "$step" >&2
+    exit 1
+  fi
+done
