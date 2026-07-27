@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectGameReady } from "./game-ready.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import {
   createDailyContract,
@@ -285,6 +286,7 @@ test("defers an asynchronous Cloud restore while a direct Daily is active", asyn
   );
 
   await page.goto(`/play?daily=${daily.date}`);
+  await expectGameReady(page);
   await expect(page.locator("#seed-value")).toHaveText(daily.seed);
 
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
@@ -321,6 +323,7 @@ test("retries the optional Cloud sync chunk after a transient load failure", asy
   );
 
   await page.goto("/play");
+  await expectGameReady(page);
   await page.locator('[data-level="trail-scout"]').click();
   await expect(page.locator("#run-state")).toHaveText("Exploring");
   await expect.poll(() => chunkRequests).toBe(2);
@@ -353,6 +356,7 @@ test("explains an expired UTC link and shares only today's public date", async (
   });
 
   await page.goto(`/play?daily=${expired}`);
+  await expectGameReady(page);
 
   const dialog = page.getByRole("dialog", {
     name: "Daily Shared Labyrinth"
@@ -388,6 +392,7 @@ test("keeps the Daily choice operable at 390px and 200 percent text", async ({
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/play?daily=${expired}`);
+  await expectGameReady(page);
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "32px";
   });
@@ -432,6 +437,7 @@ test("switches an open tab to the new UTC Daily at midnight", async ({
     });
   });
   await page.goto("/play?daily=2026-07-26");
+  await expectGameReady(page);
   await expect(page.locator("#seed-value")).toHaveText("DAILY-20260726");
 
   await page.clock.fastForward("00:01:02");
@@ -481,6 +487,7 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
   });
 
   await page.goto(`/play?daily=${daily.date}`);
+  await expectGameReady(page);
   await expect(page.getByRole("button", { name: "Records" })).toBeDisabled();
   await completeDaily(page, daily);
 
@@ -540,6 +547,7 @@ test("does not claim an unsaved Daily result is a Personal Best", async ({
   });
 
   await page.goto(`/play?daily=${daily.date}`);
+  await expectGameReady(page);
   await completeDaily(page, daily);
 
   const result = page.getByRole("dialog", {

@@ -6,6 +6,115 @@ reason.
 
 ---
 
+## Test infrastructure — stabilise the test gate
+
+- **PR**: _pending_
+- **Branch**: `fix/stabilise-test-gate`
+- **ADR**: none — not a plan phase.
+
+### e2e flakiness (~1 in 3 full runs)
+
+Root cause found and fixed, not masked. `src/app.js` dynamically imports
+`src/main.js`, so `page.goto` resolves at the load event while the app is
+still initialising. `main.js` attaches its listeners at module evaluation, but
+the real Run is swapped in only when the async `initializeRunEntry()` resolves
+— which is exactly when `app.js` sets `data-game-ready="true"`. Input sent in
+that window moves the *placeholder* Run and is lost when the swap resets
+progress. Reproduced deterministically: a failing run's snapshot showed
+`Moves 002` after seven keypresses — five presses consumed by the placeholder,
+two by the real Run. Under Playwright's 16-worker parallelism the window
+between load and ready stretches, which is why the flake tracked machine load
+and hit whichever input-driving test was unlucky (chunk-load timing, Warden
+Challenge visibility, the guest second-Labyrinth invariant — all one class).
+
+Fix, two parts, both cause-level:
+
+1. Every e2e test that drives gameplay (keyboard, app buttons, synthetic
+   `online` events) now crosses an `expectGameReady` barrier — the
+   `data-game-ready` wait two tests already used — before its first
+   interaction. After this alone, eight full runs showed zero recurrences of
+   the original three flakes.
+2. The remaining intermittent failures were a second class: genuine load
+   starvation (app boot and Clerk initialisation stretching past their
+   bounds) from 16 workers × Chromium against one shared preview process on
+   32 logical cores. `workers: 8` in `playwright.config.mjs` bounds the
+   oversubscription, and the readiness barrier carries a 15s bound — the same
+   explicit-bound pattern `entry.spec.js` already used for Clerk
+   initialisation. Suite wall-clock stayed in the same range.
+
+A third, smaller class surfaced during validation: the two tests that drive
+Clerk's real development instance (SignIn modal, demo-gate handoff) fail when
+Clerk hangs or throttles — its remotely loaded `@clerk/ui` chunk is the same
+optional download `game.spec.js`'s console filter already tolerates. Both
+tests already skipped on *detectable* Clerk unavailability; their throwing
+polls are now deadline loops that reach the same skip on a silent hang, so an
+external outage shows up as one extra skip in the run summary instead of a
+red gate. They still run and assert normally whenever Clerk responds (most
+runs: 111 passed / 5 skipped; an outage run: 110 / 6).
+
+No retries were added anywhere. Verified by repeated full-suite runs (results
+under Gate).
+
+### Vitest unhandled-error fault
+
+Not reproduced despite 8 full-suite and 30 targeted runs; the mechanism was
+removed instead. `vite.config.mjs` built the entire player API at config
+evaluation — a real pg Pool against the `.env.local` `DATABASE_URL`, a Stripe
+client, and Clerk middleware — inside the vitest process, for a run that can
+never serve an HTTP request. That config-load side effect was the suspected
+source of the post-run "Vitest caught 1 unhandled error". Now: a `vitest` run
+(mode `test`) gets a config with no API plugin at all, and dev/preview modes
+build the middlewares lazily inside `configureServer` /
+`configurePreviewServer`, so config evaluation is side-effect free everywhere.
+`tests/vite-config.test.js` pins both behaviours. If the fault ever resurfaces
+it can no longer come from the config path, and the next occurrence should be
+captured verbatim before rerunning.
+
+The pre-push hook (`set -eu; npm run check`) still exits without naming the
+failed step; `.githooks` is out of scope for this task, so "the gate is green"
+and "the push landed" remain separate facts to verify per the workflow.
+
+### Pool construction in operational scripts
+
+`scripts/verify-audit-chain.mjs`, `scripts/prune-rate-limits.mjs`, and
+`scripts/grant-admin.mjs` built `new Pool(...)` before their `try`, so a
+malformed `DATABASE_URL` threw past the handler and exited 1 instead of the
+documented 2, and none bounded connection or query time. All three now match
+`prune-webhook-inbox.mjs` / `list-dead-webhooks.mjs`: pool constructed inside
+the handler, `max: 1`, `connectionTimeoutMillis: 10000`,
+`query_timeout: 60000`, `await pool?.end()` in `finally`.
+`tests/script-database-guard.test.js` spawns each script with a malformed URL
+and asserts exit code 2, and asserts the timeout bounds are present.
+
+### Gate
+
+- Flake measurement, before: 3 failures across 4 full e2e runs at HEAD of main
+  (three input-driving tests failing together in a bad run — the documented
+  ~1-in-3 rate).
+- Flake measurement, after: **10 consecutive green full e2e runs** with the
+  complete fix (and 11 consecutive green with all but the Clerk-outage skip
+  handling). The barrier-only intermediate state also showed zero
+  recurrences of the original three flakes across 8 runs; its two residual
+  failures (Clerk initialisation, readiness past a 5s default) drove the
+  worker cap and the explicit 15s bounds.
+- `npm run check`: green (602 unit tests / 11 skipped — 9 new).
+- `npm run check:full`: green.
+
+### Deviations
+
+- The task said to suspect the 16-worker parallelism; the diagnosis found TWO
+  causes and both were fixed at the cause: (1) tests injecting input before
+  the app's async Run swap (`data-game-ready`), which parallelism only
+  amplified, and (2) genuine oversubscription starving app boot and Clerk's
+  remotely loaded UI past their bounds, addressed with `workers: 8` and
+  explicit 15s bounds on the readiness barrier and the two Clerk modal
+  expectations. No retries anywhere; no existing assertion changed meaning.
+- The vitest fault was never reproduced (8 full + 30 targeted attempts), so
+  the fix removes the suspected mechanism (config-load side effects) and pins
+  it with tests rather than claiming a verified repro.
+
+---
+
 ## Phase 1 — Immutable audit log
 
 - **PR**: _pending_
