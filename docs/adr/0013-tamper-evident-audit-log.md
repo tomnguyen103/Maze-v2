@@ -70,7 +70,13 @@ honest claim is *tamper-evident against application bugs and casual editing*, no
 Closing that gap needs infrastructure this phase does not own:
 
 - a separate non-login owner for `audit_events`, its triggers, and
-  `audit_chain_head`, with the app role holding `INSERT` only; and
+  `audit_chain_head`. The app role cannot be `INSERT`-only: `appendAudit` takes
+  `SELECT ... FOR UPDATE` on `audit_chain_head` and then `UPDATE`s it, so the
+  minimum grant set is `INSERT` on `audit_events` plus `SELECT, UPDATE` on
+  `audit_chain_head` — and nothing on either table's triggers, which is what
+  makes the owner split worth doing. A `SECURITY DEFINER` append function owned
+  by that role is the tighter alternative: the app then holds `EXECUTE` on one
+  function and no table privileges at all; and
 - periodic chain checkpoints anchored outside the database — an HMAC or signature
   over `(max(id), row_hash)` written to a store the database role cannot reach.
 
