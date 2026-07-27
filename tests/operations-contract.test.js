@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const envExample = readFileSync(".env.example", "utf8");
@@ -7,6 +8,89 @@ const operations = readFileSync(
   "utf8"
 );
 const deletionTool = readFileSync("scripts/delete-user-data.mjs", "utf8");
+
+/**
+ * Variables the hosting platform injects. An operator cannot usefully set them
+ * in a local file, so `.env.example` documents them without offering a value.
+ */
+const PLATFORM_PROVIDED = new Set([
+  "NODE_ENV",
+  "VERCEL_ENV",
+  "VERCEL_GIT_COMMIT_SHA"
+]);
+
+/**
+ * @param {string} directory
+ * @returns {string[]}
+ */
+function sourceFiles(directory) {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) {
+      return sourceFiles(path);
+    }
+    // Declaration files describe env vars rather than reading them; every
+    // other module extension counts, so a future .ts cannot escape the scan.
+    return /\.(js|jsx|ts|tsx)$/.test(path) && !path.endsWith(".d.ts")
+      ? [path]
+      : [];
+  });
+}
+
+/**
+ * Every `env.NAME`, `process.env.NAME`, and `import.meta.env.NAME` read across
+ * the server and the client bundle. `server.js` is the local entry point and
+ * sits outside both directories, so it is named explicitly rather than left to
+ * be noticed later.
+ */
+function readEnvNames() {
+  /** @type {Set<string>} */
+  const names = new Set();
+  for (const path of [
+    "server.js",
+    ...sourceFiles("server"),
+    ...sourceFiles("src")
+  ]) {
+    const source = readFileSync(path, "utf8");
+    for (const match of source.matchAll(/\benv\.([A-Z][A-Z0-9_]*)\b/g)) {
+      names.add(match[1]);
+    }
+  }
+  return [...names].sort();
+}
+
+describe("environment documentation contract", () => {
+  it("documents every variable the server and client read", () => {
+    // Word-bounded, so documenting VITE_SENTRY_DSN cannot pass for SENTRY_DSN.
+    const undocumented = readEnvNames().filter(
+      (name) => !new RegExp(`\\b${name}\\b`).test(envExample)
+    );
+    expect(undocumented).toEqual([]);
+  });
+
+  it("ships every optional hardening knob unset, so defaults stay the safe ones", () => {
+    for (const name of [
+      "REQUEST_ADDRESS_SALT",
+      "CRON_SECRET",
+      "SENTRY_DSN",
+      "VITE_SENTRY_DSN",
+      "POSTHOG_API_KEY",
+      "OTEL_EXPORTER_OTLP_ENDPOINT"
+    ]) {
+      expect(envExample).toMatch(new RegExp(`^${name}=\\s*$`, "m"));
+    }
+    // Trusting proxy headers by default would let any caller spoof its address
+    // past the rate limiter.
+    expect(envExample).toMatch(/^TRUST_PROXY_HEADERS=false$/m);
+  });
+
+  it("names the platform-injected variables without inviting an override", () => {
+    for (const name of PLATFORM_PROVIDED) {
+      expect(envExample).toContain(name);
+      expect(envExample).not.toMatch(new RegExp(`^${name}=`, "m"));
+    }
+  });
+});
 
 describe("release operations contract", () => {
   it("keeps production enforcement and live billing disabled by default", () => {
