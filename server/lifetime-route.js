@@ -7,6 +7,7 @@ import {
 } from "./lifetime-service.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { SYSTEM_ACTORS } from "./audit.js";
+import { sendRateLimited } from "./rate-limit-request.js";
 
 export const LIFETIME_PATHS = new Set([
   "/api/lifetime-checkout",
@@ -30,13 +31,21 @@ class LifetimeInputError extends Error {
  *     createCheckout: (userId: string) => Promise<Record<string, unknown>>,
  *     processWebhook: (rawBody: Buffer, signature: string) => Promise<Record<string, unknown>>
  *   },
- *   recordAudit?: import("./audit.js").RecordAudit
+ *   recordAudit?: import("./audit.js").RecordAudit,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit
  * }} dependencies
  */
 export function createLifetimeHandler({
   getUserId,
   service,
-  recordAudit = async () => {}
+  recordAudit = async () => {},
+  rateLimit = async () => ({
+    allowed: true,
+    degraded: true,
+    limit: 0,
+    remaining: 0,
+    retryAfterSeconds: 0
+  })
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -69,6 +78,15 @@ export function createLifetimeHandler({
     }
     try {
       if (pathname === "/api/lifetime-checkout") {
+        const decision = await rateLimit("lifetime.checkout", request, userId);
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Checkout attempts. Try again shortly."
+          );
+          return;
+        }
         const body = await readJsonBody(request, true);
         if (Object.keys(body).length > 0) {
           throw new LifetimeInputError(

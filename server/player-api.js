@@ -6,7 +6,8 @@ import {
 } from "./clerk-webhook-route.js";
 import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
-import { createDatabasePool } from "./database.js";
+import { getDatabasePool } from "./database.js";
+import { createRequestRateLimiter } from "./rate-limit-request.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
   createLifetimeHandler,
@@ -96,7 +97,8 @@ export function createPlayerApi(env = process.env) {
     };
   }
 
-  const pool = createDatabasePool(connectionString);
+  const pool = getDatabasePool(connectionString);
+  const rateLimit = createRequestRateLimiter(env);
   /** @type {{
    *   query: (
    *     sql: string,
@@ -143,7 +145,8 @@ export function createPlayerApi(env = process.env) {
   const handler = createPlayerApiHandler({
     store,
     getUserId,
-    recordAudit
+    recordAudit,
+    rateLimit
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
@@ -153,6 +156,7 @@ export function createPlayerApi(env = process.env) {
   const lifetimeHandler = createLifetimeHandler({
     getUserId,
     recordAudit,
+    rateLimit,
     service: lifetimeConfig
       ? createLifetimeService({
           config: lifetimeConfig,
@@ -190,7 +194,8 @@ export function createPlayerApi(env = process.env) {
   if (!env.CLERK_PUBLISHABLE_KEY || !env.CLERK_SECRET_KEY) {
     const unavailableAuthHandler = createPlayerApiHandler({
       store,
-      getUserId: () => null
+      getUserId: () => null,
+      rateLimit
     });
     const unavailableAccessHandler = createRunAccessHandler({
       store: accessStore,
@@ -200,6 +205,7 @@ export function createPlayerApi(env = process.env) {
     const unavailableLifetimeHandler = createLifetimeHandler({
       getUserId: () => null,
       recordAudit,
+      rateLimit,
       service: lifetimeConfig
         ? createLifetimeService({
             config: lifetimeConfig,

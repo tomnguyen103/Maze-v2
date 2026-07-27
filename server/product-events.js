@@ -34,6 +34,18 @@ const EVENT_SCHEMA = {
   },
   run_access_error: {
     category: ["temporary"]
+  },
+  // High volume by nature, so this is a product event rather than an audit row.
+  // Deliberately carries no caller identity.
+  rate_limit_hit: {
+    budget: [
+      "export.self",
+      "lifetime.checkout",
+      "profile.write",
+      "question.fetch",
+      "score.submit"
+    ],
+    scope: ["ip", "user"]
   }
 };
 

@@ -11,6 +11,26 @@ export function normalizeDatabaseConnectionString(connectionString) {
   return url.toString();
 }
 
+/** @type {Map<string, import("pg").Pool>} */
+const sharedPools = new Map();
+
+/**
+ * One pool per connection string for the lifetime of the process. Serverless
+ * invocations reuse a warm container, so two independent pools for the same
+ * database would double the connection footprint for no benefit.
+ *
+ * @param {string} connectionString
+ */
+export function getDatabasePool(connectionString) {
+  const existing = sharedPools.get(connectionString);
+  if (existing) {
+    return existing;
+  }
+  const pool = createDatabasePool(connectionString);
+  sharedPools.set(connectionString, pool);
+  return pool;
+}
+
 /** @param {string} connectionString */
 export function createDatabasePool(connectionString) {
   const pool = new Pool({

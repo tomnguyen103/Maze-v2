@@ -1,4 +1,5 @@
 import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
+import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
 
 /** @type {Set<string>} */
@@ -98,10 +99,27 @@ export function createQuestionRateLimiter(options = {}) {
  *   labyrinthNumber: number,
  *   questionOrdinal: number
  * }) => Promise<unknown> }} questionService
- * @param {{ maxRequests?: number, windowMs?: number, now?: () => number }} [options]
+ * @param {{
+ *   maxRequests?: number,
+ *   windowMs?: number,
+ *   now?: () => number,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit
+ * }} [options]
  */
 export function createQuestionHandler(questionService, options = {}) {
+  // Two independent limits. The in-process one caps what a single warm instance
+  // can push at the question provider; the per-caller one is durable across
+  // serverless invocations and stops one Explorer spending everyone's budget.
   const rateLimiter = createQuestionRateLimiter(options);
+  const rateLimit =
+    options.rateLimit ??
+    (async () => ({
+      allowed: true,
+      degraded: true,
+      limit: 0,
+      remaining: 0,
+      retryAfterSeconds: 0
+    }));
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -130,6 +148,15 @@ export function createQuestionHandler(questionService, options = {}) {
         JSON.stringify({
           error: "Question scrolls are resting. Please try again soon."
         })
+      );
+      return;
+    }
+    const decision = await rateLimit("question.fetch", request, null);
+    if (!decision.allowed) {
+      sendRateLimited(
+        response,
+        decision,
+        "Question scrolls are resting. Please try again soon."
       );
       return;
     }

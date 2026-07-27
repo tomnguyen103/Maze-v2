@@ -121,6 +121,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 4. `db/migrations/0004_cloud_quest_progress.sql`
 5. `db/migrations/0005_lantern_journal.sql`
 6. `db/migrations/0006_audit_events.sql`
+7. `db/migrations/0007_rate_limit_counters.sql`
 
 Then set:
 
@@ -135,8 +136,8 @@ STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
 STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
 ECHO_MAZE_APP_ORIGIN=https://your-app.example
-AUDIT_IP_SALT=your-random-audit-address-salt
-AUDIT_TRUST_PROXY=true
+TRUST_PROXY_HEADERS=true
+REQUEST_ADDRESS_SALT=your-random-address-salt
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
@@ -144,21 +145,38 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 ### Operations scripts
 
 ```bash
-npm run verify:audit    # recompute the audit_events hash chain; exits 1 on any break
+npm run verify:audit         # recompute the audit_events hash chain
+npm run prune:rate-limits    # drop rate-limit counters whose window has long closed
 ```
 
-It needs `DATABASE_URL`. Exit code 1 means the chain is broken; exit code 2 means
-the verifier could not run, which is not evidence of tampering. `verify:audit`
-sits outside `npm run check` because the local gate must not require a database.
+Both need `DATABASE_URL`, and both sit outside `npm run check` because the local
+gate must not require a database.
 
-Two optional audit variables:
+For `verify:audit`, exit code 1 means the chain is broken and exit code 2 means
+the verifier could not run — which is not evidence of tampering.
+`prune:rate-limits` takes `--older-than-hours` (default 24); guest counter keys
+stop being reachable once their address hash rotates daily, so old rows are dead
+weight rather than state.
 
-- `AUDIT_IP_SALT` — salt for the daily-rotating address hash on audit rows.
-  Unset stores no address at all; rows and chain verification still work, and the
-  server logs one startup warning.
-- `AUDIT_TRUST_PROXY` — set to `true` only when a proxy rewrites
-  `x-forwarded-for`, which is the case on Vercel. Left unset, the socket address
-  is used, because a client can otherwise choose its own address hash.
+### Security headers and rate limits
+
+`server/security-headers.js` is the single source for the header set, applied by
+local Express, the Vite dev server, and the Vite preview server the Playwright
+suite drives. `vercel.json` mirrors the same values for assets Vercel's edge
+serves without running our code — **change a directive in both places.** Full
+directive-by-directive rationale, the per-endpoint rate-limit budgets, and the
+Clerk custom-domain caveat are in `docs/security-headers.md`.
+
+Two optional variables:
+
+- `TRUST_PROXY_HEADERS=true` — honour `x-forwarded-for`. Set it on Vercel, which
+  rewrites that header. Unset, the socket address is used, because a client that
+  can set its own forwarded address can choose which rate-limit budget to spend.
+- `REQUEST_ADDRESS_SALT` — salt for the daily-rotating address hash used both for
+  guest rate-limit keys and for the `ip_hash` on audit rows. Optional: unset, it
+  is derived from `DATABASE_URL`, which is already a server-only secret and is
+  stable across warm containers. Set it explicitly when the connection string may
+  rotate independently.
 
 The included `vercel.json` serves the Vite entry document for direct `/play`
 visits and refreshes; API functions remain at `/api/*`. The game remains
