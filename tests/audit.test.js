@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   auditContextFromRequest,
   createAuditRecorder,
+  createRequestAuditor,
   SYSTEM_ACTORS
 } from "../server/audit.js";
+import { hashClientIp } from "../server/audit-store.js";
 
-/** @param {Record<string, string>} headers */
-function fakeRequest(headers) {
+/**
+ * @param {Record<string, string>} headers
+ * @param {string} [remoteAddress]
+ */
+function fakeRequest(headers, remoteAddress = undefined) {
   return /** @type {import("node:http").IncomingMessage} */ (
-    /** @type {unknown} */ ({ headers, socket: {} })
+    /** @type {unknown} */ ({ headers, socket: { remoteAddress } })
   );
 }
 
@@ -112,6 +117,73 @@ describe("createAuditRecorder", () => {
   });
 });
 
+describe("createRequestAuditor", () => {
+  it("threads the configured salt, date, and proxy trust into the context", async () => {
+    /** @type {Record<string, any>[]} */
+    const calls = [];
+    const recordAudit = createRequestAuditor({
+      recorder: {
+        async recordAudit(context, action, resource, before, after) {
+          calls.push({ context, action, resource, before, after });
+        }
+      },
+      salt: "salt",
+      today: () => "2026-07-26",
+      trustProxy: true
+    });
+    await recordAudit(
+      fakeRequest({
+        "x-request-id": "req_abc",
+        "x-forwarded-for": "203.0.113.7"
+      }),
+      {
+        actorId: "user_1",
+        actorRole: "admin",
+        action: "profile.update",
+        resource: { type: "player_profile", id: "user_1" },
+        before: { username: "Old" },
+        after: { username: "New" }
+      }
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      action: "profile.update",
+      resource: { type: "player_profile", id: "user_1" },
+      before: { username: "Old" },
+      after: { username: "New" },
+      context: {
+        actorId: "user_1",
+        actorRole: "admin",
+        requestId: "req_abc"
+      }
+    });
+    expect(calls[0].context.ipHash).toBe(
+      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-26" })
+    );
+  });
+
+  it("ignores a forwarded address when no proxy is trusted", async () => {
+    /** @type {Record<string, any>[]} */
+    const calls = [];
+    const recordAudit = createRequestAuditor({
+      recorder: {
+        async recordAudit(context) {
+          calls.push(context);
+        }
+      },
+      salt: "salt",
+      today: () => "2026-07-26"
+    });
+    await recordAudit(
+      fakeRequest({ "x-forwarded-for": "198.51.100.9" }, "203.0.113.7"),
+      { actorId: "user_1", action: "profile.update", resource: { type: "x" } }
+    );
+    expect(calls[0].ipHash).toBe(
+      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-26" })
+    );
+  });
+});
+
 describe("auditContextFromRequest", () => {
   it("derives a hashed address and the inbound request id", () => {
     const context = auditContextFromRequest(
@@ -119,7 +191,13 @@ describe("auditContextFromRequest", () => {
         "x-request-id": "req_abc",
         "x-forwarded-for": "203.0.113.7, 10.0.0.1"
       }),
-      { actorId: "user_1", actorRole: "admin", salt: "salt", date: "2026-07-26" }
+      {
+        actorId: "user_1",
+        actorRole: "admin",
+        salt: "salt",
+        date: "2026-07-26",
+        trustProxy: true
+      }
     );
     expect(context.actorId).toBe("user_1");
     expect(context.actorRole).toBe("admin");
@@ -129,7 +207,7 @@ describe("auditContextFromRequest", () => {
 
   it("omits the address hash when no salt is configured", () => {
     const context = auditContextFromRequest(
-      fakeRequest({ "x-forwarded-for": "203.0.113.7" }),
+      fakeRequest({ "x-forwarded-for": "203.0.113.7" }, "203.0.113.7"),
       { actorId: "user_1" }
     );
     expect(context.ipHash).toBeNull();

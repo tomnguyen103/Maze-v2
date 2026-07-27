@@ -6,6 +6,8 @@ import {
   canonicalAuditJson,
   createAuditStore,
   hashClientIp,
+  LOCK_TIMEOUT_MS,
+  readAuditChain,
   verifyAuditChain
 } from "../server/audit-store.js";
 
@@ -315,6 +317,20 @@ describe("createAuditStore", () => {
     expect(pool.calls.at(-1)?.sql).toBe("COMMIT");
   });
 
+  it("bounds the chain-head lock wait before taking it", async () => {
+    const pool = createFakePool();
+    await createAuditStore(pool).appendAudit(sampleEvent);
+    const timeoutIndex = pool.calls.findIndex((call) =>
+      call.sql.includes("SET LOCAL lock_timeout")
+    );
+    const lockIndex = pool.calls.findIndex((call) =>
+      call.sql.includes("FROM audit_chain_head")
+    );
+    expect(timeoutIndex).toBeGreaterThan(-1);
+    expect(timeoutIndex).toBeLessThan(lockIndex);
+    expect(pool.calls[timeoutIndex].sql).toContain(String(LOCK_TIMEOUT_MS));
+  });
+
   it("links each row to the previous row_hash", async () => {
     const pool = createFakePool();
     const store = createAuditStore(pool);
@@ -378,5 +394,20 @@ describe("createAuditStore", () => {
       call.sql.includes("FROM audit_events")
     );
     expect(read?.sql).toContain("ORDER BY id ASC");
+  });
+
+  it("reads the chain through any query handle so one snapshot can span batches", async () => {
+    /** @type {{ sql: string, values: unknown[] | undefined }[]} */
+    const seen = [];
+    await readAuditChain(
+      async (sql, values) => {
+        seen.push({ sql, values });
+        return { rows: [] };
+      },
+      { afterId: 7, limit: 100 }
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0].sql).toContain("ORDER BY id ASC");
+    expect(seen[0].values).toEqual([7, 100]);
   });
 });

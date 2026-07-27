@@ -121,9 +121,18 @@ export function createPlayerApi(env = process.env) {
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
+  const auditIpSalt = env.AUDIT_IP_SALT ?? "";
+  if (!auditIpSalt) {
+    // Audit rows are still written and the chain is still valid; only the
+    // address hash is dropped. Say so once so it is never a silent surprise.
+    console.warn(
+      "[audit] AUDIT_IP_SALT is unset; audit rows will store no address hash."
+    );
+  }
   const recordAudit = createRequestAuditor({
     recorder: createAuditRecorder({ store: createAuditStore(pool) }),
-    salt: env.AUDIT_IP_SALT ?? ""
+    salt: auditIpSalt,
+    trustProxy: env.AUDIT_TRUST_PROXY === "true"
   });
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (

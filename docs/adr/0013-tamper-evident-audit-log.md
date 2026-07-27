@@ -28,9 +28,11 @@ Appends serialize on `SELECT ... FOR UPDATE` against a one-row
 `audit_chain_head` table. Two concurrent writers cannot read the same chain
 head, so the chain stays linear without a table-wide lock.
 
-`audit_events` also carries a `BEFORE UPDATE OR DELETE` trigger that raises,
-plus `REVOKE UPDATE, DELETE, TRUNCATE ... FROM PUBLIC`. The trigger holds even
-for the table owner, which is what the application connects as.
+`audit_events` carries two triggers that raise — `BEFORE UPDATE OR DELETE` per
+row, and `BEFORE TRUNCATE` per statement, because `TRUNCATE` never fires row
+triggers. `REVOKE UPDATE, DELETE, TRUNCATE ... FROM PUBLIC` states the intent for
+non-owner roles; the triggers are what bind the table owner, which is the role
+the application connects as.
 
 `recordAudit` never throws into a request path. A failed append is logged
 through the `safe-error-log` redaction convention, and the running failure total
@@ -57,6 +59,25 @@ Audit rows never carry learning content. Journal writes record
 objective, or outcome. Score rows record the server-recalculated Run Score and
 bounded Run facts, never raw client input.
 
+## What this does not defend against
+
+A role that can `DROP TRIGGER` — which the table owner can — can disable the
+append-only guard, then rewrite rows and recompute every downstream hash. On a
+single-role Neon database that is the same role the application uses, so the
+honest claim is *tamper-evident against application bugs and casual editing*, not
+*tamper-proof against a compromised database credential*.
+
+Closing that gap needs infrastructure this phase does not own:
+
+- a separate non-login owner for `audit_events`, its triggers, and
+  `audit_chain_head`, with the app role holding `INSERT` only; and
+- periodic chain checkpoints anchored outside the database — an HMAC or signature
+  over `(max(id), row_hash)` written to a store the database role cannot reach.
+
+Both are deployment changes rather than code changes, and the second wants the
+observability sink that phase 5 introduces. Recorded here so the limitation is
+explicit rather than implied.
+
 ## Consequences
 
 - Every mutating endpoint writes exactly one row when it changes state, and none
@@ -65,7 +86,16 @@ bounded Run facts, never raw client input.
   (the decision is the record) and is audited as `run_access.decision`; the
   unmetered path grants nothing and writes nothing.
 - Chain verification is O(rows). The script walks in batches and carries the
-  last hash forward, so it stays constant-memory.
+  last hash forward, so it stays constant-memory. Every batch and the chain-head
+  read share one `REPEATABLE READ, READ ONLY` snapshot — with separate snapshots
+  a normal append landing mid-walk would read as tampering.
+- Verification exits 1 only for a broken chain. An operational failure exits 2,
+  because "the verifier could not run" is not evidence of tampering.
+- Appends set a transaction-local `lock_timeout`, so a contended chain head fails
+  the audit write instead of holding a request open to the platform timeout.
+- `x-forwarded-for` is honoured only when `AUDIT_TRUST_PROXY=true`. Otherwise the
+  socket address is hashed, because a client can otherwise choose its own
+  `ip_hash`.
 - The append costs one extra transaction per mutation. At this product's write
   rate that is acceptable; if it stops being acceptable, the fix is a per-actor
   chain, not a mutable log.

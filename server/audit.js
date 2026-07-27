@@ -106,13 +106,15 @@ export function createAuditRecorder({
  *     ) => Promise<void>
  *   },
  *   salt?: string,
- *   today?: () => string
+ *   today?: () => string,
+ *   trustProxy?: boolean
  * }} dependencies
  */
 export function createRequestAuditor({
   recorder,
   salt = "",
-  today = () => new Date().toISOString().slice(0, 10)
+  today = () => new Date().toISOString().slice(0, 10),
+  trustProxy = false
 }) {
   /** @type {RecordAudit} */
   return async function recordAudit(request, event) {
@@ -121,7 +123,8 @@ export function createRequestAuditor({
         actorId: event.actorId,
         actorRole: event.actorRole,
         salt,
-        date: today()
+        date: today(),
+        trustProxy
       }),
       event.action,
       event.resource,
@@ -131,12 +134,24 @@ export function createRequestAuditor({
   };
 }
 
-/** @param {import("node:http").IncomingMessage} request */
-function clientAddress(request) {
+/**
+ * `x-forwarded-for` is client-controlled unless a proxy is known to rewrite it,
+ * so it is only honoured when the deployment says so. Behind Vercel that header
+ * is authoritative; on a directly exposed server trusting it would let a caller
+ * choose their own ip_hash.
+ *
+ * @param {import("node:http").IncomingMessage} request
+ * @param {boolean} trustProxy
+ */
+function clientAddress(request, trustProxy) {
+  const socketAddress = request.socket?.remoteAddress || null;
+  if (!trustProxy) {
+    return socketAddress;
+  }
   const forwarded = request.headers["x-forwarded-for"];
   const header = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const first = header?.split(",")[0]?.trim();
-  return first || request.socket?.remoteAddress || null;
+  return first || socketAddress;
 }
 
 /** @param {import("node:http").IncomingMessage} request */
@@ -154,7 +169,8 @@ export function requestIdFrom(request) {
  *   actorId?: string | null,
  *   actorRole?: string | null,
  *   salt?: string,
- *   date?: string
+ *   date?: string,
+ *   trustProxy?: boolean
  * }} [options]
  */
 export function auditContextFromRequest(request, options = {}) {
@@ -163,7 +179,7 @@ export function auditContextFromRequest(request, options = {}) {
     actorId: options.actorId ?? null,
     actorRole: options.actorRole ?? null,
     requestId: requestIdFrom(request),
-    ipHash: hashClientIp(clientAddress(request), {
+    ipHash: hashClientIp(clientAddress(request, options.trustProxy === true), {
       salt: options.salt ?? "",
       date
     })

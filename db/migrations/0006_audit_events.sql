@@ -42,11 +42,22 @@ CREATE TABLE audit_chain_head (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- One row rewritten on every append. A low fillfactor keeps the new tuple
+-- version on the same page, and aggressive autovacuum stops dead tuples from
+-- accumulating under sustained write volume.
+ALTER TABLE audit_chain_head SET (
+  fillfactor = 50,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_vacuum_threshold = 100
+);
+
 INSERT INTO audit_chain_head (id, row_hash)
 VALUES (1, repeat('0', 64));
 
 -- Append-only enforcement. The revoke states the intent for non-owner roles;
--- the trigger holds even for the table owner, which is what the app connects as.
+-- the triggers hold even for the table owner, which is what the app connects as.
+-- UPDATE and DELETE are blocked per row; TRUNCATE needs its own statement-level
+-- trigger, because TRUNCATE never fires row triggers.
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_events FROM PUBLIC;
 
 CREATE FUNCTION audit_events_append_only() RETURNS TRIGGER AS $$
@@ -58,3 +69,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER audit_events_no_update_delete
   BEFORE UPDATE OR DELETE ON audit_events
   FOR EACH ROW EXECUTE FUNCTION audit_events_append_only();
+
+CREATE TRIGGER audit_events_no_truncate
+  BEFORE TRUNCATE ON audit_events
+  FOR EACH STATEMENT EXECUTE FUNCTION audit_events_append_only();

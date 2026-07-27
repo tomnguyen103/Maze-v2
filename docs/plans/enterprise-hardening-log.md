@@ -76,3 +76,32 @@ reason.
 8. **`npm run verify:audit` added to `package.json`** and documented in
    `README.md`. It sits outside `npm run check` because the local gate must not
    require a database.
+9. **New env var**: `AUDIT_TRUST_PROXY`. `x-forwarded-for` is client-controlled
+   unless a proxy rewrites it, so it is honoured only when this is `true` (the
+   Vercel case). Unset, the socket address is hashed instead.
+
+### CodeRabbit review
+
+Review completed on `f1b0902`. Nine actionable comments plus two nitpicks.
+Fixed: `BEFORE TRUNCATE` statement trigger (row triggers never fire on
+`TRUNCATE`, so the earlier ADR wording overstated the guarantee); one
+`REPEATABLE READ, READ ONLY` snapshot across every verification batch and the
+head read; exit code 2 for operational verifier failures so they cannot be
+mistaken for tampering; transaction-local `lock_timeout` on the chain-head lock;
+`AUDIT_TRUST_PROXY` gate on `x-forwarded-for`; a startup warning when
+`AUDIT_IP_SALT` is unset; hot-row `fillfactor` and autovacuum settings on
+`audit_chain_head`; direct test coverage for `createRequestAuditor`.
+
+Dismissed with reasons, both recorded in the ADR's "What this does not defend
+against" section:
+
+- *Move application runtime access to a non-owner role.* Correct, and it is the
+  real fix for owner-level `DROP TRIGGER`. It is a database provisioning change,
+  not a code change, and this repo does not own Neon role setup.
+- *Anchor chain checkpoints with an externally managed HMAC or signature.* Also
+  correct, and also not a code-only change — it needs a sink the database role
+  cannot reach, which is what phase 5's observability work introduces. Deferred
+  rather than declined.
+- *Fail fast when `AUDIT_IP_SALT` is unset.* Declined in favour of one startup
+  warning. A missing salt must not take down player services; the audit row and
+  the chain are both still valid without an address hash.

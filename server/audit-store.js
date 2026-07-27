@@ -4,6 +4,12 @@ import { createHash } from "node:crypto";
 export const AUDIT_GENESIS_HASH = "0".repeat(64);
 
 /**
+ * Matches createDatabasePool's connectionTimeoutMillis, so a contended append
+ * gives up in the same window a new connection would.
+ */
+export const LOCK_TIMEOUT_MS = 5000;
+
+/**
  * Stable-key-order JSON. Two structurally equal values always serialize
  * identically, which is what makes a recomputed row_hash comparable.
  *
@@ -148,6 +154,40 @@ export function verifyAuditChain(rows, options = {}) {
   return { valid: true, checked };
 }
 
+const CHAIN_QUERY = `SELECT
+   id,
+   actor_id,
+   actor_role,
+   action,
+   resource_type,
+   resource_id,
+   before,
+   after,
+   request_id,
+   ip_hash,
+   created_at,
+   prev_hash,
+   row_hash
+ FROM audit_events
+ WHERE id > $1
+ ORDER BY id ASC
+ LIMIT $2`;
+
+/**
+ * Reads one ordered slice of the chain through any query-capable handle, so a
+ * verifier can hold a single snapshot across every batch and the head read.
+ *
+ * @param {(
+ *   sql: string,
+ *   values?: unknown[]
+ * ) => Promise<{ rows: Record<string, unknown>[] }>} query
+ * @param {{ afterId?: number, limit?: number }} [options]
+ */
+export async function readAuditChain(query, { afterId = 0, limit = 10000 } = {}) {
+  const result = await query(CHAIN_QUERY, [afterId, limit]);
+  return result.rows;
+}
+
 /**
  * @param {{
  *   connect: () => Promise<{
@@ -171,6 +211,9 @@ export function createAuditStore(pool) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        // Bound the wait for the chain-head row lock. Without this a stuck
+        // append would hold a request open until the platform timeout.
+        await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT_MS}ms'`);
         const head = await client.query(
           `SELECT row_hash FROM audit_chain_head WHERE id = 1 FOR UPDATE`
         );
@@ -227,29 +270,8 @@ export function createAuditStore(pool) {
     /**
      * @param {{ afterId?: number, limit?: number }} [options]
      */
-    async readChain({ afterId = 0, limit = 10000 } = {}) {
-      const result = await pool.query(
-        `SELECT
-           id,
-           actor_id,
-           actor_role,
-           action,
-           resource_type,
-           resource_id,
-           before,
-           after,
-           request_id,
-           ip_hash,
-           created_at,
-           prev_hash,
-           row_hash
-         FROM audit_events
-         WHERE id > $1
-         ORDER BY id ASC
-         LIMIT $2`,
-        [afterId, limit]
-      );
-      return result.rows;
+    readChain(options) {
+      return readAuditChain(pool.query.bind(pool), options);
     }
   };
 }

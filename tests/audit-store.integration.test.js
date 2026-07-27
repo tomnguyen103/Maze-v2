@@ -92,5 +92,8 @@ describe.runIf(runIntegration)("Audit store on PostgreSQL", () => {
     await expect(
       pool.query("DELETE FROM audit_events WHERE id = $1", [row.id])
     ).rejects.toThrow(/append-only/);
+    await expect(pool.query("TRUNCATE audit_events")).rejects.toThrow(
+      /append-only/
+    );
   });
 });
