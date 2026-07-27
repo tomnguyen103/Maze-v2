@@ -235,6 +235,9 @@ Six findings, all fixed:
    in both the ADR and `docs/security-headers.md`, including the caveat that a
    Clerk production custom domain matches neither wildcard and must be added
    explicitly.
+
+---
+
 ## Phase 2 — RBAC + permission matrix
 
 - **PR**: _pending_
