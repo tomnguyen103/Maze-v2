@@ -29,14 +29,20 @@ const DENIAL_COPY = {
  * @param {HTMLElement} root
  * @param {{
  *   clerk?: { initialize: () => Promise<boolean>, mirroredRole: unknown },
+ *   createClerk?: (options?: { onChange?: () => void }) => {
+ *     initialize: () => Promise<boolean>,
+ *     mirroredRole: unknown
+ *   },
  *   loadProfile?: () => Promise<unknown>
  * }} [dependencies]
  */
 export async function renderAdmin(root, dependencies = {}) {
-  // No onChange: the default reloads on every Clerk load, and this page has no
-  // sign-in affordance to change state from. Phase 7 revisits that when it adds
-  // one.
-  const clerk = dependencies.clerk ?? createClerkBrowser();
+  // Called with no options on purpose. createClerkBrowser fires onChange on
+  // every load rather than only on a real auth change, so a reloading callback
+  // here would loop forever; this page has no sign-in affordance to change
+  // state from anyway. Phase 7 revisits that when it adds one.
+  const createClerk = dependencies.createClerk ?? createClerkBrowser;
+  const clerk = dependencies.clerk ?? createClerk();
   const loadProfile =
     dependencies.loadProfile ??
     (() =>
