@@ -99,11 +99,28 @@ describe("GET /api/me/export", () => {
     expect(exportUser).not.toHaveBeenCalled();
   });
 
-  it("returns the export as a download and audits export.self", async () => {
-    const { handler, recordAudit } = makeHandler();
+  it("returns the export as a download and audits export.self first", async () => {
+    /** @type {string[]} */
+    const order = [];
+    const recordAudit = vi.fn(() => {
+      order.push("audit");
+      return Promise.resolve();
+    });
+    const { handler } = makeHandler({ recordAudit });
     const response = fakeResponse();
+    const originalEnd = response.end.bind(response);
+    response.end = /** @type {typeof response.end} */ (
+      /** @type {unknown} */ (
+        (/** @type {string} */ chunk) => {
+          order.push("end");
+          originalEnd(chunk);
+        }
+      )
+    );
     const request = fakeRequest();
     await handler(request, response);
+    // The documented sequencing guarantee: audit attempt before the body.
+    expect(order).toEqual(["audit", "end"]);
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-disposition"]).toContain("attachment");
     expect(response.headers["content-disposition"]).toContain(

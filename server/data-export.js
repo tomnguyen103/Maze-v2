@@ -1,6 +1,43 @@
 export const EXPORT_SCHEMA_ID = "echo-maze-export/1";
 
 /**
+ * Snapshot variant: every section reads from ONE repeatable-read snapshot,
+ * so a concurrent save or deletion cannot produce an export whose sections
+ * describe different moments.
+ *
+ * @param {import("pg").Pool} pool
+ * @param {string} userId
+ * @param {{ now?: () => string }} [options]
+ */
+export async function exportUserSnapshot(pool, userId, options) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+    );
+    const exported = await buildUserExport(
+      {
+        query: async (sql, values) => {
+          const result = await client.query(sql, values);
+          return {
+            rows: /** @type {Record<string, unknown>[]} */ (result.rows)
+          };
+        }
+      },
+      userId,
+      options
+    );
+    await client.query("COMMIT");
+    return exported;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Every column each section exports is named explicitly: an export must never
  * grow a column by accident just because a migration added one. Notably
  * absent on purpose: `idempotency_key` (a client-generated dedup token, not

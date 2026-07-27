@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildUserExport, EXPORT_SCHEMA_ID } from "../server/data-export.js";
+import {
+  buildUserExport,
+  EXPORT_SCHEMA_ID,
+  exportUserSnapshot
+} from "../server/data-export.js";
 
 const USER = "user_export_1";
 const OTHER = "user_other_2";
@@ -183,5 +187,60 @@ describe("buildUserExport", () => {
     expect(schema.properties.data.required.sort()).toEqual(
       sectionNames.sort()
     );
+  });
+});
+
+describe("exportUserSnapshot", () => {
+  function fakeSnapshotPool({ failOn = "" } = {}) {
+    /** @type {string[]} */
+    const statements = [];
+    let released = false;
+    const client = {
+      async query(/** @type {string} */ sql, /** @type {unknown[]} */ values) {
+        statements.push(sql.split(/\s+/).slice(0, 2).join(" "));
+        if (failOn && sql.includes(failOn)) {
+          throw new Error("boom");
+        }
+        void values;
+        return { rows: [] };
+      },
+      release() {
+        released = true;
+      }
+    };
+    return {
+      statements,
+      isReleased: () => released,
+      async connect() {
+        return client;
+      }
+    };
+  }
+
+  it("wraps every section read in one repeatable-read snapshot", async () => {
+    const pool = fakeSnapshotPool();
+    const exported = await exportUserSnapshot(
+      /** @type {import("pg").Pool} */ (/** @type {unknown} */ (pool)),
+      "user_snapshot_1",
+      { now: () => "2026-07-27T00:00:00.000Z" }
+    );
+    expect(pool.statements[0]).toBe("BEGIN TRANSACTION");
+    expect(pool.statements.at(-1)).toBe("COMMIT");
+    // 8 section reads between BEGIN and COMMIT.
+    expect(pool.statements).toHaveLength(10);
+    expect(pool.isReleased()).toBe(true);
+    expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
+  });
+
+  it("rolls back and releases when a section read fails", async () => {
+    const pool = fakeSnapshotPool({ failOn: "FROM players" });
+    await expect(
+      exportUserSnapshot(
+        /** @type {import("pg").Pool} */ (/** @type {unknown} */ (pool)),
+        "user_snapshot_1"
+      )
+    ).rejects.toThrow("boom");
+    expect(pool.statements.at(-1)).toBe("ROLLBACK");
+    expect(pool.isReleased()).toBe(true);
   });
 });

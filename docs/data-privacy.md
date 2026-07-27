@@ -23,7 +23,9 @@ reach the server, so they cannot appear in a server-side export.
 
 - Auth required; metered at 2/hour (`export.self` budget); audited as
   `export.self`.
-- Returns a versioned envelope validated by `shared/export-schema.json`:
+- Returns a versioned envelope conforming to the checked-in contract
+  `shared/export-schema.json` (structurally pinned by unit test — the schema
+  file itself documents per-section constraints for external consumers):
   `{ "schema": "echo-maze-export/1", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return

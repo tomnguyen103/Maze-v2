@@ -22,7 +22,7 @@ import {
   createRequestAuditor,
   SYSTEM_ACTORS
 } from "./audit.js";
-import { buildUserExport } from "./data-export.js";
+import { exportUserSnapshot } from "./data-export.js";
 import {
   createDataExportHandler,
   DATA_EXPORT_PATH
@@ -221,7 +221,7 @@ export function createPlayerApi(env = process.env) {
     recordAudit
   });
   const dataExportHandler = createDataExportHandler({
-    exportUser: (userId) => buildUserExport(queryAdapter, userId),
+    exportUser: (userId) => exportUserSnapshot(pool, userId),
     getUserId,
     rateLimit,
     recordAudit
@@ -354,7 +354,7 @@ export function createPlayerApi(env = process.env) {
       getUserId: () => null
     });
     const unavailableDataExportHandler = createDataExportHandler({
-      exportUser: (userId) => buildUserExport(queryAdapter, userId),
+      exportUser: (userId) => exportUserSnapshot(pool, userId),
       getUserId: () => null,
       rateLimit,
       recordAudit
