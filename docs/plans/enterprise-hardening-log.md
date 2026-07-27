@@ -400,7 +400,7 @@ outcome of the change it failed to record.
 
 ### Gate
 
-- `npm run check`: green (591 tests / 11 skipped).
+- `npm run check`: green (593 tests / 11 skipped).
 - `npm run check:full`: green (111 e2e / 5 skipped) on a clean run.
 
   **The e2e flakiness is now a real problem, not a footnote.** Across this phase
@@ -447,8 +447,10 @@ outcome of the change it failed to record.
    refund; this is a plan constraint, not a design choice, and it is a one-line
    change on a paid plan. **Worth an explicit decision from the repo owner.**
 9. **Auditing moved into the `processEvent` seam.** In the routes, the retry loop
-   produced no audit rows and the Clerk inbox path skipped `user.delete`
-   entirely — a silent regression against phase 1.
+   produced no audit rows and the Clerk inbox path wrote no `user.delete` audit
+   row for a `user.deleted` event — a silent regression against phase 1.
+   (`user.deleted` is Clerk's event name, `user.delete` our audit action; the
+   two names are deliberately distinct.)
 
 ### Local review
 
@@ -492,6 +494,36 @@ Two findings, both fixed:
 - `README.md` and this log still described the pre-correction cron contract
   (`POST`, every ten minutes) after the ADR had been corrected to `GET` +
   `Bearer` on a daily schedule.
+
+### CodeRabbit full review
+
+`@coderabbitai review` on the privacy fix returned **"Review skipped: incremental
+reviews are disabled"** with a green status. That is a no-op, not a clean review:
+incremental reviews are off for this org, so the command reviewed nothing.
+Merging on that green status would have shipped the privacy fix unreviewed.
+`@coderabbitai full review` is the command that actually re-reviews. **A green
+CodeRabbit status means the review process terminated, not that the current code
+was reviewed — the description string is what distinguishes them.**
+
+The full review found five more, three Major, all fixed:
+
+- **`inbox.receive` was unguarded in the Clerk route.** The router dispatches
+  that handler with `void`, so a store failure rejected with no response written
+  and the request hung until the platform timeout. Now 503, which is right: the
+  delivery was never stored, so Clerk should redeliver. This is the fourth
+  instance of the hang-on-unwritten-response class in this codebase.
+- **The Stripe inbox path double-audited.** `processEvent` writes the row, then
+  the route wrote a second one from the returned result — so an inline delivery
+  produced two `lifetime.webhook` rows while a retried one produced one.
+- **Both webhook scripts built their pool before the `try`**, so a malformed
+  `DATABASE_URL` threw past the handler and bypassed the documented exit code,
+  and neither pool had connection or query timeouts.
+- README's script count, and a naming ambiguity between Clerk's `user.deleted`
+  event and our `user.delete` audit action.
+
+The same pool-construction pattern exists in `verify-audit-chain.mjs`,
+`prune-rate-limits.mjs`, and `grant-admin.mjs` from earlier phases. Left alone
+here to keep this PR's diff to its own phase; worth a follow-up.
 
 ### Note on a defect this phase caught in its own wiring
 

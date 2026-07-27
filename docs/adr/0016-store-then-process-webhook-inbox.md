@@ -106,8 +106,10 @@ for a real internal route and an unknown one, so the surface cannot be mapped.
 - New env var: `CRON_SECRET`. Required for the retry endpoint to function at all.
 - **Auditing lives in the `processEvent` seam, not in the routes.** Putting it in
   the route meant the retry loop produced no audit rows at all, and the Clerk
-  inbox path skipped `user.delete` entirely — a silent regression against phase
-  1's rule that every mutating path is audited. In the seam, a delivery that only
+  inbox path wrote no `user.delete` audit row for a `user.deleted` event — a
+  silent regression against phase 1's rule that every mutating path is audited.
+  (`user.deleted` is Clerk's event name; `user.delete` is our audit action, set
+  in phase 1. They are deliberately different words for different things.) In the seam, a delivery that only
   succeeds on its fourth attempt still leaves the same trail as one that succeeds
   immediately.
 - **Rewritten sub-paths are validated, not interpolated.** `_internalPath=../..`

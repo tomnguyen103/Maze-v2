@@ -82,12 +82,28 @@ export function createClerkWebhookHandler({
       // what the inbox deduplicates on.
       const deliveryId = deliveryIdFrom(request);
       if (inbox && deliveryId) {
-        const outcome = await inbox.receive({
-          provider: "clerk",
-          eventId: deliveryId,
-          eventType: event.type,
-          payload: { id: userId }
-        });
+        /** @type {{ duplicate: boolean }} */
+        let outcome;
+        try {
+          outcome = await inbox.receive({
+            provider: "clerk",
+            eventId: deliveryId,
+            eventType: event.type,
+            payload: { id: userId }
+          });
+        } catch (error) {
+          // The router dispatches this handler with `void`, so an unhandled
+          // rejection writes no response at all and the request hangs until the
+          // platform timeout. 503 tells Clerk to redeliver, which is exactly
+          // right when the delivery was never stored.
+          console.error("[clerk-webhook] Inbox write failed", {
+            name: safeErrorName(error)
+          });
+          sendJson(response, 503, {
+            error: "Account deletion is temporarily unavailable."
+          });
+          return;
+        }
         // 200 either way: the delivery is stored and owned by our retry loop,
         // so Clerk must stop redelivering it.
         sendJson(response, 200, {

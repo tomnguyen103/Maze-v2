@@ -190,6 +190,10 @@ export function createLifetimeHandler({
     });
     return {
       eventType,
+      // processEvent already wrote the audit row for this delivery, and it
+      // writes the same row on the retry path. Auditing again here would double
+      // every inline delivery and still leave retries single-counted.
+      audited: true,
       outcome: outcome.duplicate
         ? "duplicate"
         : outcome.processed
@@ -213,19 +217,21 @@ export function createLifetimeHandler({
       const result = inbox
         ? await receiveThroughInbox(rawBody, signature)
         : await service.processWebhook(rawBody, signature);
-      await recordAudit(request, {
-        actorId: SYSTEM_ACTORS.stripe,
-        actorRole: "system",
-        action: "lifetime.webhook",
-        resource: {
-          type: "lifetime_purchase",
-          id: result.purchaseId ? String(result.purchaseId) : null
-        },
-        after: {
-          eventType: result.eventType ?? null,
-          outcome: result.outcome ?? null
-        }
-      });
+      if (result.audited !== true) {
+        await recordAudit(request, {
+          actorId: SYSTEM_ACTORS.stripe,
+          actorRole: "system",
+          action: "lifetime.webhook",
+          resource: {
+            type: "lifetime_purchase",
+            id: result.purchaseId ? String(result.purchaseId) : null
+          },
+          after: {
+            eventType: result.eventType ?? null,
+            outcome: result.outcome ?? null
+          }
+        });
+      }
       sendJson(response, 200, { received: true });
     } catch (error) {
       if (error instanceof LifetimeWebhookVerificationError) {

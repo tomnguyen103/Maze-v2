@@ -155,8 +155,8 @@ npm run webhooks:dead                   # list webhook deliveries that gave up
 npm run webhooks:prune                  # drop settled webhook rows past retention
 ```
 
-All three need `DATABASE_URL` and sit outside `npm run check`, because the local
-gate must not require a database.
+All of these need `DATABASE_URL` and sit outside `npm run check`, because the
+local gate must not require a database.
 
 For `verify:audit`, exit code 1 means the chain is broken and exit code 2 means
 the verifier could not run — which is not evidence of tampering.

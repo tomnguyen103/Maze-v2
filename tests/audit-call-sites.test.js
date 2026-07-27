@@ -433,6 +433,72 @@ describe("audit call sites", () => {
     expect(JSON.stringify(audit.events)).not.toContain("checkout.stripe.test");
   });
 
+  it("does not double-audit a Stripe delivery the inbox already recorded", async () => {
+    // processEvent writes the audit row for both the inline path and the retry
+    // path. Auditing again in the route would double every inline delivery and
+    // still leave retries single-counted.
+    const audit = createAuditSpy();
+    const handler = createLifetimeHandler({
+      getUserId: () => "user_1",
+      recordAudit: audit.recordAudit,
+      inbox: {
+        receive: async () => ({ duplicate: false, processed: true })
+      },
+      service: {
+        createCheckout: async () => ({}),
+        confirmCheckout: async () => ({}),
+        processWebhook: async () => ({}),
+        verifyWebhook: () => ({ id: "evt_1", type: "checkout.session.completed" }),
+        processVerifiedWebhook: async () => ({ outcome: "processed" })
+      }
+    });
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({
+        method: "POST",
+        url: "/api/stripe-webhook",
+        body: { id: "evt_1" },
+        headers: { "stripe-signature": "signature" }
+      }),
+      /** @type {never} */ (response),
+      undefined
+    );
+    expect((await finished).statusCode).toBe(200);
+    expect(audit.events).toEqual([]);
+  });
+
+  it("answers 503 rather than hanging when the Clerk inbox write fails", async () => {
+    // The router dispatches this handler with `void`, so an unhandled rejection
+    // writes no response at all and the request hangs until the platform
+    // timeout. 503 tells Clerk to redeliver, which is right when nothing stored.
+    const audit = createAuditSpy();
+    const handler = createClerkWebhookHandler({
+      deleteUser: async () => {},
+      recordAudit: audit.recordAudit,
+      inbox: {
+        receive: async () => {
+          throw new Error("inbox unavailable");
+        }
+      },
+      verifyEvent: async () => ({
+        type: "user.deleted",
+        data: { id: "user_gone" }
+      })
+    });
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({
+        method: "POST",
+        url: "/api/clerk-webhook",
+        body: {},
+        headers: { "svix-id": "msg_abc" }
+      }),
+      /** @type {never} */ (response),
+      undefined
+    );
+    expect((await finished).statusCode).toBe(503);
+  });
+
   it("writes no lifetime row when the webhook signature is rejected", async () => {
     const audit = createAuditSpy();
     const handler = createLifetimeHandler({
