@@ -3,20 +3,6 @@ import { createHash } from "node:crypto";
 /** The prev_hash of the first row in the chain. */
 export const AUDIT_GENESIS_HASH = "0".repeat(64);
 
-/** Hashed field names, in the exact order used to build the canonical JSON. */
-const HASHED_FIELDS = [
-  "action",
-  "actor_id",
-  "actor_role",
-  "after",
-  "before",
-  "created_at",
-  "ip_hash",
-  "request_id",
-  "resource_id",
-  "resource_type"
-];
-
 /**
  * Stable-key-order JSON. Two structurally equal values always serialize
  * identically, which is what makes a recomputed row_hash comparable.
@@ -100,16 +86,26 @@ export function hashClientIp(address, { salt, date }) {
 }
 
 /**
+ * Rebuilds the hashed field set from a stored row by routing it back through
+ * auditEventFields, so the field list exists in exactly one place.
+ *
  * @param {Record<string, unknown>} row
  */
 function storedFields(row) {
-  /** @type {Record<string, unknown>} */
-  const fields = {};
-  for (const field of HASHED_FIELDS) {
-    fields[field] =
-      field === "created_at" ? timestampText(row.created_at) : row[field] ?? null;
-  }
-  return fields;
+  return auditEventFields({
+    action: String(row.action),
+    actorId: String(row.actor_id),
+    actorRole: String(row.actor_role),
+    after: row.after ?? null,
+    before: row.before ?? null,
+    createdAt: timestampText(row.created_at),
+    ipHash: row.ip_hash === undefined ? null : /** @type {string | null} */ (row.ip_hash),
+    requestId:
+      row.request_id === undefined ? null : /** @type {string | null} */ (row.request_id),
+    resourceId:
+      row.resource_id === undefined ? null : /** @type {string | null} */ (row.resource_id),
+    resourceType: String(row.resource_type)
+  });
 }
 
 /**
@@ -161,7 +157,7 @@ export function verifyAuditChain(rows, options = {}) {
  *     ) => Promise<{ rows: Record<string, unknown>[] }>,
  *     release: () => void
  *   }>,
- *   query?: (
+ *   query: (
  *     sql: string,
  *     values?: unknown[]
  *   ) => Promise<{ rows: Record<string, unknown>[] }>
@@ -232,20 +228,7 @@ export function createAuditStore(pool) {
      * @param {{ afterId?: number, limit?: number }} [options]
      */
     async readChain({ afterId = 0, limit = 10000 } = {}) {
-      const run = pool.query
-        ? pool.query.bind(pool)
-        : async (
-            /** @type {string} */ sql,
-            /** @type {unknown[] | undefined} */ values
-          ) => {
-            const client = await pool.connect();
-            try {
-              return await client.query(sql, values);
-            } finally {
-              client.release();
-            }
-          };
-      const result = await run(
+      const result = await pool.query(
         `SELECT
            id,
            actor_id,

@@ -39,14 +39,15 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,200}$/;
  *     ) => Promise<unknown>
  *   },
  *   now?: () => Date,
- *   onFailure?: (details: { action: string, name: string }) => void
+ *   onFailure?: (
+ *     details: { action: string, name: string, failures: number }
+ *   ) => void
  * }} dependencies
  */
 export function createAuditRecorder({
   store,
   now = () => new Date(),
-  onFailure = (details) =>
-    console.error("[audit] append failed", details)
+  onFailure = (details) => console.error("[audit] append failed", details)
 }) {
   let failures = 0;
   return {
@@ -79,7 +80,9 @@ export function createAuditRecorder({
         });
       } catch (error) {
         failures += 1;
-        onFailure({ action, name: safeErrorName(error) });
+        // The running total ships with every failure line, so a silent audit
+        // gap is visible in logs without a separate metrics surface.
+        onFailure({ action, name: safeErrorName(error), failures });
       }
     },
     failureCount() {

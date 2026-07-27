@@ -22,7 +22,7 @@ reason.
 - `server/audit.js` — `recordAudit` wrapper that never throws into a request
   path and counts failures; `createRequestAuditor` request-shaped entry point.
 - `scripts/verify-audit-chain.mjs` — batched chain walk, exits 1 on any break.
-- Call sites: `profile.update`, `score.submit`, `run_access.grant`,
+- Call sites: `profile.update`, `score.submit`, `run_access.decision`,
   `quest_progress.save`, `journal.sync`, `journal.clear`, `lifetime.checkout`,
   `lifetime.confirm`, `lifetime.webhook`, `user.delete`.
 - Tests: `tests/audit-store.test.js`, `tests/audit.test.js`,
@@ -31,7 +31,8 @@ reason.
 
 ### Gate
 
-- `npm run check`: _pending_
+- `npm run check`: green (lint, typecheck, 418 tests / 7 skipped, build, bundle
+  budget all PASS).
 - `npm run check:full`: _pending_
 
 ### Deviations
@@ -51,4 +52,24 @@ reason.
    presentation preferences that never reach the server, so there is no mutating
    endpoint to audit.
 4. **New env var**: `AUDIT_IP_SALT`. Unset means `ip_hash` is `NULL` — the audit
-   row is still written and the chain is still valid.
+   row is still written and the chain is still valid. Documented in `README.md`;
+   `.env.example` was deliberately left untouched because it is out of scope for
+   this run.
+5. **Schema hardened past the plan's sketch.** `prev_hash` / `row_hash` /
+   `ip_hash` are `CHAR(64)` with hex CHECKs instead of bare `TEXT`, `actor_role`
+   is constrained to the four known roles, and a third index
+   `audit_events_action_idx` supports the phase 7 audit viewer's action filter.
+   Deliberately *not* constrained: `action` and `resource_type`. Because
+   `recordAudit` swallows write errors, a CHECK on the action name would silently
+   drop rows for any future action — the exact failure the log exists to prevent.
+6. **`run_access.grant` renamed to `run_access.decision`, and audited only under
+   enforcement.** With `RUN_ACCESS_ENFORCEMENT_ENABLED=false` the endpoint reads
+   current access and grants nothing, so there is nothing to audit. Under
+   enforcement both admission and denial are recorded, because the decision
+   itself is the durable fact support needs.
+7. **`user.delete` targets `player_account`, not `player_profile`.** Account
+   deletion removes the whole identity, which is a different resource from the
+   Player Profile row that `profile.update` touches.
+8. **`npm run verify:audit` added to `package.json`** and documented in
+   `README.md`. It sits outside `npm run check` because the local gate must not
+   require a database.

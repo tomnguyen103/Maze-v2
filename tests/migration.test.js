@@ -104,6 +104,9 @@ describe("Run Access migration", () => {
     expect(sql).toContain("row_hash CHAR(64) NOT NULL");
     expect(sql).toContain("ip_hash CHAR(64)");
     expect(sql).toContain("actor_role IN ('admin', 'moderator', 'player', 'system')");
+    // A CHECK on the action name would silently drop rows, because recordAudit
+    // swallows write errors by design.
+    expect(sql).not.toContain("CHECK (action");
     expect(sql).toContain("CREATE TABLE audit_chain_head");
     expect(sql).toContain("CHECK (id = 1)");
     expect(sql).toContain("REVOKE UPDATE, DELETE, TRUNCATE ON audit_events");

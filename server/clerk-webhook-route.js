@@ -84,7 +84,7 @@ export function createClerkWebhookHandler({
         actorId: SYSTEM_ACTORS.clerk,
         actorRole: "system",
         action: "user.delete",
-        resource: { type: "player", id: userId }
+        resource: { type: "player_account", id: userId }
       });
     }
     sendJson(response, 200, { received: true });

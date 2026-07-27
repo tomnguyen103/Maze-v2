@@ -120,6 +120,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 3. `db/migrations/0003_lifetime_membership.sql`
 4. `db/migrations/0004_cloud_quest_progress.sql`
 5. `db/migrations/0005_lantern_journal.sql`
+6. `db/migrations/0006_audit_events.sql`
 
 Then set:
 
@@ -134,9 +135,22 @@ STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
 STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
 ECHO_MAZE_APP_ORIGIN=https://your-app.example
+AUDIT_IP_SALT=your-random-audit-address-salt
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
+
+### Operations scripts
+
+```bash
+npm run verify:audit    # recompute the audit_events hash chain; exits 1 on any break
+```
+
+It needs `DATABASE_URL`, and optionally `AUDIT_IP_SALT` — the salt for the
+daily-rotating address hash stored on audit rows. Leaving `AUDIT_IP_SALT` unset
+stores no address at all; audit rows and chain verification still work.
+`verify:audit` sits outside `npm run check` because the local gate must not
+require a database.
 
 The included `vercel.json` serves the Vite entry document for direct `/play`
 visits and refreshes; API functions remain at `/api/*`. The game remains

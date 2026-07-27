@@ -361,7 +361,9 @@ describe("createAuditStore", () => {
     const calls = [];
     await expect(
       createAuditStore(
-        /** @type {Parameters<typeof createAuditStore>[0]} */ (failing)
+        /** @type {Parameters<typeof createAuditStore>[0]} */ (
+          /** @type {unknown} */ (failing)
+        )
       ).appendAudit(sampleEvent)
     ).rejects.toThrow("insert failed");
     expect(calls).toContain("ROLLBACK");

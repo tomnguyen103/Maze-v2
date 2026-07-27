@@ -13,7 +13,9 @@ CREATE TABLE audit_events (
   actor_id TEXT NOT NULL,
   actor_role TEXT NOT NULL DEFAULT 'player'
     CHECK (actor_role IN ('admin', 'moderator', 'player', 'system')),
-  action TEXT NOT NULL CHECK (action ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'),
+  -- Deliberately unconstrained: recordAudit swallows write errors, so a CHECK
+  -- on the action name would silently drop rows for any future action.
+  action TEXT NOT NULL,
   resource_type TEXT NOT NULL,
   resource_id TEXT,
   before JSONB,
@@ -22,6 +24,8 @@ CREATE TABLE audit_events (
   ip_hash CHAR(64) CHECK (ip_hash IS NULL OR ip_hash ~ '^[a-f0-9]{64}$'),
   prev_hash CHAR(64) NOT NULL CHECK (prev_hash ~ '^[a-f0-9]{64}$'),
   row_hash CHAR(64) NOT NULL CHECK (row_hash ~ '^[a-f0-9]{64}$'),
+  -- The default is a safety net only. Rows not written by appendAudit have no
+  -- matching row_hash and will read as a chain break, which is the intent.
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

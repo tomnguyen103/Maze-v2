@@ -193,7 +193,7 @@ describe("audit call sites", () => {
     });
   });
 
-  it("writes one run_access.grant row per authorization decision", async () => {
+  it("writes one run_access.decision row per enforced authorization", async () => {
     const audit = createAuditSpy();
     const handler = createRunAccessHandler({
       getUserId: () => "user_1",
@@ -227,10 +227,43 @@ describe("audit call sites", () => {
     await finished;
     expect(audit.events).toHaveLength(1);
     expect(audit.events[0]).toMatchObject({
-      action: "run_access.grant",
+      action: "run_access.decision",
       resource: { type: "run_access_grant", id: "run_abcdefghijkl" },
       after: { allowed: true, state: "free" }
     });
+  });
+
+  it("writes no run_access row when enforcement is off and nothing is granted", async () => {
+    const audit = createAuditSpy();
+    const handler = createRunAccessHandler({
+      getUserId: () => "user_1",
+      enforcementEnabled: false,
+      recordAudit: audit.recordAudit,
+      store: {
+        getAccess: async () => ({ freeRunsRemaining: 3, state: "free" }),
+        authorizeRun: async () => {
+          throw new Error("must not authorize when enforcement is off");
+        }
+      }
+    });
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({
+        method: "POST",
+        url: "/api/access/runs",
+        body: {
+          runId: "run_abcdefghijkl",
+          seed: "SEED-ONE",
+          levelId: "bright-start",
+          labyrinthNumber: 1
+        }
+      }),
+      /** @type {never} */ (response),
+      undefined
+    );
+    const result = await finished;
+    expect(result.statusCode).toBe(200);
+    expect(audit.events).toEqual([]);
   });
 
   it("writes one quest_progress.save row per accepted boundary write", async () => {
@@ -448,7 +481,7 @@ describe("audit call sites", () => {
       action: "user.delete",
       actorId: SYSTEM_ACTORS.clerk,
       actorRole: "system",
-      resource: { type: "player", id: "user_gone" }
+      resource: { type: "player_account", id: "user_gone" }
     });
   });
 

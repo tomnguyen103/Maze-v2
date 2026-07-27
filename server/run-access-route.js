@@ -180,19 +180,22 @@ export function createRunAccessHandler({
             : "blocked"
           : "unmetered"
       });
-      await recordAudit(request, {
-        actorId: userId,
-        action: "run_access.grant",
-        resource: { type: "run_access_grant", id: runRequest.runId },
-        after: {
-          allowed: result.allowed,
-          duplicate: result.duplicate,
-          enforcementEnabled,
-          labyrinthNumber: runRequest.labyrinthNumber,
-          levelId: runRequest.levelId,
-          state: result.state
-        }
-      });
+      // Only the enforced path changes state. With enforcement off the request
+      // reads current access and grants nothing, so there is nothing to audit.
+      if (enforcementEnabled) {
+        await recordAudit(request, {
+          actorId: userId,
+          action: "run_access.decision",
+          resource: { type: "run_access_grant", id: runRequest.runId },
+          after: {
+            allowed: result.allowed,
+            duplicate: result.duplicate,
+            labyrinthNumber: runRequest.labyrinthNumber,
+            levelId: runRequest.levelId,
+            state: result.state
+          }
+        });
+      }
       sendJson(response, 200, { ...result, enforcementEnabled });
     } catch (error) {
       if (

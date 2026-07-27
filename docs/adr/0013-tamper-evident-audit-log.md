@@ -33,8 +33,15 @@ plus `REVOKE UPDATE, DELETE, TRUNCATE ... FROM PUBLIC`. The trigger holds even
 for the table owner, which is what the application connects as.
 
 `recordAudit` never throws into a request path. A failed append is logged
-through the `safe-error-log` redaction convention and counted, so observability
-can alert on a silent audit gap instead of the request failing.
+through the `safe-error-log` redaction convention, and the running failure total
+ships on every failure line, so a silent audit gap is visible in logs instead of
+the request failing.
+
+`action` and `resource_type` are unconstrained text. A CHECK on the action name
+would silently drop rows for any future action, which is exactly the failure the
+log exists to prevent. `prev_hash`, `row_hash`, and `ip_hash` do carry hex
+CHECKs, because those values are machine-generated and a malformed one means the
+chain is already wrong.
 
 Actors are Clerk user ids for human actions and reserved ids for everything
 else: `system`, `system:bootstrap`, `webhook:stripe`, `webhook:clerk`.
@@ -52,8 +59,11 @@ bounded Run facts, never raw client input.
 
 ## Consequences
 
-- Every mutating endpoint writes exactly one row on success and none on
-  rejection or conflict.
+- Every mutating endpoint writes exactly one row when it changes state, and none
+  when the request is rejected on input, loses an optimistic conflict, or
+  changes nothing. A *denial* under Run Access enforcement does change state
+  (the decision is the record) and is audited as `run_access.decision`; the
+  unmetered path grants nothing and writes nothing.
 - Chain verification is O(rows). The script walks in batches and carries the
   last hash forward, so it stays constant-memory.
 - The append costs one extra transaction per mutation. At this product's write

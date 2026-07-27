@@ -65,17 +65,20 @@ describe("createAuditRecorder", () => {
   });
 
   it("counts every failure so observability can alert on a silent audit gap", async () => {
-    const recorder = createAuditRecorder({
+    /** @type {number[]} */
+    const reported = [];
+    const counting = createAuditRecorder({
       store: {
         appendAudit: async () => {
           throw new Error("database down");
         }
       },
-      onFailure: () => {}
+      onFailure: (details) => reported.push(details.failures)
     });
-    await recorder.recordAudit({ actorId: "a" }, "x", { type: "y" });
-    await recorder.recordAudit({ actorId: "a" }, "x", { type: "y" });
-    expect(recorder.failureCount()).toBe(2);
+    await counting.recordAudit({ actorId: "a" }, "x", { type: "y" });
+    await counting.recordAudit({ actorId: "a" }, "x", { type: "y" });
+    expect(counting.failureCount()).toBe(2);
+    expect(reported).toEqual([1, 2]);
   });
 
   it("does not leak the raw error to the failure handler", async () => {
@@ -91,7 +94,7 @@ describe("createAuditRecorder", () => {
     });
     await recorder.recordAudit({ actorId: "a" }, "x", { type: "y" });
     expect(JSON.stringify(seen)).not.toContain("secret");
-    expect(seen[0]).toEqual({ action: "x", name: "Error" });
+    expect(seen[0]).toEqual({ action: "x", failures: 1, name: "Error" });
   });
 
   it("defaults the actor to the system actor when none is supplied", async () => {
