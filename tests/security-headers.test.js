@@ -7,6 +7,11 @@ import {
   securityHeaders
 } from "../server/security-headers.js";
 
+/** @param {string[]} values */
+function keywordsOf(values) {
+  return values.filter((entry) => !entry.startsWith("https://"));
+}
+
 /** @param {string} policy */
 function directives(policy) {
   return new Map(
@@ -89,6 +94,21 @@ describe("contentSecurityPolicy", () => {
       ).get("connect-src")
     ).toContain("https://clerk-telemetry.com");
     expect(contentSecurityPolicy({})).not.toContain("clerk-telemetry");
+  });
+
+  it("allows the Turnstile script, not only its frame", () => {
+    // Clerk's bot protection loads a script from challenges.cloudflare.com.
+    // frame-src alone blocks the CAPTCHA when bot protection is enabled.
+    const policy = directives(
+      contentSecurityPolicy({ clerkHost: "x.clerk.accounts.dev" })
+    );
+    expect(policy.get("script-src")).toContain(
+      "https://challenges.cloudflare.com"
+    );
+    expect(policy.get("frame-src")).toContain(
+      "https://challenges.cloudflare.com"
+    );
+    expect(contentSecurityPolicy({})).not.toContain("challenges.cloudflare.com");
   });
 
   it("allows everything the Clerk sign-in surface needs", () => {
@@ -283,19 +303,48 @@ describe("vercel.json header parity", () => {
         production: true
       })
     );
-    const clerkBearing = new Set([
+    // Only directives that carry a HOST may differ, and only in their hosts:
+    // the edge cannot decode the publishable key, so it uses wildcards. Every
+    // keyword — 'self', 'unsafe-inline', 'none' — must match exactly. Excluding
+    // style-src here is how 'unsafe-inline' silently went missing from the edge
+    // copy once before.
+    const hostBearing = new Set([
       "script-src",
       "connect-src",
       "frame-src",
-      "img-src",
-      "style-src"
+      "img-src"
     ]);
     expect([...code.keys()].sort()).toEqual([...edge.keys()].sort());
     for (const [name, value] of code) {
-      if (!clerkBearing.has(name)) {
+      if (hostBearing.has(name)) {
+        expect(keywordsOf(edge.get(name) ?? [])).toEqual(keywordsOf(value));
+      } else {
         expect(edge.get(name)).toEqual(value);
       }
     }
+  });
+
+  it("gives the edge every Clerk host family the middleware needs", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    const edge = directives(
+      config.headers[0].headers.find(
+        (/** @type {{ key: string }} */ header) =>
+          header.key === "Content-Security-Policy"
+      ).value
+    );
+    // Turnstile is Clerk's bot protection: it loads a script as well as
+    // rendering in a frame, so listing it only in frame-src blocks the CAPTCHA.
+    expect(edge.get("script-src")).toContain(
+      "https://challenges.cloudflare.com"
+    );
+    expect(edge.get("frame-src")).toContain(
+      "https://challenges.cloudflare.com"
+    );
+    expect(edge.get("connect-src")).toContain("https://clerk-telemetry.com");
+    expect(edge.get("style-src")).toContain("'unsafe-inline'");
+    expect(edge.get("script-src")).not.toContain("'unsafe-inline'");
   });
 
   it("mirrors the Permissions-Policy feature list exactly", async () => {

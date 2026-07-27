@@ -88,5 +88,8 @@ test("normal play never spends a rate-limit budget", async ({ page }) => {
     await page.keyboard.press(key);
   }
 
+  // Without this the assertion below passes vacuously whenever the flow makes
+  // no API call at all, which would prove nothing about the limiter.
+  expect(statuses.length).toBeGreaterThan(0);
   expect(statuses).not.toContain(429);
 });

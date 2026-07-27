@@ -63,5 +63,13 @@ export function createDatabasePool(connectionString) {
     connectionTimeoutMillis: 5000
   });
   attachDatabasePool(pool);
+  // attachDatabasePool only handles suspension cleanup. Without an `error`
+  // listener, an idle client dropped by the database emits an unhandled 'error'
+  // and takes the process with it — and this pool backs every feature.
+  pool.on("error", (error) => {
+    console.error("[database] idle client error", {
+      name: error instanceof Error ? "Error" : "UnknownError"
+    });
+  });
   return pool;
 }

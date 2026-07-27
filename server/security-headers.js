@@ -51,6 +51,10 @@ export function clerkHostFromPublishableKey(publishableKey) {
 export function contentSecurityPolicy({ clerkHost = null, production = false }) {
   const clerkOrigin = clerkHost ? [`https://${clerkHost}`] : [];
   const clerkImages = clerkHost ? ["https://img.clerk.com"] : [];
+  // Clerk's bot protection is Cloudflare Turnstile, which loads a script as
+  // well as rendering in a frame. Listing it only in frame-src blocks the
+  // CAPTCHA outright when bot protection is on.
+  const turnstile = clerkHost ? ["https://challenges.cloudflare.com"] : [];
   /** @type {[string, string[]][]} */
   const policy = [
     ["default-src", ["'self'"]],
@@ -59,7 +63,7 @@ export function contentSecurityPolicy({ clerkHost = null, production = false }) 
     ["frame-ancestors", ["'none'"]],
     // Stripe-hosted Checkout is reached by redirect, never by script.
     ["form-action", ["'self'", "https://checkout.stripe.com"]],
-    ["script-src", ["'self'", ...clerkOrigin]],
+    ["script-src", ["'self'", ...clerkOrigin, ...turnstile]],
     // Our own markup and CSS carry no inline style. Clerk's UI bundle injects
     // its own <style> at runtime, so inline style is permitted only once a Clerk
     // host is configured. script-src never gets this concession.
@@ -73,10 +77,7 @@ export function contentSecurityPolicy({ clerkHost = null, production = false }) 
     // Clerk runs its telemetry and crypto helpers in blob workers.
     ["worker-src", ["'self'", "blob:"]],
     // Clerk hosts sign-in components and bot protection in frames.
-    [
-      "frame-src",
-      ["'self'", ...clerkOrigin, ...(clerkHost ? ["https://challenges.cloudflare.com"] : [])]
-    ],
+    ["frame-src", ["'self'", ...clerkOrigin, ...turnstile]],
     ["manifest-src", ["'self'"]]
   ];
   const serialized = policy

@@ -33,13 +33,13 @@ HTTP is pointless and breaks the dev server.
 
 ## Content Security Policy
 
-```
+```text
 default-src 'self';
 base-uri 'none';
 object-src 'none';
 frame-ancestors 'none';
 form-action 'self' https://checkout.stripe.com;
-script-src 'self' <clerk host>;
+script-src 'self' <clerk host> [https://challenges.cloudflare.com only with a clerk host];
 style-src 'self' ['unsafe-inline' only with a clerk host];
 font-src 'self';
 img-src 'self' data: [https://img.clerk.com only with a clerk host];

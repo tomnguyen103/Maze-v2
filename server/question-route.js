@@ -131,16 +131,12 @@ export function createQuestionHandler(questionService, options = {}) {
       return;
     }
     if (!instanceThrottle.allow()) {
-      response.statusCode = 429;
-      response.setHeader("content-type", "application/json; charset=utf-8");
-      response.setHeader(
-        "retry-after",
-        String(instanceThrottle.retryAfterSeconds())
-      );
-      response.end(
-        JSON.stringify({
-          error: "Question scrolls are resting. Please try again soon."
-        })
+      // Same body and headers as the durable limiter: one route must not answer
+      // two different shapes depending on which limit rejected it.
+      sendRateLimited(
+        response,
+        { retryAfterSeconds: instanceThrottle.retryAfterSeconds() },
+        "Question scrolls are resting. Please try again soon."
       );
       return;
     }
