@@ -141,7 +141,7 @@ against" section:
 
 ### Gate
 
-- `npm run check`: green (498 tests / 7 skipped after rebasing onto merged
+- `npm run check`: green (500 tests / 7 skipped after rebasing onto merged
   phase 1).
 - `npm run check:full`: green (111 e2e passed / 5 skipped).
 
@@ -207,6 +207,29 @@ only — no assertion changed).
    `db/migrations/0006_audit_events.sql` was edited to rename the variable **in a
    comment only** — no DDL change. It has not been applied to any database, and
    the alternative is a permanently wrong comment on a privacy-critical column.
+### CodeRabbit review
+
+Six findings, all fixed:
+
+- **`vercel.json`'s `style-src` had lost `'unsafe-inline'`** and its `script-src`
+  lacked Turnstile — the exact drift the parity test existed to prevent. It did
+  not prevent it, because it excluded `style-src` as "Clerk-bearing". Tightened:
+  only directives that carry a *host* may differ from the computed policy, and
+  only in their hosts; every keyword must match exactly.
+- **Turnstile was listed in `frame-src` only.** Clerk's bot protection loads a
+  script from `challenges.cloudflare.com` as well as rendering in a frame, so the
+  CAPTCHA would have been blocked outright wherever bot protection is enabled.
+- **The shared pool had no `error` listener.** `attachDatabasePool` handles
+  suspension cleanup only, so an idle client dropped by the database would emit
+  an unhandled `error` and take the process down — and this pool now backs every
+  feature.
+- **The instance throttle's 429 differed from the durable limiter's**: no
+  `cache-control`, no `retryAfter` field. One route answering two shapes
+  depending on which limit rejected it. Both now go through `sendRateLimited`.
+- The rate-limit e2e assertion could pass vacuously when the flow made no `/api/`
+  call; it now asserts at least one API response was observed.
+- Markdown fence language identifier.
+
 9. **`vercel.json` duplicates the header values** rather than computing them,
    because Vercel's edge serves built assets without running our code. Called out
    in both the ADR and `docs/security-headers.md`, including the caveat that a
