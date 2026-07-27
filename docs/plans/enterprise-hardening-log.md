@@ -171,10 +171,15 @@ Two findings plus one nitpick, all fixed:
 3. **`score_entries` and `user_roles` are exported** although the plan's
    list omits them — the acceptance criterion "every user-owned table
    represented" wins over the narrative list.
-4. **Schema validation is structural, not a JSON-Schema engine.** Validating
-   with `ajv` would need a new dependency outside the allowed list. The test
-   pins envelope keys, section set, and schema `$id`; the schema file remains
-   the normative contract for external consumers.
+4. **Schema validation is structural, not a JSON-Schema engine, and row
+   shapes are left generic.** Validating with `ajv` would need a new
+   dependency outside the allowed list. The test pins envelope keys, section
+   set, and schema `$id`. Declaring `properties` / `required` /
+   `additionalProperties` per row was considered and declined: it would
+   restate every column list already written in `SECTION_QUERIES`, giving two
+   sources of truth for the same contract with nothing binding them together
+   — the exact drift the explicit-column design exists to avoid. The SQL
+   stays normative for shape; the schema file documents the envelope.
 5. **The audit write is sequenced before the response body** so a served
    export always has its audit attempt behind it — but the recorder keeps
    phase 1's never-throw contract, so a failed audit write is logged and

@@ -76,6 +76,13 @@ const SECTION_QUERIES = {
  * requesting user id, so the function cannot return anyone else's rows, and
  * a deleted account yields empty sections rather than an error.
  *
+ * Composable on purpose, and NOT the thing a route should wire: on a plain
+ * adapter these reads are eight separate statements, so a concurrent save or
+ * deletion could produce sections describing different moments. Route through
+ * `exportUserSnapshot`, which supplies a single-snapshot adapter. The seam
+ * exists so tests can drive a fake adapter and so phase 7's admin export can
+ * reuse the same section list.
+ *
  * @param {{
  *   query: (sql: string, values?: unknown[]) => Promise<{
  *     rows: Record<string, unknown>[]
