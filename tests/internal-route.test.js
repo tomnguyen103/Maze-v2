@@ -118,6 +118,28 @@ describe("internal webhook retry endpoint", () => {
     expect(JSON.stringify(captured.body)).not.toContain("secret@host");
   });
 
+  it("still prunes when the retry itself fails", async () => {
+    const pruneRateLimits = vi.fn(async () => 3);
+    const pruneWebhookInbox = vi.fn(async () => 1);
+    const handler = createInternalHandler({
+      inbox: {
+        retryPending: async () => {
+          throw new Error("retry unavailable");
+        }
+      },
+      pruneRateLimits,
+      pruneWebhookInbox,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+    await handler(createRequest({ url: RETRY, secret: SECRET }), response, undefined);
+    // A database that keeps failing the retry is the one whose tables would
+    // otherwise grow forever.
+    expect(pruneRateLimits).toHaveBeenCalledTimes(1);
+    expect(pruneWebhookInbox).toHaveBeenCalledTimes(1);
+    expect(captured.statusCode).toBe(503);
+  });
+
   it("does not prune when the secret is wrong", async () => {
     const pruneRateLimits = vi.fn();
     const pruneWebhookInbox = vi.fn();
