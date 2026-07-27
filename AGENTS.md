@@ -23,6 +23,10 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm run check:bundle
 ```
+
+`npm run check` runs all five in that order, and the pre-push hook runs them one
+at a time so a failure names the step to fix.
 
 Browser-facing changes also require desktop and mobile gameplay checks.

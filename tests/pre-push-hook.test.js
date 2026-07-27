@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,14 +42,25 @@ function runHookWithStubbedNpm(failingStep) {
     ].join("\n"),
     { mode: 0o755 }
   );
-  return spawnSync("sh", [".githooks/pre-push"], {
-    encoding: "utf8",
-    env: { ...process.env, PATH: `${directory}:${process.env.PATH ?? ""}` }
-  });
+  try {
+    return spawnSync(/** @type {string} */ (shell), [".githooks/pre-push"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${directory}:${process.env.PATH ?? ""}` }
+    });
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 }
 
-const shellAvailable =
-  spawnSync("sh", ["-c", "exit 0"], { encoding: "utf8" }).status === 0;
+/**
+ * The gate is documented as PowerShell, where `sh` is usually absent but Git's
+ * `bash` is on PATH. Falls back through both rather than skipping on Windows.
+ */
+const shell = ["sh", "bash"].find(
+  (candidate) =>
+    spawnSync(candidate, ["-c", "exit 0"], { encoding: "utf8" }).status === 0
+);
+const shellAvailable = shell !== undefined;
 
 describe("pre-push hook", () => {
   it("runs exactly the steps `npm run check` runs, in the same order", () => {
@@ -63,8 +74,10 @@ describe("pre-push hook", () => {
     const result = runHookWithStubbedNpm("typecheck");
     expect(result.status).not.toBe(0);
     const output = `${result.stdout}${result.stderr}`;
-    expect(output).toContain("typecheck");
-    expect(output).toMatch(/fail/i);
+    // Matched against the report line, not the banner the hook prints before
+    // every step — the banner alone would pass without the report existing.
+    expect(output).toMatch(/pre-push FAILED at: typecheck/);
+    expect(output).toContain("npm run typecheck");
   });
 
   it.skipIf(!shellAvailable)("stops at the first failure", () => {
