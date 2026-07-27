@@ -32,6 +32,11 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
   void startGameplay();
 } else if (url.pathname === "/play") {
   void startGameplay();
+} else if (url.pathname === "/admin") {
+  // Loaded on demand: an Explorer who never opens /admin never pays for it.
+  void import("./admin/admin-controller.js").then((admin) =>
+    admin.renderAdmin(gameRoot)
+  );
 } else {
   renderLanding(gameRoot);
 }

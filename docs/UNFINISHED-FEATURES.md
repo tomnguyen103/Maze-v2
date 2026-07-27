@@ -4,7 +4,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 items were catalogued here; item 1 is delivered (PR #64), leaving 16 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; items 1-4 are delivered (PRs #64-#67), leaving 13 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -21,7 +21,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] `POST /api/internal/webhook-retry` (or the same cron entry) invokes rate-limit prune and webhook-inbox prune in addition to retryPending
   - [x] Tests assert prune is called on the cron path and failures don't abort retryPending
 
-### 2. Document hardening env vars in `.env.example` — [PARTIAL]
+### 2. Document hardening env vars in `.env.example` — [PARTIAL] — DONE, PR #65
 
 - What: Phases 1/3/4/5 added ~10 optional env vars (`REQUEST_ADDRESS_SALT`, `TRUST_PROXY_HEADERS`, `CRON_SECRET`, `LOG_LEVEL`, `OTEL_EXPORTER_OTLP_ENDPOINT/HEADERS`, `SENTRY_DSN`, `VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`, `POSTHOG_API_KEY`, `POSTHOG_HOST`). Each hardening-log entry deferred updating `.env.example`; the debt was never picked up.
 - Why it matters: Operators provisioning a new environment have no single source listing the observability/security knobs.
@@ -31,10 +31,10 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 - Depends on: none
 - Effort: S
 - Acceptance criteria:
-  - [ ] Every env var read by server/ and src/ appears in `.env.example` with a comment and safe default
-  - [ ] `tests/operations-contract.test.js` still green (updated if it pins the file)
+  - [x] Every env var read by server/ and src/ appears in `.env.example` with a comment and safe default
+  - [x] `tests/operations-contract.test.js` still green (updated if it pins the file)
 
-### 3. Pre-push hook names the failing step — [NOT_STARTED]
+### 3. Pre-push hook names the failing step — [NOT_STARTED] — DONE, PR #66
 
 - What: `.githooks/pre-push` is `set -eu; npm run check`; when a step fails the push aborts without saying which step failed. Called out twice in the hardening log as an out-of-scope follow-up after it silently blocked a push.
 - Why it matters: "The gate is green" and "the push landed" are separate facts; silent failure wastes contributor time.
@@ -44,10 +44,10 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 - Depends on: none
 - Effort: S
 - Acceptance criteria:
-  - [ ] A failing lint/typecheck/test/build step prints which step failed before the hook exits nonzero
-  - [ ] Passing path behavior unchanged
+  - [x] A failing lint/typecheck/test/build step prints which step failed before the hook exits nonzero
+  - [x] Passing path behavior unchanged
 
-### 4. `/admin` client route guard reading the mirrored Clerk role — [NOT_STARTED]
+### 4. `/admin` client route guard reading the mirrored Clerk role — [NOT_STARTED] — DONE, PR #67
 
 - What: ADR 0015 mirrors the DB-authoritative role into Clerk `publicMetadata.role` on every change specifically so a client can gate an `/admin` route before the first profile fetch resolves. Nothing reads the mirror yet.
 - Why it matters: Entry ticket for the whole phase-7 admin surface; without it there is no admin UI shell to attach anything to.
@@ -57,8 +57,8 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 - Depends on: none
 - Effort: S
 - Acceptance criteria:
-  - [ ] Navigating to `/admin` as a non-admin shows a denial state without any admin data fetch
-  - [ ] Admin role (from Clerk mirror, confirmed by profile fetch) renders the admin shell
+  - [x] Navigating to `/admin` as a non-admin shows a denial state without any admin data fetch
+  - [x] Admin role (from Clerk mirror, confirmed by profile fetch) renders the admin shell
 
 ### 5. Admin data export (`export:any`) — [NOT_STARTED]
 
@@ -260,8 +260,8 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Suggested Execution Order
 
-1 (done, PR #64), 2, 3 — independent S-size hygiene, zero risk, build momentum.
-4 — admin shell guard; unblocks all admin UI work.
+1, 2, 3 — independent S-size hygiene, zero risk, build momentum. Done: PRs #64-#66.
+4 — admin shell guard; unblocks all admin UI work. Done: PR #67.
 5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4.
 7 — question bank storage (migration gate: stop-and-ask).
 8 — admin dashboard UI; consumes 4+5+6+7.
