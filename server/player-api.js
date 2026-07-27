@@ -4,6 +4,8 @@ import {
   CLERK_WEBHOOK_PATH,
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
+import { createAuditStore } from "./audit-store.js";
+import { createAuditRecorder, createRequestAuditor } from "./audit.js";
 import { createDatabasePool } from "./database.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
@@ -119,6 +121,19 @@ export function createPlayerApi(env = process.env) {
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
+  const auditIpSalt = env.AUDIT_IP_SALT ?? "";
+  if (!auditIpSalt) {
+    // Audit rows are still written and the chain is still valid; only the
+    // address hash is dropped. Say so once so it is never a silent surprise.
+    console.warn(
+      "[audit] AUDIT_IP_SALT is unset; audit rows will store no address hash."
+    );
+  }
+  const recordAudit = createRequestAuditor({
+    recorder: createAuditRecorder({ store: createAuditStore(pool) }),
+    salt: auditIpSalt,
+    trustProxy: env.AUDIT_TRUST_PROXY === "true"
+  });
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request
@@ -127,14 +142,17 @@ export function createPlayerApi(env = process.env) {
   ).userId;
   const handler = createPlayerApiHandler({
     store,
-    getUserId
+    getUserId,
+    recordAudit
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
-    getUserId
+    getUserId,
+    recordAudit
   });
   const lifetimeHandler = createLifetimeHandler({
     getUserId,
+    recordAudit,
     service: lifetimeConfig
       ? createLifetimeService({
           config: lifetimeConfig,
@@ -151,11 +169,13 @@ export function createPlayerApi(env = process.env) {
   });
   const questProgressHandler = createQuestProgressHandler({
     store: questProgressStore,
-    getUserId
+    getUserId,
+    recordAudit
   });
   const clerkWebhookHandler = createClerkWebhookHandler({
     deleteUser: (userId) => userDeletionStore.deleteUser(userId),
-    signingSecret: env.CLERK_WEBHOOK_SIGNING_SECRET
+    signingSecret: env.CLERK_WEBHOOK_SIGNING_SECRET,
+    recordAudit
   });
   const accessHandler = createRunAccessHandler({
     store: accessStore,
@@ -163,7 +183,8 @@ export function createPlayerApi(env = process.env) {
     enforcementEnabled:
       env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true" &&
       lifetimeConfig !== null,
-    recordEvent: recordProductEvent
+    recordEvent: recordProductEvent,
+    recordAudit
   });
 
   if (!env.CLERK_PUBLISHABLE_KEY || !env.CLERK_SECRET_KEY) {
@@ -178,6 +199,7 @@ export function createPlayerApi(env = process.env) {
     });
     const unavailableLifetimeHandler = createLifetimeHandler({
       getUserId: () => null,
+      recordAudit,
       service: lifetimeConfig
         ? createLifetimeService({
             config: lifetimeConfig,

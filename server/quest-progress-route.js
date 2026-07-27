@@ -15,10 +15,15 @@ const MAX_BODY_BYTES = 1024 * 1024;
  *     get: (userId: string) => Promise<unknown>,
  *     save: (userId: string, expectedRevision: number, progress: NonNullable<ReturnType<typeof import("../src/game/quest-progress.js").normalizeQuestProgress>>) => Promise<{ record: unknown, conflict: boolean, duplicate: boolean }>
  *   },
- *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>
+ *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
-export function createQuestProgressHandler({ store, getUserId }) {
+export function createQuestProgressHandler({
+  store,
+  getUserId,
+  recordAudit = async () => {}
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -58,6 +63,18 @@ export function createQuestProgressHandler({ store, getUserId }) {
         });
         return;
       }
+      await recordAudit(request, {
+        actorId: userId,
+        action: "quest_progress.save",
+        resource: { type: "cloud_quest_progress", id: userId },
+        before: { expectedRevision },
+        after: {
+          duplicate: result.duplicate,
+          labyrinthNumber: progress.labyrinthNumber,
+          levelId: progress.levelId,
+          questId: progress.questId
+        }
+      });
       sendJson(
         response,
         expectedRevision === 0 && !result.duplicate ? 201 : 200,

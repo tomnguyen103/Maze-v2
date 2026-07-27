@@ -103,14 +103,16 @@ async function readRunRequest(request) {
  *   recordEvent?: (
  *     eventName: string,
  *     fields: Record<string, unknown>
- *   ) => void
+ *   ) => void,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
 export function createRunAccessHandler({
   store,
   getUserId,
   enforcementEnabled = false,
-  recordEvent = () => {}
+  recordEvent = () => {},
+  recordAudit = async () => {}
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -178,6 +180,22 @@ export function createRunAccessHandler({
             : "blocked"
           : "unmetered"
       });
+      // Only the enforced path changes state. With enforcement off the request
+      // reads current access and grants nothing, so there is nothing to audit.
+      if (enforcementEnabled) {
+        await recordAudit(request, {
+          actorId: userId,
+          action: "run_access.decision",
+          resource: { type: "run_access_grant", id: runRequest.runId },
+          after: {
+            allowed: result.allowed,
+            duplicate: result.duplicate,
+            labyrinthNumber: runRequest.labyrinthNumber,
+            levelId: runRequest.levelId,
+            state: result.state
+          }
+        });
+      }
       sendJson(response, 200, { ...result, enforcementEnabled });
     } catch (error) {
       if (

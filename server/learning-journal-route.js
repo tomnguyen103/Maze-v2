@@ -27,10 +27,15 @@ const EVENT_KEYS = [
  *     saveJournal: (userId: string, journal: unknown, clearGeneration: number) => Promise<unknown>,
  *     clearJournal: (userId: string) => Promise<unknown>
  *   },
- *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>
+ *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
-export function createLearningJournalHandler({ store, getUserId }) {
+export function createLearningJournalHandler({
+  store,
+  getUserId,
+  recordAudit = async () => {}
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -62,25 +67,32 @@ export function createLearningJournalHandler({ store, getUserId }) {
           return;
         }
         const journal = input.journal;
-        sendJson(
-          response,
-          200,
-          normalizeState(
-            await store.saveJournal(
-              userId,
-              journal,
-              input.clearGeneration
-            )
-          )
+        const state = normalizeState(
+          await store.saveJournal(userId, journal, input.clearGeneration)
         );
+        // Audit rows carry counts only. Journal minimization forbids storing
+        // reviewed Question outcomes anywhere outside the Journal itself.
+        await recordAudit(request, {
+          actorId: userId,
+          action: "journal.sync",
+          resource: { type: "learning_journal", id: userId },
+          after: {
+            clearGeneration: state.clearGeneration,
+            eventCount: state.journal.events.length
+          }
+        });
+        sendJson(response, 200, state);
         return;
       }
       if (request.method === "DELETE") {
-        sendJson(
-          response,
-          200,
-          normalizeState(await store.clearJournal(userId))
-        );
+        const state = normalizeState(await store.clearJournal(userId));
+        await recordAudit(request, {
+          actorId: userId,
+          action: "journal.clear",
+          resource: { type: "learning_journal", id: userId },
+          after: { clearGeneration: state.clearGeneration }
+        });
+        sendJson(response, 200, state);
         return;
       }
       response.setHeader("allow", "GET, PUT, DELETE");

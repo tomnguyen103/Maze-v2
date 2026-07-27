@@ -6,6 +6,7 @@ import {
   LifetimeOwnershipError
 } from "./lifetime-service.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { SYSTEM_ACTORS } from "./audit.js";
 
 export const LIFETIME_PATHS = new Set([
   "/api/lifetime-checkout",
@@ -28,10 +29,15 @@ class LifetimeInputError extends Error {
  *     confirmCheckout: (userId: string, sessionId: string) => Promise<Record<string, unknown>>,
  *     createCheckout: (userId: string) => Promise<Record<string, unknown>>,
  *     processWebhook: (rawBody: Buffer, signature: string) => Promise<Record<string, unknown>>
- *   }
+ *   },
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
-export function createLifetimeHandler({ getUserId, service }) {
+export function createLifetimeHandler({
+  getUserId,
+  service,
+  recordAudit = async () => {}
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -69,7 +75,17 @@ export function createLifetimeHandler({ getUserId, service }) {
             "Checkout does not accept commercial fields."
           );
         }
-        sendJson(response, 200, await service.createCheckout(userId));
+        const checkout = await service.createCheckout(userId);
+        await recordAudit(request, {
+          actorId: userId,
+          action: "lifetime.checkout",
+          resource: {
+            type: "lifetime_purchase",
+            id: String(checkout.purchaseId ?? userId)
+          },
+          after: { state: checkout.state ?? null }
+        });
+        sendJson(response, 200, checkout);
         return;
       }
       const body = await readJsonBody(request, false);
@@ -81,11 +97,23 @@ export function createLifetimeHandler({ getUserId, service }) {
           "A valid Checkout Session is required."
         );
       }
-      sendJson(
-        response,
-        200,
-        await service.confirmCheckout(userId, String(body.sessionId))
+      const confirmation = await service.confirmCheckout(
+        userId,
+        String(body.sessionId)
       );
+      await recordAudit(request, {
+        actorId: userId,
+        action: "lifetime.confirm",
+        resource: {
+          type: "lifetime_purchase",
+          id: String(confirmation.purchaseId ?? userId)
+        },
+        after: {
+          outcome: confirmation.outcome ?? null,
+          state: confirmation.state ?? null
+        }
+      });
+      sendJson(response, 200, confirmation);
     } catch (error) {
       if (error instanceof LifetimeInputError) {
         sendJson(response, 400, { error: error.message });
@@ -120,7 +148,20 @@ export function createLifetimeHandler({ getUserId, service }) {
     }
     try {
       const rawBody = await readRawBody(request, 512 * 1024);
-      await service.processWebhook(rawBody, signature);
+      const result = await service.processWebhook(rawBody, signature);
+      await recordAudit(request, {
+        actorId: SYSTEM_ACTORS.stripe,
+        actorRole: "system",
+        action: "lifetime.webhook",
+        resource: {
+          type: "lifetime_purchase",
+          id: result.purchaseId ? String(result.purchaseId) : null
+        },
+        after: {
+          eventType: result.eventType ?? null,
+          outcome: result.outcome ?? null
+        }
+      });
       sendJson(response, 200, { received: true });
     } catch (error) {
       if (error instanceof LifetimeWebhookVerificationError) {

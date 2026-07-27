@@ -103,10 +103,15 @@ function isUniqueViolation(error) {
  *   },
  *   getUserId: (
  *     request: import("node:http").IncomingMessage
- *   ) => string | null | Promise<string | null>
+ *   ) => string | null | Promise<string | null>,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
-export function createPlayerApiHandler({ store, getUserId }) {
+export function createPlayerApiHandler({
+  store,
+  getUserId,
+  recordAudit = async () => {}
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -153,9 +158,16 @@ export function createPlayerApiHandler({ store, getUserId }) {
         }
         if (request.method === "PUT") {
           const profile = validateProfileInput(await readJsonBody(request));
-          sendJson(response, 200, {
-            profile: publicProfile(await store.saveProfile(userId, profile))
+          const before = publicProfile(await store.getProfile(userId));
+          const after = publicProfile(await store.saveProfile(userId, profile));
+          await recordAudit(request, {
+            actorId: userId,
+            action: "profile.update",
+            resource: { type: "player_profile", id: userId },
+            before,
+            after
           });
+          sendJson(response, 200, { profile: after });
           return;
         }
         response.setHeader("allow", "GET, PUT");
@@ -178,6 +190,17 @@ export function createPlayerApiHandler({ store, getUserId }) {
         userId,
         validateScoreInput(await readJsonBody(request))
       );
+      await recordAudit(request, {
+        actorId: userId,
+        action: "score.submit",
+        resource: { type: "score_entry", id: userId },
+        after: {
+          duplicate: result.duplicate,
+          labyrinthNumber: result.entry.labyrinthNumber,
+          levelId: result.entry.levelId,
+          score: result.entry.score
+        }
+      });
       sendJson(response, result.duplicate ? 200 : 201, {
         entry: publicScoreEntry(result.entry),
         duplicate: result.duplicate

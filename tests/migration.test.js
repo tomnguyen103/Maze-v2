@@ -92,4 +92,36 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("elapsed");
     expect(sql).not.toContain("question_text");
   });
+
+  it("creates an append-only hash-chained audit log without raw addresses", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0006_audit_events.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE audit_events");
+    expect(sql).toContain("prev_hash CHAR(64) NOT NULL");
+    expect(sql).toContain("row_hash CHAR(64) NOT NULL");
+    expect(sql).toContain("ip_hash CHAR(64)");
+    expect(sql).toContain("actor_role IN ('admin', 'moderator', 'player', 'system')");
+    // A CHECK on the action name would silently drop rows, because recordAudit
+    // swallows write errors by design.
+    expect(sql).not.toContain("CHECK (action");
+    expect(sql).toContain("CREATE TABLE audit_chain_head");
+    expect(sql).toContain("CHECK (id = 1)");
+    expect(sql).toContain("REVOKE UPDATE, DELETE, TRUNCATE ON audit_events");
+    expect(sql).toContain("BEFORE UPDATE OR DELETE ON audit_events");
+    // TRUNCATE never fires row triggers, so it needs its own statement trigger.
+    expect(sql).toContain("BEFORE TRUNCATE ON audit_events");
+    expect(sql).toContain(
+      "FOR EACH STATEMENT EXECUTE FUNCTION audit_events_append_only()"
+    );
+    expect(sql).toContain("ALTER TABLE audit_chain_head SET (");
+    expect(sql).toContain("fillfactor = 50");
+    expect(sql).toContain("audit_events_actor_idx");
+    expect(sql).toContain("audit_events_resource_idx");
+    expect(sql).not.toContain("ip_address");
+    expect(sql).not.toContain("user_agent");
+    expect(sql).not.toContain("ALTER TABLE players");
+  });
 });
