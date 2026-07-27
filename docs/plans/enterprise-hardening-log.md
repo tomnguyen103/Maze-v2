@@ -15,7 +15,7 @@ reason.
 ### e2e flakiness (~1 in 3 full runs)
 
 Root cause found and fixed, not masked. `src/app.js` dynamically imports
-`src/main.js`, so `page.goto` resolves at the load event while the game is
+`src/main.js`, so `page.goto` resolves at the load event while the app is
 still initialising. `main.js` attaches its listeners at module evaluation, but
 the real Run is swapped in only when the async `initializeRunEntry()` resolves
 — which is exactly when `app.js` sets `data-game-ready="true"`. Input sent in
@@ -41,6 +41,16 @@ Fix, two parts, both cause-level:
    oversubscription, and the readiness barrier carries a 15s bound — the same
    explicit-bound pattern `entry.spec.js` already used for Clerk
    initialisation. Suite wall-clock stayed in the same range.
+
+A third, smaller class surfaced during validation: the two tests that drive
+Clerk's real development instance (SignIn modal, demo-gate handoff) fail when
+Clerk hangs or throttles — its remotely loaded `@clerk/ui` chunk is the same
+optional download `game.spec.js`'s console filter already tolerates. Both
+tests already skipped on *detectable* Clerk unavailability; their throwing
+polls are now deadline loops that reach the same skip on a silent hang, so an
+external outage shows up as one extra skip in the run summary instead of a
+red gate. They still run and assert normally whenever Clerk responds (most
+runs: 111 passed / 5 skipped; an outage run: 110 / 6).
 
 No retries were added anywhere. Verified by repeated full-suite runs (results
 under Gate).
@@ -81,8 +91,9 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 - Flake measurement, before: 3 failures across 4 full e2e runs at HEAD of main
   (three input-driving tests failing together in a bad run — the documented
   ~1-in-3 rate).
-- Flake measurement, after: **11 consecutive green full e2e runs** with the
-  complete fix. The barrier-only intermediate state also showed zero
+- Flake measurement, after: **10 consecutive green full e2e runs** with the
+  complete fix (and 11 consecutive green with all but the Clerk-outage skip
+  handling). The barrier-only intermediate state also showed zero
   recurrences of the original three flakes across 8 runs; its two residual
   failures (Clerk initialisation, readiness past a 5s default) drove the
   worker cap and the explicit 15s bounds.
@@ -101,6 +112,10 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 - The vitest fault was never reproduced (8 full + 30 targeted attempts), so
   the fix removes the suspected mechanism (config-load side effects) and pins
   it with tests rather than claiming a verified repro.
+
+---
+
+## Phase 1 — Immutable audit log
 
 - **PR**: _pending_
 - **Branch**: `feat/audit-log`

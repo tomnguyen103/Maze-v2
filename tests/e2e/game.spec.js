@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectGameReady } from "./game-ready.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
@@ -196,24 +197,6 @@ async function answerCorrectlyIfChallenged(page, getCurrentQuestion) {
     await expect(challenge).not.toBeVisible();
     await expect(page.locator("#maze-canvas")).toBeFocused();
   }
-}
-
-/**
- * The app swaps in the real Run asynchronously after the load event; input
- * sent before `data-game-ready` lands on the placeholder Run and is silently
- * lost when the swap resets progress. Every test that drives gameplay must
- * cross this barrier first.
- *
- * @param {import("@playwright/test").Page} page
- */
-async function expectGameReady(page) {
-  // Readiness spans the main-chunk fetch plus run initialisation, which under
-  // a fully loaded worker queue legitimately exceeds the 5s default.
-  await expect(page.locator("#game-root")).toHaveAttribute(
-    "data-game-ready",
-    "true",
-    { timeout: 15000 }
-  );
 }
 
 test("presents transparent lifetime pricing in a focused dialog", async ({ page }) => {
