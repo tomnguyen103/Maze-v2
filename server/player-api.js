@@ -4,6 +4,7 @@ import {
   CLERK_WEBHOOK_PATH,
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
+import { createAdminHandler, isAdminPath } from "./admin-route.js";
 import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
@@ -26,6 +27,12 @@ import {
 } from "./learning-journal-route.js";
 import { createLearningJournalStore } from "./learning-journal-store.js";
 import { createPlayerApiHandler } from "./player-route.js";
+import {
+  createPermissionGuard,
+  createRoleResolver,
+  createRoleStore,
+  publicAccess
+} from "./rbac.js";
 import { createPlayerStore } from "./player-store.js";
 import {
   createQuestProgressHandler,
@@ -117,17 +124,34 @@ export function createPlayerApi(env = process.env) {
     salt: resolveAddressSalt(env),
     trustProxy: trustsProxyHeaders(env)
   });
+  const roleStore = createRoleStore(queryAdapter);
+  const roleResolver = createRoleResolver({ store: roleStore });
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request
   ) => getAuth(
     /** @type {import("express").Request} */ (request)
   ).userId;
+  const requirePermission = createPermissionGuard({
+    resolver: roleResolver,
+    getUserId
+  });
+  const accessFor = async (
+    /** @type {import("node:http").IncomingMessage} */ request,
+    /** @type {string} */ userId
+  ) => publicAccess(await roleResolver.roleFor(request, userId));
   const handler = createPlayerApiHandler({
     store,
     getUserId,
     recordAudit,
-    rateLimit
+    rateLimit,
+    accessFor
+  });
+  const adminHandler = createAdminHandler({
+    store: roleStore,
+    requirePermission,
+    recordAudit,
+    mirrorRole: createClerkRoleMirror(env)
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
@@ -205,6 +229,13 @@ export function createPlayerApi(env = process.env) {
       store: learningJournalStore,
       getUserId: () => null
     });
+    const unavailableAdminHandler = createAdminHandler({
+      store: roleStore,
+      requirePermission: createPermissionGuard({
+        resolver: roleResolver,
+        getUserId: () => null
+      })
+    });
     const unavailableQuestProgressHandler = createQuestProgressHandler({
       store: questProgressStore,
       getUserId: () => null
@@ -218,6 +249,12 @@ export function createPlayerApi(env = process.env) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
       if (pathname === CLERK_WEBHOOK_PATH) {
         void clerkWebhookHandler(request, response, next);
+        return;
+      }
+      if (isAdminPath(pathname)) {
+        // No Clerk means no admin identity, so every admin route is 401 rather
+        // than silently unguarded.
+        void unavailableAdminHandler(request, response, next);
         return;
       }
       if (ACCESS_PATHS.has(pathname)) {
@@ -252,7 +289,7 @@ export function createPlayerApi(env = process.env) {
    */
   return function playerApi(request, response, next = undefined) {
     const pathname = new URL(request.url ?? "", "http://local").pathname;
-    if (!PLAYER_PATHS.has(pathname)) {
+    if (!PLAYER_PATHS.has(pathname) && !isAdminPath(pathname)) {
       next?.();
       return;
     }
@@ -283,6 +320,10 @@ export function createPlayerApi(env = process.env) {
           sendError(response, 401, "Sign in to continue.");
           return;
         }
+        if (isAdminPath(pathname)) {
+          void adminHandler(request, response, next);
+          return;
+        }
         if (ACCESS_PATHS.has(pathname)) {
           void accessHandler(request, response, next);
           return;
@@ -302,6 +343,40 @@ export function createPlayerApi(env = process.env) {
         void handler(request, response, next);
       }
     );
+  };
+}
+
+/**
+ * Mirrors the role into Clerk `publicMetadata` so the browser can gate UI
+ * without an extra round trip. The database row stays authoritative — nothing
+ * server-side ever reads this claim.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ */
+function createClerkRoleMirror(env) {
+  const secretKey = env.CLERK_SECRET_KEY;
+  if (!secretKey) {
+    return async () => {};
+  }
+  /**
+   * @param {string} userId
+   * @param {string} role
+   */
+  return async function mirrorRole(userId, role) {
+    const response = await fetch(
+      `https://api.clerk.com/v1/users/${encodeURIComponent(userId)}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: `Bearer ${secretKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ public_metadata: { role } })
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Clerk metadata update failed with ${response.status}.`);
+    }
   };
 }
 

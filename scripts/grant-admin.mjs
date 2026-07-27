@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+// Grants the first admin. Every later role change goes through
+// POST /api/admin/users/:id/role, which requires an existing admin — so this
+// script exists only to break that circle.
+//
+// It writes the same audit row the endpoint would, attributed to
+// 'system:bootstrap', so a chain-of-custody question about who made the first
+// admin has an answer.
+//
+// Exit codes: 0 granted, 2 could not run.
+//
+// Usage: node scripts/grant-admin.mjs <clerk-user-id> [--role admin|moderator]
+
+import { Pool } from "pg";
+import { createAuditStore } from "../server/audit-store.js";
+import { createAuditRecorder, SYSTEM_ACTORS } from "../server/audit.js";
+import { normalizeDatabaseConnectionString } from "../server/database.js";
+import { createRoleStore } from "../server/rbac.js";
+import { isRole } from "../shared/permissions.js";
+
+const [userId] = process.argv.slice(2).filter((value) => !value.startsWith("--"));
+const roleArgument = process.argv.indexOf("--role");
+const role = roleArgument === -1 ? "admin" : process.argv[roleArgument + 1];
+
+if (!userId || !/^[A-Za-z0-9_-]{1,255}$/.test(userId)) {
+  console.error("Usage: node scripts/grant-admin.mjs <clerk-user-id> [--role admin|moderator]");
+  process.exit(2);
+}
+if (!isRole(role) || role === "player") {
+  console.error("--role must be admin or moderator.");
+  process.exit(2);
+}
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error("DATABASE_URL is required to grant a role.");
+  process.exit(2);
+}
+
+const pool = new Pool({
+  connectionString: normalizeDatabaseConnectionString(connectionString),
+  max: 1
+});
+
+try {
+  const adapter = {
+    /**
+     * @param {string} sql
+     * @param {unknown[]} [values]
+     */
+    async query(sql, values) {
+      const result = await pool.query(sql, values);
+      return {
+        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
+      };
+    }
+  };
+  const result = await createRoleStore(adapter).setRole({
+    userId,
+    role,
+    grantedBy: SYSTEM_ACTORS.bootstrap
+  });
+  const recorder = createAuditRecorder({ store: createAuditStore(pool) });
+  await recorder.recordAudit(
+    { actorId: SYSTEM_ACTORS.bootstrap, actorRole: "system" },
+    "role.grant",
+    { type: "user_role", id: userId },
+    { role: result.previousRole },
+    { role }
+  );
+  if (recorder.failureCount() > 0) {
+    // The grant succeeded but its audit row did not. Say so loudly: a role
+    // change with no audit row is exactly what the log exists to prevent.
+    console.error(
+      `WARN role granted but the audit row failed. Reconcile before relying on the log.`
+    );
+    process.exitCode = 2;
+  } else {
+    console.log(
+      `GRANTED ${role} to ${userId} (was ${result.previousRole}), audited as ${SYSTEM_ACTORS.bootstrap}.`
+    );
+  }
+} catch (error) {
+  console.error(
+    "ERROR role could not be granted.",
+    error instanceof Error ? error.message : "Unknown error"
+  );
+  process.exitCode = 2;
+} finally {
+  await pool.end();
+}

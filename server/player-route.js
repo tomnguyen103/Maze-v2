@@ -107,14 +107,19 @@ function isUniqueViolation(error) {
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
  *   recordAudit?: import("./audit.js").RecordAudit,
- *   rateLimit?: import("./rate-limit-request.js").RateLimit
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit,
+ *   accessFor?: (
+ *     request: import("node:http").IncomingMessage,
+ *     userId: string
+ *   ) => Promise<{ role: string, permissions: string[] }>
  * }} dependencies
  */
 export function createPlayerApiHandler({
   store,
   getUserId,
   recordAudit = async () => {},
-  rateLimit = async () => UNMETERED
+  rateLimit = async () => UNMETERED,
+  accessFor = async () => ({ role: "player", permissions: [] })
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -156,7 +161,9 @@ export function createPlayerApiHandler({
       if (url.pathname === "/api/profile") {
         if (request.method === "GET") {
           sendJson(response, 200, {
-            profile: publicProfile(await store.getProfile(userId))
+            profile: publicProfile(await store.getProfile(userId)),
+            // For hiding UI only. Every guarded route re-checks server-side.
+            access: await accessFor(request, userId)
           });
           return;
         }

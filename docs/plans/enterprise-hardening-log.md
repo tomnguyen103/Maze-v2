@@ -235,3 +235,61 @@ Six findings, all fixed:
    in both the ADR and `docs/security-headers.md`, including the caveat that a
    Clerk production custom domain matches neither wildcard and must be added
    explicitly.
+## Phase 2 — RBAC + permission matrix
+
+- **PR**: _pending_
+- **Branch**: `feat/rbac-permissions`
+- **ADR**: `docs/adr/0015-database-authoritative-roles.md`
+- **Migration**: `db/migrations/0008_user_roles.sql`
+
+### Delivered
+
+- `shared/permissions.js` — the one matrix, imported by both server and browser;
+  only the server enforces it.
+- `db/migrations/0008_user_roles.sql` — authoritative role per Clerk identity,
+  with a `CHECK (user_id <> granted_by)` backstop against self-promotion.
+- `server/rbac.js` — `createRoleStore` (absence of a row means `player`),
+  `createRoleResolver` (per-request cache, fails closed), `createPermissionGuard`
+  (`requirePermission` → 401 / 403 / allowed), `publicAccess` for UI gating.
+- `server/admin-route.js` — `POST /api/admin/users/:id/role`, permission-checked
+  and audited (`role.grant` / `role.revoke`), with the Clerk `publicMetadata`
+  mirror.
+- `scripts/grant-admin.mjs` → `npm run grant:admin`, audited as
+  `system:bootstrap`.
+- `src/player/can.js` — client-side `can()` / `isStaff()`, UI only.
+- Tests: `tests/permissions.test.js`, `tests/rbac.test.js`,
+  `tests/admin-route.test.js`, `tests/can.test.js`,
+  `tests/rbac-store.integration.test.js`, and a new case in
+  `tests/migration.test.js`.
+
+### Gate
+
+- `npm run check`: green (475 tests / 11 skipped).
+- `npm run check:full`: green (105 e2e passed / 5 skipped).
+
+### Deviations
+
+1. **Migration numbered 0008, not 0007.** Phase 3 claimed `0007` on a branch that
+   was still open for review when this phase started. Numbering around it avoids
+   two migrations sharing an ordinal; the gap closes when phase 3 merges.
+2. **`getRole` lives on a store, not as a free `getRole(pool, userId)`.** The
+   plan sketches the latter. A store matches every other data-access module in
+   `server/` and lets the per-request cache sit in a separate resolver, which is
+   what makes the "cache per request only" rule testable.
+3. **Revoking deletes the row rather than writing `role = 'player'`.** Absence
+   already means `player`, so a redundant row would be a second way to say the
+   same thing — and a row that says `player` invites the question of whether it
+   means "explicitly demoted" or "never granted".
+4. **The Clerk mirror is best-effort.** A failed `publicMetadata` write is logged
+   and the request still succeeds. The mirror only feeds UI gating; losing it
+   must not lose the grant. Covered by a test.
+5. **403 bodies do not name the missing permission or the caller's role.** The
+   plan does not specify the body. Describing the permission model to someone who
+   just failed a permission check is free reconnaissance. Asserted by test.
+6. **No `users:read` route yet.** The permission exists in the matrix because
+   phase 7's admin dashboard needs it, but no endpoint checks it in this phase.
+   This is the one place the matrix runs ahead of the code; it is called out here
+   rather than silently shipped.
+7. **`GET /api/profile` gains an additive `access` field.** Existing profile
+   tests use `toMatchObject` and pass unmodified — no existing test changed
+   meaning.
