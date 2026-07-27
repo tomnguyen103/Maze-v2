@@ -4,7 +4,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 unfinished items remain out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; item 1 is delivered (PR #64), leaving 16 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -197,7 +197,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 - Source: docs/plans/echo-maze-prioritized-feature-roadmap.md — §8.2 "Question source"
 - Evidence checked: grep `capstone|boss` in src/ — no files; `src/questions/question-bank.js` has no milestone-special deck. `isGateWardenMilestone` exists (`src/questions/quest-levels.js:160-161`).
 - Touches: src/questions/question-bank.js, src/questions/quest-levels.js, content review
-- Depends on: none (7 changes the storage home if done first). NOTE: requires curated child-appropriate content — a product/content decision; executor must stop and ask rather than author question content.
+- Depends on: none (7 changes the storage home if done first). NOTE: requires curation of child-appropriate content — a product/content decision; executor must stop and ask rather than author question content.
 - Effort: M
 - Acceptance criteria:
   - [ ] Gate Warden encounters draw from a curated capstone deck when available, band-matched fallback otherwise
@@ -260,7 +260,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Suggested Execution Order
 
-1, 2, 3 — independent S-size hygiene, zero risk, build momentum.
+1 (done, PR #64), 2, 3 — independent S-size hygiene, zero risk, build momentum.
 4 — admin shell guard; unblocks all admin UI work.
 5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4.
 7 — question bank storage (migration gate: stop-and-ask).
