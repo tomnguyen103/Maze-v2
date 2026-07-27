@@ -152,6 +152,7 @@ npm run verify:audit                    # recompute the audit_events hash chain
 npm run prune:rate-limits               # drop rate-limit counters whose window has closed
 npm run grant:admin -- <clerk-user-id>  # grant the first admin
 npm run webhooks:dead                   # list webhook deliveries that gave up
+npm run webhooks:prune                  # drop settled webhook rows past retention
 ```
 
 All three need `DATABASE_URL` and sit outside `npm run check`, because the local
@@ -162,9 +163,16 @@ the verifier could not run — which is not evidence of tampering.
 
 `webhooks:dead` exits nonzero when any delivery has exhausted its retries, so it
 can gate a deploy: every row it prints is a provider state change that was never
-applied. `CRON_SECRET` guards `POST /api/internal/webhook-retry`, which Vercel
-cron calls every ten minutes; leaving it unset closes that endpoint rather than
-opening it.
+applied. `webhooks:prune` removes settled rows past their retention window
+(default 30 days) — a dead Clerk delivery still holds the raw Clerk id its
+payload arrived with, so it must not linger indefinitely.
+
+`CRON_SECRET` guards `/api/internal/webhook-retry`. Vercel cron calls it with
+`GET` and `Authorization: Bearer $CRON_SECRET`; `POST` with an `x-cron-secret`
+header also works for driving it by hand. The schedule is **daily**, because
+Vercel's Hobby plan allows one run per cron job per day — on a paid plan, change
+the `crons` entry in `vercel.json` for a tighter cadence. Leaving `CRON_SECRET`
+unset closes the endpoint rather than opening it.
 
 `grant:admin` exists only to break a circle: every other role change goes through
 `POST /api/admin/users/:id/role`, which itself requires an existing admin. It

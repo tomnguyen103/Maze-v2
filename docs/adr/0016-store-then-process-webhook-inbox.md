@@ -120,7 +120,17 @@ for a real internal route and an unknown one, so the surface cannot be mapped.
 - A day between retries is a long time for a failed refund. The daily schedule is
   a Hobby-plan constraint, not a design position, and it is the first thing to
   change if this ever runs on a paid plan.
-- The inbox holds the full verified payload. That is deliberate — a retry has to
-  reprocess the original event — but it means `webhook_inbox` is the one table
-  carrying provider payloads, and phase 6's export must not include it, since the
-  rows are ours rather than the Explorer's.
+- **The payload is transient, not retained.** The inbox holds the full verified
+  payload because a retry has to reprocess the original event — but a Clerk
+  `user.deleted` payload carries the raw Clerk id, which is exactly the identity
+  the deletion tombstone exists to avoid storing (`README.md`: "it stores only a
+  SHA-256 deletion tombstone — not the raw Clerk identity"). Keeping it forever
+  would quietly break that guarantee.
+
+  So the payload lives exactly as long as it is useful: `markProcessed` clears it
+  the moment the delivery succeeds, and `npm run webhooks:prune` removes settled
+  rows past a 30-day window, which bounds how long a *dead* row can hold one. A
+  row whose payload is gone is not selected for retry, so a cleared payload can
+  never be mistaken for an empty event.
+- `webhook_inbox` is the one table carrying provider payloads, so phase 6's
+  export must not include it — those rows are ours, not the Explorer's.

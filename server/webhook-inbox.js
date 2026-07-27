@@ -49,7 +49,12 @@ export function createWebhookInboxStore(pool) {
          SET status = 'processed',
              processed_at = now(),
              attempts = attempts + 1,
-             last_error = NULL
+             last_error = NULL,
+             -- The payload exists to make a retry possible. Once the delivery
+             -- has succeeded there is nothing left to retry, and a Clerk
+             -- user.deleted payload holds the raw Clerk id that the deletion
+             -- tombstone exists to avoid keeping.
+             payload = NULL
          WHERE provider = $1 AND event_id = $2`,
         [provider, eventId]
       );
@@ -97,12 +102,34 @@ export function createWebhookInboxStore(pool) {
         `SELECT provider, event_id, event_type, payload, attempts
          FROM webhook_inbox
          WHERE status IN ('pending', 'failed')
+           AND payload IS NOT NULL
            AND attempts < $2
          ORDER BY received_at ASC
          LIMIT $1`,
         [limit, MAX_WEBHOOK_ATTEMPTS]
       );
       return result.rows;
+    },
+
+    /**
+     * Removes settled rows past their retention window. Processed rows have
+     * already had their payload cleared; dead rows still carry one, so this is
+     * what stops an unprocessable delivery holding an identity forever.
+     *
+     * A dead row is an operator's problem, so the window is generous enough to
+     * notice it and short enough to bound retention.
+     *
+     * @param {{ olderThanMs?: number }} [options]
+     */
+    async prune({ olderThanMs = 30 * 24 * 60 * 60 * 1000 } = {}) {
+      const result = await pool.query(
+        `DELETE FROM webhook_inbox
+         WHERE status IN ('processed', 'dead')
+           AND received_at < now() - ($1::bigint * interval '1 millisecond')
+         RETURNING provider`,
+        [olderThanMs]
+      );
+      return result.rows.length;
     },
 
     /**

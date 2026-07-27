@@ -43,6 +43,8 @@ function createFakeStore() {
         row.attempts += 1;
         row.last_error = null;
         row.processed_at = "now";
+        // Mirrors the SQL: the payload exists only to make a retry possible.
+        row.payload = null;
       }
     },
     /** @param {{ provider: string, eventId: string, error: unknown }} failure */
@@ -60,10 +62,23 @@ function createFakeStore() {
         .filter(
           (row) =>
             ["pending", "failed"].includes(row.status) &&
+            row.payload !== null &&
             row.attempts < MAX_WEBHOOK_ATTEMPTS
         )
         .sort((left, right) => left.received_at - right.received_at)
         .slice(0, limit);
+    },
+    // The window is the SQL's concern; the fake prunes every settled row so the
+    // test asserts which statuses are eligible, not the arithmetic.
+    async prune() {
+      let pruned = 0;
+      for (const [id, row] of [...rows.entries()]) {
+        if (["processed", "dead"].includes(row.status)) {
+          rows.delete(id);
+          pruned += 1;
+        }
+      }
+      return pruned;
     },
     /** @param {{ limit?: number }} [options] */
     async listDead({ limit = 100 } = {}) {
@@ -258,6 +273,54 @@ describe("createWebhookInbox", () => {
       received_at: 9
     });
     await expect(inbox.retryPending()).resolves.toMatchObject({ claimed: 0 });
+  });
+});
+
+describe("payload retention", () => {
+  it("clears the payload the moment a delivery succeeds", async () => {
+    // A Clerk user.deleted payload carries the raw Clerk id, which the deletion
+    // tombstone exists specifically to avoid storing. It must not outlive the
+    // retry it enables.
+    const store = createFakeStore();
+    const inbox = createWebhookInbox({ store, processEvent: async () => {} });
+    await inbox.receive(
+      delivery({ provider: "clerk", eventType: "user.deleted", payload: { id: "user_raw_id" } })
+    );
+    const row = store.rows.get("clerk:evt_1");
+    expect(row?.status).toBe("processed");
+    expect(row?.payload).toBeNull();
+    expect(JSON.stringify(row)).not.toContain("user_raw_id");
+  });
+
+  it("keeps the payload while the delivery is still retryable", async () => {
+    const store = createFakeStore();
+    const inbox = createWebhookInbox({
+      store,
+      onFailure: () => {},
+      processEvent: async () => {
+        throw new Error("downstream unavailable");
+      }
+    });
+    await inbox.receive(delivery({ payload: { id: "evt_1" } }));
+    expect(store.rows.get("stripe:evt_1")?.payload).toEqual({ id: "evt_1" });
+  });
+
+  it("prunes settled rows so a dead payload cannot linger forever", async () => {
+    const store = createFakeStore();
+    const inbox = createWebhookInbox({
+      store,
+      onFailure: () => {},
+      processEvent: async () => {
+        throw new Error("permanently broken");
+      }
+    });
+    await inbox.receive(delivery());
+    for (let round = 0; round < 10; round += 1) {
+      await inbox.retryPending();
+    }
+    expect(store.rows.get("stripe:evt_1")?.status).toBe("dead");
+    await expect(store.prune()).resolves.toBe(1);
+    expect(store.rows.size).toBe(0);
   });
 });
 

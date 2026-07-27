@@ -173,6 +173,11 @@ describe("Run Access migration", () => {
     expect(sql).toContain("CHECK ((status = 'processed') = (processed_at IS NOT NULL))");
     expect(sql).toContain("webhook_inbox_retry_idx");
     expect(sql).toContain("webhook_inbox_dead_idx");
+    // The payload is transient: a Clerk user.deleted payload carries the raw
+    // Clerk id that the deletion tombstone exists to avoid storing.
+    expect(sql).toContain("payload JSONB,");
+    expect(sql).not.toContain("payload JSONB NOT NULL");
+    expect(sql).toContain("webhook_inbox_settled_idx");
     expect(sql).not.toContain("card_number");
     expect(sql).not.toContain("ALTER TABLE lifetime_purchases");
   });

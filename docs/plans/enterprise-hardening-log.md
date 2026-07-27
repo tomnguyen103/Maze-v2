@@ -393,13 +393,14 @@ outcome of the change it failed to record.
 - Clerk deliveries keyed on the `svix-id` header, which is what a redelivery
   reuses.
 - `scripts/list-dead-webhooks.mjs` → `npm run webhooks:dead`, exiting nonzero
-  when any dead row exists.
+  when any dead row exists, and `scripts/prune-webhook-inbox.mjs` →
+  `npm run webhooks:prune` for retention.
 - Tests: `tests/webhook-inbox.test.js`, `tests/internal-route.test.js`, new cases
   in `tests/migration.test.js` and `tests/vercel-functions.test.js`.
 
 ### Gate
 
-- `npm run check`: green (588 tests / 11 skipped).
+- `npm run check`: green (591 tests / 11 skipped).
 - `npm run check:full`: green (111 e2e / 5 skipped) on a clean run.
 
   **The e2e flakiness is now a real problem, not a footnote.** Across this phase
@@ -469,6 +470,28 @@ inbox, so that deployment ran pre-inbox Stripe handling while its retry endpoint
 was live; a `markFailed` failure turned into a 503 for a delivery already stored;
 and `receiveThroughInbox` dropped `purchaseId` from the audit resource, which the
 move into `processEvent` resolves.
+
+### CodeRabbit review
+
+Two findings, both fixed:
+
+- **The inbox retained raw Clerk identities indefinitely.** `payload` was stored
+  forever with no purge, and a Clerk `user.deleted` payload carries the raw Clerk
+  id — the exact identity `README.md` documents as never being stored raw, since
+  deletion keeps only a SHA-256 tombstone. The ADR had reasoned about excluding
+  the payload from phase 6's export but never about retaining it at all. Fixed:
+  `markProcessed` clears the payload the moment the delivery succeeds, a row with
+  no payload is not selected for retry, and `npm run webhooks:prune` bounds how
+  long a dead row can hold one.
+
+  Worth naming plainly — this phase introduced a privacy regression against an
+  invariant documented in the README, and neither the local review nor the gate
+  caught it. It was found by reading the schema against the docs, which is the
+  check I should have run myself when adding a table that stores provider
+  payloads.
+- `README.md` and this log still described the pre-correction cron contract
+  (`POST`, every ten minutes) after the ADR had been corrected to `GET` +
+  `Bearer` on a daily schedule.
 
 ### Note on a defect this phase caught in its own wiring
 
