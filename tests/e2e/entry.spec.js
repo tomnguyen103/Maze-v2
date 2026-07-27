@@ -96,8 +96,13 @@ test("opens the maintained Clerk SignIn dialog when configured", async ({
   );
   await signIn.click();
 
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByLabel(/Email address/i)).toBeVisible();
+  // Clerk renders its modal from remotely loaded UI chunks, so visibility can
+  // trail the click well past the 5s default on a loaded worker queue — the
+  // same reason the readiness poll above carries its own explicit bound.
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByLabel(/Email address/i)).toBeVisible({
+    timeout: 15000
+  });
 });
 
 test("starts normal gameplay at a clean play route", async ({ page }) => {

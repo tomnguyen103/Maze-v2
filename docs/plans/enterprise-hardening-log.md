@@ -78,12 +78,29 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ### Gate
 
-- _pending_
+- Flake measurement, before: 3 failures across 4 full e2e runs at HEAD of main
+  (three input-driving tests failing together in a bad run — the documented
+  ~1-in-3 rate).
+- Flake measurement, after: **11 consecutive green full e2e runs** with the
+  complete fix. The barrier-only intermediate state also showed zero
+  recurrences of the original three flakes across 8 runs; its two residual
+  failures (Clerk initialisation, readiness past a 5s default) drove the
+  worker cap and the explicit 15s bounds.
+- `npm run check`: green (602 unit tests / 11 skipped — 9 new).
+- `npm run check:full`: green.
 
 ### Deviations
 
-- None from the task as specified. No retries, no worker-count change, no
-  timeout changes; existing tests were extended (readiness barriers) only.
+- The task said to suspect the 16-worker parallelism; the diagnosis found TWO
+  causes and both were fixed at the cause: (1) tests injecting input before
+  the app's async Run swap (`data-game-ready`), which parallelism only
+  amplified, and (2) genuine oversubscription starving app boot and Clerk's
+  remotely loaded UI past their bounds, addressed with `workers: 8` and
+  explicit 15s bounds on the readiness barrier and the two Clerk modal
+  expectations. No retries anywhere; no existing assertion changed meaning.
+- The vitest fault was never reproduced (8 full + 30 targeted attempts), so
+  the fix removes the suspected mechanism (config-load side effects) and pins
+  it with tests rather than claiming a verified repro.
 
 - **PR**: _pending_
 - **Branch**: `feat/audit-log`
