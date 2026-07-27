@@ -9,6 +9,7 @@ import { createAuditRecorder, createRequestAuditor } from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
 import {
+  reportAddressSalt,
   resolveAddressSalt,
   trustsProxyHeaders
 } from "./request-identity.js";
@@ -110,6 +111,7 @@ export function createPlayerApi(env = process.env) {
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
+  reportAddressSalt(env);
   const recordAudit = createRequestAuditor({
     recorder: createAuditRecorder({ store: createAuditStore(pool) }),
     salt: resolveAddressSalt(env),

@@ -141,11 +141,21 @@ rows are dead weight rather than state. Needs `DATABASE_URL`. Takes
 - `TRUST_PROXY_HEADERS=true` — honour `x-forwarded-for`. Set this on Vercel,
   where the platform rewrites it. Unset, the socket address is used, because a
   client that can set its own forwarded address can choose which budget to spend.
-- `REQUEST_ADDRESS_SALT` — salt for the daily-rotating guest address hash.
-  **Optional.** Unset, it is derived from `DATABASE_URL`, which is already a
-  server-only secret and is stable across warm containers, so guests are metered
-  by default. Set it explicitly when the connection string may rotate
-  independently of the buckets.
+- `REQUEST_ADDRESS_SALT` — salt for the daily-rotating address hash, used both
+  for guest rate-limit keys and for the `ip_hash` on audit rows. **Optional.**
+  Unset, it is derived from `DATABASE_URL`, which is already a server-only secret
+  and is stable across warm containers, so guests are metered by default.
+
+  Set it explicitly when either is true:
+
+  - **`DATABASE_URL` has no strong secret** — a local
+    `postgres://postgres:postgres@localhost/...` derives a guessable salt, and an
+    address hash is only 2^32 possibilities, so a guessable salt makes `ip_hash`
+    reversible. The server warns at startup in this case.
+  - **The database password may rotate** independently. Rotating it silently
+    re-keys every hash: new audit rows stop correlating with old ones and every
+    guest rate-limit bucket resets. The server logs the salt's source at startup
+    so a rotation is visible.
 
 ## Not covered end-to-end
 

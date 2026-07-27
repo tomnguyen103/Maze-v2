@@ -141,9 +141,24 @@ against" section:
 
 ### Gate
 
-- `npm run check`: green (480 tests / 7 skipped after rebasing onto merged
+- `npm run check`: green (498 tests / 7 skipped after rebasing onto merged
   phase 1).
 - `npm run check:full`: green (111 e2e passed / 5 skipped).
+
+### Local review
+
+Ran over the pre-rebase diff, then again over the rebase resolution and the
+unification commit. Real findings fixed both times; the second pass confirmed no
+phase 1 call site was lost in the conflict resolution and no pre-existing test
+changed meaning (`git diff <phase-1-squash> HEAD -- tests/` is additions only).
+
+The salt default drew two follow-on findings, both fixed: a `DATABASE_URL` with
+no strong secret derives a guessable salt, which would make `ip_hash` reversible
+— the server now warns at startup; and rotating the database password silently
+re-keys every hash, so the salt's source is logged once at startup rather than
+being documented only in the README. The now-dead `hashClientIp` alias was
+removed and its two test files re-pointed at `request-identity.js` (import path
+only — no assertion changed).
 
 ### Deviations
 

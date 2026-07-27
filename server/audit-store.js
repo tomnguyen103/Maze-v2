@@ -79,15 +79,6 @@ export function auditRowHash(prevHash, fields) {
 }
 
 /**
- * Daily-rotating address hash. Raw addresses never reach the database.
- *
- * Re-exported from `request-identity.js`, which is the single implementation
- * shared with rate limiting, so the two subsystems cannot drift into hashing the
- * same address two different ways.
- */
-export { hashClientAddress as hashClientIp } from "./request-identity.js";
-
-/**
  * Rebuilds the hashed field set from a stored row by routing it back through
  * auditEventFields, so the field list exists in exactly one place.
  *

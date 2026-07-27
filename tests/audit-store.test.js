@@ -5,11 +5,11 @@ import {
   auditRowHash,
   canonicalAuditJson,
   createAuditStore,
-  hashClientIp,
   LOCK_TIMEOUT_MS,
   readAuditChain,
   verifyAuditChain
 } from "../server/audit-store.js";
+import { hashClientAddress } from "../server/request-identity.js";
 
 /**
  * @param {{ rows?: Record<string, unknown>[][] }} [options]
@@ -183,7 +183,7 @@ describe("auditRowHash", () => {
 
 describe("hashClientIp", () => {
   it("never returns the raw address", () => {
-    const hash = hashClientIp("203.0.113.7", {
+    const hash = hashClientAddress("203.0.113.7", {
       salt: "salt",
       date: "2026-07-26"
     });
@@ -193,14 +193,14 @@ describe("hashClientIp", () => {
 
   it("rotates daily so addresses are not linkable across days", () => {
     expect(
-      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-26" })
+      hashClientAddress("203.0.113.7", { salt: "salt", date: "2026-07-26" })
     ).not.toBe(
-      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-27" })
+      hashClientAddress("203.0.113.7", { salt: "salt", date: "2026-07-27" })
     );
   });
 
   it("returns null without an address", () => {
-    expect(hashClientIp(null, { salt: "salt", date: "2026-07-26" })).toBeNull();
+    expect(hashClientAddress(null, { salt: "salt", date: "2026-07-26" })).toBeNull();
   });
 });
 

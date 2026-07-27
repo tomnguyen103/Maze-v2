@@ -175,8 +175,10 @@ Two optional variables:
 - `REQUEST_ADDRESS_SALT` — salt for the daily-rotating address hash used both for
   guest rate-limit keys and for the `ip_hash` on audit rows. Optional: unset, it
   is derived from `DATABASE_URL`, which is already a server-only secret and is
-  stable across warm containers. Set it explicitly when the connection string may
-  rotate independently.
+  stable across warm containers. Set it explicitly when `DATABASE_URL` carries no
+  strong secret (the server warns at startup) or when the password may rotate
+  independently — rotating it silently re-keys every hash. See
+  `docs/security-headers.md`.
 
 The included `vercel.json` serves the Vite entry document for direct `/play`
 visits and refreshes; API functions remain at `/api/*`. The game remains
