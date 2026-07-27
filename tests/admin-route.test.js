@@ -46,6 +46,7 @@ function createResponse() {
  *   role?: import("../shared/permissions.js").Role,
  *   previousRole?: import("../shared/permissions.js").Role,
  *   setRole?: (change: Record<string, unknown>) => Promise<any>,
+ *   exportUser?: (userId: string) => Promise<unknown>,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} [options]
  */
@@ -61,6 +62,8 @@ function createHarness(options = {}) {
   const writes = [];
   /** @type {[string, string][]} */
   const mirrored = [];
+  /** @type {string[]} */
+  const exported = [];
   const handler = createAdminHandler({
     store: {
       setRole:
@@ -70,6 +73,12 @@ function createHarness(options = {}) {
           return { previousRole, role: change.role };
         })
     },
+    exportUser:
+      options.exportUser ??
+      (async (userId) => {
+        exported.push(userId);
+        return { schemaVersion: 1, userId };
+      }),
     requirePermission: createPermissionGuard({
       getUserId: () => actor,
       resolver: { roleFor: async () => role }
@@ -83,7 +92,7 @@ function createHarness(options = {}) {
         mirrored.push([userId, nextRole]);
       })
   });
-  return { handler, audits, writes, mirrored };
+  return { handler, audits, writes, mirrored, exported };
 }
 
 /**
@@ -337,5 +346,81 @@ describe("admin role endpoint", () => {
     });
     expect(result.statusCode).toBe(503);
     expect(harness.audits).toEqual([]);
+  });
+});
+
+const exportUrl = "/api/admin/users/user_target/export";
+
+describe("admin data export", () => {
+  it("serves another Explorer's export and audits it as export.admin", async () => {
+    const harness = createHarness();
+    const result = await call(harness, { method: "GET", url: exportUrl });
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toEqual({ schemaVersion: 1, userId: "user_target" });
+    expect(harness.exported).toEqual(["user_target"]);
+    expect(harness.audits).toHaveLength(1);
+    expect(harness.audits[0]).toMatchObject({
+      action: "export.admin",
+      actorId: "admin_1",
+      actorRole: "admin",
+      resource: { type: "player_account", id: "user_target" }
+    });
+  });
+
+  it("refuses a moderator, who holds users:read but not export:any", async () => {
+    const harness = createHarness({ actor: "mod_1", role: "moderator" });
+    const result = await call(harness, { method: "GET", url: exportUrl });
+    expect(result.statusCode).toBe(403);
+    expect(harness.exported).toEqual([]);
+    expect(harness.audits).toEqual([]);
+  });
+
+  it("refuses a signed-out caller", async () => {
+    const harness = createHarness({ actor: null });
+    const result = await call(harness, { method: "GET", url: exportUrl });
+    expect(result.statusCode).toBe(401);
+    expect(harness.exported).toEqual([]);
+  });
+
+  it("rejects a method other than GET", async () => {
+    const harness = createHarness();
+    const result = await call(harness, { method: "POST", url: exportUrl });
+    expect(result.statusCode).toBe(405);
+    expect(result.headers.allow).toBe("GET");
+    expect(harness.exported).toEqual([]);
+  });
+
+  it("does not leak the failure when the export cannot be built", async () => {
+    const harness = createHarness({
+      exportUser: async () => {
+        throw new Error("postgres://user:secret@host is unreachable");
+      }
+    });
+    const result = await call(harness, { method: "GET", url: exportUrl });
+    expect(result.statusCode).toBe(503);
+    expect(JSON.stringify(result.body)).not.toContain("secret@host");
+    expect(harness.audits).toEqual([]);
+  });
+
+  it("still guards the role route with its own permission", async () => {
+    // The two sub-paths must not share one check: export:any is admin-only,
+    // and so is users:roles:write, but they are separate grants.
+    const harness = createHarness();
+    const result = await call(harness, {
+      url: roleUrl,
+      body: { role: "moderator" }
+    });
+    expect(result.statusCode).toBe(200);
+  });
+
+  it("keeps an unknown path indistinguishable from a forbidden one", async () => {
+    const harness = createHarness({ actor: "mod_1", role: "moderator" });
+    const unknown = await call(harness, {
+      method: "GET",
+      url: "/api/admin/does-not-exist"
+    });
+    const real = await call(harness, { method: "GET", url: exportUrl });
+    // A caller who may not use either route cannot tell them apart.
+    expect(unknown.statusCode).toBe(real.statusCode);
   });
 });

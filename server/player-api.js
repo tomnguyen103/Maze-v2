@@ -213,6 +213,8 @@ export function createPlayerApi(env = process.env) {
   const adminHandler = createAdminHandler({
     store: roleStore,
     requirePermission,
+    // The same builder the self-export serves, so both produce one schema.
+    exportUser: (userId) => exportUserSnapshot(pool, userId),
     recordAudit,
     mirrorRole: createClerkRoleMirror(env)
   });

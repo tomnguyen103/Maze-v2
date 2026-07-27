@@ -30,8 +30,12 @@ reach the server, so they cannot appear in a server-side export.
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows.
-- The phase 7 admin variant reuses the same builder under the `export:any`
-  permission, audited as `export.admin`.
+- The admin variant, `GET /api/admin/users/:id/export`, reuses the same builder
+  under the `export:any` permission, audited as `export.admin` with the target
+  Explorer as the resource. Admin-only: a moderator holds `users:read` but not
+  `export:any` and gets 403. It is not separately metered — an admin already
+  holds far more direct routes to the same rows, so a budget here would buy
+  nothing.
 
 ## Deletion
 
