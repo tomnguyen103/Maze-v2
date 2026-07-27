@@ -267,6 +267,13 @@ Six findings, all fixed:
 - `npm run check`: green (477 tests / 11 skipped).
 - `npm run check:full`: green (105 e2e passed / 5 skipped).
 
+  The e2e suite is intermittently flaky under Playwright's 16-worker
+  parallelism, independently of this work. Two distinct flakes were seen across
+  this run: a chunk-load timing test during phase 1, and Warden Challenge dialog
+  visibility during phase 2. Both passed on targeted rerun and on a clean full
+  rerun, and neither phase touched the code under test. Worth a dedicated look
+  outside this plan — a suite that fails ~2% of runs erodes the gate's meaning.
+
 ### Deviations
 
 1. **Migration numbered 0008, not 0007.** Phase 3 claimed `0007` on a branch that
