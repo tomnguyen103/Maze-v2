@@ -103,14 +103,16 @@ async function readRunRequest(request) {
  *   recordEvent?: (
  *     eventName: string,
  *     fields: Record<string, unknown>
- *   ) => void
+ *   ) => void,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
 export function createRunAccessHandler({
   store,
   getUserId,
   enforcementEnabled = false,
-  recordEvent = () => {}
+  recordEvent = () => {},
+  recordAudit = async () => {}
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -177,6 +179,19 @@ export function createRunAccessHandler({
             ? "admitted"
             : "blocked"
           : "unmetered"
+      });
+      await recordAudit(request, {
+        actorId: userId,
+        action: "run_access.grant",
+        resource: { type: "run_access_grant", id: runRequest.runId },
+        after: {
+          allowed: result.allowed,
+          duplicate: result.duplicate,
+          enforcementEnabled,
+          labyrinthNumber: runRequest.labyrinthNumber,
+          levelId: runRequest.levelId,
+          state: result.state
+        }
       });
       sendJson(response, 200, { ...result, enforcementEnabled });
     } catch (error) {

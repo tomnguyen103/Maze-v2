@@ -1,6 +1,7 @@
 import { verifyWebhook } from "@clerk/express/webhooks";
 import { URL } from "node:url";
 import { safeErrorName } from "./safe-error-log.js";
+import { SYSTEM_ACTORS } from "./audit.js";
 
 export const CLERK_WEBHOOK_PATH = "/api/clerk-webhook";
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -9,13 +10,15 @@ const MAX_BODY_BYTES = 1024 * 1024;
  * @param {{
  *   deleteUser: (userId: string) => Promise<void>,
  *   signingSecret?: string,
- *   verifyEvent?: (request: import("node:http").IncomingMessage, body: Buffer) => Promise<{ type: string, data: { id?: unknown } }>
+ *   verifyEvent?: (request: import("node:http").IncomingMessage, body: Buffer) => Promise<{ type: string, data: { id?: unknown } }>,
+ *   recordAudit?: import("./audit.js").RecordAudit
  * }} dependencies
  */
 export function createClerkWebhookHandler({
   deleteUser,
   signingSecret = "",
-  verifyEvent
+  verifyEvent,
+  recordAudit = async () => {}
 }) {
   const verify = verifyEvent ?? (async (request, body) => {
     if (!signingSecret) {
@@ -77,6 +80,12 @@ export function createClerkWebhookHandler({
         });
         return;
       }
+      await recordAudit(request, {
+        actorId: SYSTEM_ACTORS.clerk,
+        actorRole: "system",
+        action: "user.delete",
+        resource: { type: "player", id: userId }
+      });
     }
     sendJson(response, 200, { received: true });
   };
