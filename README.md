@@ -122,6 +122,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 5. `db/migrations/0005_lantern_journal.sql`
 6. `db/migrations/0006_audit_events.sql`
 7. `db/migrations/0007_rate_limit_counters.sql`
+8. `db/migrations/0008_user_roles.sql`
 
 Then set:
 
@@ -145,15 +146,23 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 ### Operations scripts
 
 ```bash
-npm run verify:audit         # recompute the audit_events hash chain
-npm run prune:rate-limits    # drop rate-limit counters whose window has long closed
+npm run verify:audit                    # recompute the audit_events hash chain
+npm run prune:rate-limits               # drop rate-limit counters whose window has closed
+npm run grant:admin -- <clerk-user-id>  # grant the first admin
 ```
 
-Both need `DATABASE_URL`, and both sit outside `npm run check` because the local
+All three need `DATABASE_URL` and sit outside `npm run check`, because the local
 gate must not require a database.
 
 For `verify:audit`, exit code 1 means the chain is broken and exit code 2 means
 the verifier could not run — which is not evidence of tampering.
+
+`grant:admin` exists only to break a circle: every other role change goes through
+`POST /api/admin/users/:id/role`, which itself requires an existing admin. It
+writes the same audit row that endpoint would, attributed to `system:bootstrap`,
+so "who made the first admin" has an answer. Pass `--role moderator` to grant
+that instead.
+
 `prune:rate-limits` takes `--older-than-hours` (default 24); guest counter keys
 stop being reachable once their address hash rotates daily, so old rows are dead
 weight rather than state.

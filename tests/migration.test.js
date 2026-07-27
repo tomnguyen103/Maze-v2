@@ -140,4 +140,21 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("clerk_user_id");
     expect(sql).not.toContain("ALTER TABLE player_access");
   });
+
+  it("stores the authoritative role with its granting admin", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0008_user_roles.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE user_roles");
+    expect(sql).toContain("user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("role IN ('admin', 'moderator', 'player')");
+    expect(sql).toContain("granted_by TEXT NOT NULL");
+    // Self-promotion is refused in the route; this is the database backstop.
+    expect(sql).toContain("CHECK (user_id <> granted_by");
+    expect(sql).toContain("user_roles_role_idx");
+    expect(sql).not.toContain("password");
+    expect(sql).not.toContain("ALTER TABLE players");
+  });
 });

@@ -235,3 +235,137 @@ Six findings, all fixed:
    in both the ADR and `docs/security-headers.md`, including the caveat that a
    Clerk production custom domain matches neither wildcard and must be added
    explicitly.
+
+---
+
+## Phase 2 — RBAC + permission matrix
+
+- **PR**: _pending_
+- **Branch**: `feat/rbac-permissions`
+- **ADR**: `docs/adr/0015-database-authoritative-roles.md`
+- **Migration**: `db/migrations/0008_user_roles.sql`
+
+### Delivered
+
+- `shared/permissions.js` — the one matrix, imported by both server and browser;
+  only the server enforces it.
+- `db/migrations/0008_user_roles.sql` — authoritative role per Clerk identity,
+  with a `CHECK (user_id <> granted_by)` backstop against self-promotion.
+- `server/rbac.js` — `createRoleStore` (absence of a row means `player`),
+  `createRoleResolver` (per-request cache, fails closed), `createPermissionGuard`
+  (`requirePermission` → 401 / 403 / allowed), `publicAccess` for UI gating.
+- `server/admin-route.js` — `POST /api/admin/users/:id/role`, permission-checked
+  and audited (`role.grant` / `role.revoke`), with the Clerk `publicMetadata`
+  mirror.
+- `scripts/grant-admin.mjs` → `npm run grant:admin`, audited as
+  `system:bootstrap`.
+- `src/player/can.js` — client-side `can()` / `isStaff()`, UI only.
+- Tests: `tests/permissions.test.js`, `tests/rbac.test.js`,
+  `tests/admin-route.test.js`, `tests/can.test.js`,
+  `tests/rbac-store.integration.test.js`, and a new case in
+  `tests/migration.test.js`.
+
+### Gate
+
+- `npm run check`: green (557 tests / 11 skipped, after rebasing onto merged phase 3).
+- `npm run check:full`: green (105 e2e passed / 5 skipped).
+
+  The e2e suite is intermittently flaky under Playwright's 16-worker
+  parallelism, independently of this work. Two distinct flakes were seen across
+  this run: a chunk-load timing test during phase 1, and Warden Challenge dialog
+  visibility during phase 2. Both passed on targeted rerun and on a clean full
+  rerun, and neither phase touched the code under test. Worth a dedicated look
+  outside this plan — a suite that fails ~2% of runs erodes the gate's meaning.
+
+### Deviations
+
+1. **Migration numbered 0008, not 0007.** Phase 3 claimed `0007` on a branch that
+   was still open for review when this phase started. Numbering around it avoids
+   two migrations sharing an ordinal; the gap closes when phase 3 merges.
+2. **`getRole` lives on a store, not as a free `getRole(pool, userId)`.** The
+   plan sketches the latter. A store matches every other data-access module in
+   `server/` and lets the per-request cache sit in a separate resolver, which is
+   what makes the "cache per request only" rule testable.
+3. **Revoking deletes the row rather than writing `role = 'player'`.** Absence
+   already means `player`, so a redundant row would be a second way to say the
+   same thing — and a row that says `player` invites the question of whether it
+   means "explicitly demoted" or "never granted".
+4. **The Clerk mirror is best-effort.** A failed `publicMetadata` write is logged
+   and the request still succeeds. The mirror only feeds UI gating; losing it
+   must not lose the grant. Covered by a test.
+5. **403 bodies do not name the missing permission or the caller's role.** The
+   plan does not specify the body. Describing the permission model to someone who
+   just failed a permission check is free reconnaissance. Asserted by test.
+6. **The matrix is declared ahead of its enforcement.** This phase ships one
+   guarded route, so `users:roles:write` is the only permission a server route
+   checks today. Consuming phase per permission: `users:read`, `questions:read`,
+   `questions:write`, `questions:publish`, `refunds:issue`, `audit:read` →
+   phase 7; `export:any` → phase 6. **Consequence worth stating plainly: the
+   `moderator` role currently grants nothing enforceable.** Defining the
+   vocabulary once keeps phase 7 from inventing a second one, but the gap is real
+   until then.
+7. **`GET /api/profile` gains an additive `access` field.** Existing profile
+   tests use `toMatchObject` and pass unmodified — no existing test changed
+   meaning.
+8. **`api/admin.js` takes the project to 12 Vercel functions — the Hobby
+   ceiling.** The whole admin surface is one function reached by a `vercel.json`
+   rewrite, but the budget is now exhausted. `tests/vercel-functions.test.js`
+   already asserted `<= 12`; its exact-count fixture moved 11 → 12, which keeps
+   the invariant it guards intact. **Every later phase must route new endpoints
+   through an existing function rather than adding a file** — phase 6's export
+   and phase 7's admin API in particular.
+
+### Local review
+
+Both axes run. Real findings fixed:
+
+- **`/api/admin/*` had no Vercel entrypoint**, so the endpoint would have worked
+  only under `npm start` and the dev server, against the plan's serverless ground
+  rule. Added `api/admin.js` plus the rewrite.
+- **The no-`DATABASE_URL` branch let admin paths fall through** to the SPA, so
+  `POST /api/admin/users/x/role` answered `200 index.html`. Now 503.
+- **`grant-admin.mjs` mis-parsed its arguments**: filtering out `--`-prefixed
+  tokens made a flag's *value* indistinguishable from the user id, so
+  `--role moderator user_123` would have granted moderator to the literal id
+  `"moderator"` — and written a real audit row for it. Replaced with positional
+  parsing that also accepts `--role=`.
+- **An audit row was written for no-op changes**, contradicting ADR 0013's "none
+  when the request changes nothing".
+- **404 and 405 preceded the permission check**, letting an unauthorized caller
+  map the admin surface.
+- `setRole` depended on `this`, the only such function in `server/`; hoisted.
+- `listByRole` was unused and has been removed rather than shipped ahead of its
+  caller.
+
+Dismissed with reason: a swallowed `recordAudit` failure leaves a grant unaudited
+without failing the request. That is phase 1's deliberate design — logged and
+counted, never thrown into the request path. `grant-admin.mjs` exits non-zero on
+it because a script can afford to.
+
+### CodeRabbit review
+
+Five findings, all fixed:
+
+- **`setRole` had a TOCTOU window.** The previous role was read in a separate
+  query before the write, so two concurrent changes to the same Explorer could
+  both capture the same `before` value and file wrong audit history. The read and
+  the write now share one statement — a CTE for the upsert, `RETURNING role` for
+  the revoke.
+- **A bare `POST /api/admin` hung until the platform timeout.** With no
+  `_adminPath` the shim left `request.url` as `/api/admin`, which misses
+  `isAdminPath`, so the router called `next?.()` — and a serverless function has
+  no next handler, so nothing was ever written. The shim now always rebuilds with
+  the trailing slash, so it answers 401.
+- **An audit failure turned a committed role change into a 503.** `setRole` has
+  already committed by then, so the response claimed a failure that did not
+  happen — and because the retry is a no-op, the audit row would never be
+  written. Now best-effort with its own `catch`, matching the mirror.
+- **The Clerk mirror `fetch` had no timeout**, so a slow Clerk held the admin's
+  request open after the database write succeeded. Bounded to 5s.
+- **Re-running `grant-admin.mjs` rewrote `updated_at` and filed a `role.grant`**
+  for a change that did not happen. It now reads the current role first and
+  exits cleanly on a no-op.
+
+This supersedes the earlier "dismissed with reason" note above: the endpoint's
+audit write is still best-effort by design, but it no longer misreports the
+outcome of the change it failed to record.
