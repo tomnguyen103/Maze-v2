@@ -90,19 +90,26 @@ export function createPostHogForwarder(
       source: "server"
     });
     delete properties.event;
-    void fetcher(`${host}/capture/`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        api_key: apiKey,
-        event: name,
-        // Aggregate-only by design: product events carry no caller identity,
-        // so there is no honest per-user distinct id to send.
-        distinct_id: "echo-maze-server",
-        properties
-      }),
-      signal: AbortSignal.timeout(3000)
-    }).catch(() => {});
+    // try/catch as well as .catch: a fetcher can throw synchronously (for
+    // example on a malformed POSTHOG_HOST) and that must not reach the
+    // request path either.
+    try {
+      void fetcher(`${host}/capture/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          api_key: apiKey,
+          event: name,
+          // Aggregate-only by design: product events carry no caller
+          // identity, so there is no honest per-user distinct id to send.
+          distinct_id: "echo-maze-server",
+          properties
+        }),
+        signal: AbortSignal.timeout(3000)
+      }).catch(() => {});
+    } catch {
+      // Delivery is best-effort; nothing to do.
+    }
   };
 }
 

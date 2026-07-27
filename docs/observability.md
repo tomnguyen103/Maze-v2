@@ -1,7 +1,9 @@
 # Observability
 
-Everything here is env-gated: with none of the variables set, the game runs
-exactly as before — no SDKs load, no network calls happen, no overhead.
+Everything heavier than logging is env-gated: with none of the variables
+set, no telemetry SDK loads and no telemetry network call happens. Request
+logging and the health endpoints are always on — they are part of the
+server, not of the optional telemetry.
 
 ## Structured logs
 
@@ -42,7 +44,7 @@ never add an `api/` file for a new endpoint).
 `OTEL_EXPORTER_OTLP_ENDPOINT` is set, with http and pg auto-instrumentation,
 exporting OTLP/HTTP. For Grafana Cloud set:
 
-```
+```dotenv
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<region>.grafana.net/otlp
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64 instance:token>
 ```

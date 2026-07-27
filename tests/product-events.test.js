@@ -154,6 +154,19 @@ describe("server-side PostHog forwarding", () => {
     );
   });
 
+  it("swallows a synchronously throwing fetcher too", () => {
+    const forward = createPostHogForwarder(
+      { POSTHOG_API_KEY: "phc_test" },
+      () => {
+        throw new Error("bad host");
+      }
+    );
+    if (!forward) throw new Error("Forwarder should be configured.");
+    expect(() =>
+      forward({ event: "lifetime_confirmation", outcome: "activated" })
+    ).not.toThrow();
+  });
+
   it("swallows delivery failures so analytics never fail a request", () => {
     const fetcher = vi.fn(
       (/** @type {string} */ url, /** @type {{ body: string }} */ options) =>

@@ -23,7 +23,7 @@ export function redactError(error) {
 export function createLogger(env = globalThis.process.env, destination) {
   const options = {
     level: typeof env.LOG_LEVEL === "string" && env.LOG_LEVEL ? env.LOG_LEVEL : "info",
-    base: undefined,
+    base: null,
     serializers: {
       err: redactError,
       error: redactError
