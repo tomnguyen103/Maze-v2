@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import access from "../api/access.js";
 import admin from "../api/admin.js";
+import leaderboard from "../api/leaderboard.js";
 import stripeWebhook from "../api/stripe-webhook.js";
 
 describe("Vercel function budget", () => {
@@ -55,6 +56,7 @@ describe("Vercel function budget", () => {
         /** @type {unknown} */ ({
           end() {},
           setHeader() {},
+          on() {},
           statusCode: 0
         })
       );
@@ -102,6 +104,7 @@ describe("Vercel function budget", () => {
       /** @type {unknown} */ ({
         statusCode: 0,
         setHeader() {},
+        on() {},
         end() {
           settle(captured.statusCode || response.statusCode);
         }
@@ -113,15 +116,66 @@ describe("Vercel function budget", () => {
     await expect(finished).resolves.toBeGreaterThanOrEqual(400);
   });
 
+  it("routes the health namespace through the leaderboard function", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    expect(config.rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: "/api/health",
+          destination: "/api/leaderboard?_healthRoute=health"
+        },
+        {
+          source: "/api/ready",
+          destination: "/api/leaderboard?_healthRoute=ready"
+        }
+      ])
+    );
+
+    for (const [incoming, expectedUrl, expectedStatus] of [
+      ["/api/leaderboard?_healthRoute=health", "/api/health", 200],
+      // The rewritten value is attacker-controlled: anything unknown must be
+      // answered, never fall through to a next?.() that does not exist.
+      ["/api/leaderboard?_healthRoute=../secret", "/api/leaderboard?_healthRoute=../secret", 404]
+    ]) {
+      const request = /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ ({ method: "GET", url: incoming, headers: {} })
+      );
+      /** @type {(status: number) => void} */
+      let settle = () => {};
+      const finished = new Promise((resolve) => {
+        settle = resolve;
+      });
+      const response = /** @type {import("node:http").ServerResponse} */ (
+        /** @type {unknown} */ ({
+          statusCode: 0,
+          setHeader() {},
+          on() {},
+          end() {
+            settle(response.statusCode);
+          }
+        })
+      );
+      await leaderboard(request, response);
+      expect(request.url).toBe(expectedUrl);
+      await expect(finished).resolves.toBe(expectedStatus);
+    }
+  });
+
   it("restores the public nested Access path before server routing", async () => {
-    const request = /** @type {import("node:http").IncomingMessage} */ ({
-      method: "GET",
-      url: "/api/access?_accessRoute=config"
-    });
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "GET",
+        url: "/api/access?_accessRoute=config",
+        headers: {}
+      })
+    );
     const response = /** @type {import("node:http").ServerResponse} */ (
       /** @type {unknown} */ ({
         end() {},
         setHeader() {},
+        on() {},
         statusCode: 0
       })
     );

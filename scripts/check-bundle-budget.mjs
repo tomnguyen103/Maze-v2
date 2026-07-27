@@ -9,7 +9,16 @@ const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
   { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 30 },
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 12 },
-  { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 }
+  { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
+  // Exists only when VITE_SENTRY_DSN was set at build time; an unset DSN
+  // eliminates the chunk, so absence is a pass, not a missing asset.
+  {
+    label: "optional Sentry",
+    prefix: "error-reporting-",
+    suffix: ".js",
+    maxKb: 120,
+    optional: true
+  }
 ];
 
 let failed = false;
@@ -20,6 +29,10 @@ for (const budget of budgets) {
       candidate.endsWith(budget.suffix)
   );
   if (!file) {
+    if (budget.optional) {
+      process.stdout.write(`SKIP ${budget.label}: not built\n`);
+      continue;
+    }
     throw new Error(`Could not find ${budget.label} in dist/assets.`);
   }
   const bytes = await readFile(new URL(file, assetsDirectory));

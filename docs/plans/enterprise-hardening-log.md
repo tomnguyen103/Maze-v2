@@ -8,7 +8,7 @@ reason.
 
 ## Test infrastructure — stabilise the test gate
 
-- **PR**: _pending_
+- **PR**: #61 (merged)
 - **Branch**: `fix/stabilise-test-gate`
 - **ADR**: none — not a plan phase.
 
@@ -112,6 +112,68 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 - The vitest fault was never reproduced (8 full + 30 targeted attempts), so
   the fix removes the suspected mechanism (config-load side effects) and pins
   it with tests rather than claiming a verified repro.
+
+---
+
+## Phase 5 — Observability
+
+- **PR**: #62
+- **Branch**: `feat/observability`
+- **ADR**: `docs/adr/0017-env-gated-observability.md`
+- **Migration**: none.
+
+### Delivered
+
+- `server/logger.js` (pino, redacting serializers), `server/request-log.js`
+  (`x-request-id` assign/echo, one structured line per owned request),
+  request id flowing into audit rows via the existing header read.
+- `server/health-route.js` — `/api/health` + `/api/ready`, dispatched first
+  in every `createPlayerApi` branch; `vercel.json` rewrites both onto the
+  `leaderboard` function with a validated `_healthRoute` parameter.
+- `server/tracing.js` + `server/error-tracking.js` +
+  `server/telemetry-bootstrap.js` — OTel and Sentry, env-gated behind
+  dynamic imports, bootstrap as the first import of `player-api.js`.
+- `src/error-reporting.js` — browser Sentry as a lazy build-time-optional
+  chunk; `scripts/check-bundle-budget.mjs` gained an `optional` budget kind.
+- `shared/telemetry-scrub.js` — one `beforeSend` scrubber for both sides.
+- `server/product-events.js` — PostHog forwarding of the two server-trusted
+  events via plain `fetch`, schema-filtered, fire-and-forget.
+- `docs/observability.md`; tests: `logger.test.js`, `request-log.test.js`,
+  `health-route.test.js`, `telemetry.test.js`, new cases in
+  `product-events.test.js`, `player-api-integration.test.js`,
+  `vercel-functions.test.js`.
+
+### Gate
+
+- `npm run check`: green (635 unit tests / 11 skipped — 29 new; bundle
+  budget passes with `SKIP optional Sentry: not built` by default).
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### Deviations
+
+1. **No `api/health.js` / `api/ready.js`.** The plan predates the discovery
+   that phase 2 spent the last Hobby function slot. Health rewrites onto the
+   `leaderboard` function, shim-validated like `/api/admin/*`.
+2. **Request logging covers the player API's namespaces**, not the question
+   endpoint — the plan places the middleware in `player-api.js`, and the
+   question route stays as-is.
+3. **Ad-hoc `console` paths pinned by existing tests stay on `console`**
+   (`logProviderFallback`, pool error listeners). Replacing them would change
+   existing tests' meaning; they already log only redacted names.
+4. **PostHog uses plain `fetch`, not `posthog-node`** — the SDK is not on
+   the allowed dependency list, and one capture call does not need it.
+5. **Sentry source-map upload is documented, not scripted** — it needs
+   `@sentry/cli`, also not on the allowed list; the Vercel Sentry
+   integration covers it in deployment.
+6. **Log lines carry no user id.** The plan's "user id when known" would
+   require logging after Clerk authentication resolves; the request line is
+   emitted by pre-auth middleware. `request_id` joins a request to its audit
+   rows, which do carry the actor — that is the correlation the plan wanted.
+7. **New env vars** (all optional): `LOG_LEVEL`,
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
+   `SENTRY_DSN`, `VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`,
+   `POSTHOG_API_KEY`, `POSTHOG_HOST`. Documented in
+   `docs/observability.md`.
 
 ---
 

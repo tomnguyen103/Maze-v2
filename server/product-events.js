@@ -47,10 +47,81 @@ const EVENT_SCHEMA = {
 };
 
 /**
- * @param {{ write?: (event: Record<string, unknown>) => void }} [dependencies]
+ * Only events whose truth lives on the server are forwarded: a client can
+ * fabricate its own analytics, but not a confirmed checkout or a Run Access
+ * decision. High-volume telemetry (rate limits) deliberately stays local.
+ */
+const SERVER_TRUSTED_EVENTS = new Set([
+  "lifetime_confirmation",
+  "run_access_decision"
+]);
+
+/**
+ * Env-gated PostHog delivery. Returns null when unconfigured. The forwarder
+ * receives events AFTER schema filtering, so identities can never travel even
+ * if a call site passes them, and delivery is fire-and-forget with a bounded
+ * timeout — analytics must never block or fail a request.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} [env]
+ * @param {(url: string, options: {
+ *   method: string,
+ *   headers: Record<string, string>,
+ *   body: string,
+ *   signal: AbortSignal
+ * }) => Promise<unknown>} [fetcher]
+ */
+export function createPostHogForwarder(
+  env = globalThis.process.env,
+  fetcher = globalThis.fetch
+) {
+  const apiKey = env.POSTHOG_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+  const host = env.POSTHOG_HOST || "https://us.i.posthog.com";
+  /** @param {Record<string, unknown>} event */
+  return function forwardProductEvent(event) {
+    const name = String(event.event ?? "");
+    if (!SERVER_TRUSTED_EVENTS.has(name)) {
+      return;
+    }
+    const properties = /** @type {Record<string, unknown>} */ ({
+      ...event,
+      source: "server"
+    });
+    delete properties.event;
+    // try/catch as well as .catch: a fetcher can throw synchronously (for
+    // example on a malformed POSTHOG_HOST) and that must not reach the
+    // request path either.
+    try {
+      void fetcher(`${host}/capture/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          api_key: apiKey,
+          event: name,
+          // Aggregate-only by design: product events carry no caller
+          // identity, so there is no honest per-user distinct id to send.
+          distinct_id: "echo-maze-server",
+          properties
+        }),
+        signal: AbortSignal.timeout(3000)
+      }).catch(() => {});
+    } catch {
+      // Delivery is best-effort; nothing to do.
+    }
+  };
+}
+
+/**
+ * @param {{
+ *   write?: (event: Record<string, unknown>) => void,
+ *   forward?: ((event: Record<string, unknown>) => void) | null
+ * }} [dependencies]
  */
 export function createProductEventRecorder({
-  write = (event) => console.info(`[product] ${JSON.stringify(event)}`)
+  write = (event) => console.info(`[product] ${JSON.stringify(event)}`),
+  forward = null
 } = {}) {
   /**
    * @param {string} eventName
@@ -75,7 +146,10 @@ export function createProductEventRecorder({
       }
     }
     write(event);
+    forward?.(event);
   };
 }
 
-export const recordProductEvent = createProductEventRecorder();
+export const recordProductEvent = createProductEventRecorder({
+  forward: createPostHogForwarder()
+});

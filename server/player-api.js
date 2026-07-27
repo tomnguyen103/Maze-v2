@@ -1,3 +1,6 @@
+// First import on purpose: OpenTelemetry instrumentation (env-gated inside)
+// must register before pg or any http client loads.
+import "./telemetry-bootstrap.js";
 import { clerkMiddleware, getAuth } from "@clerk/express";
 import Stripe from "stripe";
 import {
@@ -20,6 +23,9 @@ import {
   SYSTEM_ACTORS
 } from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
+import { createHealthHandler, isHealthPath } from "./health-route.js";
+import { createLogger } from "./logger.js";
+import { createRequestLogger } from "./request-log.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
 import {
   reportAddressSalt,
@@ -87,7 +93,21 @@ function sendError(response, status, error) {
 /** @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env */
 export function createPlayerApi(env = process.env) {
   const connectionString = env.DATABASE_URL;
+  const logRequest = createRequestLogger({ logger: createLogger(env) });
+  const version =
+    typeof env.VERCEL_GIT_COMMIT_SHA === "string" && env.VERCEL_GIT_COMMIT_SHA
+      ? env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+      : "dev";
+  const clerkConfigured = Boolean(
+    env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY
+  );
   if (!connectionString) {
+    const healthHandler = createHealthHandler({
+      version,
+      checkDatabase: null,
+      stripeConfigured: loadLifetimeConfig(env) !== null,
+      clerkConfigured
+    });
     /**
      * @param {import("node:http").IncomingMessage} request
      * @param {import("node:http").ServerResponse} response
@@ -98,9 +118,15 @@ export function createPlayerApi(env = process.env) {
       if (
         !PLAYER_PATHS.has(pathname) &&
         !isAdminPath(pathname) &&
-        !isInternalPath(pathname)
+        !isInternalPath(pathname) &&
+        !isHealthPath(pathname)
       ) {
         next?.();
+        return;
+      }
+      logRequest(request, response);
+      if (isHealthPath(pathname)) {
+        void healthHandler(request, response, next);
         return;
       }
       if (isAdminPath(pathname) || isInternalPath(pathname)) {
@@ -151,6 +177,12 @@ export function createPlayerApi(env = process.env) {
   const roleResolver = createRoleResolver({ store: roleStore });
   const lifetimeConfig = loadLifetimeConfig(env);
   const inboxStore = createWebhookInboxStore(queryAdapter);
+  const healthHandler = createHealthHandler({
+    version,
+    checkDatabase: () => queryAdapter.query("SELECT 1"),
+    stripeConfigured: lifetimeConfig !== null,
+    clerkConfigured
+  });
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request
   ) => getAuth(
@@ -316,6 +348,18 @@ export function createPlayerApi(env = process.env) {
      */
     return (request, response, next) => {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
+      if (
+        PLAYER_PATHS.has(pathname) ||
+        isAdminPath(pathname) ||
+        isInternalPath(pathname) ||
+        isHealthPath(pathname)
+      ) {
+        logRequest(request, response);
+      }
+      if (isHealthPath(pathname)) {
+        void healthHandler(request, response, next);
+        return;
+      }
       if (pathname === CLERK_WEBHOOK_PATH) {
         void clerkWebhookHandler(request, response, next);
         return;
@@ -366,9 +410,15 @@ export function createPlayerApi(env = process.env) {
     if (
       !PLAYER_PATHS.has(pathname) &&
       !isAdminPath(pathname) &&
-      !isInternalPath(pathname)
+      !isInternalPath(pathname) &&
+      !isHealthPath(pathname)
     ) {
       next?.();
+      return;
+    }
+    logRequest(request, response);
+    if (isHealthPath(pathname)) {
+      void healthHandler(request, response, next);
       return;
     }
     if (isInternalPath(pathname)) {

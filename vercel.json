@@ -9,6 +9,14 @@
       "destination": "/api/admin?_adminPath=:adminPath*"
     },
     {
+      "source": "/api/health",
+      "destination": "/api/leaderboard?_healthRoute=health"
+    },
+    {
+      "source": "/api/ready",
+      "destination": "/api/leaderboard?_healthRoute=ready"
+    },
+    {
       "source": "/api/access/config",
       "destination": "/api/access?_accessRoute=config"
     },
