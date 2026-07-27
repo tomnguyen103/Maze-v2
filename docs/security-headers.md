@@ -40,10 +40,10 @@ object-src 'none';
 frame-ancestors 'none';
 form-action 'self' https://checkout.stripe.com;
 script-src 'self' <clerk host>;
-style-src 'self';
+style-src 'self' ['unsafe-inline' only with a clerk host];
 font-src 'self';
-img-src 'self' data: https://img.clerk.com;
-connect-src 'self' <clerk host>;
+img-src 'self' data: [https://img.clerk.com only with a clerk host];
+connect-src 'self' <clerk host> [https://clerk-telemetry.com only with a clerk host];
 worker-src 'self' blob:;
 frame-src 'self' <clerk host> https://challenges.cloudflare.com;
 manifest-src 'self';
@@ -52,10 +52,14 @@ upgrade-insecure-requests            (production only)
 
 Notes on each non-obvious entry:
 
-- **No `'unsafe-inline'`, no `'unsafe-eval'`, no nonce.** The app has no inline
-  `<script>` and no inline `style`, and fonts are bundled through
-  `@fontsource-variable`. Tests assert both unsafe keywords stay absent. Adding
-  an inline script means weakening this policy — don't.
+- **`script-src` never gets `'unsafe-inline'`, `'unsafe-eval'`, or a nonce.** Our
+  markup and CSS carry no inline script, and fonts are bundled through
+  `@fontsource-variable`. Tests assert this for every configuration. Adding an
+  inline script means weakening this policy — don't.
+- **`style-src` gets `'unsafe-inline'` only when a Clerk host is configured**,
+  because Clerk's UI bundle injects its own `<style>` at runtime. A guest-only
+  deployment keeps `style-src 'self'`. Inline style cannot execute script.
+- **`https://clerk-telemetry.com`** joins `connect-src` on the same condition.
 - **`<clerk host>`** is derived at runtime from the publishable key, whose third
   underscore-separated segment is the base64 instance host. This is the same
   value `src/player/clerk-browser.js` decodes to load the optional Clerk UI
@@ -83,7 +87,7 @@ so the limits hold across serverless invocations.
 
 | Budget | Allowance | Endpoint |
 |---|---|---|
-| `question.fetch` | 30 / min | `GET /api/question` |
+| `question.fetch` | 30 / min | `GET /api/question` (address-keyed; see below) |
 | `score.submit` | 10 / min | `POST /api/scores` |
 | `profile.write` | 10 / min | `PUT /api/profile` |
 | `lifetime.checkout` | 5 / min | `POST /api/lifetime-checkout` |
@@ -91,6 +95,17 @@ so the limits hold across serverless invocations.
 
 Keys are `budget:user:<clerk id>` when signed in and `budget:ip:<address hash>`
 for guests — a daily-rotating hash, never a raw address.
+
+`GET /api/question` is unauthenticated by design, so no user id exists there and
+it is address-keyed for everyone. A classroom behind one NAT therefore shares one
+30/min budget. Phase 8 introduces classrooms and is where that budget should be
+reconsidered.
+
+Windows are fixed. A full budget is spendable instantly — that is the intended
+burst, since normal play is bursty — and up to two budgets can cross one
+boundary. The counter resets only when the stored window is strictly older than
+the incoming one and never moves `window_start` backwards, so a request delayed
+across a boundary cannot rewind a fresh window and win a second budget.
 
 Rejections answer `429` with `Retry-After` (seconds) and a matching `retryAfter`
 body field, and emit a `rate_limit_hit` product event carrying `budget` and
@@ -126,6 +141,19 @@ rows are dead weight rather than state. Needs `DATABASE_URL`. Takes
 - `TRUST_PROXY_HEADERS=true` — honour `x-forwarded-for`. Set this on Vercel,
   where the platform rewrites it. Unset, the socket address is used, because a
   client that can set its own forwarded address can choose which budget to spend.
-- `REQUEST_ADDRESS_SALT` — salt for the guest address hash. Unset means guests
-  are not identifiable, so they are admitted unmetered; signed-in budgets still
-  apply.
+- `REQUEST_ADDRESS_SALT` — salt for the daily-rotating guest address hash.
+  **Optional.** Unset, it is derived from `DATABASE_URL`, which is already a
+  server-only secret and is stable across warm containers, so guests are metered
+  by default. Set it explicitly when the connection string may rotate
+  independently of the buckets.
+
+## Not covered end-to-end
+
+The Playwright run has no Clerk keys, so it exercises the guest surface only: it
+asserts the served headers and that a Labyrinth plays with zero CSP violations
+and zero `429`s. The Clerk-configured policy is covered by unit tests derived
+from what `src/player/clerk-browser.js` actually loads.
+
+**Before trusting this in production, verify sign-in and Stripe Checkout once in
+a keyed environment.** A CSP that is too strict fails silently from the server's
+point of view — the browser refuses the resource and the server sees nothing.

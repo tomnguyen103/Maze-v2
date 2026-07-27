@@ -1,4 +1,5 @@
 import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
+import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
 
@@ -107,19 +108,11 @@ export function createQuestionRateLimiter(options = {}) {
  * }} [options]
  */
 export function createQuestionHandler(questionService, options = {}) {
-  // Two independent limits. The in-process one caps what a single warm instance
-  // can push at the question provider; the per-caller one is durable across
-  // serverless invocations and stops one Explorer spending everyone's budget.
-  const rateLimiter = createQuestionRateLimiter(options);
-  const rateLimit =
-    options.rateLimit ??
-    (async () => ({
-      allowed: true,
-      degraded: true,
-      limit: 0,
-      remaining: 0,
-      retryAfterSeconds: 0
-    }));
+  // Two independent limits. The instance throttle caps what a single warm
+  // container pushes at the question provider; the per-caller budget is durable
+  // across serverless invocations and stops one Explorer spending the rest.
+  const instanceThrottle = createQuestionRateLimiter(options);
+  const rateLimit = options.rateLimit ?? (async () => UNMETERED);
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -137,12 +130,12 @@ export function createQuestionHandler(questionService, options = {}) {
       response.end(JSON.stringify({ error: "Use GET for Question requests." }));
       return;
     }
-    if (!rateLimiter.allow()) {
+    if (!instanceThrottle.allow()) {
       response.statusCode = 429;
       response.setHeader("content-type", "application/json; charset=utf-8");
       response.setHeader(
         "retry-after",
-        String(rateLimiter.retryAfterSeconds())
+        String(instanceThrottle.retryAfterSeconds())
       );
       response.end(
         JSON.stringify({

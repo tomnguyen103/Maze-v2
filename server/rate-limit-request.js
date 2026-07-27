@@ -1,5 +1,7 @@
-import { getDatabasePool } from "./database.js";
+import { createHash } from "node:crypto";
+import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { recordProductEvent } from "./product-events.js";
+import { UNMETERED } from "./rate-limit-config.js";
 import {
   createRateLimiter,
   createRateLimitStore
@@ -16,26 +18,31 @@ import { createAddressHasher } from "./request-identity.js";
  * }} RateLimitDecision
  *
  * @typedef {(
- *   budget: import("./rate-limit.js").RateLimitBudget,
+ *   budget: import("./rate-limit-config.js").RateLimitBudget,
  *   request: import("node:http").IncomingMessage,
  *   userId?: string | null
  * ) => Promise<RateLimitDecision>} RateLimit
  */
 
 /**
- * Decision returned when no counter store is configured, or when the caller
- * cannot be identified. Both admit the request: rate limiting is protective,
- * and refusing play because the limiter is unavailable is the worse failure.
+ * Guest metering needs a salt that is stable across serverless containers, or
+ * the same address lands in a different bucket per invocation and the limit
+ * never bites. `DATABASE_URL` is already a server-only secret with exactly that
+ * lifetime, so it is the default source. `REQUEST_ADDRESS_SALT` overrides it —
+ * set that when the connection string may rotate independently.
  *
- * @type {RateLimitDecision}
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @param {string} connectionString
  */
-const ADMITTED = {
-  allowed: true,
-  degraded: true,
-  limit: 0,
-  remaining: 0,
-  retryAfterSeconds: 0
-};
+function addressSaltFor(env, connectionString) {
+  const configured = env.REQUEST_ADDRESS_SALT;
+  if (configured) {
+    return configured;
+  }
+  return createHash("sha256")
+    .update(`echo-maze:request-address:${connectionString}`)
+    .digest("hex");
+}
 
 /**
  * Builds the `rateLimit(budget, request, userId)` function that route handlers
@@ -48,26 +55,16 @@ export function createRequestRateLimiter(env = process.env) {
   const connectionString = env.DATABASE_URL;
   if (!connectionString) {
     // Guest play works without a database; so must the limiter.
-    return async () => ADMITTED;
+    return async () => UNMETERED;
   }
-  const pool = getDatabasePool(connectionString);
   const limiter = createRateLimiter({
-    store: createRateLimitStore({
-      /**
-       * @param {string} sql
-       * @param {unknown[]} [values]
-       */
-      async query(sql, values) {
-        const result = await pool.query(sql, values);
-        return {
-          rows: /** @type {Record<string, unknown>[]} */ (result.rows)
-        };
-      }
-    }),
+    store: createRateLimitStore(
+      createQueryAdapter(getDatabasePool(connectionString))
+    ),
     onLimited: (details) => recordProductEvent("rate_limit_hit", details)
   });
   const addressHashFor = createAddressHasher({
-    salt: env.REQUEST_ADDRESS_SALT ?? "",
+    salt: addressSaltFor(env, connectionString),
     trustProxy: env.TRUST_PROXY_HEADERS === "true"
   });
 
@@ -82,7 +79,7 @@ export function createRequestRateLimiter(env = process.env) {
 
 /**
  * @param {import("node:http").ServerResponse} response
- * @param {{ retryAfterSeconds: number, limit: number }} decision
+ * @param {{ retryAfterSeconds: number }} decision
  * @param {string} message
  */
 export function sendRateLimited(response, decision, message) {

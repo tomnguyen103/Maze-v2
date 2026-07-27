@@ -6,7 +6,7 @@ import {
 } from "./clerk-webhook-route.js";
 import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
-import { getDatabasePool } from "./database.js";
+import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
@@ -99,24 +99,7 @@ export function createPlayerApi(env = process.env) {
 
   const pool = getDatabasePool(connectionString);
   const rateLimit = createRequestRateLimiter(env);
-  /** @type {{
-   *   query: (
-   *     sql: string,
-   *     values?: unknown[]
-   *   ) => Promise<{ rows: Record<string, unknown>[] }>
-   * }} */
-  const queryAdapter = {
-    /**
-     * @param {string} sql
-     * @param {unknown[]} [values]
-     */
-    async query(sql, values) {
-      const result = await pool.query(sql, values);
-      return {
-        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
-      };
-    }
-  };
+  const queryAdapter = createQueryAdapter(pool);
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
   const lifetimeStore = createLifetimeStore(pool);

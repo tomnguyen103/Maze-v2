@@ -7,6 +7,7 @@ import {
 } from "./lifetime-service.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { SYSTEM_ACTORS } from "./audit.js";
+import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 
 export const LIFETIME_PATHS = new Set([
@@ -39,13 +40,7 @@ export function createLifetimeHandler({
   getUserId,
   service,
   recordAudit = async () => {},
-  rateLimit = async () => ({
-    allowed: true,
-    degraded: true,
-    limit: 0,
-    remaining: 0,
-    retryAfterSeconds: 0
-  })
+  rateLimit = async () => UNMETERED
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request

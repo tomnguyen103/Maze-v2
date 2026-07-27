@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   clerkHostFromPublishableKey,
@@ -59,10 +60,51 @@ describe("contentSecurityPolicy", () => {
     expect(policy.get("frame-ancestors")).toEqual(["'none'"]);
   });
 
-  it("never permits inline or eval'd script", () => {
-    const policy = contentSecurityPolicy({ clerkHost: "x.clerk.accounts.dev" });
-    expect(policy).not.toContain("'unsafe-inline'");
-    expect(policy).not.toContain("'unsafe-eval'");
+  it("never permits inline or eval'd script, with or without Clerk", () => {
+    for (const options of [{}, { clerkHost: "x.clerk.accounts.dev" }]) {
+      const policy = directives(contentSecurityPolicy(options));
+      expect(policy.get("script-src")).not.toContain("'unsafe-inline'");
+      expect(policy.get("script-src")).not.toContain("'unsafe-eval'");
+      expect(contentSecurityPolicy(options)).not.toContain("'unsafe-eval'");
+    }
+  });
+
+  it("permits inline style only once Clerk is configured", () => {
+    // Clerk's UI bundle injects its own <style> at runtime. Our own markup and
+    // CSS carry none, so the guest-only deployment keeps the stricter policy.
+    expect(directives(contentSecurityPolicy({})).get("style-src")).toEqual([
+      "'self'"
+    ]);
+    expect(
+      directives(
+        contentSecurityPolicy({ clerkHost: "x.clerk.accounts.dev" })
+      ).get("style-src")
+    ).toEqual(["'self'", "'unsafe-inline'"]);
+  });
+
+  it("permits Clerk telemetry only once Clerk is configured", () => {
+    expect(
+      directives(
+        contentSecurityPolicy({ clerkHost: "x.clerk.accounts.dev" })
+      ).get("connect-src")
+    ).toContain("https://clerk-telemetry.com");
+    expect(contentSecurityPolicy({})).not.toContain("clerk-telemetry");
+  });
+
+  it("allows everything the Clerk sign-in surface needs", () => {
+    // Derived from what src/player/clerk-browser.js actually does: it injects a
+    // script tag from the instance host and Clerk frames its own components.
+    const host = "bright-fox-42.clerk.accounts.dev";
+    const policy = directives(contentSecurityPolicy({ clerkHost: host }));
+    expect(policy.get("script-src")).toContain(`https://${host}`);
+    expect(policy.get("connect-src")).toContain(`https://${host}`);
+    expect(policy.get("frame-src")).toContain(`https://${host}`);
+    expect(policy.get("frame-src")).toContain(
+      "https://challenges.cloudflare.com"
+    );
+    expect(policy.get("style-src")).toContain("'unsafe-inline'");
+    expect(policy.get("img-src")).toContain("https://img.clerk.com");
+    expect(policy.get("worker-src")).toContain("blob:");
   });
 
   it("permits the Stripe-hosted Checkout redirect as a form target only", () => {
@@ -205,5 +247,65 @@ describe("createSecurityHeadersMiddleware", () => {
     expect(applied["strict-transport-security"]).toBe(
       "max-age=31536000; includeSubDomains"
     );
+  });
+});
+
+describe("vercel.json header parity", () => {
+  it("declares the same header names the middleware sets", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    const declared = new Set(
+      config.headers[0].headers.map(
+        (/** @type {{ key: string }} */ header) => header.key.toLowerCase()
+      )
+    );
+    for (const name of Object.keys(securityHeaders({ production: true }))) {
+      expect(declared).toContain(name);
+    }
+  });
+
+  it("keeps every non-Clerk CSP directive byte-identical to the middleware", async () => {
+    // vercel.json cannot derive the Clerk host, so its Clerk-bearing directives
+    // use wildcards on purpose. Everything else must not drift.
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    const edge = directives(
+      config.headers[0].headers.find(
+        (/** @type {{ key: string }} */ header) =>
+          header.key === "Content-Security-Policy"
+      ).value
+    );
+    const code = directives(
+      contentSecurityPolicy({
+        clerkHost: "bright-fox-42.clerk.accounts.dev",
+        production: true
+      })
+    );
+    const clerkBearing = new Set([
+      "script-src",
+      "connect-src",
+      "frame-src",
+      "img-src",
+      "style-src"
+    ]);
+    expect([...code.keys()].sort()).toEqual([...edge.keys()].sort());
+    for (const [name, value] of code) {
+      if (!clerkBearing.has(name)) {
+        expect(edge.get(name)).toEqual(value);
+      }
+    }
+  });
+
+  it("mirrors the Permissions-Policy feature list exactly", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    const edge = config.headers[0].headers.find(
+      (/** @type {{ key: string }} */ header) =>
+        header.key === "Permissions-Policy"
+    ).value;
+    expect(edge).toBe(securityHeaders({})["permissions-policy"]);
   });
 });

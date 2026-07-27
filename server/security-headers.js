@@ -60,10 +60,16 @@ export function contentSecurityPolicy({ clerkHost = null, production = false }) 
     // Stripe-hosted Checkout is reached by redirect, never by script.
     ["form-action", ["'self'", "https://checkout.stripe.com"]],
     ["script-src", ["'self'", ...clerkOrigin]],
-    ["style-src", ["'self'"]],
+    // Our own markup and CSS carry no inline style. Clerk's UI bundle injects
+    // its own <style> at runtime, so inline style is permitted only once a Clerk
+    // host is configured. script-src never gets this concession.
+    ["style-src", clerkHost ? ["'self'", "'unsafe-inline'"] : ["'self'"]],
     ["font-src", ["'self'"]],
     ["img-src", ["'self'", "data:", ...clerkImages]],
-    ["connect-src", ["'self'", ...clerkOrigin]],
+    [
+      "connect-src",
+      ["'self'", ...clerkOrigin, ...(clerkHost ? ["https://clerk-telemetry.com"] : [])]
+    ],
     // Clerk runs its telemetry and crypto helpers in blob workers.
     ["worker-src", ["'self'", "blob:"]],
     // Clerk hosts sign-in components and bot protection in frames.

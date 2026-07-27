@@ -1,21 +1,12 @@
+import {
+  RATE_LIMIT_BUDGETS,
+  UNMETERED
+} from "./rate-limit-config.js";
 import { safeErrorName } from "./safe-error-log.js";
 
-/**
- * Per-budget allowances. Generous on purpose: these protect the database and
- * the question provider from abuse, and normal play must never reach them. The
- * e2e suite is what proves that second half.
- *
- * `export.self` is consumed by the phase 6 data-export endpoint.
- */
-export const RATE_LIMIT_BUDGETS = {
-  "question.fetch": { limit: 30, windowMs: 60_000 },
-  "score.submit": { limit: 10, windowMs: 60_000 },
-  "lifetime.checkout": { limit: 5, windowMs: 60_000 },
-  "profile.write": { limit: 10, windowMs: 60_000 },
-  "export.self": { limit: 2, windowMs: 3_600_000 }
-};
+export { RATE_LIMIT_BUDGETS, UNMETERED };
 
-/** @typedef {keyof typeof RATE_LIMIT_BUDGETS} RateLimitBudget */
+/** @typedef {import("./rate-limit-config.js").RateLimitBudget} RateLimitBudget */
 
 /**
  * Start of the fixed window containing `timestamp`, as an ISO string so it is
@@ -78,29 +69,20 @@ export function createRateLimiter({
       if (!key) {
         // One shared bucket for every unidentifiable caller would let a single
         // abuser lock out everyone else, which is worse than not metering.
-        return {
-          allowed: true,
-          degraded: true,
-          limit: budget.limit,
-          remaining: budget.limit,
-          retryAfterSeconds: 0
-        };
+        return { ...UNMETERED, limit: budget.limit, remaining: budget.limit };
       }
-      const timestamp = now();
-      const windowStart = windowStartFor(timestamp, budget.windowMs);
+      const requestedAt = now();
       let count;
+      let windowStart;
       try {
-        ({ count } = await store.increment(key, windowStart));
+        ({ count, windowStart } = await store.increment(
+          key,
+          windowStartFor(requestedAt, budget.windowMs)
+        ));
       } catch (error) {
         // Rate limiting must never take down play. Admit and say so.
         onFailure({ budget: budgetName, name: safeErrorName(error) });
-        return {
-          allowed: true,
-          degraded: true,
-          limit: budget.limit,
-          remaining: budget.limit,
-          retryAfterSeconds: 0
-        };
+        return { ...UNMETERED, limit: budget.limit, remaining: budget.limit };
       }
       const allowed = count <= budget.limit;
       if (!allowed) {
@@ -109,6 +91,9 @@ export function createRateLimiter({
           scope: caller.userId ? "user" : "ip"
         });
       }
+      // Derived from the window the row actually settled on, not the one this
+      // request computed, so a request delayed across a boundary still reports
+      // the real time until reset.
       const windowEnds = Date.parse(windowStart) + budget.windowMs;
       return {
         allowed,
@@ -117,7 +102,7 @@ export function createRateLimiter({
         remaining: Math.max(0, budget.limit - count),
         retryAfterSeconds: allowed
           ? 0
-          : Math.max(1, Math.ceil((windowEnds - timestamp) / 1000))
+          : Math.max(1, Math.ceil((windowEnds - now()) / 1000))
       };
     }
   };
@@ -137,6 +122,11 @@ export function createRateLimiter({
 export function createRateLimitStore(pool) {
   return {
     /**
+     * The count resets only when the stored window is strictly OLDER than the
+     * incoming one, and `window_start` never moves backwards. A request delayed
+     * across a boundary — pool saturation, container clock skew — would
+     * otherwise rewind a fresh window to 1 and hand out a free budget.
+     *
      * @param {string} key
      * @param {string} windowStart
      */
@@ -146,19 +136,26 @@ export function createRateLimitStore(pool) {
          VALUES ($1, $2, 1)
          ON CONFLICT (key) DO UPDATE
            SET count = CASE
-                 WHEN rate_limit_counters.window_start = EXCLUDED.window_start
-                   THEN rate_limit_counters.count + 1
-                 ELSE 1
+                 WHEN rate_limit_counters.window_start < EXCLUDED.window_start
+                   THEN 1
+                 ELSE rate_limit_counters.count + 1
                END,
-               window_start = EXCLUDED.window_start,
+               window_start = GREATEST(
+                 rate_limit_counters.window_start,
+                 EXCLUDED.window_start
+               ),
                updated_at = now()
          RETURNING count, window_start`,
         [key, windowStart]
       );
       const row = result.rows[0] ?? {};
+      const settled = row.window_start;
       return {
         count: Number(row.count ?? 1),
-        windowStart: String(row.window_start ?? windowStart)
+        windowStart:
+          settled instanceof Date
+            ? settled.toISOString()
+            : String(settled ?? windowStart)
       };
     },
 

@@ -4,6 +4,7 @@ import {
   validateScoreInput
 } from "./player-validation.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
 
@@ -76,15 +77,6 @@ function isUniqueViolation(error) {
     error.code === "23505"
   );
 }
-
-/** @type {import("./rate-limit-request.js").RateLimitDecision} */
-const UNMETERED = {
-  allowed: true,
-  degraded: true,
-  limit: 0,
-  remaining: 0,
-  retryAfterSeconds: 0
-};
 
 /**
  * @param {{

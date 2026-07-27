@@ -10,7 +10,10 @@
 // Usage: node scripts/prune-rate-limits.mjs [--older-than-hours 24]
 
 import { Pool } from "pg";
-import { normalizeDatabaseConnectionString } from "../server/database.js";
+import {
+  createQueryAdapter,
+  normalizeDatabaseConnectionString
+} from "../server/database.js";
 import { createRateLimitStore } from "../server/rate-limit.js";
 
 const HOURS_ARGUMENT = process.argv.indexOf("--older-than-hours");
@@ -33,18 +36,7 @@ const pool = new Pool({
 });
 
 try {
-  const store = createRateLimitStore({
-    /**
-     * @param {string} sql
-     * @param {unknown[]} [values]
-     */
-    async query(sql, values) {
-      const result = await pool.query(sql, values);
-      return {
-        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
-      };
-    }
-  });
+  const store = createRateLimitStore(createQueryAdapter(pool));
   const pruned = await store.prune({ olderThanMs: hours * 60 * 60 * 1000 });
   console.log(`PRUNED ${pruned} rate-limit counters older than ${hours}h.`);
 } catch (error) {

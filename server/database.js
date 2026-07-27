@@ -11,6 +11,29 @@ export function normalizeDatabaseConnectionString(connectionString) {
   return url.toString();
 }
 
+/**
+ * Narrows a `pg` pool or client to the query-only shape the stores expect, so
+ * each store can be exercised against a plain fake in tests.
+ *
+ * @param {{
+ *   query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }>
+ * }} pool
+ */
+export function createQueryAdapter(pool) {
+  return {
+    /**
+     * @param {string} sql
+     * @param {unknown[]} [values]
+     */
+    async query(sql, values) {
+      const result = await pool.query(sql, values);
+      return {
+        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
+      };
+    }
+  };
+}
+
 /** @type {Map<string, import("pg").Pool>} */
 const sharedPools = new Map();
 
