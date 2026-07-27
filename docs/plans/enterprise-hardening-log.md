@@ -163,7 +163,11 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 5. **Sentry source-map upload is documented, not scripted** — it needs
    `@sentry/cli`, also not on the allowed list; the Vercel Sentry
    integration covers it in deployment.
-6. **New env vars** (all optional): `LOG_LEVEL`,
+6. **Log lines carry no user id.** The plan's "user id when known" would
+   require logging after Clerk authentication resolves; the request line is
+   emitted by pre-auth middleware. `request_id` joins a request to its audit
+   rows, which do carry the actor — that is the correlation the plan wanted.
+7. **New env vars** (all optional): `LOG_LEVEL`,
    `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
    `SENTRY_DSN`, `VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`,
    `POSTHOG_API_KEY`, `POSTHOG_HOST`. Documented in

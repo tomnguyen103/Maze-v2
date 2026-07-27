@@ -49,6 +49,9 @@ OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64 instance:token>
 
 Initialisation happens in `server/telemetry-bootstrap.js`, the first import
 of `server/player-api.js`, so instrumentation registers before `pg` loads.
+`pg` is a CommonJS package, which the require hook patches; if a future
+pure-ESM dependency needs spans, register the loader hook explicitly
+(`NODE_OPTIONS=--import @opentelemetry/instrumentation/hook.mjs`).
 
 ## Error tracking
 

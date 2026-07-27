@@ -85,6 +85,11 @@ export function createPostHogForwarder(
     if (!SERVER_TRUSTED_EVENTS.has(name)) {
       return;
     }
+    const properties = /** @type {Record<string, unknown>} */ ({
+      ...event,
+      source: "server"
+    });
+    delete properties.event;
     void fetcher(`${host}/capture/`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -94,7 +99,7 @@ export function createPostHogForwarder(
         // Aggregate-only by design: product events carry no caller identity,
         // so there is no honest per-user distinct id to send.
         distinct_id: "echo-maze-server",
-        properties: { ...event, source: "server" }
+        properties
       }),
       signal: AbortSignal.timeout(3000)
     }).catch(() => {});

@@ -1,4 +1,4 @@
-import { pino } from "pino";
+import { destination as pinoDestination, pino } from "pino";
 import { safeErrorName } from "./safe-error-log.js";
 
 /**
@@ -30,5 +30,9 @@ export function createLogger(env = globalThis.process.env, destination) {
     },
     timestamp: pino.stdTimeFunctions.isoTime
   };
-  return destination ? pino(options, destination) : pino(options);
+  // Synchronous stdout on purpose: the request line is written in a
+  // response-finish listener, exactly the window where a serverless function
+  // can be frozen after `end()` — pino's default async destination could
+  // lose it.
+  return pino(options, destination ?? pinoDestination({ sync: true }));
 }

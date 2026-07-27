@@ -1,11 +1,5 @@
 import { defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
-import { createQuestionHandler } from "./server/question-route.js";
-import { createQuestionService } from "./server/question-service.js";
-import { createPlayerApi } from "./server/player-api.js";
-import { createRequestRateLimiter } from "./server/rate-limit-request.js";
-import { logProviderFallback } from "./server/safe-error-log.js";
-import { createSecurityHeadersMiddleware } from "./server/security-headers.js";
 
 export default defineConfig(({ mode }) => {
   const base = {
@@ -37,39 +31,57 @@ export default defineConfig(({ mode }) => {
 
   /**
    * Built when a dev or preview server actually starts, never at config load:
-   * config evaluation must stay side-effect free.
+   * config evaluation must stay side-effect free. The server modules are
+   * imported dynamically for the same reason — a static import would
+   * evaluate `server/telemetry-bootstrap.js` (and everything else the player
+   * API pulls in) inside every vitest and build process.
    *
-   * @type {{
-   *   securityHeaders: ReturnType<typeof createSecurityHeadersMiddleware>,
-   *   questionHandler: ReturnType<typeof createQuestionHandler>,
-   *   playerApi: ReturnType<typeof createPlayerApi>
-   * } | null}
+   * @type {Promise<{
+   *   securityHeaders: ReturnType<typeof import("./server/security-headers.js")["createSecurityHeadersMiddleware"]>,
+   *   questionHandler: ReturnType<typeof import("./server/question-route.js")["createQuestionHandler"]>,
+   *   playerApi: ReturnType<typeof import("./server/player-api.js")["createPlayerApi"]>
+   * }> | null}
    */
   let middlewares = null;
   const buildMiddlewares = () => {
-    if (middlewares) {
-      return middlewares;
-    }
-    const env = {
-      ...globalThis.process.env,
-      ...loadEnv(mode, globalThis.process.cwd(), "")
-    };
-    middlewares = {
-      securityHeaders: createSecurityHeadersMiddleware(env),
-      questionHandler: createQuestionHandler(
-        createQuestionService({
-          env,
-          onProviderError: logProviderFallback
-        }),
-        { rateLimit: createRequestRateLimiter(env) }
-      ),
-      playerApi: createPlayerApi(env)
-    };
+    middlewares ??= (async () => {
+      const [
+        { createQuestionHandler },
+        { createQuestionService },
+        { createPlayerApi },
+        { createRequestRateLimiter },
+        { logProviderFallback },
+        { createSecurityHeadersMiddleware }
+      ] = await Promise.all([
+        import("./server/question-route.js"),
+        import("./server/question-service.js"),
+        import("./server/player-api.js"),
+        import("./server/rate-limit-request.js"),
+        import("./server/safe-error-log.js"),
+        import("./server/security-headers.js")
+      ]);
+      const env = {
+        ...globalThis.process.env,
+        ...loadEnv(mode, globalThis.process.cwd(), "")
+      };
+      return {
+        securityHeaders: createSecurityHeadersMiddleware(env),
+        questionHandler: createQuestionHandler(
+          createQuestionService({
+            env,
+            onProviderError: logProviderFallback
+          }),
+          { rateLimit: createRequestRateLimiter(env) }
+        ),
+        playerApi: createPlayerApi(env)
+      };
+    })();
     return middlewares;
   };
   /** @param {import("vite").ViteDevServer | import("vite").PreviewServer} server */
-  const applyMiddlewares = (server) => {
-    const { securityHeaders, questionHandler, playerApi } = buildMiddlewares();
+  const applyMiddlewares = async (server) => {
+    const { securityHeaders, questionHandler, playerApi } =
+      await buildMiddlewares();
     server.middlewares.use(securityHeaders);
     server.middlewares.use(questionHandler);
     server.middlewares.use(playerApi);

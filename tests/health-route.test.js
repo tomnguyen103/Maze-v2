@@ -110,6 +110,19 @@ describe("readiness", () => {
     expect(body).not.toContain("ECONNREFUSED");
   });
 
+  it("bounds a stalled database check instead of hanging the endpoint", async () => {
+    const handler = createHealthHandler({
+      ...healthy(),
+      checkDatabase: () => new Promise(() => {}),
+      checkTimeoutMs: 20
+    });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.database).toBe("failed");
+    expect(response.writableEnded).toBe(true);
+  });
+
   it("reports an unconfigured database as unavailable", async () => {
     const handler = createHealthHandler({
       ...healthy(),

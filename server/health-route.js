@@ -29,14 +29,16 @@ function sendJson(response, status, body) {
  *   version: string,
  *   checkDatabase: (() => Promise<unknown>) | null,
  *   stripeConfigured: boolean,
- *   clerkConfigured: boolean
+ *   clerkConfigured: boolean,
+ *   checkTimeoutMs?: number
  * }} dependencies
  */
 export function createHealthHandler({
   version,
   checkDatabase,
   stripeConfigured,
-  clerkConfigured
+  clerkConfigured,
+  checkTimeoutMs = 3000
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -62,7 +64,19 @@ export function createHealthHandler({
     let database = "unconfigured";
     if (checkDatabase) {
       try {
-        await checkDatabase();
+        // Bounded: a database that accepts the connection but stalls must
+        // surface as a 503 with detail, not hold this endpoint open until
+        // the platform timeout.
+        await Promise.race([
+          checkDatabase(),
+          new Promise((_resolve, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error("readiness check timed out")),
+              checkTimeoutMs
+            );
+            timer.unref?.();
+          })
+        ]);
         database = "ok";
       } catch {
         // The failure reason may quote connection details; the per-check
