@@ -19,14 +19,21 @@ const PLATFORM_PROVIDED = new Set([
   "VERCEL_GIT_COMMIT_SHA"
 ]);
 
-/** @param {string} directory @returns {string[]} */
+/**
+ * @param {string} directory
+ * @returns {string[]}
+ */
 function sourceFiles(directory) {
   return readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) {
       return sourceFiles(path);
     }
-    return path.endsWith(".js") ? [path] : [];
+    // Declaration files describe env vars rather than reading them; every
+    // other module extension counts, so a future .ts cannot escape the scan.
+    return /\.(js|jsx|ts|tsx)$/.test(path) && !path.endsWith(".d.ts")
+      ? [path]
+      : [];
   });
 }
 
