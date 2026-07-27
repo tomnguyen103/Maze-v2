@@ -89,6 +89,19 @@ describe("renderAdmin", () => {
     expect(loadProfile).not.toHaveBeenCalled();
   });
 
+  it("denies on the default dependencies without reloading the page", async () => {
+    // Regression: the default Clerk browser calls its onChange on every load,
+    // so a reloading callback here looped forever in any keyed environment.
+    const reload = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...window.location, reload }
+    });
+    await renderAdmin(root);
+    expect(reload).not.toHaveBeenCalled();
+    expect(root.dataset.adminState).toBe("role");
+  });
+
   it("escapes the role it echoes back", async () => {
     await renderAdmin(root, {
       clerk: stubClerk("admin"),

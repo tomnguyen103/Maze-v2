@@ -22,6 +22,10 @@ const DENIAL_COPY = {
  * frame and the guard, and nothing here fetches admin data — a denied Explorer
  * causes no admin request at all.
  *
+ * Staff, not admins alone: the gate is `audit:read`, so a moderator reaches the
+ * shell and then sees only what their own permissions allow, the same way
+ * `isStaff` gates staff UI elsewhere.
+ *
  * @param {HTMLElement} root
  * @param {{
  *   clerk?: { initialize: () => Promise<boolean>, mirroredRole: unknown },
@@ -29,53 +33,69 @@ const DENIAL_COPY = {
  * }} [dependencies]
  */
 export async function renderAdmin(root, dependencies = {}) {
-  const clerk =
-    dependencies.clerk ??
-    createClerkBrowser({
-      onChange: () => {
-        window.location.reload();
-      }
-    });
+  // No onChange: the default reloads on every Clerk load, and this page has no
+  // sign-in affordance to change state from. Phase 7 revisits that when it adds
+  // one.
+  const clerk = dependencies.clerk ?? createClerkBrowser();
   const loadProfile =
     dependencies.loadProfile ??
     (() =>
-      createPlayerApiClient({ getToken: () => clerkToken(clerk) }).getProfile());
+      createPlayerApiClient({
+        getToken: async () => {
+          const token = await /** @type {{ getToken?: () => Promise<unknown> }} */ (
+            clerk
+          ).getToken?.();
+          return typeof token === "string" ? token : null;
+        }
+      }).getProfile());
 
-  renderFrame(root, `<p class="admin-status" role="status">Checking access…</p>`);
-  // Clerk has to load before the mirror exists; a failure to load is simply an
+  renderFrame(root, "Checking access…");
+  // Clerk has to load before the mirror exists. A failure to load leaves an
   // Explorer with no claim, which the guard already denies.
-  await callIfPresent(clerk, "initialize");
+  try {
+    await clerk.initialize();
+  } catch {
+    // Denial is the right outcome, so there is nothing to report here.
+  }
   const result = await resolveAdminAccess({
-    mirroredRole: mirroredRoleOf(clerk),
+    mirroredRole: clerk.mirroredRole,
     loadProfile
   });
   if (result.state === "denied") {
     const copy = DENIAL_COPY[result.reason];
-    renderFrame(
-      root,
-      `<h1>${copy.title}</h1>
-       <p>${copy.body}</p>
-       <a class="primary-button" href="/">Back to Echo Maze</a>`,
-      result.reason
-    );
+    renderFrame(root, copy.body, result.reason, copy.title, true);
     return result;
   }
   renderFrame(
     root,
-    `<h1>Admin</h1>
-     <p>Signed in as ${escapeHtml(roleOf(result.access))}.</p>
-     <p class="admin-status" role="status">No admin tools are wired up yet.</p>`,
-    "allowed"
+    "No admin tools are wired up yet.",
+    "allowed",
+    "Admin",
+    false,
+    `Signed in as ${roleOf(result.access)}.`
   );
   return result;
 }
 
 /**
+ * Dynamic text goes in through `textContent`, never through the template, so
+ * a role string out of Clerk cannot become markup.
+ *
  * @param {HTMLElement} root
- * @param {string} inner
+ * @param {string} status
  * @param {string} [state]
+ * @param {string} [title]
+ * @param {boolean} [withHomeLink]
+ * @param {string} [detail]
  */
-function renderFrame(root, inner, state = "checking") {
+function renderFrame(
+  root,
+  status,
+  state = "checking",
+  title = "Admin",
+  withHomeLink = false,
+  detail = ""
+) {
   root.dataset.adminState = state;
   root.innerHTML = `
     <a class="skip-link" href="#admin-main">Skip to the admin area</a>
@@ -84,60 +104,31 @@ function renderFrame(root, inner, state = "checking") {
     </header>
     <main class="landing-page" id="admin-main">
       <p class="section-label">Admin</p>
-      ${inner}
+      <h1 id="admin-title"></h1>
+      <p id="admin-detail"${detail ? "" : " hidden"}></p>
+      <p class="admin-status" id="admin-status" role="status"></p>
+      ${withHomeLink ? '<a class="primary-button" href="/">Back to Echo Maze</a>' : ""}
     </main>
   `;
-}
-
-/** @param {unknown} clerk */
-function mirroredRoleOf(clerk) {
-  const source = /** @type {Record<string, unknown>} */ (clerk ?? {});
-  if ("mirroredRole" in source) {
-    return source.mirroredRole;
-  }
-  return null;
+  setText(root, "#admin-title", title);
+  setText(root, "#admin-detail", detail);
+  setText(root, "#admin-status", status);
 }
 
 /**
- * @param {unknown} target
- * @param {string} method
+ * @param {HTMLElement} root
+ * @param {string} selector
+ * @param {string} text
  */
-async function callIfPresent(target, method) {
-  const source = /** @type {Record<string, unknown>} */ (target ?? {});
-  const candidate = source[method];
-  if (typeof candidate !== "function") {
-    return null;
+function setText(root, selector, text) {
+  const element = root.querySelector(selector);
+  if (element) {
+    element.textContent = text;
   }
-  try {
-    return await candidate.call(target);
-  } catch {
-    return null;
-  }
-}
-
-/** @param {unknown} clerk */
-async function clerkToken(clerk) {
-  const token = await callIfPresent(clerk, "getToken");
-  return typeof token === "string" ? token : null;
 }
 
 /** @param {unknown} access */
 function roleOf(access) {
   const role = /** @type {Record<string, unknown>} */ (access ?? {}).role;
   return typeof role === "string" ? role : "staff";
-}
-
-/** @param {string} value */
-function escapeHtml(value) {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      })[character] ?? character
-  );
 }

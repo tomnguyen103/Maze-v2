@@ -10,6 +10,9 @@ const budgets = [
   { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 30 },
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 12 },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
+  // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
+  // grows against a number rather than unpoliced.
+  { label: "admin JavaScript", prefix: "admin-controller-", suffix: ".js", maxKb: 20 },
   // Exists only when VITE_SENTRY_DSN was set at build time; an unset DSN
   // eliminates the chunk, so absence is a pass, not a missing asset.
   {
