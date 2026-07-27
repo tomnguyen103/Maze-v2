@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import access from "../api/access.js";
 import admin from "../api/admin.js";
 import leaderboard from "../api/leaderboard.js";
+import profile from "../api/profile.js";
 import stripeWebhook from "../api/stripe-webhook.js";
 
 describe("Vercel function budget", () => {
@@ -158,6 +159,54 @@ describe("Vercel function budget", () => {
         })
       );
       await leaderboard(request, response);
+      expect(request.url).toBe(expectedUrl);
+      await expect(finished).resolves.toBe(expectedStatus);
+    }
+  });
+
+  it("routes the personal-data namespace through the profile function", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    expect(config.rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: "/api/me/export",
+          destination: "/api/profile?_meRoute=export"
+        }
+      ])
+    );
+
+    for (const [incoming, expectedUrl, expectedStatus] of [
+      // 503, not a hang: this shim runs without DATABASE_URL in unit tests.
+      ["/api/profile?_meRoute=export", "/api/me/export", 503],
+      // The rewritten value is attacker-controlled: anything unknown must be
+      // answered, never fall through to a next?.() that does not exist.
+      [
+        "/api/profile?_meRoute=../secret",
+        "/api/profile?_meRoute=../secret",
+        404
+      ]
+    ]) {
+      const request = /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ ({ method: "GET", url: incoming, headers: {} })
+      );
+      /** @type {(status: number) => void} */
+      let settle = () => {};
+      const finished = new Promise((resolve) => {
+        settle = resolve;
+      });
+      const response = /** @type {import("node:http").ServerResponse} */ (
+        /** @type {unknown} */ ({
+          statusCode: 0,
+          setHeader() {},
+          on() {},
+          end() {
+            settle(response.statusCode);
+          }
+        })
+      );
+      await profile(request, response);
       expect(request.url).toBe(expectedUrl);
       await expect(finished).resolves.toBe(expectedStatus);
     }

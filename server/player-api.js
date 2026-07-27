@@ -22,6 +22,11 @@ import {
   createRequestAuditor,
   SYSTEM_ACTORS
 } from "./audit.js";
+import { buildUserExport } from "./data-export.js";
+import {
+  createDataExportHandler,
+  DATA_EXPORT_PATH
+} from "./data-export-route.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
@@ -71,6 +76,7 @@ const PLAYER_PATHS = new Set([
   "/api/profile",
   "/api/leaderboard",
   "/api/scores",
+  DATA_EXPORT_PATH,
   LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
@@ -214,6 +220,12 @@ export function createPlayerApi(env = process.env) {
     getUserId,
     recordAudit
   });
+  const dataExportHandler = createDataExportHandler({
+    exportUser: (userId) => buildUserExport(queryAdapter, userId),
+    getUserId,
+    rateLimit,
+    recordAudit
+  });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
   const lifetimeService = lifetimeConfig
@@ -341,6 +353,12 @@ export function createPlayerApi(env = process.env) {
       store: questProgressStore,
       getUserId: () => null
     });
+    const unavailableDataExportHandler = createDataExportHandler({
+      exportUser: (userId) => buildUserExport(queryAdapter, userId),
+      getUserId: () => null,
+      rateLimit,
+      recordAudit
+    });
     /**
      * @param {import("node:http").IncomingMessage} request
      * @param {import("node:http").ServerResponse} response
@@ -385,6 +403,12 @@ export function createPlayerApi(env = process.env) {
       }
       if (pathname === LEARNING_JOURNAL_PATH) {
         void unavailableLearningJournalHandler(request, response, next);
+        return;
+      }
+      if (pathname === DATA_EXPORT_PATH) {
+        // No Clerk means no identity, so the export answers 401 rather than
+        // falling through.
+        void unavailableDataExportHandler(request, response, next);
         return;
       }
       if (QUEST_PROGRESS_PATHS.has(pathname)) {
@@ -468,6 +492,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (pathname === LEARNING_JOURNAL_PATH) {
           void learningJournalHandler(request, response, next);
+          return;
+        }
+        if (pathname === DATA_EXPORT_PATH) {
+          void dataExportHandler(request, response, next);
           return;
         }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {

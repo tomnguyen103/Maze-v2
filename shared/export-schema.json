@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "echo-maze-export/1",
+  "title": "Echo Maze personal data export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "data"],
+  "properties": {
+    "schema": { "const": "echo-maze-export/1" },
+    "generated_at": { "type": "string" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "scores",
+        "run_access",
+        "lifetime_purchases",
+        "quest_progress",
+        "journal",
+        "role"
+      ],
+      "properties": {
+        "profile": {
+          "description": "players row; null when no Player Profile exists.",
+          "type": ["object", "null"]
+        },
+        "scores": {
+          "description": "score_entries rows — every accepted Score Entry.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "run_access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["access", "grants"],
+          "properties": {
+            "access": {
+              "description": "player_access row; null before any signed-in Run.",
+              "type": ["object", "null"]
+            },
+            "grants": {
+              "description": "run_access_grants rows — every Run Grant.",
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          }
+        },
+        "lifetime_purchases": {
+          "description": "lifetime_purchases rows. Stripe identifiers only; no card data is ever stored.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "quest_progress": {
+          "description": "cloud_quest_progress row; null when Quest Continuity never synced.",
+          "type": ["object", "null"]
+        },
+        "journal": {
+          "description": "learning_journals row — the privacy-minimized Lantern Journal outcomes.",
+          "type": ["object", "null"]
+        },
+        "role": {
+          "description": "user_roles row; absence of a row means player.",
+          "enum": ["player", "moderator", "admin"]
+        }
+      }
+    }
+  }
+}
