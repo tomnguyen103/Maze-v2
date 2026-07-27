@@ -1,257 +1,16 @@
 # Enterprise hardening — execution log
 
-One entry per phase of `docs/plans/enterprise-hardening-plan.md`. Each entry
-records the PR, the local gate results, and any deviation from the plan with its
-reason.
+One entry per phase of `enterprise-hardening-plan.md`. Each entry records the
+PR, the local gate results, and any deviation from the plan with its reason.
+Entries are ordered by phase number; the test-infrastructure entry (PR #61,
+not a plan phase) sits between phases 4 and 5, where it landed chronologically.
 
 ---
 
-## Test infrastructure — stabilise the test gate
-
-- **PR**: #61 (merged)
-- **Branch**: `fix/stabilise-test-gate`
-- **ADR**: none — not a plan phase.
-
-### e2e flakiness (~1 in 3 full runs)
-
-Root cause found and fixed, not masked. `src/app.js` dynamically imports
-`src/main.js`, so `page.goto` resolves at the load event while the app is
-still initialising. `main.js` attaches its listeners at module evaluation, but
-the real Run is swapped in only when the async `initializeRunEntry()` resolves
-— which is exactly when `app.js` sets `data-game-ready="true"`. Input sent in
-that window moves the *placeholder* Run and is lost when the swap resets
-progress. Reproduced deterministically: a failing run's snapshot showed
-`Moves 002` after seven keypresses — five presses consumed by the placeholder,
-two by the real Run. Under Playwright's 16-worker parallelism the window
-between load and ready stretches, which is why the flake tracked machine load
-and hit whichever input-driving test was unlucky (chunk-load timing, Warden
-Challenge visibility, the guest second-Labyrinth invariant — all one class).
-
-Fix, two parts, both cause-level:
-
-1. Every e2e test that drives gameplay (keyboard, app buttons, synthetic
-   `online` events) now crosses an `expectGameReady` barrier — the
-   `data-game-ready` wait two tests already used — before its first
-   interaction. After this alone, eight full runs showed zero recurrences of
-   the original three flakes.
-2. The remaining intermittent failures were a second class: genuine load
-   starvation (app boot and Clerk initialisation stretching past their
-   bounds) from 16 workers × Chromium against one shared preview process on
-   32 logical cores. `workers: 8` in `playwright.config.mjs` bounds the
-   oversubscription, and the readiness barrier carries a 15s bound — the same
-   explicit-bound pattern `entry.spec.js` already used for Clerk
-   initialisation. Suite wall-clock stayed in the same range.
-
-A third, smaller class surfaced during validation: the two tests that drive
-Clerk's real development instance (SignIn modal, demo-gate handoff) fail when
-Clerk hangs or throttles — its remotely loaded `@clerk/ui` chunk is the same
-optional download `game.spec.js`'s console filter already tolerates. Both
-tests already skipped on *detectable* Clerk unavailability; their throwing
-polls are now deadline loops that reach the same skip on a silent hang, so an
-external outage shows up as one extra skip in the run summary instead of a
-red gate. They still run and assert normally whenever Clerk responds (most
-runs: 111 passed / 5 skipped; an outage run: 110 / 6).
-
-No retries were added anywhere. Verified by repeated full-suite runs (results
-under Gate).
-
-### Vitest unhandled-error fault
-
-Not reproduced despite 8 full-suite and 30 targeted runs; the mechanism was
-removed instead. `vite.config.mjs` built the entire player API at config
-evaluation — a real pg Pool against the `.env.local` `DATABASE_URL`, a Stripe
-client, and Clerk middleware — inside the vitest process, for a run that can
-never serve an HTTP request. That config-load side effect was the suspected
-source of the post-run "Vitest caught 1 unhandled error". Now: a `vitest` run
-(mode `test`) gets a config with no API plugin at all, and dev/preview modes
-build the middlewares lazily inside `configureServer` /
-`configurePreviewServer`, so config evaluation is side-effect free everywhere.
-`tests/vite-config.test.js` pins both behaviours. If the fault ever resurfaces
-it can no longer come from the config path, and the next occurrence should be
-captured verbatim before rerunning.
-
-The pre-push hook (`set -eu; npm run check`) still exits without naming the
-failed step; `.githooks` is out of scope for this task, so "the gate is green"
-and "the push landed" remain separate facts to verify per the workflow.
-
-### Pool construction in operational scripts
-
-`scripts/verify-audit-chain.mjs`, `scripts/prune-rate-limits.mjs`, and
-`scripts/grant-admin.mjs` built `new Pool(...)` before their `try`, so a
-malformed `DATABASE_URL` threw past the handler and exited 1 instead of the
-documented 2, and none bounded connection or query time. All three now match
-`prune-webhook-inbox.mjs` / `list-dead-webhooks.mjs`: pool constructed inside
-the handler, `max: 1`, `connectionTimeoutMillis: 10000`,
-`query_timeout: 60000`, `await pool?.end()` in `finally`.
-`tests/script-database-guard.test.js` spawns each script with a malformed URL
-and asserts exit code 2, and asserts the timeout bounds are present.
-
-### Gate
-
-- Flake measurement, before: 3 failures across 4 full e2e runs at HEAD of main
-  (three input-driving tests failing together in a bad run — the documented
-  ~1-in-3 rate).
-- Flake measurement, after: **10 consecutive green full e2e runs** with the
-  complete fix (and 11 consecutive green with all but the Clerk-outage skip
-  handling). The barrier-only intermediate state also showed zero
-  recurrences of the original three flakes across 8 runs; its two residual
-  failures (Clerk initialisation, readiness past a 5s default) drove the
-  worker cap and the explicit 15s bounds.
-- `npm run check`: green (602 unit tests / 11 skipped — 9 new).
-- `npm run check:full`: green.
-
-### Deviations
-
-- The task said to suspect the 16-worker parallelism; the diagnosis found TWO
-  causes and both were fixed at the cause: (1) tests injecting input before
-  the app's async Run swap (`data-game-ready`), which parallelism only
-  amplified, and (2) genuine oversubscription starving app boot and Clerk's
-  remotely loaded UI past their bounds, addressed with `workers: 8` and
-  explicit 15s bounds on the readiness barrier and the two Clerk modal
-  expectations. No retries anywhere; no existing assertion changed meaning.
-- The vitest fault was never reproduced (8 full + 30 targeted attempts), so
-  the fix removes the suspected mechanism (config-load side effects) and pins
-  it with tests rather than claiming a verified repro.
-
----
-
-## Phase 6 — GDPR data export
-
-- **PR**: #63
-- **Branch**: `feat/gdpr-export`
-- **ADR**: `docs/adr/0018-gdpr-data-export.md`
-- **Migration**: none.
-
-### Delivered
-
-- `server/data-export.js` — `buildUserExport` with explicit column lists per
-  section; every query binds the requesting user id; deleted accounts yield
-  empty sections.
-- `server/data-export-route.js` — `GET /api/me/export`, auth required,
-  `export.self` budget (2/hour), audited `export.self` before the body is
-  sent, `Content-Disposition: attachment`.
-- `shared/export-schema.json` — checked-in contract; the unit test pins the
-  builder's sections to the schema's required sections.
-- `vercel.json` rewrite `/api/me/export` → `profile` function with a
-  validated `_meRoute` (attacker-controlled-rewrite discipline, shim test
-  asserts both the rebuild and that unknown values are answered 404).
-- `docs/data-privacy.md`.
-- Tests: `data-export.test.js`, `data-export-route.test.js`, new cases in
-  `vercel-functions.test.js` and `player-api-integration.test.js`.
-
-### Gate
-
-- `npm run check`: green (652 unit tests / 11 skipped — 14 new), after
-  rebasing onto merged phase 5.
-- `npm run check:full`: green (111 e2e / 5 skipped).
-
-### CodeRabbit review
-
-Two findings plus one nitpick, all fixed:
-
-- **The export read from eight independent queries**, so a concurrent save
-  or deletion could produce sections describing different moments.
-  `exportUserSnapshot` now wraps every section read in one
-  `REPEATABLE READ READ ONLY` transaction — the same snapshot discipline
-  `verify-audit-chain.mjs` already uses — with rollback and client release
-  covered by tests.
-- `docs/data-privacy.md` implied runtime JSON-Schema validation; it now says
-  the envelope conforms to the checked-in contract and is structurally
-  pinned by test.
-- The audit-before-body sequencing was asserted only as "audit eventually
-  ran"; the test now records both events and asserts the order.
-
-### Deviations
-
-1. **No `api/me-export.js` file** — the Hobby ceiling (12/12) again; the
-   plan predates it. Rewrites onto the `profile` function.
-2. **Explorer Access Settings are not a section.** They are device-local and
-   never reach the server (phase 1 already recorded this); the export
-   documents the fact instead of shipping a permanently empty section.
-3. **`score_entries` and `user_roles` are exported** although the plan's
-   list omits them — the acceptance criterion "every user-owned table
-   represented" wins over the narrative list.
-4. **Schema validation is structural, not a JSON-Schema engine, and row
-   shapes are left generic.** Validating with `ajv` would need a new
-   dependency outside the allowed list. The test pins envelope keys, section
-   set, and schema `$id`. Declaring `properties` / `required` /
-   `additionalProperties` per row was considered and declined: it would
-   restate every column list already written in `SECTION_QUERIES`, giving two
-   sources of truth for the same contract with nothing binding them together
-   — the exact drift the explicit-column design exists to avoid. The SQL
-   stays normative for shape; the schema file documents the envelope.
-5. **The audit write is sequenced before the response body** so a served
-   export always has its audit attempt behind it — but the recorder keeps
-   phase 1's never-throw contract, so a failed audit write is logged and
-   counted, not converted into a 503.
-
----
-
-## Phase 5 — Observability
-
-- **PR**: #62
-- **Branch**: `feat/observability`
-- **ADR**: `docs/adr/0017-env-gated-observability.md`
-- **Migration**: none.
-
-### Delivered
-
-- `server/logger.js` (pino, redacting serializers), `server/request-log.js`
-  (`x-request-id` assign/echo, one structured line per owned request),
-  request id flowing into audit rows via the existing header read.
-- `server/health-route.js` — `/api/health` + `/api/ready`, dispatched first
-  in every `createPlayerApi` branch; `vercel.json` rewrites both onto the
-  `leaderboard` function with a validated `_healthRoute` parameter.
-- `server/tracing.js` + `server/error-tracking.js` +
-  `server/telemetry-bootstrap.js` — OTel and Sentry, env-gated behind
-  dynamic imports, bootstrap as the first import of `player-api.js`.
-- `src/error-reporting.js` — browser Sentry as a lazy build-time-optional
-  chunk; `scripts/check-bundle-budget.mjs` gained an `optional` budget kind.
-- `shared/telemetry-scrub.js` — one `beforeSend` scrubber for both sides.
-- `server/product-events.js` — PostHog forwarding of the two server-trusted
-  events via plain `fetch`, schema-filtered, fire-and-forget.
-- `docs/observability.md`; tests: `logger.test.js`, `request-log.test.js`,
-  `health-route.test.js`, `telemetry.test.js`, new cases in
-  `product-events.test.js`, `player-api-integration.test.js`,
-  `vercel-functions.test.js`.
-
-### Gate
-
-- `npm run check`: green (635 unit tests / 11 skipped — 29 new; bundle
-  budget passes with `SKIP optional Sentry: not built` by default).
-- `npm run check:full`: green (111 e2e / 5 skipped).
-
-### Deviations
-
-1. **No `api/health.js` / `api/ready.js`.** The plan predates the discovery
-   that phase 2 spent the last Hobby function slot. Health rewrites onto the
-   `leaderboard` function, shim-validated like `/api/admin/*`.
-2. **Request logging covers the player API's namespaces**, not the question
-   endpoint — the plan places the middleware in `player-api.js`, and the
-   question route stays as-is.
-3. **Ad-hoc `console` paths pinned by existing tests stay on `console`**
-   (`logProviderFallback`, pool error listeners). Replacing them would change
-   existing tests' meaning; they already log only redacted names.
-4. **PostHog uses plain `fetch`, not `posthog-node`** — the SDK is not on
-   the allowed dependency list, and one capture call does not need it.
-5. **Sentry source-map upload is documented, not scripted** — it needs
-   `@sentry/cli`, also not on the allowed list; the Vercel Sentry
-   integration covers it in deployment.
-6. **Log lines carry no user id.** The plan's "user id when known" would
-   require logging after Clerk authentication resolves; the request line is
-   emitted by pre-auth middleware. `request_id` joins a request to its audit
-   rows, which do carry the actor — that is the correlation the plan wanted.
-7. **New env vars** (all optional): `LOG_LEVEL`,
-   `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
-   `SENTRY_DSN`, `VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`,
-   `POSTHOG_API_KEY`, `POSTHOG_HOST`. Documented in
-   `docs/observability.md`.
-
----
 
 ## Phase 1 — Immutable audit log
 
-- **PR**: _pending_
+- **PR**: #57 (merged)
 - **Branch**: `feat/audit-log`
 - **ADR**: `docs/adr/0013-tamper-evident-audit-log.md`
 - **Migration**: `db/migrations/0006_audit_events.sql`
@@ -353,137 +112,10 @@ against" section:
 
 ---
 
-## Phase 3 — Rate limiting + security headers
-
-- **PR**: _pending_
-- **Branch**: `feat/rate-limit-security-headers`
-- **ADR**: `docs/adr/0014-serverless-rate-limits-and-strict-headers.md`
-- **Migration**: `db/migrations/0007_rate_limit_counters.sql`
-
-### Delivered
-
-- `rate_limit_counters` + `server/rate-limit.js`: fixed-window counter driven by
-  one atomic `INSERT ... ON CONFLICT DO UPDATE`, so the window rollover and the
-  increment are the same statement. Budgets per the plan: question 30/min, score
-  10/min, profile 10/min, checkout 5/min, export 2/hour.
-- `server/rate-limit-request.js`: the `rateLimit(budget, request, userId)`
-  function injected into route handlers, plus `sendRateLimited` (429 +
-  `Retry-After`).
-- `server/request-identity.js`: proxy-aware address extraction and the
-  daily-rotating address hash used for guest keys.
-- `server/security-headers.js`: one source for CSP, `X-Content-Type-Options`,
-  `Referrer-Policy`, `X-Frame-Options`, `Cross-Origin-Opener-Policy`,
-  `Permissions-Policy`, and production-only HSTS. Wired into local Express, the
-  Vite dev server, and the Vite preview server; mirrored in `vercel.json` for the
-  edge.
-- `scripts/prune-rate-limits.mjs` → `npm run prune:rate-limits`.
-- `docs/security-headers.md`, README deploy and operations sections.
-- Tests: `tests/rate-limit.test.js`, `tests/rate-limit-routes.test.js`,
-  `tests/security-headers.test.js`, `tests/e2e/security-headers.spec.js`, and a
-  new case in `tests/migration.test.js`.
-
-### Gate
-
-- `npm run check`: green (500 tests / 7 skipped after rebasing onto merged
-  phase 1).
-- `npm run check:full`: green (111 e2e passed / 5 skipped).
-
-### Local review
-
-Ran over the pre-rebase diff, then again over the rebase resolution and the
-unification commit. Real findings fixed both times; the second pass confirmed no
-phase 1 call site was lost in the conflict resolution and no pre-existing test
-changed meaning (`git diff <phase-1-squash> HEAD -- tests/` is additions only).
-
-The salt default drew two follow-on findings, both fixed: a `DATABASE_URL` with
-no strong secret derives a guessable salt, which would make `ip_hash` reversible
-— the server now warns at startup; and rotating the database password silently
-re-keys every hash, so the salt's source is logged once at startup rather than
-being documented only in the README. The now-dead `hashClientIp` alias was
-removed and its two test files re-pointed at `request-identity.js` (import path
-only — no assertion changed).
-
-### Deviations
-
-1. **The existing in-process question throttle is kept, unchanged.**
-   `createQuestionRateLimiter` caps what one warm instance sends the question
-   provider; the new budget caps what one caller sends us. They answer different
-   questions, and its existing tests keep their meaning. The instance throttle
-   runs first, so a request it rejects never consumes a per-caller budget.
-2. **Fixed window, not sliding.** The plan says "fixed-window-with-burst", and
-   this is that: up to two budgets' worth can cross a window boundary. Accepted —
-   these limits protect the database and the provider, they are not a fairness
-   mechanism, and a sliding window costs either a second table or a
-   read-modify-write.
-3. **The limiter fails open.** An unreachable counter store admits the request
-   and marks the decision `degraded`. Rate limiting must never be why a child
-   cannot play.
-4. **Callers with no identity are admitted unmetered.** With neither a user id
-   nor an address hash there is no honest key, and one shared bucket would let a
-   single abuser lock out every other anonymous caller.
-5. **`POST /api/lifetime-confirm` is deliberately not metered.** A paid Explorer
-   must always be able to finish activating their membership. Only checkout
-   creation is metered. This protects the documented monetization invariant.
-6. **`getDatabasePool` added to `server/database.js`**, memoizing one pool per
-   connection string, so the limiter and the player API share connections instead
-   of opening two pools per warm container. `createDatabasePool` is unchanged and
-   still exported, so `tests/database.test.js` keeps its meaning.
-7. **New env vars**: `TRUST_PROXY_HEADERS` (gates `x-forwarded-for`; a client
-   that can set its own forwarded address could otherwise choose which budget to
-   spend) and `REQUEST_ADDRESS_SALT` (guest address hash). Both optional, both
-   documented in `README.md` and `docs/security-headers.md`. `.env.example` left
-   untouched, out of scope for this run.
-8. **Phase 1's `AUDIT_IP_SALT` and `AUDIT_TRUST_PROXY` are folded into
-   `REQUEST_ADDRESS_SALT` and `TRUST_PROXY_HEADERS`.** Phase 1 and phase 3 were
-   built in parallel and each grew its own address extraction and daily hashing,
-   with a separate pair of environment variables. Shipping both would mean two
-   ways to hash the same address and two flags for one policy. On rebase,
-   `server/request-identity.js` became the single implementation and
-   `audit-store.js`'s `hashClientIp` re-exports it. No existing test changed
-   meaning: `hashClientAddress` keeps the same null-on-empty-salt contract, and
-   the whole phase 1 suite passes unmodified.
-
-   Side effect worth stating: because the salt now defaults to a hash of
-   `DATABASE_URL`, audit `ip_hash` is populated without configuration instead of
-   being silently `NULL`, which is what phase 1's own review flagged as the risk.
-
-   `db/migrations/0006_audit_events.sql` was edited to rename the variable **in a
-   comment only** — no DDL change. It has not been applied to any database, and
-   the alternative is a permanently wrong comment on a privacy-critical column.
-### CodeRabbit review
-
-Six findings, all fixed:
-
-- **`vercel.json`'s `style-src` had lost `'unsafe-inline'`** and its `script-src`
-  lacked Turnstile — the exact drift the parity test existed to prevent. It did
-  not prevent it, because it excluded `style-src` as "Clerk-bearing". Tightened:
-  only directives that carry a *host* may differ from the computed policy, and
-  only in their hosts; every keyword must match exactly.
-- **Turnstile was listed in `frame-src` only.** Clerk's bot protection loads a
-  script from `challenges.cloudflare.com` as well as rendering in a frame, so the
-  CAPTCHA would have been blocked outright wherever bot protection is enabled.
-- **The shared pool had no `error` listener.** `attachDatabasePool` handles
-  suspension cleanup only, so an idle client dropped by the database would emit
-  an unhandled `error` and take the process down — and this pool now backs every
-  feature.
-- **The instance throttle's 429 differed from the durable limiter's**: no
-  `cache-control`, no `retryAfter` field. One route answering two shapes
-  depending on which limit rejected it. Both now go through `sendRateLimited`.
-- The rate-limit e2e assertion could pass vacuously when the flow made no `/api/`
-  call; it now asserts at least one API response was observed.
-- Markdown fence language identifier.
-
-9. **`vercel.json` duplicates the header values** rather than computing them,
-   because Vercel's edge serves built assets without running our code. Called out
-   in both the ADR and `docs/security-headers.md`, including the caveat that a
-   Clerk production custom domain matches neither wildcard and must be added
-   explicitly.
-
----
 
 ## Phase 2 — RBAC + permission matrix
 
-- **PR**: _pending_
+- **PR**: #59 (merged)
 - **Branch**: `feat/rbac-permissions`
 - **ADR**: `docs/adr/0015-database-authoritative-roles.md`
 - **Migration**: `db/migrations/0008_user_roles.sql`
@@ -615,9 +247,139 @@ outcome of the change it failed to record.
 
 ---
 
+
+## Phase 3 — Rate limiting + security headers
+
+- **PR**: #58 (merged)
+- **Branch**: `feat/rate-limit-security-headers`
+- **ADR**: `docs/adr/0014-serverless-rate-limits-and-strict-headers.md`
+- **Migration**: `db/migrations/0007_rate_limit_counters.sql`
+
+### Delivered
+
+- `rate_limit_counters` + `server/rate-limit.js`: fixed-window counter driven by
+  one atomic `INSERT ... ON CONFLICT DO UPDATE`, so the window rollover and the
+  increment are the same statement. Budgets per the plan: question 30/min, score
+  10/min, profile 10/min, checkout 5/min, export 2/hour.
+- `server/rate-limit-request.js`: the `rateLimit(budget, request, userId)`
+  function injected into route handlers, plus `sendRateLimited` (429 +
+  `Retry-After`).
+- `server/request-identity.js`: proxy-aware address extraction and the
+  daily-rotating address hash used for guest keys.
+- `server/security-headers.js`: one source for CSP, `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options`, `Cross-Origin-Opener-Policy`,
+  `Permissions-Policy`, and production-only HSTS. Wired into local Express, the
+  Vite dev server, and the Vite preview server; mirrored in `vercel.json` for the
+  edge.
+- `scripts/prune-rate-limits.mjs` → `npm run prune:rate-limits`.
+- `docs/security-headers.md`, README deploy and operations sections.
+- Tests: `tests/rate-limit.test.js`, `tests/rate-limit-routes.test.js`,
+  `tests/security-headers.test.js`, `tests/e2e/security-headers.spec.js`, and a
+  new case in `tests/migration.test.js`.
+
+### Gate
+
+- `npm run check`: green (500 tests / 7 skipped after rebasing onto merged
+  phase 1).
+- `npm run check:full`: green (111 e2e passed / 5 skipped).
+
+### Local review
+
+Ran over the pre-rebase diff, then again over the rebase resolution and the
+unification commit. Real findings fixed both times; the second pass confirmed no
+phase 1 call site was lost in the conflict resolution and no pre-existing test
+changed meaning (`git diff <phase-1-squash> HEAD -- tests/` is additions only).
+
+The salt default drew two follow-on findings, both fixed: a `DATABASE_URL` with
+no strong secret derives a guessable salt, which would make `ip_hash` reversible
+— the server now warns at startup; and rotating the database password silently
+re-keys every hash, so the salt's source is logged once at startup rather than
+being documented only in the README. The now-dead `hashClientIp` alias was
+removed and its two test files re-pointed at `request-identity.js` (import path
+only — no assertion changed).
+
+### Deviations
+
+1. **The existing in-process question throttle is kept, unchanged.**
+   `createQuestionRateLimiter` caps what one warm instance sends the question
+   provider; the new budget caps what one caller sends us. They answer different
+   questions, and its existing tests keep their meaning. The instance throttle
+   runs first, so a request it rejects never consumes a per-caller budget.
+2. **Fixed window, not sliding.** The plan says "fixed-window-with-burst", and
+   this is that: up to two budgets' worth can cross a window boundary. Accepted —
+   these limits protect the database and the provider, they are not a fairness
+   mechanism, and a sliding window costs either a second table or a
+   read-modify-write.
+3. **The limiter fails open.** An unreachable counter store admits the request
+   and marks the decision `degraded`. Rate limiting must never be why a child
+   cannot play.
+4. **Callers with no identity are admitted unmetered.** With neither a user id
+   nor an address hash there is no honest key, and one shared bucket would let a
+   single abuser lock out every other anonymous caller.
+5. **`POST /api/lifetime-confirm` is deliberately not metered.** A paid Explorer
+   must always be able to finish activating their membership. Only checkout
+   creation is metered. This protects the documented monetization invariant.
+6. **`getDatabasePool` added to `server/database.js`**, memoizing one pool per
+   connection string, so the limiter and the player API share connections instead
+   of opening two pools per warm container. `createDatabasePool` is unchanged and
+   still exported, so `tests/database.test.js` keeps its meaning.
+7. **New env vars**: `TRUST_PROXY_HEADERS` (gates `x-forwarded-for`; a client
+   that can set its own forwarded address could otherwise choose which budget to
+   spend) and `REQUEST_ADDRESS_SALT` (guest address hash). Both optional, both
+   documented in `README.md` and `docs/security-headers.md`. `.env.example` left
+   untouched, out of scope for this run.
+8. **Phase 1's `AUDIT_IP_SALT` and `AUDIT_TRUST_PROXY` are folded into
+   `REQUEST_ADDRESS_SALT` and `TRUST_PROXY_HEADERS`.** Phase 1 and phase 3 were
+   built in parallel and each grew its own address extraction and daily hashing,
+   with a separate pair of environment variables. Shipping both would mean two
+   ways to hash the same address and two flags for one policy. On rebase,
+   `server/request-identity.js` became the single implementation and
+   `audit-store.js`'s `hashClientIp` re-exports it. No existing test changed
+   meaning: `hashClientAddress` keeps the same null-on-empty-salt contract, and
+   the whole phase 1 suite passes unmodified.
+
+   Side effect worth stating: because the salt now defaults to a hash of
+   `DATABASE_URL`, audit `ip_hash` is populated without configuration instead of
+   being silently `NULL`, which is what phase 1's own review flagged as the risk.
+
+   `db/migrations/0006_audit_events.sql` was edited to rename the variable **in a
+   comment only** — no DDL change. It has not been applied to any database, and
+   the alternative is a permanently wrong comment on a privacy-critical column.
+### CodeRabbit review
+
+Six findings, all fixed:
+
+- **`vercel.json`'s `style-src` had lost `'unsafe-inline'`** and its `script-src`
+  lacked Turnstile — the exact drift the parity test existed to prevent. It did
+  not prevent it, because it excluded `style-src` as "Clerk-bearing". Tightened:
+  only directives that carry a *host* may differ from the computed policy, and
+  only in their hosts; every keyword must match exactly.
+- **Turnstile was listed in `frame-src` only.** Clerk's bot protection loads a
+  script from `challenges.cloudflare.com` as well as rendering in a frame, so the
+  CAPTCHA would have been blocked outright wherever bot protection is enabled.
+- **The shared pool had no `error` listener.** `attachDatabasePool` handles
+  suspension cleanup only, so an idle client dropped by the database would emit
+  an unhandled `error` and take the process down — and this pool now backs every
+  feature.
+- **The instance throttle's 429 differed from the durable limiter's**: no
+  `cache-control`, no `retryAfter` field. One route answering two shapes
+  depending on which limit rejected it. Both now go through `sendRateLimited`.
+- The rate-limit e2e assertion could pass vacuously when the flow made no `/api/`
+  call; it now asserts at least one API response was observed.
+- Markdown fence language identifier.
+
+9. **`vercel.json` duplicates the header values** rather than computing them,
+   because Vercel's edge serves built assets without running our code. Called out
+   in both the ADR and `docs/security-headers.md`, including the caveat that a
+   Clerk production custom domain matches neither wildcard and must be added
+   explicitly.
+
+---
+
+
 ## Phase 4 — Webhook inbox
 
-- **PR**: _pending_
+- **PR**: #60 (merged)
 - **Branch**: `feat/webhook-inbox`
 - **ADR**: `docs/adr/0016-store-then-process-webhook-inbox.md`
 - **Migration**: `db/migrations/0009_webhook_inbox.sql`
@@ -788,3 +550,249 @@ function — the endpoint would have hung until the platform timeout rather than
 answering. It was caught by the shim test written for this phase, not by the
 gate. Every dispatch guard in that file now enumerates all three namespaces, and
 each one has a test that asserts a response is actually written.
+
+## Test infrastructure — stabilise the test gate
+
+- **PR**: #61 (merged)
+- **Branch**: `fix/stabilise-test-gate`
+- **ADR**: none — not a plan phase.
+
+### e2e flakiness (~1 in 3 full runs)
+
+Root cause found and fixed, not masked. `src/app.js` dynamically imports
+`src/main.js`, so `page.goto` resolves at the load event while the app is
+still initialising. `main.js` attaches its listeners at module evaluation, but
+the real Run is swapped in only when the async `initializeRunEntry()` resolves
+— which is exactly when `app.js` sets `data-game-ready="true"`. Input sent in
+that window moves the *placeholder* Run and is lost when the swap resets
+progress. Reproduced deterministically: a failing run's snapshot showed
+`Moves 002` after seven keypresses — five presses consumed by the placeholder,
+two by the real Run. Under Playwright's 16-worker parallelism the window
+between load and ready stretches, which is why the flake tracked machine load
+and hit whichever input-driving test was unlucky (chunk-load timing, Warden
+Challenge visibility, the guest second-Labyrinth invariant — all one class).
+
+Fix, two parts, both cause-level:
+
+1. Every e2e test that drives gameplay (keyboard, app buttons, synthetic
+   `online` events) now crosses an `expectGameReady` barrier — the
+   `data-game-ready` wait two tests already used — before its first
+   interaction. After this alone, eight full runs showed zero recurrences of
+   the original three flakes.
+2. The remaining intermittent failures were a second class: genuine load
+   starvation (app boot and Clerk initialisation stretching past their
+   bounds) from 16 workers × Chromium against one shared preview process on
+   32 logical cores. `workers: 8` in `playwright.config.mjs` bounds the
+   oversubscription, and the readiness barrier carries a 15s bound — the same
+   explicit-bound pattern `entry.spec.js` already used for Clerk
+   initialisation. Suite wall-clock stayed in the same range.
+
+A third, smaller class surfaced during validation: the two tests that drive
+Clerk's real development instance (SignIn modal, demo-gate handoff) fail when
+Clerk hangs or throttles — its remotely loaded `@clerk/ui` chunk is the same
+optional download `game.spec.js`'s console filter already tolerates. Both
+tests already skipped on *detectable* Clerk unavailability; their throwing
+polls are now deadline loops that reach the same skip on a silent hang, so an
+external outage shows up as one extra skip in the run summary instead of a
+red gate. They still run and assert normally whenever Clerk responds (most
+runs: 111 passed / 5 skipped; an outage run: 110 / 6).
+
+No retries were added anywhere. Verified by repeated full-suite runs (results
+under Gate).
+
+### Vitest unhandled-error fault
+
+Not reproduced despite 8 full-suite and 30 targeted runs; the mechanism was
+removed instead. `vite.config.mjs` built the entire player API at config
+evaluation — a real pg Pool against the `.env.local` `DATABASE_URL`, a Stripe
+client, and Clerk middleware — inside the vitest process, for a run that can
+never serve an HTTP request. That config-load side effect was the suspected
+source of the post-run "Vitest caught 1 unhandled error". Now: a `vitest` run
+(mode `test`) gets a config with no API plugin at all, and dev/preview modes
+build the middlewares lazily inside `configureServer` /
+`configurePreviewServer`, so config evaluation is side-effect free everywhere.
+`tests/vite-config.test.js` pins both behaviours. If the fault ever resurfaces
+it can no longer come from the config path, and the next occurrence should be
+captured verbatim before rerunning.
+
+The pre-push hook (`set -eu; npm run check`) still exits without naming the
+failed step; `.githooks` is out of scope for this task, so "the gate is green"
+and "the push landed" remain separate facts to verify per the workflow.
+
+### Pool construction in operational scripts
+
+`scripts/verify-audit-chain.mjs`, `scripts/prune-rate-limits.mjs`, and
+`scripts/grant-admin.mjs` built `new Pool(...)` before their `try`, so a
+malformed `DATABASE_URL` threw past the handler and exited 1 instead of the
+documented 2, and none bounded connection or query time. All three now match
+`prune-webhook-inbox.mjs` / `list-dead-webhooks.mjs`: pool constructed inside
+the handler, `max: 1`, `connectionTimeoutMillis: 10000`,
+`query_timeout: 60000`, `await pool?.end()` in `finally`.
+`tests/script-database-guard.test.js` spawns each script with a malformed URL
+and asserts exit code 2, and asserts the timeout bounds are present.
+
+### Gate
+
+- Flake measurement, before: 3 failures across 4 full e2e runs at HEAD of main
+  (three input-driving tests failing together in a bad run — the documented
+  ~1-in-3 rate).
+- Flake measurement, after: **10 consecutive green full e2e runs** with the
+  complete fix (and 11 consecutive green with all but the Clerk-outage skip
+  handling). The barrier-only intermediate state also showed zero
+  recurrences of the original three flakes across 8 runs; its two residual
+  failures (Clerk initialisation, readiness past a 5s default) drove the
+  worker cap and the explicit 15s bounds.
+- `npm run check`: green (602 unit tests / 11 skipped — 9 new).
+- `npm run check:full`: green.
+
+### Deviations
+
+- The task said to suspect the 16-worker parallelism; the diagnosis found TWO
+  causes and both were fixed at the cause: (1) tests injecting input before
+  the app's async Run swap (`data-game-ready`), which parallelism only
+  amplified, and (2) genuine oversubscription starving app boot and Clerk's
+  remotely loaded UI past their bounds, addressed with `workers: 8` and
+  explicit 15s bounds on the readiness barrier and the two Clerk modal
+  expectations. No retries anywhere; no existing assertion changed meaning.
+- The vitest fault was never reproduced (8 full + 30 targeted attempts), so
+  the fix removes the suspected mechanism (config-load side effects) and pins
+  it with tests rather than claiming a verified repro.
+
+---
+
+
+## Phase 5 — Observability
+
+- **PR**: #62
+- **Branch**: `feat/observability`
+- **ADR**: `docs/adr/0017-env-gated-observability.md`
+- **Migration**: none.
+
+### Delivered
+
+- `server/logger.js` (pino, redacting serializers), `server/request-log.js`
+  (`x-request-id` assign/echo, one structured line per owned request),
+  request id flowing into audit rows via the existing header read.
+- `server/health-route.js` — `/api/health` + `/api/ready`, dispatched first
+  in every `createPlayerApi` branch; `vercel.json` rewrites both onto the
+  `leaderboard` function with a validated `_healthRoute` parameter.
+- `server/tracing.js` + `server/error-tracking.js` +
+  `server/telemetry-bootstrap.js` — OTel and Sentry, env-gated behind
+  dynamic imports, bootstrap as the first import of `player-api.js`.
+- `src/error-reporting.js` — browser Sentry as a lazy build-time-optional
+  chunk; `scripts/check-bundle-budget.mjs` gained an `optional` budget kind.
+- `shared/telemetry-scrub.js` — one `beforeSend` scrubber for both sides.
+- `server/product-events.js` — PostHog forwarding of the two server-trusted
+  events via plain `fetch`, schema-filtered, fire-and-forget.
+- `docs/observability.md`; tests: `logger.test.js`, `request-log.test.js`,
+  `health-route.test.js`, `telemetry.test.js`, new cases in
+  `product-events.test.js`, `player-api-integration.test.js`,
+  `vercel-functions.test.js`.
+
+### Gate
+
+- `npm run check`: green (635 unit tests / 11 skipped — 29 new; bundle
+  budget passes with `SKIP optional Sentry: not built` by default).
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### Deviations
+
+1. **No `api/health.js` / `api/ready.js`.** The plan predates the discovery
+   that phase 2 spent the last Hobby function slot. Health rewrites onto the
+   `leaderboard` function, shim-validated like `/api/admin/*`.
+2. **Request logging covers the player API's namespaces**, not the question
+   endpoint — the plan places the middleware in `player-api.js`, and the
+   question route stays as-is.
+3. **Ad-hoc `console` paths pinned by existing tests stay on `console`**
+   (`logProviderFallback`, pool error listeners). Replacing them would change
+   existing tests' meaning; they already log only redacted names.
+4. **PostHog uses plain `fetch`, not `posthog-node`** — the SDK is not on
+   the allowed dependency list, and one capture call does not need it.
+5. **Sentry source-map upload is documented, not scripted** — it needs
+   `@sentry/cli`, also not on the allowed list; the Vercel Sentry
+   integration covers it in deployment.
+6. **Log lines carry no user id.** The plan's "user id when known" would
+   require logging after Clerk authentication resolves; the request line is
+   emitted by pre-auth middleware. `request_id` joins a request to its audit
+   rows, which do carry the actor — that is the correlation the plan wanted.
+7. **New env vars** (all optional): `LOG_LEVEL`,
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
+   `SENTRY_DSN`, `VITE_SENTRY_DSN`, `VITE_SENTRY_RELEASE`,
+   `POSTHOG_API_KEY`, `POSTHOG_HOST`. Documented in
+   `docs/observability.md`.
+
+---
+
+
+## Phase 6 — GDPR data export
+
+- **PR**: #63
+- **Branch**: `feat/gdpr-export`
+- **ADR**: `docs/adr/0018-gdpr-data-export.md`
+- **Migration**: none.
+
+### Delivered
+
+- `server/data-export.js` — `buildUserExport` with explicit column lists per
+  section; every query binds the requesting user id; deleted accounts yield
+  empty sections.
+- `server/data-export-route.js` — `GET /api/me/export`, auth required,
+  `export.self` budget (2/hour), audited `export.self` before the body is
+  sent, `Content-Disposition: attachment`.
+- `shared/export-schema.json` — checked-in contract; the unit test pins the
+  builder's sections to the schema's required sections.
+- `vercel.json` rewrite `/api/me/export` → `profile` function with a
+  validated `_meRoute` (attacker-controlled-rewrite discipline, shim test
+  asserts both the rebuild and that unknown values are answered 404).
+- `docs/data-privacy.md`.
+- Tests: `data-export.test.js`, `data-export-route.test.js`, new cases in
+  `vercel-functions.test.js` and `player-api-integration.test.js`.
+
+### Gate
+
+- `npm run check`: green (652 unit tests / 11 skipped — 14 new), after
+  rebasing onto merged phase 5.
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### CodeRabbit review
+
+Two findings plus one nitpick, all fixed:
+
+- **The export read from eight independent queries**, so a concurrent save
+  or deletion could produce sections describing different moments.
+  `exportUserSnapshot` now wraps every section read in one
+  `REPEATABLE READ READ ONLY` transaction — the same snapshot discipline
+  `verify-audit-chain.mjs` already uses — with rollback and client release
+  covered by tests.
+- `docs/data-privacy.md` implied runtime JSON-Schema validation; it now says
+  the envelope conforms to the checked-in contract and is structurally
+  pinned by test.
+- The audit-before-body sequencing was asserted only as "audit eventually
+  ran"; the test now records both events and asserts the order.
+
+### Deviations
+
+1. **No `api/me-export.js` file** — the Hobby ceiling (12/12) again; the
+   plan predates it. Rewrites onto the `profile` function.
+2. **Explorer Access Settings are not a section.** They are device-local and
+   never reach the server (phase 1 already recorded this); the export
+   documents the fact instead of shipping a permanently empty section.
+3. **`score_entries` and `user_roles` are exported** although the plan's
+   list omits them — the acceptance criterion "every user-owned table
+   represented" wins over the narrative list.
+4. **Schema validation is structural, not a JSON-Schema engine, and row
+   shapes are left generic.** Validating with `ajv` would need a new
+   dependency outside the allowed list. The test pins envelope keys, section
+   set, and schema `$id`. Declaring `properties` / `required` /
+   `additionalProperties` per row was considered and declined: it would
+   restate every column list already written in `SECTION_QUERIES`, giving two
+   sources of truth for the same contract with nothing binding them together
+   — the exact drift the explicit-column design exists to avoid. The SQL
+   stays normative for shape; the schema file documents the envelope.
+5. **The audit write is sequenced before the response body** so a served
+   export always has its audit attempt behind it — but the recorder keeps
+   phase 1's never-throw contract, so a failed audit write is logged and
+   counted, not converted into a 503.
+
+---
+

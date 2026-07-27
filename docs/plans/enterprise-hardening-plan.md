@@ -1,6 +1,8 @@
 # Echo Maze — Enterprise Hardening Plan
 
-Status: PLANNED
+Status: phases 1–6 DELIVERED (PRs #57–#60, #62, #63; ADRs 0013–0018; see
+`enterprise-hardening-log.md` for per-phase evidence and deviations). Phases
+7–9 remain PLANNED and not started.
 Created: 2026-07-26
 Source: senior-architect review of the codebase (Clerk auth, Postgres + migrations, Stripe lifetime checkout, Clerk/Stripe webhooks, ~50 test files, bundle budget gate, Vercel serverless).
 
