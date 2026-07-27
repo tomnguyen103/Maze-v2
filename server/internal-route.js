@@ -34,22 +34,33 @@ function secretMatches(candidate, expected) {
 }
 
 /**
+ * @typedef {{
+ *   claimed: number,
+ *   processed: number,
+ *   failed: number,
+ *   dead: number
+ * }} RetryOutcome
+ */
+
+/**
  * Internal, machine-only endpoints. Guarded by a shared secret rather than
  * Clerk, because the caller is Vercel cron and has no Explorer identity.
  *
  * @param {{
  *   inbox: {
- *     retryPending: (options?: { limit?: number }) => Promise<{
- *       claimed: number,
- *       processed: number,
- *       failed: number,
- *       dead: number
- *     }>
+ *     retryPending: (options?: { limit?: number }) => Promise<RetryOutcome>
  *   } | null,
+ *   pruneRateLimits?: (() => Promise<number>) | null,
+ *   pruneWebhookInbox?: (() => Promise<number>) | null,
  *   cronSecret?: string
  * }} dependencies
  */
-export function createInternalHandler({ inbox, cronSecret = "" }) {
+export function createInternalHandler({
+  inbox,
+  pruneRateLimits = null,
+  pruneWebhookInbox = null,
+  cronSecret = ""
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -93,15 +104,51 @@ export function createInternalHandler({ inbox, cronSecret = "" }) {
       sendJson(response, 503, { error: "Webhook inbox is not configured." });
       return;
     }
+    // Housekeeping is independent of the retry rather than sequenced after it.
+    // A database sick enough to fail the retry every day is exactly the one
+    // whose tables would then grow forever, which is what this prune exists to
+    // stop. Neither half can fail the other.
+    const pruning = Promise.all([
+      runPrune("rate-limit counters", pruneRateLimits),
+      runPrune("webhook inbox", pruneWebhookInbox)
+    ]);
+    /** @type {RetryOutcome | null} */
+    let retry = null;
     try {
-      sendJson(response, 200, await inbox.retryPending());
+      retry = await inbox.retryPending();
     } catch (error) {
       console.error("[internal] webhook retry failed", {
         name: safeErrorName(error)
       });
-      sendJson(response, 503, { error: "Webhook retry is unavailable." });
     }
+    const [rateLimits, webhookInbox] = await pruning;
+    if (retry === null) {
+      sendJson(response, 503, { error: "Webhook retry is unavailable." });
+      return;
+    }
+    sendJson(response, 200, { ...retry, pruned: { rateLimits, webhookInbox } });
   };
+}
+
+/**
+ * Returns the pruned row count, or null when the prune is unconfigured or
+ * failed. The failure is logged, never surfaced to the caller.
+ *
+ * @param {string} what
+ * @param {(() => Promise<number>) | null} prune
+ */
+async function runPrune(what, prune) {
+  if (!prune) {
+    return null;
+  }
+  try {
+    return await prune();
+  } catch (error) {
+    console.error(`[internal] pruning ${what} failed`, {
+      name: safeErrorName(error)
+    });
+    return null;
+  }
 }
 
 /**

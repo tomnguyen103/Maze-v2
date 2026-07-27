@@ -32,6 +32,7 @@ import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
 import { createRequestLogger } from "./request-log.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
+import { createRateLimitStore } from "./rate-limit.js";
 import {
   reportAddressSalt,
   resolveAddressSalt,
@@ -285,8 +286,13 @@ export function createPlayerApi(env = process.env) {
       }
     }
   });
+  // ADR 0014 names the cron endpoint as the schedule for the two prunes that
+  // otherwise only ever run from a shell script nobody remembers to run.
+  const rateLimitStore = createRateLimitStore(queryAdapter);
   const internalHandler = createInternalHandler({
     inbox,
+    pruneRateLimits: () => rateLimitStore.prune(),
+    pruneWebhookInbox: () => inboxStore.prune(),
     cronSecret: env.CRON_SECRET ?? ""
   });
   const lifetimeHandler = createLifetimeHandler({
