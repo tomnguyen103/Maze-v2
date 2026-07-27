@@ -21,8 +21,15 @@ truth lives in a token is a permission model that fails open.
 ## Decision
 
 **One matrix, `shared/permissions.js`.** Server and browser import the same
-table. Only the server enforces it. A permission exists only where a route
-actually checks it — an unused permission is a claim the code does not back.
+table. Only the server enforces it.
+
+The matrix is deliberately declared ahead of its enforcement. This phase ships
+one guarded route, so `users:roles:write` is the only permission any server route
+checks today; the rest exist because phase 7's admin dashboard is what consumes
+them, and defining them once keeps that phase from inventing a second vocabulary.
+That is a real gap and it is named here rather than implied: **the `moderator`
+role currently grants nothing enforceable.** Each permission is listed with its
+consuming phase in `docs/plans/enterprise-hardening-log.md`.
 
 **The database row is authoritative.** `user_roles` holds the role, and the
 absence of a row means `player`. That keeps the default least-privileged without
@@ -30,9 +37,14 @@ a row per Explorer, and it means a `DELETE` is a complete revocation rather than
 a state to remember.
 
 **The Clerk claim is a mirror, written but never read.** `publicMetadata.role`
-is updated on every change so the browser can hide UI without an extra round
-trip. Nothing server-side reads it. A failed mirror write is logged and the
-request still succeeds — losing UI polish is not worth losing the grant.
+is updated on every change. Nothing server-side reads it, and — worth being
+straight about — nothing client-side reads it *yet* either: `src/player/can.js`
+is fed from the `access` field on `/api/profile`, derived from the database row.
+The mirror exists because the plan calls for it, and because it is the only role
+signal available to a client before its first profile fetch resolves, which is
+where phase 7's `/admin` route guard will need it. A failed mirror write is
+logged and the request still succeeds — losing UI polish is not worth losing
+the grant.
 
 **Unknown resolves to the default, everywhere.** `hasPermission` and
 `getRole` both coerce an unrecognised role to `player` rather than throwing. A
@@ -66,14 +78,24 @@ change with no audit row is exactly what phase 1 exists to prevent.
 
 ## Consequences
 
-- Every `/api/admin/*` route is permission-checked and audited. There is no
-  unguarded path in `server/admin-route.js`, and an unknown admin route returns
-  404 rather than falling through.
+- Every `/api/admin/*` route is permission-checked and audited. The permission
+  check runs *before* the path and method checks, so an unauthorized caller sees
+  the same 403 for a real route, an unknown route, and a wrong method, and cannot
+  map the admin surface.
+- An audit row is written only when the role actually changes. Re-granting a role
+  someone already holds returns 200 with `changed: false` and writes nothing.
+- `api/admin.js` is the single Vercel function for the whole admin surface,
+  reached by a `vercel.json` rewrite. That matters beyond tidiness: it takes the
+  project to **12 serverless functions, exactly the Vercel Hobby ceiling**. Every
+  later phase must add endpoints behind an existing function via a rewrite — the
+  way `/api/admin/*` and `/api/access/*` already do — rather than adding a file.
+  `tests/vercel-functions.test.js` enforces the ceiling.
 - Player-facing routes are unchanged. `GET /api/profile` gains an `access` field
   for UI gating; it is additive, and the existing profile tests still pass
   unmodified.
 - With no Clerk keys configured there is no admin identity, so admin routes
-  answer 401 rather than being silently unguarded.
+  answer 401. With no database configured there is no authoritative role, so they
+  answer 503. Neither branch falls through to the SPA document.
 - One extra query per request that reaches a guarded route, cached per request.
   If that ever matters, the fix is a shorter-lived cache with an explicit
   invalidation path — not trusting the token.

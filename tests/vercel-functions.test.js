@@ -7,7 +7,10 @@ describe("Vercel function budget", () => {
     const functionFiles = await filesUnder(
       new URL("../api/", import.meta.url)
     );
-    expect(functionFiles).toHaveLength(11);
+    // 12 is the Hobby ceiling. We are AT it: every later phase must route new
+    // endpoints through an existing function via a vercel.json rewrite, the way
+    // /api/admin/* and /api/access/* already do, rather than adding a file.
+    expect(functionFiles).toHaveLength(12);
     expect(functionFiles.length).toBeLessThanOrEqual(12);
 
     const config = JSON.parse(
@@ -25,6 +28,10 @@ describe("Vercel function budget", () => {
         {
           source: "/api/access/runs",
           destination: "/api/access?_accessRoute=runs"
+        },
+        {
+          source: "/api/admin/:adminPath*",
+          destination: "/api/admin?_adminPath=:adminPath*"
         }
       ])
     );

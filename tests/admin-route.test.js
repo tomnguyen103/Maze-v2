@@ -106,7 +106,11 @@ describe("admin role endpoint", () => {
       body: { role: "moderator" }
     });
     expect(result.statusCode).toBe(200);
-    expect(result.body).toEqual({ userId: "user_target", role: "moderator" });
+    expect(result.body).toEqual({
+      userId: "user_target",
+      role: "moderator",
+      changed: true
+    });
     expect(harness.writes).toEqual([
       { userId: "user_target", role: "moderator", grantedBy: "admin_1" }
     ]);
@@ -120,6 +124,20 @@ describe("admin role endpoint", () => {
       before: { role: "player" },
       after: { role: "moderator" }
     });
+  });
+
+  it("writes no audit row when the role does not actually change", async () => {
+    // Re-granting a role someone already holds changes nothing, and an audit log
+    // padded with non-events is harder to read.
+    const harness = createHarness({ previousRole: "moderator" });
+    const result = await call(harness, {
+      url: roleUrl,
+      body: { role: "moderator" }
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.body.changed).toBe(false);
+    expect(harness.writes).toHaveLength(1);
+    expect(harness.audits).toEqual([]);
   });
 
   it("audits a revocation as role.revoke", async () => {
@@ -216,6 +234,22 @@ describe("admin role endpoint", () => {
     );
     expect((await finished).statusCode).toBe(400);
     expect(harness.writes).toEqual([]);
+  });
+
+  it("denies before revealing whether an admin route exists", async () => {
+    const harness = createHarness({ actor: "user_1", role: "player" });
+    const unknown = await call(harness, {
+      url: "/api/admin/users/user_target/secrets",
+      body: {}
+    });
+    const wrongMethod = await call(harness, {
+      method: "GET",
+      url: roleUrl
+    });
+    // A player gets the same 403 for both, so the admin surface cannot be
+    // mapped by reading 404s and 405s.
+    expect(unknown.statusCode).toBe(403);
+    expect(wrongMethod.statusCode).toBe(403);
   });
 
   it("rejects a non-POST method", async () => {

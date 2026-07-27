@@ -83,8 +83,14 @@ export function createPlayerApi(env = process.env) {
      */
     return function unavailablePlayerApi(request, response, next = undefined) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
-      if (!PLAYER_PATHS.has(pathname)) {
+      if (!PLAYER_PATHS.has(pathname) && !isAdminPath(pathname)) {
         next?.();
+        return;
+      }
+      if (isAdminPath(pathname)) {
+        // Without a database there is no authoritative role, so every admin
+        // route denies rather than falling through to the SPA document.
+        sendError(response, 503, "Admin services are not configured.");
         return;
       }
       if (pathname === "/api/access/config" && request.method === "GET") {

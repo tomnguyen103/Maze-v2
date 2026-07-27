@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/admin/:adminPath*",
+      "destination": "/api/admin?_adminPath=:adminPath*"
+    },
+    {
       "source": "/api/access/config",
       "destination": "/api/access?_accessRoute=config"
     },

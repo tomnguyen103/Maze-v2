@@ -51,6 +51,14 @@ export function createAdminHandler({
       next?.();
       return;
     }
+    // The permission check runs before shape checks, so an unauthorized caller
+    // cannot map the admin surface by reading 404s and 405s.
+    const decision = await checkRoleWrite(request);
+    if (!decision.allowed) {
+      sendJson(response, decision.status, { error: decision.error });
+      return;
+    }
+
     const roleMatch = ROLE_PATH.exec(pathname);
     if (!roleMatch) {
       sendJson(response, 404, { error: "Unknown admin route." });
@@ -59,12 +67,6 @@ export function createAdminHandler({
     if (request.method !== "POST") {
       response.setHeader("allow", "POST");
       sendJson(response, 405, { error: "Use POST to change a role." });
-      return;
-    }
-
-    const decision = await checkRoleWrite(request);
-    if (!decision.allowed) {
-      sendJson(response, decision.status, { error: decision.error });
       return;
     }
 
@@ -88,6 +90,7 @@ export function createAdminHandler({
         role,
         grantedBy: decision.userId
       });
+      const changed = result.previousRole !== role;
       // The mirror is for client-side UI gating only, so a failure to write it
       // must not fail the request or leave the database unchanged.
       try {
@@ -97,15 +100,19 @@ export function createAdminHandler({
           name: safeErrorName(error)
         });
       }
-      await recordAudit(request, {
-        actorId: decision.userId,
-        actorRole: decision.role,
-        action: role === DEFAULT_ROLE ? "role.revoke" : "role.grant",
-        resource: { type: "user_role", id: targetUserId },
-        before: { role: result.previousRole },
-        after: { role }
-      });
-      sendJson(response, 200, { userId: targetUserId, role });
+      // No row for a no-op. Re-granting a role someone already holds changes
+      // nothing, and an audit log padded with non-events is harder to read.
+      if (changed) {
+        await recordAudit(request, {
+          actorId: decision.userId,
+          actorRole: decision.role,
+          action: role === DEFAULT_ROLE ? "role.revoke" : "role.grant",
+          resource: { type: "user_role", id: targetUserId },
+          before: { role: result.previousRole },
+          after: { role }
+        });
+      }
+      sendJson(response, 200, { userId: targetUserId, role, changed });
     } catch (error) {
       if (error instanceof RoleWriteError || error instanceof AdminInputError) {
         sendJson(response, 400, { error: error.message });

@@ -18,10 +18,35 @@ import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { createRoleStore } from "../server/rbac.js";
 import { isRole } from "../shared/permissions.js";
 
-const [userId] = process.argv.slice(2).filter((value) => !value.startsWith("--"));
-const roleArgument = process.argv.indexOf("--role");
-const role = roleArgument === -1 ? "admin" : process.argv[roleArgument + 1];
+// Parsed positionally rather than by filtering out `--` tokens: filtering makes
+// a flag's value indistinguishable from the user id, so
+// `grant-admin --role moderator user_123` would have granted moderator to the
+// literal id "moderator".
+const argv = process.argv.slice(2);
+/** @type {string | undefined} */
+let userId;
+let role = "admin";
+let parseError = "";
+for (let index = 0; index < argv.length; index += 1) {
+  const argument = argv[index];
+  if (argument === "--role") {
+    role = argv[index + 1] ?? "";
+    index += 1;
+  } else if (argument.startsWith("--role=")) {
+    role = argument.slice("--role=".length);
+  } else if (argument.startsWith("-")) {
+    parseError = `Unknown option ${argument}.`;
+  } else if (userId === undefined) {
+    userId = argument;
+  } else {
+    parseError = "Pass exactly one Clerk user id.";
+  }
+}
 
+if (parseError) {
+  console.error(parseError);
+  process.exit(2);
+}
 if (!userId || !/^[A-Za-z0-9_-]{1,255}$/.test(userId)) {
   console.error("Usage: node scripts/grant-admin.mjs <clerk-user-id> [--role admin|moderator]");
   process.exit(2);

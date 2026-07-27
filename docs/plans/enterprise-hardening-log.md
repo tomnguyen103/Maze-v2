@@ -264,7 +264,7 @@ Six findings, all fixed:
 
 ### Gate
 
-- `npm run check`: green (475 tests / 11 skipped).
+- `npm run check`: green (477 tests / 11 skipped).
 - `npm run check:full`: green (105 e2e passed / 5 skipped).
 
 ### Deviations
@@ -286,10 +286,48 @@ Six findings, all fixed:
 5. **403 bodies do not name the missing permission or the caller's role.** The
    plan does not specify the body. Describing the permission model to someone who
    just failed a permission check is free reconnaissance. Asserted by test.
-6. **No `users:read` route yet.** The permission exists in the matrix because
-   phase 7's admin dashboard needs it, but no endpoint checks it in this phase.
-   This is the one place the matrix runs ahead of the code; it is called out here
-   rather than silently shipped.
+6. **The matrix is declared ahead of its enforcement.** This phase ships one
+   guarded route, so `users:roles:write` is the only permission a server route
+   checks today. Consuming phase per permission: `users:read`, `questions:read`,
+   `questions:write`, `questions:publish`, `refunds:issue`, `audit:read` →
+   phase 7; `export:any` → phase 6. **Consequence worth stating plainly: the
+   `moderator` role currently grants nothing enforceable.** Defining the
+   vocabulary once keeps phase 7 from inventing a second one, but the gap is real
+   until then.
 7. **`GET /api/profile` gains an additive `access` field.** Existing profile
    tests use `toMatchObject` and pass unmodified — no existing test changed
    meaning.
+8. **`api/admin.js` takes the project to 12 Vercel functions — the Hobby
+   ceiling.** The whole admin surface is one function reached by a `vercel.json`
+   rewrite, but the budget is now exhausted. `tests/vercel-functions.test.js`
+   already asserted `<= 12`; its exact-count fixture moved 11 → 12, which keeps
+   the invariant it guards intact. **Every later phase must route new endpoints
+   through an existing function rather than adding a file** — phase 6's export
+   and phase 7's admin API in particular.
+
+### Local review
+
+Both axes run. Real findings fixed:
+
+- **`/api/admin/*` had no Vercel entrypoint**, so the endpoint would have worked
+  only under `npm start` and the dev server, against the plan's serverless ground
+  rule. Added `api/admin.js` plus the rewrite.
+- **The no-`DATABASE_URL` branch let admin paths fall through** to the SPA, so
+  `POST /api/admin/users/x/role` answered `200 index.html`. Now 503.
+- **`grant-admin.mjs` mis-parsed its arguments**: filtering out `--`-prefixed
+  tokens made a flag's *value* indistinguishable from the user id, so
+  `--role moderator user_123` would have granted moderator to the literal id
+  `"moderator"` — and written a real audit row for it. Replaced with positional
+  parsing that also accepts `--role=`.
+- **An audit row was written for no-op changes**, contradicting ADR 0013's "none
+  when the request changes nothing".
+- **404 and 405 preceded the permission check**, letting an unauthorized caller
+  map the admin surface.
+- `setRole` depended on `this`, the only such function in `server/`; hoisted.
+- `listByRole` was unused and has been removed rather than shipped ahead of its
+  caller.
+
+Dismissed with reason: a swallowed `recordAudit` failure leaves a grant unaudited
+without failing the request. That is phase 1's deliberate design — logged and
+counted, never thrown into the request path. `grant-admin.mjs` exits non-zero on
+it because a script can afford to.

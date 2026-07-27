@@ -26,21 +26,23 @@ export class RoleWriteError extends Error {
  * }} pool
  */
 export function createRoleStore(pool) {
+  /**
+   * @param {string} userId
+   * @returns {Promise<import("../shared/permissions.js").Role>}
+   */
+  async function getRole(userId) {
+    const result = await pool.query(
+      "SELECT role FROM user_roles WHERE user_id = $1",
+      [userId]
+    );
+    const role = result.rows[0]?.role;
+    // No row means player. An unrecognised value also means player, so a bad
+    // write can never widen access.
+    return isRole(role) ? role : DEFAULT_ROLE;
+  }
+
   return {
-    /**
-     * @param {string} userId
-     * @returns {Promise<import("../shared/permissions.js").Role>}
-     */
-    async getRole(userId) {
-      const result = await pool.query(
-        "SELECT role FROM user_roles WHERE user_id = $1",
-        [userId]
-      );
-      const role = result.rows[0]?.role;
-      // No row means player. An unrecognised value also means player, so a bad
-      // write can never widen access.
-      return isRole(role) ? role : DEFAULT_ROLE;
-    },
+    getRole,
 
     /**
      * @param {{ userId: string, role: string, grantedBy: string }} change
@@ -49,7 +51,7 @@ export function createRoleStore(pool) {
       if (!isRole(role)) {
         throw new RoleWriteError("Role is not supported.");
       }
-      const previous = await this.getRole(userId);
+      const previous = await getRole(userId);
       if (role === DEFAULT_ROLE) {
         // Absence of a row is the default, so revoking means deleting rather
         // than storing a redundant 'player' row.
@@ -66,15 +68,6 @@ export function createRoleStore(pool) {
         [userId, role, grantedBy]
       );
       return { previousRole: previous, role };
-    },
-
-    /** @param {import("../shared/permissions.js").Role} role */
-    async listByRole(role) {
-      const result = await pool.query(
-        "SELECT user_id, role, granted_by, updated_at FROM user_roles WHERE role = $1 ORDER BY user_id",
-        [role]
-      );
-      return result.rows;
     }
   };
 }
