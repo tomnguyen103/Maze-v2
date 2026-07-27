@@ -117,7 +117,7 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ## Phase 6 — GDPR data export
 
-- **PR**: _pending_
+- **PR**: #63
 - **Branch**: `feat/gdpr-export`
 - **ADR**: `docs/adr/0018-gdpr-data-export.md`
 - **Migration**: none.
@@ -141,7 +141,25 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ### Gate
 
-- _pending_
+- `npm run check`: green (652 unit tests / 11 skipped — 14 new), after
+  rebasing onto merged phase 5.
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### CodeRabbit review
+
+Two findings plus one nitpick, all fixed:
+
+- **The export read from eight independent queries**, so a concurrent save
+  or deletion could produce sections describing different moments.
+  `exportUserSnapshot` now wraps every section read in one
+  `REPEATABLE READ READ ONLY` transaction — the same snapshot discipline
+  `verify-audit-chain.mjs` already uses — with rollback and client release
+  covered by tests.
+- `docs/data-privacy.md` implied runtime JSON-Schema validation; it now says
+  the envelope conforms to the checked-in contract and is structurally
+  pinned by test.
+- The audit-before-body sequencing was asserted only as "audit eventually
+  ran"; the test now records both events and asserts the order.
 
 ### Deviations
 
