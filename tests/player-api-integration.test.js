@@ -78,6 +78,64 @@ describe("composed player API", () => {
     });
   });
 
+  it("answers liveness in every configuration and echoes a request id", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/health`, {
+        headers: { "x-request-id": "req_health_1" }
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-request-id")).toBe("req_health_1");
+      expect(await response.json()).toEqual({ status: "ok", version: "dev" });
+    });
+  });
+
+  it("generates a request id when the caller sends none", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/health`);
+      expect(response.headers.get("x-request-id")).toMatch(
+        /^[A-Za-z0-9_.:-]{1,200}$/
+      );
+    });
+  });
+
+  it("reports unreadiness with per-check detail when nothing is configured", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/ready`);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        status: "unavailable",
+        version: "dev",
+        checks: {
+          database: "unconfigured",
+          stripe: "unconfigured",
+          clerk: "unconfigured"
+        }
+      });
+    });
+  });
+
+  it("marks an unreachable database as failed readiness with the database configured", async () => {
+    const handler = createPlayerApi({
+      CLERK_PUBLISHABLE_KEY: "pk_test_example",
+      CLERK_SECRET_KEY: "sk_test_example",
+      DATABASE_URL: "postgresql://test:test@127.0.0.1:1/echo"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/ready`);
+      expect(response.status).toBe(503);
+      const body = await response.json();
+      expect(body.checks.database).toBe("failed");
+      expect(body.checks.clerk).toBe("ok");
+    });
+  });
+
   it("fails Clerk account-deletion webhooks closed without storage", async () => {
     const handler = createPlayerApi({});
 

@@ -16,6 +16,15 @@ if (!(templateElement instanceof HTMLTemplateElement)) {
 }
 const gameTemplate = templateElement;
 
+if (import.meta.env.VITE_SENTRY_DSN) {
+  // Optional and lazy: with the DSN unset at build time this branch is dead
+  // code and the Sentry chunk never exists; a failed load must never block
+  // play.
+  void import("./error-reporting.js")
+    .then((reporting) => reporting.initBrowserErrorTracking())
+    .catch(() => {});
+}
+
 const url = new URL(window.location.href);
 if (url.pathname === "/" && url.searchParams.has("seed")) {
   url.pathname = "/play";
