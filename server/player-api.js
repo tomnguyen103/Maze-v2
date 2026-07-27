@@ -6,7 +6,13 @@ import {
 } from "./clerk-webhook-route.js";
 import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
-import { createDatabasePool } from "./database.js";
+import { createQueryAdapter, getDatabasePool } from "./database.js";
+import { createRequestRateLimiter } from "./rate-limit-request.js";
+import {
+  reportAddressSalt,
+  resolveAddressSalt,
+  trustsProxyHeaders
+} from "./request-identity.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
   createLifetimeHandler,
@@ -96,43 +102,20 @@ export function createPlayerApi(env = process.env) {
     };
   }
 
-  const pool = createDatabasePool(connectionString);
-  /** @type {{
-   *   query: (
-   *     sql: string,
-   *     values?: unknown[]
-   *   ) => Promise<{ rows: Record<string, unknown>[] }>
-   * }} */
-  const queryAdapter = {
-    /**
-     * @param {string} sql
-     * @param {unknown[]} [values]
-     */
-    async query(sql, values) {
-      const result = await pool.query(sql, values);
-      return {
-        rows: /** @type {Record<string, unknown>[]} */ (result.rows)
-      };
-    }
-  };
+  const pool = getDatabasePool(connectionString);
+  const rateLimit = createRequestRateLimiter(env);
+  const queryAdapter = createQueryAdapter(pool);
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
-  const auditIpSalt = env.AUDIT_IP_SALT ?? "";
-  if (!auditIpSalt) {
-    // Audit rows are still written and the chain is still valid; only the
-    // address hash is dropped. Say so once so it is never a silent surprise.
-    console.warn(
-      "[audit] AUDIT_IP_SALT is unset; audit rows will store no address hash."
-    );
-  }
+  reportAddressSalt(env);
   const recordAudit = createRequestAuditor({
     recorder: createAuditRecorder({ store: createAuditStore(pool) }),
-    salt: auditIpSalt,
-    trustProxy: env.AUDIT_TRUST_PROXY === "true"
+    salt: resolveAddressSalt(env),
+    trustProxy: trustsProxyHeaders(env)
   });
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (
@@ -143,7 +126,8 @@ export function createPlayerApi(env = process.env) {
   const handler = createPlayerApiHandler({
     store,
     getUserId,
-    recordAudit
+    recordAudit,
+    rateLimit
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
@@ -153,6 +137,7 @@ export function createPlayerApi(env = process.env) {
   const lifetimeHandler = createLifetimeHandler({
     getUserId,
     recordAudit,
+    rateLimit,
     service: lifetimeConfig
       ? createLifetimeService({
           config: lifetimeConfig,
@@ -190,7 +175,8 @@ export function createPlayerApi(env = process.env) {
   if (!env.CLERK_PUBLISHABLE_KEY || !env.CLERK_SECRET_KEY) {
     const unavailableAuthHandler = createPlayerApiHandler({
       store,
-      getUserId: () => null
+      getUserId: () => null,
+      rateLimit
     });
     const unavailableAccessHandler = createRunAccessHandler({
       store: accessStore,
@@ -200,6 +186,7 @@ export function createPlayerApi(env = process.env) {
     const unavailableLifetimeHandler = createLifetimeHandler({
       getUserId: () => null,
       recordAudit,
+      rateLimit,
       service: lifetimeConfig
         ? createLifetimeService({
             config: lifetimeConfig,

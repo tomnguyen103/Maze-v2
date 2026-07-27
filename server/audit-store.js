@@ -79,19 +79,6 @@ export function auditRowHash(prevHash, fields) {
 }
 
 /**
- * Daily-rotating address hash. Raw addresses never reach the database.
- *
- * @param {string | null | undefined} address
- * @param {{ salt: string, date: string }} options
- */
-export function hashClientIp(address, { salt, date }) {
-  if (!address || !salt) {
-    return null;
-  }
-  return createHash("sha256").update(`${address}:${date}:${salt}`).digest("hex");
-}
-
-/**
  * Rebuilds the hashed field set from a stored row by routing it back through
  * auditEventFields, so the field list exists in exactly one place.
  *

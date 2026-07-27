@@ -5,7 +5,7 @@ import {
   createRequestAuditor,
   SYSTEM_ACTORS
 } from "../server/audit.js";
-import { hashClientIp } from "../server/audit-store.js";
+import { hashClientAddress } from "../server/request-identity.js";
 
 /**
  * @param {Record<string, string>} headers
@@ -158,7 +158,7 @@ describe("createRequestAuditor", () => {
       }
     });
     expect(calls[0].context.ipHash).toBe(
-      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-26" })
+      hashClientAddress("203.0.113.7", { salt: "salt", date: "2026-07-26" })
     );
   });
 
@@ -179,7 +179,7 @@ describe("createRequestAuditor", () => {
       { actorId: "user_1", action: "profile.update", resource: { type: "x" } }
     );
     expect(calls[0].ipHash).toBe(
-      hashClientIp("203.0.113.7", { salt: "salt", date: "2026-07-26" })
+      hashClientAddress("203.0.113.7", { salt: "salt", date: "2026-07-26" })
     );
   });
 });

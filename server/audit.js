@@ -1,4 +1,4 @@
-import { hashClientIp } from "./audit-store.js";
+import { clientAddress, hashClientAddress } from "./request-identity.js";
 import { safeErrorName } from "./safe-error-log.js";
 
 /** Non-human actors. A webhook is never attributed to a player. */
@@ -134,26 +134,6 @@ export function createRequestAuditor({
   };
 }
 
-/**
- * `x-forwarded-for` is client-controlled unless a proxy is known to rewrite it,
- * so it is only honoured when the deployment says so. Behind Vercel that header
- * is authoritative; on a directly exposed server trusting it would let a caller
- * choose their own ip_hash.
- *
- * @param {import("node:http").IncomingMessage} request
- * @param {boolean} trustProxy
- */
-function clientAddress(request, trustProxy) {
-  const socketAddress = request.socket?.remoteAddress || null;
-  if (!trustProxy) {
-    return socketAddress;
-  }
-  const forwarded = request.headers["x-forwarded-for"];
-  const header = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  const first = header?.split(",")[0]?.trim();
-  return first || socketAddress;
-}
-
 /** @param {import("node:http").IncomingMessage} request */
 export function requestIdFrom(request) {
   const header = request.headers["x-request-id"];
@@ -179,7 +159,7 @@ export function auditContextFromRequest(request, options = {}) {
     actorId: options.actorId ?? null,
     actorRole: options.actorRole ?? null,
     requestId: requestIdFrom(request),
-    ipHash: hashClientIp(clientAddress(request, options.trustProxy === true), {
+    ipHash: hashClientAddress(clientAddress(request, options.trustProxy === true), {
       salt: options.salt ?? "",
       date
     })

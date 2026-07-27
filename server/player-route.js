@@ -4,6 +4,8 @@ import {
   validateScoreInput
 } from "./player-validation.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { UNMETERED } from "./rate-limit-config.js";
+import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -104,13 +106,15 @@ function isUniqueViolation(error) {
  *   getUserId: (
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
- *   recordAudit?: import("./audit.js").RecordAudit
+ *   recordAudit?: import("./audit.js").RecordAudit,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit
  * }} dependencies
  */
 export function createPlayerApiHandler({
   store,
   getUserId,
-  recordAudit = async () => {}
+  recordAudit = async () => {},
+  rateLimit = async () => UNMETERED
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -157,6 +161,15 @@ export function createPlayerApiHandler({
           return;
         }
         if (request.method === "PUT") {
+          const decision = await rateLimit("profile.write", request, userId);
+          if (!decision.allowed) {
+            sendRateLimited(
+              response,
+              decision,
+              "Too many Player Profile changes. Try again shortly."
+            );
+            return;
+          }
           const profile = validateProfileInput(await readJsonBody(request));
           const before = publicProfile(await store.getProfile(userId));
           const after = publicProfile(await store.saveProfile(userId, profile));
@@ -178,6 +191,15 @@ export function createPlayerApiHandler({
       if (request.method !== "POST") {
         response.setHeader("allow", "POST");
         sendJson(response, 405, { error: "Use POST for Run Scores." });
+        return;
+      }
+      const decision = await rateLimit("score.submit", request, userId);
+      if (!decision.allowed) {
+        sendRateLimited(
+          response,
+          decision,
+          "Too many Run Score submissions. Try again shortly."
+        );
         return;
       }
       if (!(await store.getProfile(userId))) {

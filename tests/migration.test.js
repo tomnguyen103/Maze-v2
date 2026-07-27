@@ -124,4 +124,20 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("user_agent");
     expect(sql).not.toContain("ALTER TABLE players");
   });
+
+  it("adds serverless-safe rate-limit counters without storing addresses", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0007_rate_limit_counters.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE rate_limit_counters");
+    expect(sql).toContain("key TEXT PRIMARY KEY");
+    expect(sql).toContain("window_start TIMESTAMPTZ NOT NULL");
+    expect(sql).toContain("CHECK (count >= 0)");
+    expect(sql).toContain("rate_limit_counters_window_idx");
+    expect(sql).not.toContain("ip_address");
+    expect(sql).not.toContain("clerk_user_id");
+    expect(sql).not.toContain("ALTER TABLE player_access");
+  });
 });

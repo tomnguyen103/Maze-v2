@@ -1,4 +1,6 @@
 import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
+import { UNMETERED } from "./rate-limit-config.js";
+import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
 
 /** @type {Set<string>} */
@@ -98,10 +100,19 @@ export function createQuestionRateLimiter(options = {}) {
  *   labyrinthNumber: number,
  *   questionOrdinal: number
  * }) => Promise<unknown> }} questionService
- * @param {{ maxRequests?: number, windowMs?: number, now?: () => number }} [options]
+ * @param {{
+ *   maxRequests?: number,
+ *   windowMs?: number,
+ *   now?: () => number,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit
+ * }} [options]
  */
 export function createQuestionHandler(questionService, options = {}) {
-  const rateLimiter = createQuestionRateLimiter(options);
+  // Two independent limits. The instance throttle caps what a single warm
+  // container pushes at the question provider; the per-caller budget is durable
+  // across serverless invocations and stops one Explorer spending the rest.
+  const instanceThrottle = createQuestionRateLimiter(options);
+  const rateLimit = options.rateLimit ?? (async () => UNMETERED);
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -119,17 +130,22 @@ export function createQuestionHandler(questionService, options = {}) {
       response.end(JSON.stringify({ error: "Use GET for Question requests." }));
       return;
     }
-    if (!rateLimiter.allow()) {
-      response.statusCode = 429;
-      response.setHeader("content-type", "application/json; charset=utf-8");
-      response.setHeader(
-        "retry-after",
-        String(rateLimiter.retryAfterSeconds())
+    if (!instanceThrottle.allow()) {
+      // Same body and headers as the durable limiter: one route must not answer
+      // two different shapes depending on which limit rejected it.
+      sendRateLimited(
+        response,
+        { retryAfterSeconds: instanceThrottle.retryAfterSeconds() },
+        "Question scrolls are resting. Please try again soon."
       );
-      response.end(
-        JSON.stringify({
-          error: "Question scrolls are resting. Please try again soon."
-        })
+      return;
+    }
+    const decision = await rateLimit("question.fetch", request, null);
+    if (!decision.allowed) {
+      sendRateLimited(
+        response,
+        decision,
+        "Question scrolls are resting. Please try again soon."
       );
       return;
     }

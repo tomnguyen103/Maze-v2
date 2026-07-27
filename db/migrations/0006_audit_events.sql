@@ -5,8 +5,8 @@
 -- chain and scripts/verify-audit-chain.mjs reports the first broken id.
 --
 -- Privacy: never store a raw IP address. ip_hash is
--- sha256(address + ':' + UTC date + ':' + AUDIT_IP_SALT), rotated daily, which
--- follows the Lantern Journal minimization precedent.
+-- sha256(address + ':' + UTC date + ':' + REQUEST_ADDRESS_SALT), rotated daily,
+-- which follows the Lantern Journal minimization precedent.
 
 CREATE TABLE audit_events (
   id BIGSERIAL PRIMARY KEY,

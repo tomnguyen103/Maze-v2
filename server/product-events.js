@@ -1,3 +1,5 @@
+import { RATE_LIMIT_BUDGET_NAMES } from "./rate-limit-config.js";
+
 const EVENT_SCHEMA = {
   lifetime_checkout: {
     outcome: ["created", "reused"]
@@ -34,6 +36,13 @@ const EVENT_SCHEMA = {
   },
   run_access_error: {
     category: ["temporary"]
+  },
+  // High volume by nature, so this is a product event rather than an audit row.
+  // Deliberately carries no caller identity. The budget list is derived, so a
+  // new budget cannot silently drop its events.
+  rate_limit_hit: {
+    budget: RATE_LIMIT_BUDGET_NAMES,
+    scope: ["ip", "user"]
   }
 };
 
