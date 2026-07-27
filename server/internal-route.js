@@ -9,9 +9,20 @@ export function isInternalPath(pathname) {
   return pathname.startsWith("/api/internal/");
 }
 
+/** @param {import("node:http").IncomingMessage} request */
+function suppliedSecret(request) {
+  const bearer = request.headers.authorization;
+  if (typeof bearer === "string" && bearer.startsWith("Bearer ")) {
+    return bearer.slice("Bearer ".length);
+  }
+  const header = request.headers["x-cron-secret"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" ? value : null;
+}
+
 /**
- * Constant-time compare so a caller cannot recover the secret by timing how
- * long a wrong guess takes.
+ * Constant-time on content. The length check short-circuits, which leaks only
+ * the secret's length, not any of its bytes.
  *
  * @param {string} candidate
  * @param {string} expected
@@ -55,9 +66,11 @@ export function createInternalHandler({ inbox, cronSecret = "" }) {
       sendJson(response, 503, { error: "Internal endpoints are not configured." });
       return;
     }
-    const header = request.headers["x-cron-secret"];
-    const supplied = Array.isArray(header) ? header[0] : header;
-    if (typeof supplied !== "string" || !secretMatches(supplied, cronSecret)) {
+    // Vercel cron calls with `Authorization: Bearer $CRON_SECRET`; a manual or
+    // scripted invocation is easier with an explicit header. Accept both, and
+    // require one of them.
+    const supplied = suppliedSecret(request);
+    if (supplied === null || !secretMatches(supplied, cronSecret)) {
       // Identical for a wrong secret and an unknown internal path, so the
       // surface cannot be mapped without the secret.
       sendJson(response, 401, { error: "Unauthorized." });
@@ -67,9 +80,13 @@ export function createInternalHandler({ inbox, cronSecret = "" }) {
       sendJson(response, 404, { error: "Unknown internal route." });
       return;
     }
-    if (request.method !== "POST") {
-      response.setHeader("allow", "POST");
-      sendJson(response, 405, { error: "Use POST for the webhook retry." });
+    // Vercel cron issues GET. POST is accepted too so the endpoint can be
+    // driven by hand without pretending to be the scheduler.
+    if (request.method !== "GET" && request.method !== "POST") {
+      response.setHeader("allow", "GET, POST");
+      sendJson(response, 405, {
+        error: "Use GET or POST for the webhook retry."
+      });
       return;
     }
     if (!inbox) {

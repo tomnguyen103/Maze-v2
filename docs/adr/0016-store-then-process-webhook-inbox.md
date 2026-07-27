@@ -52,13 +52,37 @@ dashboard.
 failing payload may quote the very fields the Journal and audit rules keep out of
 storage — card fragments, ids, addresses. Asserted by test.
 
-**The retry claim uses `FOR UPDATE SKIP LOCKED`.** Two overlapping cron
-invocations must not process the same row twice.
+**Overlapping runs are safe through idempotency, not locking.** An earlier draft
+of this ADR claimed `FOR UPDATE SKIP LOCKED` prevented two cron invocations from
+processing the same row. It did not: the retry loop reads through the pooled
+query adapter, where every statement is its own transaction, so the row locks
+released the moment the `SELECT` returned. The lock was decoration.
+
+The real guarantee is that `processEvent` is idempotent per provider — Stripe
+through `stripe_webhook_events`, Clerk through the deletion tombstone — so
+processing a row twice is a no-op. `selectRetryable` is named for what it does:
+it selects, it does not claim.
 
 ## Where the endpoint lives
 
-`POST /api/internal/webhook-retry`, guarded by a `x-cron-secret` header compared
-in constant time, driven by Vercel cron every ten minutes.
+`/api/internal/webhook-retry`, driven by Vercel cron.
+
+Two corrections to the plan's sketch, both forced by how the platform actually
+behaves rather than by preference:
+
+- **Vercel cron issues `GET` with `Authorization: Bearer $CRON_SECRET`**, not a
+  `POST` carrying a custom header. An endpoint that only accepted `POST` and
+  `x-cron-secret` would have returned 401 to every scheduled run and the retry
+  loop would never have executed. Both shapes are accepted now; the custom header
+  stays because driving the endpoint by hand is easier with it.
+- **The schedule is daily, not every ten minutes.** Vercel's Hobby plan — the
+  same plan whose 12-function ceiling shaped where this endpoint lives — permits
+  one invocation per cron job per day. `*/10 * * * *` would not have run as
+  written. On a paid plan, restoring the ten-minute cadence is a one-line change
+  to `vercel.json`.
+
+The secret is compared with `timingSafeEqual`. The length check short-circuits,
+which leaks the secret's length but none of its bytes.
 
 It is **not** its own serverless function. The project sits at Vercel's
 12-function Hobby ceiling, so `vercel.json` rewrites `/api/internal/*` onto
@@ -80,6 +104,22 @@ for a real internal route and an unknown one, so the surface cannot be mapped.
 - Both webhook routes keep their pre-inbox behaviour when no inbox is configured,
   so guest-only and database-less deployments are unaffected.
 - New env var: `CRON_SECRET`. Required for the retry endpoint to function at all.
+- **Auditing lives in the `processEvent` seam, not in the routes.** Putting it in
+  the route meant the retry loop produced no audit rows at all, and the Clerk
+  inbox path skipped `user.delete` entirely — a silent regression against phase
+  1's rule that every mutating path is audited. In the seam, a delivery that only
+  succeeds on its fourth attempt still leaves the same trail as one that succeeds
+  immediately.
+- **Rewritten sub-paths are validated, not interpolated.** `_internalPath=../..`
+  normalizes to `/`, which no namespace recognises, so the request reached a
+  `next?.()` that does not exist in a serverless function and hung until the
+  platform timeout — unauthenticated. Both shims now reject anything that is not
+  a plain path segment. This is the third instance of that failure mode in this
+  codebase; every shim and every dispatch guard now has a test asserting a
+  response is actually written.
+- A day between retries is a long time for a failed refund. The daily schedule is
+  a Hobby-plan constraint, not a design position, and it is the first thing to
+  change if this ever runs on a paid plan.
 - The inbox holds the full verified payload. That is deliberate — a retry has to
   reprocess the original event — but it means `webhook_inbox` is the one table
   carrying provider payloads, and phase 6's export must not include it, since the

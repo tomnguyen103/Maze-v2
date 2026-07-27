@@ -399,8 +399,17 @@ outcome of the change it failed to record.
 
 ### Gate
 
-- `npm run check`: green (585 tests / 11 skipped).
-- `npm run check:full`: green (111 e2e / 5 skipped).
+- `npm run check`: green (588 tests / 11 skipped).
+- `npm run check:full`: green (111 e2e / 5 skipped) on a clean run.
+
+  **The e2e flakiness is now a real problem, not a footnote.** Across this phase
+  three separate full-suite runs failed three *different* tests — a chunk-load
+  test, a Warden Challenge dialog, and the guest second-Labyrinth invariant —
+  each passing on targeted rerun and on other full runs. That is roughly a 1-in-3
+  chance that any given `check:full` reports a failure unrelated to the change
+  under test, which is close to the point where a red gate stops carrying
+  information. It is not caused by this phase (it was visible in phases 1 and 2),
+  and it deserves its own fix outside this plan.
 
 ### Deviations
 
@@ -413,9 +422,12 @@ outcome of the change it failed to record.
    plan's schema comment implies the error text. A failing payload may quote the
    very fields the Journal and audit rules keep out of storage, so only the class
    name is kept. Asserted by test.
-3. **`FOR UPDATE SKIP LOCKED` on the retry claim**, which the plan does not
-   mention. Two overlapping cron invocations would otherwise process the same row
-   twice — the exact double-apply the inbox exists to prevent.
+3. **No lock-based claim on the retry loop.** An earlier draft used
+   `FOR UPDATE SKIP LOCKED` and the ADR claimed it stopped two cron invocations
+   colliding. It did not — the loop reads through the pooled adapter in
+   autocommit, so the locks released at statement end. Removed, and the ADR now
+   states the real guarantee: `processEvent` is idempotent per provider, so
+   processing a row twice is a no-op.
 4. **An unset `CRON_SECRET` closes the endpoint with 503** rather than leaving it
    open or falling through. A missing secret must never mean an open internal
    endpoint.
@@ -424,6 +436,39 @@ outcome of the change it failed to record.
    existing `stripe-lifetime.test.js` / `clerk-webhook-route.test.js` semantics
    are untouched.
 6. **New env var**: `CRON_SECRET`.
+7. **The cron contract in the plan does not match the platform.** Vercel cron
+   issues `GET` with `Authorization: Bearer $CRON_SECRET`; the plan's `POST` +
+   `x-cron-secret` would have returned 401 to every scheduled run. Both shapes
+   are accepted now.
+8. **The schedule is daily, not every ten minutes.** Vercel Hobby — the same plan
+   whose 12-function ceiling shaped where this endpoint lives — allows one run
+   per cron job per day. A day between retries is a long time for a failed
+   refund; this is a plan constraint, not a design choice, and it is a one-line
+   change on a paid plan. **Worth an explicit decision from the repo owner.**
+9. **Auditing moved into the `processEvent` seam.** In the routes, the retry loop
+   produced no audit rows and the Clerk inbox path skipped `user.delete`
+   entirely — a silent regression against phase 1.
+
+### Local review
+
+Both axes run. Eight findings, all fixed, four of them serious:
+
+- **Path traversal into a hang.** `_internalPath=../..` normalizes to `/`, which
+  no namespace recognises, so the request reached a `next?.()` that does not
+  exist in a serverless function — an unauthenticated caller could hang a
+  function until the platform timeout. `api/admin.js` had the same hole. Both
+  shims now validate the segment.
+- **Audit rows lost.** The Clerk inbox path returned before `recordAudit`, and
+  the retry loop audited nothing for either provider, so with a database
+  configured no `user.delete` row was written at all.
+- **`FOR UPDATE SKIP LOCKED` did nothing** (see deviation 3).
+- **The cron endpoint would never have run** (see deviations 7 and 8).
+
+Also fixed: the no-Clerk branch built a second lifetime service without the
+inbox, so that deployment ran pre-inbox Stripe handling while its retry endpoint
+was live; a `markFailed` failure turned into a 503 for a delivery already stored;
+and `receiveThroughInbox` dropped `purchaseId` from the audit resource, which the
+move into `processEvent` resolves.
 
 ### Note on a defect this phase caught in its own wiring
 

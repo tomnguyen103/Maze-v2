@@ -82,17 +82,24 @@ export function createWebhookInboxStore(pool) {
     },
 
     /**
+     * Reads the rows still owed work. Deliberately NOT a lock-based claim: this
+     * runs through the pooled adapter in autocommit, where `FOR UPDATE` would
+     * release at statement end and guarantee nothing. Two overlapping runs can
+     * therefore pick the same row, which is safe because `processEvent` is
+     * idempotent per provider — Stripe through `stripe_webhook_events`, Clerk
+     * through the deletion tombstone. That idempotency is the real guarantee,
+     * not the lock.
+     *
      * @param {{ limit?: number }} [options]
      */
-    async claimRetryable({ limit = 20 } = {}) {
+    async selectRetryable({ limit = 20 } = {}) {
       const result = await pool.query(
         `SELECT provider, event_id, event_type, payload, attempts
          FROM webhook_inbox
          WHERE status IN ('pending', 'failed')
            AND attempts < $2
          ORDER BY received_at ASC
-         LIMIT $1
-         FOR UPDATE SKIP LOCKED`,
+         LIMIT $1`,
         [limit, MAX_WEBHOOK_ATTEMPTS]
       );
       return result.rows;
@@ -151,11 +158,27 @@ export function createWebhookInbox({
         payload: event.payload
       });
     } catch (error) {
-      const outcome = await store.markFailed({
-        provider,
-        eventId: event.eventId,
-        error
-      });
+      /** @type {{ status: string, attempts: number }} */
+      let outcome;
+      try {
+        outcome = await store.markFailed({
+          provider,
+          eventId: event.eventId,
+          error
+        });
+      } catch (bookkeepingError) {
+        // The delivery is already stored, so it stays retryable. Reporting a
+        // failure to the provider here would ask it to redeliver something we
+        // already own.
+        onFailure({
+          provider,
+          eventType: event.eventType,
+          status: "failed",
+          attempts: 0,
+          name: safeErrorName(bookkeepingError)
+        });
+        return { processed: false, status: "failed", attempts: 0 };
+      }
       onFailure({
         provider,
         eventType: event.eventType,
@@ -165,8 +188,20 @@ export function createWebhookInbox({
       });
       return { processed: false, ...outcome };
     }
-    await store.markProcessed({ provider, eventId: event.eventId });
-    return { processed: true, status: "processed", attempts: 0 };
+    try {
+      await store.markProcessed({ provider, eventId: event.eventId });
+    } catch (error) {
+      // Processing succeeded. A failed status write leaves the row retryable,
+      // and a retry is a no-op because processEvent is idempotent.
+      onFailure({
+        provider,
+        eventType: event.eventType,
+        status: "processed",
+        attempts: 0,
+        name: safeErrorName(error)
+      });
+    }
+    return { processed: true, status: "processed" };
   }
 
   return {
@@ -189,7 +224,7 @@ export function createWebhookInbox({
      * @param {{ limit?: number }} [options]
      */
     async retryPending({ limit = 20 } = {}) {
-      const rows = await store.claimRetryable({ limit });
+      const rows = await store.selectRetryable({ limit });
       let processed = 0;
       let failed = 0;
       let dead = 0;

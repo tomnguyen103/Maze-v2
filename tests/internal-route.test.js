@@ -140,7 +140,7 @@ describe("internal webhook retry endpoint", () => {
     expect(captured.statusCode).toBe(404);
   });
 
-  it("rejects a non-POST method", async () => {
+  it("accepts the GET that Vercel cron actually issues", async () => {
     const handler = createInternalHandler({
       inbox: workingInbox,
       cronSecret: SECRET
@@ -151,8 +151,56 @@ describe("internal webhook retry endpoint", () => {
       response,
       undefined
     );
+    expect(captured.statusCode).toBe(200);
+  });
+
+  it("accepts the Bearer header Vercel cron sends", async () => {
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      cronSecret: SECRET
+    });
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "GET",
+        url: RETRY,
+        headers: { authorization: `Bearer ${SECRET}` }
+      })
+    );
+    const { response, captured } = createResponse();
+    await handler(request, response, undefined);
+    expect(captured.statusCode).toBe(200);
+  });
+
+  it("rejects a wrong Bearer secret", async () => {
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      cronSecret: SECRET
+    });
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "GET",
+        url: RETRY,
+        headers: { authorization: "Bearer wrong-secret-value" }
+      })
+    );
+    const { response, captured } = createResponse();
+    await handler(request, response, undefined);
+    expect(captured.statusCode).toBe(401);
+  });
+
+  it("rejects a method that is neither GET nor POST", async () => {
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+    await handler(
+      createRequest({ method: "DELETE", url: RETRY, secret: SECRET }),
+      response,
+      undefined
+    );
     expect(captured.statusCode).toBe(405);
-    expect(captured.headers.allow).toBe("POST");
+    expect(captured.headers.allow).toBe("GET, POST");
   });
 
   it("reports 503 when the inbox is unavailable", async () => {

@@ -55,7 +55,7 @@ function createFakeStore() {
       return { status: row.status, attempts: row.attempts };
     },
     /** @param {{ limit?: number }} [options] */
-    async claimRetryable({ limit = 20 } = {}) {
+    async selectRetryable({ limit = 20 } = {}) {
       return [...rows.values()]
         .filter(
           (row) =>
@@ -310,12 +310,15 @@ describe("createWebhookInboxStore", () => {
     expect(pool.calls[0].values[3]).toBe("Error");
   });
 
-  it("claims retryable rows oldest first and skips locked ones", async () => {
+  it("selects retryable rows oldest first, below the attempt cap", async () => {
     const pool = poolReturning([]);
-    await createWebhookInboxStore(pool).claimRetryable({ limit: 5 });
+    await createWebhookInboxStore(pool).selectRetryable({ limit: 5 });
     expect(pool.calls[0].sql).toContain("status IN ('pending', 'failed')");
     expect(pool.calls[0].sql).toContain("ORDER BY received_at ASC");
-    // Two cron invocations must not process the same row twice.
-    expect(pool.calls[0].sql).toContain("FOR UPDATE SKIP LOCKED");
+    expect(pool.calls[0].values).toEqual([5, MAX_WEBHOOK_ATTEMPTS]);
+    // Deliberately not a lock-based claim: through the pooled adapter every
+    // statement is its own transaction, so FOR UPDATE would guarantee nothing.
+    // Overlapping runs are safe because processEvent is idempotent instead.
+    expect(pool.calls[0].sql).not.toContain("FOR UPDATE");
   });
 });

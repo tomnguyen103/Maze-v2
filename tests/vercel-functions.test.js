@@ -80,7 +80,7 @@ describe("Vercel function budget", () => {
       ])
     );
     expect(config.crons).toEqual([
-      { path: "/api/internal/webhook-retry", schedule: "*/10 * * * *" }
+      { path: "/api/internal/webhook-retry", schedule: "0 3 * * *" }
     ]);
 
     const request = /** @type {import("node:http").IncomingMessage} */ (

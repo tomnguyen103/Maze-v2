@@ -14,7 +14,11 @@ import {
   createWebhookInboxStore
 } from "./webhook-inbox.js";
 import { createAuditStore } from "./audit-store.js";
-import { createAuditRecorder, createRequestAuditor } from "./audit.js";
+import {
+  createAuditRecorder,
+  createRequestAuditor,
+  SYSTEM_ACTORS
+} from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
 import {
@@ -137,8 +141,9 @@ export function createPlayerApi(env = process.env) {
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
   reportAddressSalt(env);
+  const auditRecorder = createAuditRecorder({ store: createAuditStore(pool) });
   const recordAudit = createRequestAuditor({
-    recorder: createAuditRecorder({ store: createAuditStore(pool) }),
+    recorder: auditRecorder,
     salt: resolveAddressSalt(env),
     trustProxy: trustsProxyHeaders(env)
   });
@@ -195,12 +200,31 @@ export function createPlayerApi(env = process.env) {
   const inbox = createWebhookInbox({
     store: inboxStore,
     /**
+     * Auditing lives here rather than in the routes so the retry loop produces
+     * the same rows the inline path does. A delivery that only succeeds on its
+     * fourth attempt must still leave the audit trail phase 1 requires.
+     *
      * @param {string} provider
      * @param {{ eventType: string, payload: unknown }} event
      */
     async processEvent(provider, event) {
       if (provider === "stripe") {
-        await lifetimeService.processVerifiedWebhook(event.payload);
+        const result = /** @type {Record<string, unknown>} */ (
+          await lifetimeService.processVerifiedWebhook(event.payload)
+        );
+        await auditRecorder.recordAudit(
+          { actorId: SYSTEM_ACTORS.stripe, actorRole: "system" },
+          "lifetime.webhook",
+          {
+            type: "lifetime_purchase",
+            id: result?.purchaseId ? String(result.purchaseId) : null
+          },
+          undefined,
+          {
+            eventType: event.eventType,
+            outcome: result?.outcome ?? null
+          }
+        );
         return;
       }
       if (event.eventType === "user.deleted") {
@@ -209,6 +233,11 @@ export function createPlayerApi(env = process.env) {
           throw new Error("Clerk deletion event is invalid.");
         }
         await userDeletionStore.deleteUser(payload.id);
+        await auditRecorder.recordAudit(
+          { actorId: SYSTEM_ACTORS.clerk, actorRole: "system" },
+          "user.delete",
+          { type: "player_account", id: payload.id }
+        );
       }
     }
   });
@@ -259,19 +288,11 @@ export function createPlayerApi(env = process.env) {
       getUserId: () => null,
       recordAudit,
       rateLimit,
-      service: lifetimeConfig
-        ? createLifetimeService({
-            config: lifetimeConfig,
-            provider: createStripeLifetimeProvider({
-              appOrigin: lifetimeConfig.appOrigin,
-              priceId: lifetimeConfig.priceId,
-              stripe: new Stripe(lifetimeConfig.secretKey),
-              webhookSecret: lifetimeConfig.webhookSecret
-            }),
-            recordEvent: recordProductEvent,
-            store: lifetimeStore
-          })
-        : unavailableLifetimeService()
+      inbox,
+      // The same instance the configured branch uses. Building a second one
+      // here previously meant this deployment ran pre-inbox Stripe handling
+      // while its retry endpoint was live against the inbox.
+      service: lifetimeService
     });
     const unavailableLearningJournalHandler = createLearningJournalHandler({
       store: learningJournalStore,
