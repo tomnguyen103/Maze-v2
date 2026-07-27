@@ -61,8 +61,81 @@ describe("internal webhook retry endpoint", () => {
       claimed: 2,
       processed: 1,
       failed: 1,
-      dead: 0
+      dead: 0,
+      pruned: { rateLimits: null, webhookInbox: null }
     });
+  });
+
+  it("prunes rate-limit counters and the webhook inbox on the cron path", async () => {
+    const pruneRateLimits = vi.fn(async () => 4);
+    const pruneWebhookInbox = vi.fn(async () => 2);
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      pruneRateLimits,
+      pruneWebhookInbox,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+    await handler(
+      createRequest({ method: "GET", url: RETRY, secret: SECRET }),
+      response,
+      undefined
+    );
+    expect(pruneRateLimits).toHaveBeenCalledTimes(1);
+    expect(pruneWebhookInbox).toHaveBeenCalledTimes(1);
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body).toEqual({
+      claimed: 2,
+      processed: 1,
+      failed: 1,
+      dead: 0,
+      pruned: { rateLimits: 4, webhookInbox: 2 }
+    });
+  });
+
+  it("keeps the retry result when a prune fails, and does not leak the failure", async () => {
+    const pruneWebhookInbox = vi.fn(async () => 7);
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      pruneRateLimits: async () => {
+        throw new Error("connection string postgres://user:secret@host");
+      },
+      pruneWebhookInbox,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+    await handler(createRequest({ url: RETRY, secret: SECRET }), response, undefined);
+    // One failing prune must not stop the other, nor the retry it follows.
+    expect(pruneWebhookInbox).toHaveBeenCalledTimes(1);
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body).toEqual({
+      claimed: 2,
+      processed: 1,
+      failed: 1,
+      dead: 0,
+      pruned: { rateLimits: null, webhookInbox: 7 }
+    });
+    expect(JSON.stringify(captured.body)).not.toContain("secret@host");
+  });
+
+  it("does not prune when the secret is wrong", async () => {
+    const pruneRateLimits = vi.fn();
+    const pruneWebhookInbox = vi.fn();
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      pruneRateLimits,
+      pruneWebhookInbox,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+    await handler(
+      createRequest({ url: RETRY, secret: "wrong-secret-value" }),
+      response,
+      undefined
+    );
+    expect(captured.statusCode).toBe(401);
+    expect(pruneRateLimits).not.toHaveBeenCalled();
+    expect(pruneWebhookInbox).not.toHaveBeenCalled();
   });
 
   it("rejects a missing secret", async () => {

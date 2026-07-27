@@ -136,6 +136,12 @@ Guest keys stop being reachable once their address hash rotates, so yesterday's
 rows are dead weight rather than state. Needs `DATABASE_URL`. Takes
 `--older-than-hours` (default 24).
 
+The daily cron call to `/api/internal/webhook-retry` also runs this prune, and
+the webhook-inbox one, at their default windows — the script is for an
+out-of-band run, not the only path. A prune failure is logged and reported as
+`pruned.rateLimits: null` / `pruned.webhookInbox: null` in the cron response; it
+never fails the retry that precedes it.
+
 ### Environment
 
 - `TRUST_PROXY_HEADERS=true` — honour `x-forwarded-for`. Set this on Vercel,

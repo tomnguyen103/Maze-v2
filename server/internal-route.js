@@ -46,10 +46,17 @@ function secretMatches(candidate, expected) {
  *       dead: number
  *     }>
  *   } | null,
+ *   pruneRateLimits?: (() => Promise<number>) | null,
+ *   pruneWebhookInbox?: (() => Promise<number>) | null,
  *   cronSecret?: string
  * }} dependencies
  */
-export function createInternalHandler({ inbox, cronSecret = "" }) {
+export function createInternalHandler({
+  inbox,
+  pruneRateLimits = null,
+  pruneWebhookInbox = null,
+  cronSecret = ""
+}) {
   /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
@@ -93,15 +100,46 @@ export function createInternalHandler({ inbox, cronSecret = "" }) {
       sendJson(response, 503, { error: "Webhook inbox is not configured." });
       return;
     }
+    /** @type {{ claimed: number, processed: number, failed: number, dead: number }} */
+    let retry;
     try {
-      sendJson(response, 200, await inbox.retryPending());
+      retry = await inbox.retryPending();
     } catch (error) {
       console.error("[internal] webhook retry failed", {
         name: safeErrorName(error)
       });
       sendJson(response, 503, { error: "Webhook retry is unavailable." });
+      return;
     }
+    // Housekeeping runs after the retry and never fails it: a full table is a
+    // slow problem, a lost webhook is an immediate one.
+    const [rateLimits, webhookInbox] = await Promise.all([
+      runPrune("rate-limit counters", pruneRateLimits),
+      runPrune("webhook inbox", pruneWebhookInbox)
+    ]);
+    sendJson(response, 200, { ...retry, pruned: { rateLimits, webhookInbox } });
   };
+}
+
+/**
+ * Returns the pruned row count, or null when the prune is unconfigured or
+ * failed. The failure is logged, never surfaced to the caller.
+ *
+ * @param {string} what
+ * @param {(() => Promise<number>) | null} prune
+ */
+async function runPrune(what, prune) {
+  if (!prune) {
+    return null;
+  }
+  try {
+    return await prune();
+  } catch (error) {
+    console.error(`[internal] pruning ${what} failed`, {
+      name: safeErrorName(error)
+    });
+    return null;
+  }
 }
 
 /**
