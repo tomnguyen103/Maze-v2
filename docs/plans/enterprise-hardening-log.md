@@ -385,8 +385,10 @@ outcome of the change it failed to record.
   and is a no-op rather than a second state change.
 - `server/webhook-inbox.js` — store, the `receive` / `retryPending` pair, and one
   `processEvent` seam shared by the inline path and the retry loop.
-- `server/internal-route.js` — `POST /api/internal/webhook-retry`, guarded by a
-  constant-time `x-cron-secret` comparison, wired to Vercel cron every 10 min.
+- `server/internal-route.js` — `/api/internal/webhook-retry`, guarded by a
+  constant-time secret comparison. Vercel cron calls it with `GET` and
+  `Authorization: Bearer $CRON_SECRET`; `POST` with `x-cron-secret` also works
+  for driving it by hand. Daily schedule — see deviations 7 and 8.
 - `server/lifetime-service.js` split into `verifyWebhook` +
   `processVerifiedWebhook`, with `processWebhook` preserved as the old entry
   point so its existing tests keep their meaning.
