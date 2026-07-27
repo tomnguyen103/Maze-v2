@@ -115,6 +115,78 @@ and asserts exit code 2, and asserts the timeout bounds are present.
 
 ---
 
+## Phase 6 — GDPR data export
+
+- **PR**: #63
+- **Branch**: `feat/gdpr-export`
+- **ADR**: `docs/adr/0018-gdpr-data-export.md`
+- **Migration**: none.
+
+### Delivered
+
+- `server/data-export.js` — `buildUserExport` with explicit column lists per
+  section; every query binds the requesting user id; deleted accounts yield
+  empty sections.
+- `server/data-export-route.js` — `GET /api/me/export`, auth required,
+  `export.self` budget (2/hour), audited `export.self` before the body is
+  sent, `Content-Disposition: attachment`.
+- `shared/export-schema.json` — checked-in contract; the unit test pins the
+  builder's sections to the schema's required sections.
+- `vercel.json` rewrite `/api/me/export` → `profile` function with a
+  validated `_meRoute` (attacker-controlled-rewrite discipline, shim test
+  asserts both the rebuild and that unknown values are answered 404).
+- `docs/data-privacy.md`.
+- Tests: `data-export.test.js`, `data-export-route.test.js`, new cases in
+  `vercel-functions.test.js` and `player-api-integration.test.js`.
+
+### Gate
+
+- `npm run check`: green (652 unit tests / 11 skipped — 14 new), after
+  rebasing onto merged phase 5.
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### CodeRabbit review
+
+Two findings plus one nitpick, all fixed:
+
+- **The export read from eight independent queries**, so a concurrent save
+  or deletion could produce sections describing different moments.
+  `exportUserSnapshot` now wraps every section read in one
+  `REPEATABLE READ READ ONLY` transaction — the same snapshot discipline
+  `verify-audit-chain.mjs` already uses — with rollback and client release
+  covered by tests.
+- `docs/data-privacy.md` implied runtime JSON-Schema validation; it now says
+  the envelope conforms to the checked-in contract and is structurally
+  pinned by test.
+- The audit-before-body sequencing was asserted only as "audit eventually
+  ran"; the test now records both events and asserts the order.
+
+### Deviations
+
+1. **No `api/me-export.js` file** — the Hobby ceiling (12/12) again; the
+   plan predates it. Rewrites onto the `profile` function.
+2. **Explorer Access Settings are not a section.** They are device-local and
+   never reach the server (phase 1 already recorded this); the export
+   documents the fact instead of shipping a permanently empty section.
+3. **`score_entries` and `user_roles` are exported** although the plan's
+   list omits them — the acceptance criterion "every user-owned table
+   represented" wins over the narrative list.
+4. **Schema validation is structural, not a JSON-Schema engine, and row
+   shapes are left generic.** Validating with `ajv` would need a new
+   dependency outside the allowed list. The test pins envelope keys, section
+   set, and schema `$id`. Declaring `properties` / `required` /
+   `additionalProperties` per row was considered and declined: it would
+   restate every column list already written in `SECTION_QUERIES`, giving two
+   sources of truth for the same contract with nothing binding them together
+   — the exact drift the explicit-column design exists to avoid. The SQL
+   stays normative for shape; the schema file documents the envelope.
+5. **The audit write is sequenced before the response body** so a served
+   export always has its audit attempt behind it — but the recorder keeps
+   phase 1's never-throw contract, so a failed audit write is logged and
+   counted, not converted into a 503.
+
+---
+
 ## Phase 5 — Observability
 
 - **PR**: #62

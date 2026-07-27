@@ -17,6 +17,10 @@
       "destination": "/api/leaderboard?_healthRoute=ready"
     },
     {
+      "source": "/api/me/export",
+      "destination": "/api/profile?_meRoute=export"
+    },
+    {
       "source": "/api/access/config",
       "destination": "/api/access?_accessRoute=config"
     },
