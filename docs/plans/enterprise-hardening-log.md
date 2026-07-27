@@ -369,3 +369,68 @@ Five findings, all fixed:
 This supersedes the earlier "dismissed with reason" note above: the endpoint's
 audit write is still best-effort by design, but it no longer misreports the
 outcome of the change it failed to record.
+
+---
+
+## Phase 4 — Webhook inbox
+
+- **PR**: _pending_
+- **Branch**: `feat/webhook-inbox`
+- **ADR**: `docs/adr/0016-store-then-process-webhook-inbox.md`
+- **Migration**: `db/migrations/0009_webhook_inbox.sql`
+
+### Delivered
+
+- `webhook_inbox` keyed on `(provider, event_id)`, so a repeat delivery collides
+  and is a no-op rather than a second state change.
+- `server/webhook-inbox.js` — store, the `receive` / `retryPending` pair, and one
+  `processEvent` seam shared by the inline path and the retry loop.
+- `server/internal-route.js` — `POST /api/internal/webhook-retry`, guarded by a
+  constant-time `x-cron-secret` comparison, wired to Vercel cron every 10 min.
+- `server/lifetime-service.js` split into `verifyWebhook` +
+  `processVerifiedWebhook`, with `processWebhook` preserved as the old entry
+  point so its existing tests keep their meaning.
+- Clerk deliveries keyed on the `svix-id` header, which is what a redelivery
+  reuses.
+- `scripts/list-dead-webhooks.mjs` → `npm run webhooks:dead`, exiting nonzero
+  when any dead row exists.
+- Tests: `tests/webhook-inbox.test.js`, `tests/internal-route.test.js`, new cases
+  in `tests/migration.test.js` and `tests/vercel-functions.test.js`.
+
+### Gate
+
+- `npm run check`: green (585 tests / 11 skipped).
+- `npm run check:full`: green (111 e2e / 5 skipped).
+
+### Deviations
+
+1. **The retry endpoint is not its own serverless function.** The project is at
+   Vercel's 12-function Hobby ceiling, so `vercel.json` rewrites `/api/internal/*`
+   onto `api/stripe-webhook.js`, which rebuilds the path before dispatching. The
+   plan assumed a free function slot; phase 2 spent the last one. Recorded in the
+   ADR so nobody "tidies" it back into a new file.
+2. **`last_error` stores a redacted class name, not the provider's message.** The
+   plan's schema comment implies the error text. A failing payload may quote the
+   very fields the Journal and audit rules keep out of storage, so only the class
+   name is kept. Asserted by test.
+3. **`FOR UPDATE SKIP LOCKED` on the retry claim**, which the plan does not
+   mention. Two overlapping cron invocations would otherwise process the same row
+   twice — the exact double-apply the inbox exists to prevent.
+4. **An unset `CRON_SECRET` closes the endpoint with 503** rather than leaving it
+   open or falling through. A missing secret must never mean an open internal
+   endpoint.
+5. **Both webhook routes keep their pre-inbox behaviour when no inbox is
+   configured.** Guest-only and database-less deployments are unaffected, and the
+   existing `stripe-lifetime.test.js` / `clerk-webhook-route.test.js` semantics
+   are untouched.
+6. **New env var**: `CRON_SECRET`.
+
+### Note on a defect this phase caught in its own wiring
+
+The Vercel shim class of bug appeared for the third time: the no-`DATABASE_URL`
+branch of `server/player-api.js` did not recognise `/api/internal/*`, so the
+request fell through to a `next?.()` that has no callback in a serverless
+function — the endpoint would have hung until the platform timeout rather than
+answering. It was caught by the shim test written for this phase, not by the
+gate. Every dispatch guard in that file now enumerates all three namespaces, and
+each one has a test that asserts a response is actually written.

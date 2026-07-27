@@ -123,6 +123,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 6. `db/migrations/0006_audit_events.sql`
 7. `db/migrations/0007_rate_limit_counters.sql`
 8. `db/migrations/0008_user_roles.sql`
+9. `db/migrations/0009_webhook_inbox.sql`
 
 Then set:
 
@@ -139,6 +140,7 @@ STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
 ECHO_MAZE_APP_ORIGIN=https://your-app.example
 TRUST_PROXY_HEADERS=true
 REQUEST_ADDRESS_SALT=your-random-address-salt
+CRON_SECRET=your-random-cron-secret
 GEMINI_API_KEY=your-secret-key
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
@@ -149,6 +151,7 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 npm run verify:audit                    # recompute the audit_events hash chain
 npm run prune:rate-limits               # drop rate-limit counters whose window has closed
 npm run grant:admin -- <clerk-user-id>  # grant the first admin
+npm run webhooks:dead                   # list webhook deliveries that gave up
 ```
 
 All three need `DATABASE_URL` and sit outside `npm run check`, because the local
@@ -156,6 +159,12 @@ gate must not require a database.
 
 For `verify:audit`, exit code 1 means the chain is broken and exit code 2 means
 the verifier could not run — which is not evidence of tampering.
+
+`webhooks:dead` exits nonzero when any delivery has exhausted its retries, so it
+can gate a deploy: every row it prints is a provider state change that was never
+applied. `CRON_SECRET` guards `POST /api/internal/webhook-retry`, which Vercel
+cron calls every ten minutes; leaving it unset closes that endpoint rather than
+opening it.
 
 `grant:admin` exists only to break a circle: every other role change goes through
 `POST /api/admin/users/:id/role`, which itself requires an existing admin. It

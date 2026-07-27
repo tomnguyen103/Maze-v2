@@ -157,4 +157,23 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("password");
     expect(sql).not.toContain("ALTER TABLE players");
   });
+
+  it("stores webhook deliveries once, with no provider error bodies", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0009_webhook_inbox.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE webhook_inbox");
+    expect(sql).toContain("PRIMARY KEY (provider, event_id)");
+    expect(sql).toContain("provider IN ('stripe', 'clerk')");
+    expect(sql).toContain("status IN ('pending', 'processed', 'failed', 'dead')");
+    expect(sql).toContain("attempts INT NOT NULL DEFAULT 0");
+    // A processed row must record when, and an unprocessed row must not claim to.
+    expect(sql).toContain("CHECK ((status = 'processed') = (processed_at IS NOT NULL))");
+    expect(sql).toContain("webhook_inbox_retry_idx");
+    expect(sql).toContain("webhook_inbox_dead_idx");
+    expect(sql).not.toContain("card_number");
+    expect(sql).not.toContain("ALTER TABLE lifetime_purchases");
+  });
 });

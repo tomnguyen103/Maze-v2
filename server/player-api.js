@@ -5,6 +5,14 @@ import {
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
 import { createAdminHandler, isAdminPath } from "./admin-route.js";
+import {
+  createInternalHandler,
+  isInternalPath
+} from "./internal-route.js";
+import {
+  createWebhookInbox,
+  createWebhookInboxStore
+} from "./webhook-inbox.js";
 import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
@@ -83,14 +91,18 @@ export function createPlayerApi(env = process.env) {
      */
     return function unavailablePlayerApi(request, response, next = undefined) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
-      if (!PLAYER_PATHS.has(pathname) && !isAdminPath(pathname)) {
+      if (
+        !PLAYER_PATHS.has(pathname) &&
+        !isAdminPath(pathname) &&
+        !isInternalPath(pathname)
+      ) {
         next?.();
         return;
       }
-      if (isAdminPath(pathname)) {
-        // Without a database there is no authoritative role, so every admin
-        // route denies rather than falling through to the SPA document.
-        sendError(response, 503, "Admin services are not configured.");
+      if (isAdminPath(pathname) || isInternalPath(pathname)) {
+        // Without a database there is neither an authoritative role nor a
+        // webhook inbox, so these deny rather than falling through to the SPA.
+        sendError(response, 503, "These services are not configured.");
         return;
       }
       if (pathname === "/api/access/config" && request.method === "GET") {
@@ -133,6 +145,7 @@ export function createPlayerApi(env = process.env) {
   const roleStore = createRoleStore(queryAdapter);
   const roleResolver = createRoleResolver({ store: roleStore });
   const lifetimeConfig = loadLifetimeConfig(env);
+  const inboxStore = createWebhookInboxStore(queryAdapter);
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request
   ) => getAuth(
@@ -164,23 +177,51 @@ export function createPlayerApi(env = process.env) {
     getUserId,
     recordAudit
   });
+  // Hoisted so the webhook inbox can reach the same service instance the
+  // route uses: the retry loop must take exactly the inline path's route.
+  const lifetimeService = lifetimeConfig
+    ? createLifetimeService({
+        config: lifetimeConfig,
+        provider: createStripeLifetimeProvider({
+          appOrigin: lifetimeConfig.appOrigin,
+          priceId: lifetimeConfig.priceId,
+          stripe: new Stripe(lifetimeConfig.secretKey),
+          webhookSecret: lifetimeConfig.webhookSecret
+        }),
+        recordEvent: recordProductEvent,
+        store: lifetimeStore
+      })
+    : unavailableLifetimeService();
+  const inbox = createWebhookInbox({
+    store: inboxStore,
+    /**
+     * @param {string} provider
+     * @param {{ eventType: string, payload: unknown }} event
+     */
+    async processEvent(provider, event) {
+      if (provider === "stripe") {
+        await lifetimeService.processVerifiedWebhook(event.payload);
+        return;
+      }
+      if (event.eventType === "user.deleted") {
+        const payload = /** @type {{ id?: unknown }} */ (event.payload ?? {});
+        if (typeof payload.id !== "string" || !payload.id) {
+          throw new Error("Clerk deletion event is invalid.");
+        }
+        await userDeletionStore.deleteUser(payload.id);
+      }
+    }
+  });
+  const internalHandler = createInternalHandler({
+    inbox,
+    cronSecret: env.CRON_SECRET ?? ""
+  });
   const lifetimeHandler = createLifetimeHandler({
     getUserId,
     recordAudit,
     rateLimit,
-    service: lifetimeConfig
-      ? createLifetimeService({
-          config: lifetimeConfig,
-          provider: createStripeLifetimeProvider({
-            appOrigin: lifetimeConfig.appOrigin,
-            priceId: lifetimeConfig.priceId,
-            stripe: new Stripe(lifetimeConfig.secretKey),
-            webhookSecret: lifetimeConfig.webhookSecret
-          }),
-          recordEvent: recordProductEvent,
-          store: lifetimeStore
-        })
-      : unavailableLifetimeService()
+    inbox,
+    service: lifetimeService
   });
   const questProgressHandler = createQuestProgressHandler({
     store: questProgressStore,
@@ -190,7 +231,8 @@ export function createPlayerApi(env = process.env) {
   const clerkWebhookHandler = createClerkWebhookHandler({
     deleteUser: (userId) => userDeletionStore.deleteUser(userId),
     signingSecret: env.CLERK_WEBHOOK_SIGNING_SECRET,
-    recordAudit
+    recordAudit,
+    inbox
   });
   const accessHandler = createRunAccessHandler({
     store: accessStore,
@@ -257,6 +299,11 @@ export function createPlayerApi(env = process.env) {
         void clerkWebhookHandler(request, response, next);
         return;
       }
+      if (isInternalPath(pathname)) {
+        // Internal routes never needed Clerk, so they work here unchanged.
+        void internalHandler(request, response, next);
+        return;
+      }
       if (isAdminPath(pathname)) {
         // No Clerk means no admin identity, so every admin route is 401 rather
         // than silently unguarded.
@@ -295,8 +342,18 @@ export function createPlayerApi(env = process.env) {
    */
   return function playerApi(request, response, next = undefined) {
     const pathname = new URL(request.url ?? "", "http://local").pathname;
-    if (!PLAYER_PATHS.has(pathname) && !isAdminPath(pathname)) {
+    if (
+      !PLAYER_PATHS.has(pathname) &&
+      !isAdminPath(pathname) &&
+      !isInternalPath(pathname)
+    ) {
       next?.();
+      return;
+    }
+    if (isInternalPath(pathname)) {
+      // Authenticated by shared secret, not Clerk: the caller is Vercel cron
+      // and has no Explorer identity.
+      void internalHandler(request, response, next);
       return;
     }
     if (pathname === "/api/stripe-webhook") {
@@ -396,6 +453,10 @@ function unavailableLifetimeService() {
   return {
     confirmCheckout: unavailable,
     createCheckout: unavailable,
-    processWebhook: unavailable
+    processWebhook: unavailable,
+    processVerifiedWebhook: unavailable,
+    verifyWebhook: () => {
+      throw new Error("Lifetime Membership is not configured.");
+    }
   };
 }

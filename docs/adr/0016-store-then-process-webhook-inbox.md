@@ -1,0 +1,86 @@
+# 16. Store-then-process webhook inbox
+
+Date: 2026-07-27
+
+## Status
+
+Accepted
+
+## Context
+
+Stripe and Clerk webhooks were verified and processed in one step. If processing
+threw after verification, the handler answered 503 and the delivery was lost
+unless the provider happened to redeliver — and providers stop redelivering
+eventually. A refund that failed to apply on its last retry simply never applied.
+
+Idempotency existed only inside the Stripe handler, via `stripe_webhook_events`.
+That covered replay of the same Stripe event, but nothing owned recovery: there
+was no record of a delivery that had arrived and not yet succeeded.
+
+## Decision
+
+**Verify, then store, then process — in that order.** Signature verification
+still happens first and an unverified delivery is never written; it was never a
+genuine delivery. Once stored, we answer 200 so the provider stops retrying, and
+our own loop owns recovery from there.
+
+That ordering is the whole point: a crash between storing and processing leaves a
+retryable row, and a crash before storing leaves nothing — which is correct,
+because the provider will redeliver something we have no record of.
+
+**`PRIMARY KEY (provider, event_id)` is the idempotency.** A repeat delivery
+collides and returns `duplicate`, and a duplicate is a no-op — not a second
+processing attempt. `provider` is part of the key so a Stripe and a Clerk event
+that happen to share an id stay distinct.
+
+Clerk events are keyed by the `svix-id` delivery header rather than anything in
+the payload, because that header is what a Clerk redelivery reuses.
+
+**One seam, `processEvent(provider, event)`, shared by the inline path and the
+retry loop.** A retried delivery must take exactly the route a fresh one takes,
+or the retry is testing different code than production runs.
+`lifetime-service.processWebhook` is now `verifyWebhook` + `processVerifiedWebhook`,
+with the old entry point preserved so its existing tests keep their meaning.
+
+**Failures escalate, then stop.** Five attempts, then `dead`. A row that has
+failed five times is not transient, and leaving it in the retry set forever means
+every cron run pays for it. `scripts/list-dead-webhooks.mjs` exits nonzero when
+any exist, so it can gate a deploy or wake someone; phase 7 surfaces them in the
+dashboard.
+
+**`last_error` stores a redacted class name, never the provider's message.** A
+failing payload may quote the very fields the Journal and audit rules keep out of
+storage — card fragments, ids, addresses. Asserted by test.
+
+**The retry claim uses `FOR UPDATE SKIP LOCKED`.** Two overlapping cron
+invocations must not process the same row twice.
+
+## Where the endpoint lives
+
+`POST /api/internal/webhook-retry`, guarded by a `x-cron-secret` header compared
+in constant time, driven by Vercel cron every ten minutes.
+
+It is **not** its own serverless function. The project sits at Vercel's
+12-function Hobby ceiling, so `vercel.json` rewrites `/api/internal/*` onto
+`api/stripe-webhook.js`, which rebuilds the path before dispatching. Webhook
+delivery and the webhook retry loop are the same subsystem, so that is the least
+surprising host — but the reason is the ceiling, not taste, and it is recorded
+here so the next person does not "tidy" it into a new file.
+
+An unset `CRON_SECRET` **closes** the endpoint with 503. A missing secret must
+never mean an open internal endpoint. Unauthenticated callers get the same 401
+for a real internal route and an unknown one, so the surface cannot be mapped.
+
+## Consequences
+
+- Replaying the same event any number of times causes one state change.
+- A delivery that fails mid-process stays retryable rather than being lost.
+- Providers see 200 as soon as the delivery is stored, so their retry schedule
+  stops competing with ours.
+- Both webhook routes keep their pre-inbox behaviour when no inbox is configured,
+  so guest-only and database-less deployments are unaffected.
+- New env var: `CRON_SECRET`. Required for the retry endpoint to function at all.
+- The inbox holds the full verified payload. That is deliberate — a retry has to
+  reprocess the original event — but it means `webhook_inbox` is the one table
+  carrying provider payloads, and phase 6's export must not include it, since the
+  rows are ours rather than the Explorer's.
