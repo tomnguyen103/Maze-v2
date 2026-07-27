@@ -39,12 +39,18 @@ function sourceFiles(directory) {
 
 /**
  * Every `env.NAME`, `process.env.NAME`, and `import.meta.env.NAME` read across
- * the server and the client bundle.
+ * the server and the client bundle. `server.js` is the local entry point and
+ * sits outside both directories, so it is named explicitly rather than left to
+ * be noticed later.
  */
 function readEnvNames() {
   /** @type {Set<string>} */
   const names = new Set();
-  for (const path of [...sourceFiles("server"), ...sourceFiles("src")]) {
+  for (const path of [
+    "server.js",
+    ...sourceFiles("server"),
+    ...sourceFiles("src")
+  ]) {
     const source = readFileSync(path, "utf8");
     for (const match of source.matchAll(/\benv\.([A-Z][A-Z0-9_]*)\b/g)) {
       names.add(match[1]);
