@@ -162,6 +162,10 @@ describe("buildUserExport", () => {
     expect(adapter.queries).toHaveLength(8);
   });
 
+  // Structural pinning only: envelope keys, section set, and $id. The
+  // schema's per-section constraints (additionalProperties, the role enum)
+  // are documentation for external consumers — enforcing them here would
+  // need a JSON-Schema engine, which is not an allowed dependency.
   it("matches the checked-in export schema", async () => {
     const schema = JSON.parse(
       readFileSync(
