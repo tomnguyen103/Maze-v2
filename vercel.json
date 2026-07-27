@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/internal/:internalPath*",
+      "destination": "/api/stripe-webhook?_internalPath=:internalPath*"
+    },
+    {
       "source": "/api/admin/:adminPath*",
       "destination": "/api/admin?_adminPath=:adminPath*"
     },
@@ -50,6 +54,12 @@
           "value": "max-age=31536000; includeSubDomains"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/internal/webhook-retry",
+      "schedule": "0 3 * * *"
     }
   ]
 }

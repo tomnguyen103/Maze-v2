@@ -369,3 +369,179 @@ Five findings, all fixed:
 This supersedes the earlier "dismissed with reason" note above: the endpoint's
 audit write is still best-effort by design, but it no longer misreports the
 outcome of the change it failed to record.
+
+---
+
+## Phase 4 — Webhook inbox
+
+- **PR**: _pending_
+- **Branch**: `feat/webhook-inbox`
+- **ADR**: `docs/adr/0016-store-then-process-webhook-inbox.md`
+- **Migration**: `db/migrations/0009_webhook_inbox.sql`
+
+### Delivered
+
+- `webhook_inbox` keyed on `(provider, event_id)`, so a repeat delivery collides
+  and is a no-op rather than a second state change.
+- `server/webhook-inbox.js` — store, the `receive` / `retryPending` pair, and one
+  `processEvent` seam shared by the inline path and the retry loop.
+- `server/internal-route.js` — `/api/internal/webhook-retry`, guarded by a
+  constant-time secret comparison. Vercel cron calls it with `GET` and
+  `Authorization: Bearer $CRON_SECRET`; `POST` with `x-cron-secret` also works
+  for driving it by hand. Daily schedule — see deviations 7 and 8.
+- `server/lifetime-service.js` split into `verifyWebhook` +
+  `processVerifiedWebhook`, with `processWebhook` preserved as the old entry
+  point so its existing tests keep their meaning.
+- Clerk deliveries keyed on the `svix-id` header, which is what a redelivery
+  reuses.
+- `scripts/list-dead-webhooks.mjs` → `npm run webhooks:dead`, exiting nonzero
+  when any dead row exists, and `scripts/prune-webhook-inbox.mjs` →
+  `npm run webhooks:prune` for retention.
+- Tests: `tests/webhook-inbox.test.js`, `tests/internal-route.test.js`, new cases
+  in `tests/migration.test.js` and `tests/vercel-functions.test.js`.
+
+### Gate
+
+- `npm run check`: green (593 tests / 11 skipped).
+- `npm run check:full`: green (111 e2e / 5 skipped) on a clean run.
+
+  The unit suite has its own intermittent fault: `vitest` occasionally reports
+  "Vitest caught 1 unhandled error during the test run" with one test file not
+  completing, then passes cleanly on every rerun (four consecutive clean runs
+  each time it appeared). It surfaced twice during this phase, and the first
+  occurrence exited non-zero from the pre-push hook and silently blocked a push —
+  the branch stayed at its previous SHA and only a manual check of the remote ref
+  caught it. Unreproducible so far; likely an async pool error escaping after the
+  run ends. **"The gate is green" and "the push landed" are separate facts.**
+
+  **The e2e flakiness is now a real problem, not a footnote.** Across this phase
+  three separate full-suite runs failed three *different* tests — a chunk-load
+  test, a Warden Challenge dialog, and the guest second-Labyrinth invariant —
+  each passing on targeted rerun and on other full runs. That is roughly a 1-in-3
+  chance that any given `check:full` reports a failure unrelated to the change
+  under test, which is close to the point where a red gate stops carrying
+  information. It is not caused by this phase (it was visible in phases 1 and 2),
+  and it deserves its own fix outside this plan.
+
+### Deviations
+
+1. **The retry endpoint is not its own serverless function.** The project is at
+   Vercel's 12-function Hobby ceiling, so `vercel.json` rewrites `/api/internal/*`
+   onto `api/stripe-webhook.js`, which rebuilds the path before dispatching. The
+   plan assumed a free function slot; phase 2 spent the last one. Recorded in the
+   ADR so nobody "tidies" it back into a new file.
+2. **`last_error` stores a redacted class name, not the provider's message.** The
+   plan's schema comment implies the error text. A failing payload may quote the
+   very fields the Journal and audit rules keep out of storage, so only the class
+   name is kept. Asserted by test.
+3. **No lock-based claim on the retry loop.** An earlier draft used
+   `FOR UPDATE SKIP LOCKED` and the ADR claimed it stopped two cron invocations
+   colliding. It did not — the loop reads through the pooled adapter in
+   autocommit, so the locks released at statement end. Removed, and the ADR now
+   states the real guarantee: `processEvent` is idempotent per provider, so
+   processing a row twice is a no-op.
+4. **An unset `CRON_SECRET` closes the endpoint with 503** rather than leaving it
+   open or falling through. A missing secret must never mean an open internal
+   endpoint.
+5. **Both webhook routes keep their pre-inbox behaviour when no inbox is
+   configured.** Guest-only and database-less deployments are unaffected, and the
+   existing `stripe-lifetime.test.js` / `clerk-webhook-route.test.js` semantics
+   are untouched.
+6. **New env var**: `CRON_SECRET`.
+7. **The cron contract in the plan does not match the platform.** Vercel cron
+   issues `GET` with `Authorization: Bearer $CRON_SECRET`; the plan's `POST` +
+   `x-cron-secret` would have returned 401 to every scheduled run. Both shapes
+   are accepted now.
+8. **The schedule is daily, not every ten minutes.** Vercel Hobby — the same plan
+   whose 12-function ceiling shaped where this endpoint lives — allows one run
+   per cron job per day. A day between retries is a long time for a failed
+   refund; this is a plan constraint, not a design choice, and it is a one-line
+   change on a paid plan. **Worth an explicit decision from the repo owner.**
+9. **Auditing moved into the `processEvent` seam.** In the routes, the retry loop
+   produced no audit rows and the Clerk inbox path wrote no `user.delete` audit
+   row for a `user.deleted` event — a silent regression against phase 1.
+   (`user.deleted` is Clerk's event name, `user.delete` our audit action; the
+   two names are deliberately distinct.)
+
+### Local review
+
+Both axes run. Eight findings, all fixed, four of them serious:
+
+- **Path traversal into a hang.** `_internalPath=../..` normalizes to `/`, which
+  no namespace recognises, so the request reached a `next?.()` that does not
+  exist in a serverless function — an unauthenticated caller could hang a
+  function until the platform timeout. `api/admin.js` had the same hole. Both
+  shims now validate the segment.
+- **Audit rows lost.** The Clerk inbox path returned before `recordAudit`, and
+  the retry loop audited nothing for either provider, so with a database
+  configured no `user.delete` row was written at all.
+- **`FOR UPDATE SKIP LOCKED` did nothing** (see deviation 3).
+- **The cron endpoint would never have run** (see deviations 7 and 8).
+
+Also fixed: the no-Clerk branch built a second lifetime service without the
+inbox, so that deployment ran pre-inbox Stripe handling while its retry endpoint
+was live; a `markFailed` failure turned into a 503 for a delivery already stored;
+and `receiveThroughInbox` dropped `purchaseId` from the audit resource, which the
+move into `processEvent` resolves.
+
+### CodeRabbit review
+
+Two findings, both fixed:
+
+- **The inbox retained raw Clerk identities indefinitely.** `payload` was stored
+  forever with no purge, and a Clerk `user.deleted` payload carries the raw Clerk
+  id — the exact identity `README.md` documents as never being stored raw, since
+  deletion keeps only a SHA-256 tombstone. The ADR had reasoned about excluding
+  the payload from phase 6's export but never about retaining it at all. Fixed:
+  `markProcessed` clears the payload the moment the delivery succeeds, a row with
+  no payload is not selected for retry, and `npm run webhooks:prune` bounds how
+  long a dead row can hold one.
+
+  Worth naming plainly — this phase introduced a privacy regression against an
+  invariant documented in the README, and neither the local review nor the gate
+  caught it. It was found by reading the schema against the docs, which is the
+  check I should have run myself when adding a table that stores provider
+  payloads.
+- `README.md` and this log still described the pre-correction cron contract
+  (`POST`, every ten minutes) after the ADR had been corrected to `GET` +
+  `Bearer` on a daily schedule.
+
+### CodeRabbit full review
+
+`@coderabbitai review` on the privacy fix returned **"Review skipped: incremental
+reviews are disabled"** with a green status. That is a no-op, not a clean review:
+incremental reviews are off for this org, so the command reviewed nothing.
+Merging on that green status would have shipped the privacy fix unreviewed.
+`@coderabbitai full review` is the command that actually re-reviews. **A green
+CodeRabbit status means the review process terminated, not that the current code
+was reviewed — the description string is what distinguishes them.**
+
+The full review found five more, three Major, all fixed:
+
+- **`inbox.receive` was unguarded in the Clerk route.** The router dispatches
+  that handler with `void`, so a store failure rejected with no response written
+  and the request hung until the platform timeout. Now 503, which is right: the
+  delivery was never stored, so Clerk should redeliver. This is the fourth
+  instance of the hang-on-unwritten-response class in this codebase.
+- **The Stripe inbox path double-audited.** `processEvent` writes the row, then
+  the route wrote a second one from the returned result — so an inline delivery
+  produced two `lifetime.webhook` rows while a retried one produced one.
+- **Both webhook scripts built their pool before the `try`**, so a malformed
+  `DATABASE_URL` threw past the handler and bypassed the documented exit code,
+  and neither pool had connection or query timeouts.
+- README's script count, and a naming ambiguity between Clerk's `user.deleted`
+  event and our `user.delete` audit action.
+
+The same pool-construction pattern exists in `verify-audit-chain.mjs`,
+`prune-rate-limits.mjs`, and `grant-admin.mjs` from earlier phases. Left alone
+here to keep this PR's diff to its own phase; worth a follow-up.
+
+### Note on a defect this phase caught in its own wiring
+
+The Vercel shim class of bug appeared for the third time: the no-`DATABASE_URL`
+branch of `server/player-api.js` did not recognise `/api/internal/*`, so the
+request fell through to a `next?.()` that has no callback in a serverless
+function — the endpoint would have hung until the platform timeout rather than
+answering. It was caught by the shim test written for this phase, not by the
+gate. Every dispatch guard in that file now enumerates all three namespaces, and
+each one has a test that asserts a response is actually written.

@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import access from "../api/access.js";
 import admin from "../api/admin.js";
+import stripeWebhook from "../api/stripe-webhook.js";
 
 describe("Vercel function budget", () => {
   it("keeps every API route within the Hobby deployment limit", async () => {
@@ -62,6 +63,54 @@ describe("Vercel function budget", () => {
       // Answered, not passed along: a serverless function has no next handler.
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
     }
+  });
+
+  it("routes the internal namespace through the stripe-webhook function", async () => {
+    // At the 12-function Hobby ceiling, a new endpoint has to share an existing
+    // function. This asserts the rewrite and the shim agree on the path shape.
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    expect(config.rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: "/api/internal/:internalPath*",
+          destination: "/api/stripe-webhook?_internalPath=:internalPath*"
+        }
+      ])
+    );
+    expect(config.crons).toEqual([
+      { path: "/api/internal/webhook-retry", schedule: "0 3 * * *" }
+    ]);
+
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "POST",
+        url: "/api/stripe-webhook?_internalPath=webhook-retry",
+        headers: {}
+      })
+    );
+    // The router dispatches async handlers with `void`, so the shim's return
+    // resolves before the response is written. Wait for `end` instead.
+    /** @type {(status: number) => void} */
+    let settle = () => {};
+    const finished = new Promise((resolve) => {
+      settle = resolve;
+    });
+    const captured = { statusCode: 0 };
+    const response = /** @type {import("node:http").ServerResponse} */ (
+      /** @type {unknown} */ ({
+        statusCode: 0,
+        setHeader() {},
+        end() {
+          settle(captured.statusCode || response.statusCode);
+        }
+      })
+    );
+    await stripeWebhook(request, response);
+    expect(request.url).toBe("/api/internal/webhook-retry");
+    // Answered, not passed along: without CRON_SECRET the endpoint closes.
+    await expect(finished).resolves.toBeGreaterThanOrEqual(400);
   });
 
   it("restores the public nested Access path before server routing", async () => {

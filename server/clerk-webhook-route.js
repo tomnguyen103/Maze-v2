@@ -11,14 +11,23 @@ const MAX_BODY_BYTES = 1024 * 1024;
  *   deleteUser: (userId: string) => Promise<void>,
  *   signingSecret?: string,
  *   verifyEvent?: (request: import("node:http").IncomingMessage, body: Buffer) => Promise<{ type: string, data: { id?: unknown } }>,
- *   recordAudit?: import("./audit.js").RecordAudit
+ *   recordAudit?: import("./audit.js").RecordAudit,
+ *   inbox?: {
+ *     receive: (delivery: {
+ *       provider: "clerk",
+ *       eventId: string,
+ *       eventType: string,
+ *       payload: unknown
+ *     }) => Promise<{ duplicate: boolean, processed: boolean }>
+ *   } | null
  * }} dependencies
  */
 export function createClerkWebhookHandler({
   deleteUser,
   signingSecret = "",
   verifyEvent,
-  recordAudit = async () => {}
+  recordAudit = async () => {},
+  inbox = null
 }) {
   const verify = verifyEvent ?? (async (request, body) => {
     if (!signingSecret) {
@@ -69,6 +78,40 @@ export function createClerkWebhookHandler({
         sendJson(response, 400, { error: "Clerk deletion event is invalid." });
         return;
       }
+      // The svix delivery id is the stable key a redelivery reuses, so it is
+      // what the inbox deduplicates on.
+      const deliveryId = deliveryIdFrom(request);
+      if (inbox && deliveryId) {
+        /** @type {{ duplicate: boolean }} */
+        let outcome;
+        try {
+          outcome = await inbox.receive({
+            provider: "clerk",
+            eventId: deliveryId,
+            eventType: event.type,
+            payload: { id: userId }
+          });
+        } catch (error) {
+          // The router dispatches this handler with `void`, so an unhandled
+          // rejection writes no response at all and the request hangs until the
+          // platform timeout. 503 tells Clerk to redeliver, which is exactly
+          // right when the delivery was never stored.
+          console.error("[clerk-webhook] Inbox write failed", {
+            name: safeErrorName(error)
+          });
+          sendJson(response, 503, {
+            error: "Account deletion is temporarily unavailable."
+          });
+          return;
+        }
+        // 200 either way: the delivery is stored and owned by our retry loop,
+        // so Clerk must stop redelivering it.
+        sendJson(response, 200, {
+          received: true,
+          duplicate: outcome.duplicate
+        });
+        return;
+      }
       try {
         await deleteUser(userId);
       } catch (error) {
@@ -89,6 +132,15 @@ export function createClerkWebhookHandler({
     }
     sendJson(response, 200, { received: true });
   };
+}
+
+/** @param {import("node:http").IncomingMessage} request */
+function deliveryIdFrom(request) {
+  const header = request.headers["svix-id"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,255}$/.test(value)
+    ? value
+    : null;
 }
 
 class WebhookConfigurationError extends Error {}

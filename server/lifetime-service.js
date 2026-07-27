@@ -164,9 +164,32 @@ export function createLifetimeService({
       return result;
     },
 
+    /**
+     * Signature verification, split out so the webhook inbox can store a
+     * delivery before processing it. Anything that fails here was never a
+     * genuine delivery and must not be stored.
+     *
+     * @param {Buffer} rawBody
+     * @param {string} signature
+     */
+    verifyWebhook(rawBody, signature) {
+      return provider.constructWebhookEvent(rawBody, signature);
+    },
+
     /** @param {Buffer} rawBody @param {string} signature */
     async processWebhook(rawBody, signature) {
-      const verified = provider.constructWebhookEvent(rawBody, signature);
+      return this.processVerifiedWebhook(
+        provider.constructWebhookEvent(rawBody, signature)
+      );
+    },
+
+    /**
+     * Everything after verification. The inline path and the retry loop share
+     * exactly this, so a retried delivery takes the same route as a fresh one.
+     *
+     * @param {unknown} verified
+     */
+    async processVerifiedWebhook(verified) {
       const normalized = normalizeLifetimeProviderEvent(
         /** @type {Parameters<typeof normalizeLifetimeProviderEvent>[0]} */ (
           verified

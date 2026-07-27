@@ -30,17 +30,28 @@ class LifetimeInputError extends Error {
  *   service: {
  *     confirmCheckout: (userId: string, sessionId: string) => Promise<Record<string, unknown>>,
  *     createCheckout: (userId: string) => Promise<Record<string, unknown>>,
- *     processWebhook: (rawBody: Buffer, signature: string) => Promise<Record<string, unknown>>
+ *     processWebhook: (rawBody: Buffer, signature: string) => Promise<Record<string, unknown>>,
+ *     verifyWebhook?: (rawBody: Buffer, signature: string) => unknown,
+ *     processVerifiedWebhook?: (verified: unknown) => Promise<Record<string, unknown>>
  *   },
  *   recordAudit?: import("./audit.js").RecordAudit,
- *   rateLimit?: import("./rate-limit-request.js").RateLimit
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit,
+ *   inbox?: {
+ *     receive: (delivery: {
+ *       provider: "stripe",
+ *       eventId: string,
+ *       eventType: string,
+ *       payload: unknown
+ *     }) => Promise<{ duplicate: boolean, processed: boolean }>
+ *   } | null
  * }} dependencies
  */
 export function createLifetimeHandler({
   getUserId,
   service,
   recordAudit = async () => {},
-  rateLimit = async () => UNMETERED
+  rateLimit = async () => UNMETERED,
+  inbox = null
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -150,6 +161,48 @@ export function createLifetimeHandler({
   };
 
   /**
+   * Verify first, store second, process third. A crash between storing and
+   * processing leaves a retryable row; a crash before storing leaves nothing,
+   * which is correct because the provider will redeliver.
+   *
+   * @param {Buffer} rawBody
+   * @param {string} signature
+   */
+  async function receiveThroughInbox(rawBody, signature) {
+    if (!inbox || !service.verifyWebhook || !service.processVerifiedWebhook) {
+      return service.processWebhook(rawBody, signature);
+    }
+    const verified = /** @type {Record<string, unknown>} */ (
+      service.verifyWebhook(rawBody, signature)
+    );
+    const eventId = typeof verified.id === "string" ? verified.id : "";
+    const eventType = typeof verified.type === "string" ? verified.type : "";
+    if (!eventId || !eventType) {
+      // A verified Stripe event always carries both. Without them there is no
+      // key to deduplicate on, so fall back rather than store an unkeyed row.
+      return service.processVerifiedWebhook(verified);
+    }
+    const outcome = await inbox.receive({
+      provider: "stripe",
+      eventId,
+      eventType,
+      payload: verified
+    });
+    return {
+      eventType,
+      // processEvent already wrote the audit row for this delivery, and it
+      // writes the same row on the retry path. Auditing again here would double
+      // every inline delivery and still leave retries single-counted.
+      audited: true,
+      outcome: outcome.duplicate
+        ? "duplicate"
+        : outcome.processed
+          ? "processed"
+          : "deferred"
+    };
+  }
+
+  /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
    */
@@ -161,20 +214,24 @@ export function createLifetimeHandler({
     }
     try {
       const rawBody = await readRawBody(request, 512 * 1024);
-      const result = await service.processWebhook(rawBody, signature);
-      await recordAudit(request, {
-        actorId: SYSTEM_ACTORS.stripe,
-        actorRole: "system",
-        action: "lifetime.webhook",
-        resource: {
-          type: "lifetime_purchase",
-          id: result.purchaseId ? String(result.purchaseId) : null
-        },
-        after: {
-          eventType: result.eventType ?? null,
-          outcome: result.outcome ?? null
-        }
-      });
+      const result = inbox
+        ? await receiveThroughInbox(rawBody, signature)
+        : await service.processWebhook(rawBody, signature);
+      if (result.audited !== true) {
+        await recordAudit(request, {
+          actorId: SYSTEM_ACTORS.stripe,
+          actorRole: "system",
+          action: "lifetime.webhook",
+          resource: {
+            type: "lifetime_purchase",
+            id: result.purchaseId ? String(result.purchaseId) : null
+          },
+          after: {
+            eventType: result.eventType ?? null,
+            outcome: result.outcome ?? null
+          }
+        });
+      }
       sendJson(response, 200, { received: true });
     } catch (error) {
       if (error instanceof LifetimeWebhookVerificationError) {
