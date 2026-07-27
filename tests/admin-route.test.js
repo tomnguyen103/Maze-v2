@@ -298,6 +298,33 @@ describe("admin role endpoint", () => {
     expect(harness.audits).toHaveLength(1);
   });
 
+  it("still reports success when the audit write fails", async () => {
+    // setRole has already committed by then. Reporting 503 would claim a failed
+    // change that actually succeeded, and the retry would be a no-op that writes
+    // no audit row at all.
+    const handler = createAdminHandler({
+      store: {
+        setRole: async () => ({ previousRole: "player", role: "moderator" })
+      },
+      requirePermission: createPermissionGuard({
+        getUserId: () => "admin_1",
+        resolver: { roleFor: async () => "admin" }
+      }),
+      recordAudit: async () => {
+        throw new Error("audit unavailable");
+      }
+    });
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({ url: roleUrl, body: { role: "moderator" } }),
+      response,
+      undefined
+    );
+    const result = await finished;
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toMatchObject({ role: "moderator", changed: true });
+  });
+
   it("reports 503 and writes no audit row when the store fails", async () => {
     const harness = createHarness({
       setRole: async () => {

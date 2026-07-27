@@ -51,23 +51,45 @@ export function createRoleStore(pool) {
       if (!isRole(role)) {
         throw new RoleWriteError("Role is not supported.");
       }
-      const previous = await getRole(userId);
       if (role === DEFAULT_ROLE) {
         // Absence of a row is the default, so revoking means deleting rather
-        // than storing a redundant 'player' row.
-        await pool.query("DELETE FROM user_roles WHERE user_id = $1", [userId]);
-        return { previousRole: previous, role };
+        // than storing a redundant 'player' row. RETURNING gives the prior role
+        // from the same statement that removed it.
+        const deleted = await pool.query(
+          "DELETE FROM user_roles WHERE user_id = $1 RETURNING role",
+          [userId]
+        );
+        const removed = deleted.rows[0]?.role;
+        return {
+          previousRole: isRole(removed) ? removed : DEFAULT_ROLE,
+          role
+        };
       }
-      await pool.query(
-        `INSERT INTO user_roles (user_id, role, granted_by)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (user_id) DO UPDATE
-           SET role = EXCLUDED.role,
-               granted_by = EXCLUDED.granted_by,
-               updated_at = now()`,
+      // The read and the write share one snapshot, so two concurrent changes to
+      // the same Explorer cannot both report the same `before` value.
+      const upserted = await pool.query(
+        `WITH previous AS (
+           SELECT role FROM user_roles WHERE user_id = $1
+         ),
+         upserted AS (
+           INSERT INTO user_roles (user_id, role, granted_by)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO UPDATE
+             SET role = EXCLUDED.role,
+                 granted_by = EXCLUDED.granted_by,
+                 updated_at = now()
+           RETURNING role
+         )
+         SELECT
+           (SELECT role FROM previous) AS previous_role,
+           (SELECT role FROM upserted) AS role`,
         [userId, role, grantedBy]
       );
-      return { previousRole: previous, role };
+      const previous = upserted.rows[0]?.previous_role;
+      return {
+        previousRole: isRole(previous) ? previous : DEFAULT_ROLE,
+        role
+      };
     }
   };
 }

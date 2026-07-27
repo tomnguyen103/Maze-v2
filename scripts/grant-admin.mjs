@@ -80,7 +80,15 @@ try {
       };
     }
   };
-  const result = await createRoleStore(adapter).setRole({
+  const store = createRoleStore(adapter);
+  const current = await store.getRole(userId);
+  if (current === role) {
+    // Re-running the bootstrap must not rewrite updated_at or file a role.grant
+    // for a change that did not happen.
+    console.log(`UNCHANGED ${userId} already holds ${role}.`);
+    process.exit(0);
+  }
+  const result = await store.setRole({
     userId,
     role,
     grantedBy: SYSTEM_ACTORS.bootstrap

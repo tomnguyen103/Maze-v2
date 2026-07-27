@@ -377,7 +377,10 @@ function createClerkRoleMirror(env) {
           authorization: `Bearer ${secretKey}`,
           "content-type": "application/json"
         },
-        body: JSON.stringify({ public_metadata: { role } })
+        body: JSON.stringify({ public_metadata: { role } }),
+        // The database write has already committed by this point; a slow Clerk
+        // must not hold the admin's request open behind it.
+        signal: AbortSignal.timeout(5000)
       }
     );
     if (!response.ok) {

@@ -103,14 +103,23 @@ export function createAdminHandler({
       // No row for a no-op. Re-granting a role someone already holds changes
       // nothing, and an audit log padded with non-events is harder to read.
       if (changed) {
-        await recordAudit(request, {
-          actorId: decision.userId,
-          actorRole: decision.role,
-          action: role === DEFAULT_ROLE ? "role.revoke" : "role.grant",
-          resource: { type: "user_role", id: targetUserId },
-          before: { role: result.previousRole },
-          after: { role }
-        });
+        // Best-effort, like the mirror: the role write has already committed, so
+        // a failure here must not report 503 for a change that succeeded. A
+        // retry would be a no-op and would write no row at all.
+        try {
+          await recordAudit(request, {
+            actorId: decision.userId,
+            actorRole: decision.role,
+            action: role === DEFAULT_ROLE ? "role.revoke" : "role.grant",
+            resource: { type: "user_role", id: targetUserId },
+            before: { role: result.previousRole },
+            after: { role }
+          });
+        } catch (error) {
+          console.error("[admin] role audit failed", {
+            name: safeErrorName(error)
+          });
+        }
       }
       sendJson(response, 200, { userId: targetUserId, role, changed });
     } catch (error) {

@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import access from "../api/access.js";
+import admin from "../api/admin.js";
 
 describe("Vercel function budget", () => {
   it("keeps every API route within the Hobby deployment limit", async () => {
@@ -35,6 +36,32 @@ describe("Vercel function budget", () => {
         }
       ])
     );
+  });
+
+  it("normalizes every admin path, including a bare /api/admin", async () => {
+    // Without the trailing slash the router misses isAdminPath, calls next?.()
+    // with no callback in a serverless function, and hangs until the platform
+    // timeout instead of answering 401.
+    for (const [incoming, expected] of [
+      ["/api/admin?_adminPath=users/user_1/role", "/api/admin/users/user_1/role"],
+      ["/api/admin", "/api/admin/"],
+      ["/api/admin?_adminPath=", "/api/admin/"]
+    ]) {
+      const request = /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ ({ method: "POST", url: incoming, headers: {} })
+      );
+      const response = /** @type {import("node:http").ServerResponse} */ (
+        /** @type {unknown} */ ({
+          end() {},
+          setHeader() {},
+          statusCode: 0
+        })
+      );
+      await admin(request, response);
+      expect(request.url).toBe(expected);
+      // Answered, not passed along: a serverless function has no next handler.
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    }
   });
 
   it("restores the public nested Access path before server routing", async () => {

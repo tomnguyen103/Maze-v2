@@ -22,17 +22,23 @@ function createFakePool(options = {}) {
      */
     async query(sql, values = []) {
       calls.push({ sql, values });
+      if (sql.includes("DELETE FROM user_roles")) {
+        // RETURNING role: the prior role comes from the same statement.
+        const previous = roles.get(String(values[0]));
+        roles.delete(String(values[0]));
+        return { rows: previous ? [{ role: previous }] : [] };
+      }
+      if (sql.includes("INSERT INTO user_roles")) {
+        // The CTE reads the pre-update row and upserts in one snapshot.
+        const previous = roles.get(String(values[0])) ?? null;
+        roles.set(String(values[0]), String(values[1]));
+        return {
+          rows: [{ previous_role: previous, role: String(values[1]) }]
+        };
+      }
       if (sql.includes("SELECT role FROM user_roles")) {
         const role = roles.get(String(values[0]));
         return { rows: role ? [{ role }] : (options.rows ?? []) };
-      }
-      if (sql.includes("DELETE FROM user_roles")) {
-        roles.delete(String(values[0]));
-        return { rows: [] };
-      }
-      if (sql.includes("INSERT INTO user_roles")) {
-        roles.set(String(values[0]), String(values[1]));
-        return { rows: [] };
       }
       return { rows: [] };
     }
@@ -66,11 +72,13 @@ describe("createRoleStore", () => {
         grantedBy: "admin_1"
       })
     ).resolves.toEqual({ previousRole: "player", role: "moderator" });
+    // One statement, so the before value cannot be skewed by a concurrent
+    // change to the same Explorer between the read and the write.
+    expect(pool.calls).toHaveLength(1);
+    expect(pool.calls[0].sql).toContain("INSERT INTO user_roles");
+    expect(pool.calls[0].sql).toContain("WITH previous AS");
+    expect(pool.calls[0].values).toEqual(["user_1", "moderator", "admin_1"]);
     await expect(store.getRole("user_1")).resolves.toBe("moderator");
-    const insert = pool.calls.find((call) =>
-      call.sql.includes("INSERT INTO user_roles")
-    );
-    expect(insert?.values).toEqual(["user_1", "moderator", "admin_1"]);
   });
 
   it("reports the previous role so the audit row can carry a before value", async () => {
@@ -100,9 +108,11 @@ describe("createRoleStore", () => {
     await expect(
       store.setRole({ userId: "user_1", role: "player", grantedBy: "admin_1" })
     ).resolves.toEqual({ previousRole: "admin", role: "player" });
-    expect(
-      pool.calls.some((call) => call.sql.includes("DELETE FROM user_roles"))
-    ).toBe(true);
+    const remove = pool.calls.find((call) =>
+      call.sql.includes("DELETE FROM user_roles")
+    );
+    // RETURNING role, so the revocation also reports what it removed.
+    expect(remove?.sql).toContain("RETURNING role");
     await expect(store.getRole("user_1")).resolves.toBe("player");
   });
 

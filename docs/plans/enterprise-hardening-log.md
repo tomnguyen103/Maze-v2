@@ -267,7 +267,7 @@ Six findings, all fixed:
 
 ### Gate
 
-- `npm run check`: green (477 tests / 11 skipped).
+- `npm run check`: green (557 tests / 11 skipped, after rebasing onto merged phase 3).
 - `npm run check:full`: green (105 e2e passed / 5 skipped).
 
   The e2e suite is intermittently flaky under Playwright's 16-worker
@@ -341,3 +341,31 @@ Dismissed with reason: a swallowed `recordAudit` failure leaves a grant unaudite
 without failing the request. That is phase 1's deliberate design — logged and
 counted, never thrown into the request path. `grant-admin.mjs` exits non-zero on
 it because a script can afford to.
+
+### CodeRabbit review
+
+Five findings, all fixed:
+
+- **`setRole` had a TOCTOU window.** The previous role was read in a separate
+  query before the write, so two concurrent changes to the same Explorer could
+  both capture the same `before` value and file wrong audit history. The read and
+  the write now share one statement — a CTE for the upsert, `RETURNING role` for
+  the revoke.
+- **A bare `POST /api/admin` hung until the platform timeout.** With no
+  `_adminPath` the shim left `request.url` as `/api/admin`, which misses
+  `isAdminPath`, so the router called `next?.()` — and a serverless function has
+  no next handler, so nothing was ever written. The shim now always rebuilds with
+  the trailing slash, so it answers 401.
+- **An audit failure turned a committed role change into a 503.** `setRole` has
+  already committed by then, so the response claimed a failure that did not
+  happen — and because the retry is a no-op, the audit row would never be
+  written. Now best-effort with its own `catch`, matching the mirror.
+- **The Clerk mirror `fetch` had no timeout**, so a slow Clerk held the admin's
+  request open after the database write succeeded. Bounded to 5s.
+- **Re-running `grant-admin.mjs` rewrote `updated_at` and filed a `role.grant`**
+  for a change that did not happen. It now reads the current role first and
+  exits cleanly on a no-op.
+
+This supersedes the earlier "dismissed with reason" note above: the endpoint's
+audit write is still best-effort by design, but it no longer misreports the
+outcome of the change it failed to record.
