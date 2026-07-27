@@ -35,11 +35,6 @@ if (!connectionString) {
   process.exit(2);
 }
 
-const pool = new Pool({
-  connectionString: normalizeDatabaseConnectionString(connectionString),
-  max: 1
-});
-
 /**
  * @param {(
  *   sql: string,
@@ -79,9 +74,21 @@ async function verify(query) {
   return { checked };
 }
 
+/** @type {Pool | null} */
+let pool = null;
 /** @type {import("pg").PoolClient | null} */
 let client = null;
 try {
+  // Constructed inside the handler: normalizeDatabaseConnectionString throws on
+  // a malformed URL, which outside `try` would bypass the documented exit code.
+  pool = new Pool({
+    connectionString: normalizeDatabaseConnectionString(connectionString),
+    max: 1,
+    // Bounded so a stalled database fails the script rather than hanging a
+    // scheduled run forever.
+    connectionTimeoutMillis: 10000,
+    query_timeout: 60000
+  });
   client = await pool.connect();
   await client.query(
     "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
@@ -105,5 +112,5 @@ try {
   process.exitCode = 2;
 } finally {
   client?.release();
-  await pool.end();
+  await pool?.end();
 }

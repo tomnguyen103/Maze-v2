@@ -121,7 +121,8 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   await page.goto("/play");
   await expect(page.locator("#game-root")).toHaveAttribute(
     "data-game-ready",
-    "true"
+    "true",
+    { timeout: 15000 }
   );
 
   await expect
@@ -142,7 +143,8 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   await page.reload();
   await expect(page.locator("#game-root")).toHaveAttribute(
     "data-game-ready",
-    "true"
+    "true",
+    { timeout: 15000 }
   );
   await expect(
     page.getByRole("dialog", { name: "Create an account for three free Runs." })
@@ -151,7 +153,8 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   await page.goto("/play?seed=DEMO-GATE&level=trail-scout&labyrinth=2");
   await expect(page.locator("#game-root")).toHaveAttribute(
     "data-game-ready",
-    "true"
+    "true",
+    { timeout: 15000 }
   );
   await expect(
     page.getByRole("dialog", { name: "Create an account for three free Runs." })
@@ -173,7 +176,8 @@ test("hands the top layer from the demo gate to Clerk account creation", async (
   await page.goto("/play");
   await expect(page.locator("#game-root")).toHaveAttribute(
     "data-game-ready",
-    "true"
+    "true",
+    { timeout: 15000 }
   );
 
   const demoGate = page.getByRole("dialog", {

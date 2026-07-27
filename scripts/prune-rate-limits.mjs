@@ -30,12 +30,20 @@ if (!connectionString) {
   process.exit(2);
 }
 
-const pool = new Pool({
-  connectionString: normalizeDatabaseConnectionString(connectionString),
-  max: 1
-});
+/** @type {Pool | null} */
+let pool = null;
 
 try {
+  // Constructed inside the handler: normalizeDatabaseConnectionString throws on
+  // a malformed URL, which outside `try` would bypass the documented exit code.
+  pool = new Pool({
+    connectionString: normalizeDatabaseConnectionString(connectionString),
+    max: 1,
+    // Bounded so a stalled database fails the script rather than hanging a
+    // scheduled run forever.
+    connectionTimeoutMillis: 10000,
+    query_timeout: 60000
+  });
   const store = createRateLimitStore(createQueryAdapter(pool));
   const pruned = await store.prune({ olderThanMs: hours * 60 * 60 * 1000 });
   console.log(`PRUNED ${pruned} rate-limit counters older than ${hours}h.`);
@@ -46,5 +54,5 @@ try {
   );
   process.exitCode = 2;
 } finally {
-  await pool.end();
+  await pool?.end();
 }

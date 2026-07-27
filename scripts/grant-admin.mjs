@@ -62,19 +62,28 @@ if (!connectionString) {
   process.exit(2);
 }
 
-const pool = new Pool({
-  connectionString: normalizeDatabaseConnectionString(connectionString),
-  max: 1
-});
+/** @type {Pool | null} */
+let pool = null;
 
 try {
+  // Constructed inside the handler: normalizeDatabaseConnectionString throws on
+  // a malformed URL, which outside `try` would bypass the documented exit code.
+  const grantPool = new Pool({
+    connectionString: normalizeDatabaseConnectionString(connectionString),
+    max: 1,
+    // Bounded so a stalled database fails the script rather than hanging a
+    // scheduled run forever.
+    connectionTimeoutMillis: 10000,
+    query_timeout: 60000
+  });
+  pool = grantPool;
   const adapter = {
     /**
      * @param {string} sql
      * @param {unknown[]} [values]
      */
     async query(sql, values) {
-      const result = await pool.query(sql, values);
+      const result = await grantPool.query(sql, values);
       return {
         rows: /** @type {Record<string, unknown>[]} */ (result.rows)
       };
@@ -93,7 +102,7 @@ try {
     role,
     grantedBy: SYSTEM_ACTORS.bootstrap
   });
-  const recorder = createAuditRecorder({ store: createAuditStore(pool) });
+  const recorder = createAuditRecorder({ store: createAuditStore(grantPool) });
   await recorder.recordAudit(
     { actorId: SYSTEM_ACTORS.bootstrap, actorRole: "system" },
     "role.grant",
@@ -120,5 +129,5 @@ try {
   );
   process.exitCode = 2;
 } finally {
-  await pool.end();
+  await pool?.end();
 }

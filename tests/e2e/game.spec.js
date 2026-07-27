@@ -198,6 +198,24 @@ async function answerCorrectlyIfChallenged(page, getCurrentQuestion) {
   }
 }
 
+/**
+ * The app swaps in the real Run asynchronously after the load event; input
+ * sent before `data-game-ready` lands on the placeholder Run and is silently
+ * lost when the swap resets progress. Every test that drives gameplay must
+ * cross this barrier first.
+ *
+ * @param {import("@playwright/test").Page} page
+ */
+async function expectGameReady(page) {
+  // Readiness spans the main-chunk fetch plus run initialisation, which under
+  // a fully loaded worker queue legitimately exceeds the 5s default.
+  await expect(page.locator("#game-root")).toHaveAttribute(
+    "data-game-ready",
+    "true",
+    { timeout: 15000 }
+  );
+}
+
 test("presents transparent lifetime pricing in a focused dialog", async ({ page }) => {
   await page.goto("/play");
   await page.locator("#lifetime-dialog").evaluate(
@@ -264,6 +282,7 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
     }
   });
   await page.goto("/play");
+  await expectGameReady(page);
 
   await expect(
     page.getByRole("heading", { name: "Choose your Quest Level" })
@@ -306,6 +325,7 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/?seed=ATLAS-CHECK&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
   await expect(page.locator("#pause-run")).toHaveAttribute(
     "aria-pressed",
     "false"
@@ -363,6 +383,7 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
   page
 }) => {
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   const settingsButton = page.getByRole("button", { name: "Settings" });
   const initialRunFacts = await page.evaluate(() => ({
     seed: document.querySelector("#seed-value")?.textContent,
@@ -498,6 +519,7 @@ test("keeps a Run paused when Settings is activated twice while loading", async 
     await route.continue();
   });
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
 
   await page.getByRole("button", { name: "Settings" }).dblclick({
     delay: 20
@@ -525,6 +547,7 @@ test("retries the Settings view after its first chunk request fails", async ({
     await route.continue();
   });
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   const settingsButton = page.getByRole("button", { name: "Settings" });
 
   await settingsButton.click();
@@ -545,6 +568,7 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?seed=ACCESS-FOLD&level=trail-scout");
+  await expectGameReady(page);
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByLabel("Stronger Fog contrast").check();
   await page.getByLabel("Larger maze marks").check();
@@ -602,6 +626,7 @@ test("keeps signed-out Quest progress local and playable", async ({
   page
 }) => {
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
 
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#quest-sync-status")).toHaveText(
@@ -659,6 +684,7 @@ test("shows an explicit keyboard-safe choice for different device Quests", async
   );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/play");
+  await expectGameReady(page);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
   const dialog = page.getByRole("dialog", {
@@ -748,6 +774,7 @@ test("retries the Cloud Quest choice view after its first chunk fails", async ({
     await route.continue();
   });
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
 
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.locator("#live-region")).toContainText(
@@ -817,6 +844,7 @@ test("resumes an active Run after a repeated Cloud Quest conflict is resolved", 
   );
 
   await page.goto("/?seed=REPEATED-CLOUD-CONFLICT&level=trail-scout");
+  await expectGameReady(page);
   await expect(page.locator("#run-state")).toHaveText("Exploring");
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
@@ -856,6 +884,7 @@ test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
     );
   });
   await page.reload();
+  await expectGameReady(page);
 
   await expect(page.locator("#pause-run")).toBeDisabled();
   await expect(page.locator("#pause-run")).toHaveText("Quest complete");
@@ -901,6 +930,7 @@ test("allows an explicit Labyrinth 20 share after restoring a completed Atlas", 
   });
 
   await page.goto("/?seed=COMPLETED-SHARE-20&level=trail-scout&labyrinth=20");
+  await expectGameReady(page);
 
   await expect(page.locator("#pause-run")).toBeEnabled();
   await expect(page.locator("#pause-run")).toHaveText("Pause");
@@ -916,6 +946,7 @@ test("allows an explicit Labyrinth 20 share after restoring a completed Atlas", 
 
 test("keeps event messages outside the playable maze", async ({ page }) => {
   await page.goto("/?seed=VISIBLE-GRID&level=trail-scout");
+  await expectGameReady(page);
 
   await stubClipboard(page);
   await page.locator("#seed-copy").click();
@@ -1015,6 +1046,7 @@ test("shows guest score state and the global top ten without changing Records", 
     });
   });
   await page.goto("/?seed=GLOBAL-BOARD&level=trail-scout");
+  await expectGameReady(page);
 
   await expect(page.locator("#player-name")).toHaveText("Guest");
   await expect(page.locator("#player-score")).toHaveText("0");
@@ -1030,6 +1062,7 @@ test("shows guest score state and the global top ten without changing Records", 
 
 test("pauses an active run while Records are open", async ({ page }) => {
   await page.goto("/?seed=RECORDS-PAUSE");
+  await expectGameReady(page);
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await expect(page.locator("#run-state")).toHaveText("Paused");
@@ -1055,6 +1088,7 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
   });
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/?seed=NARROW-SAVED&level=trail-scout");
+  await expectGameReady(page);
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await expect(
@@ -1091,6 +1125,7 @@ test("preserves native button keyboard behavior and pause timing", async ({
   page
 }) => {
   await page.goto("/?seed=BUTTON-KEYS");
+  await expectGameReady(page);
   const pulseCount = page.locator("#pulse-count");
   await expect(page.getByLabel(/Interactive maze/)).toBeFocused();
   await page.getByRole("button", { name: "Pause" }).focus();
@@ -1120,6 +1155,7 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
     });
   });
   await page.goto("/?seed=RUNE-CHOIR-93");
+  await expectGameReady(page);
   const canvas = page.getByLabel(/Interactive maze/);
   const initialLabyrinth = await canvas.screenshot();
   const box = await canvas.boundingBox();
@@ -1168,6 +1204,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
   });
   const originalSeed = "ABCDEFGHIJKLMNOPQRSTUVWX";
   await page.goto(`/?seed=${originalSeed}`);
+  await expectGameReady(page);
 
   await page.getByRole("button", { name: "New Quest" }).click();
   await chooseTrailScout(page);
@@ -1181,6 +1218,7 @@ test("requires account creation before a guest starts a second Labyrinth", async
   test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
@@ -1237,6 +1275,7 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
 }) => {
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
@@ -1310,10 +1349,7 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
 }) => {
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
-  await expect(page.locator("#game-root")).toHaveAttribute(
-    "data-game-ready",
-    "true"
-  );
+  await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of DEFEAT_PATH) {
@@ -1436,10 +1472,7 @@ test("keeps an active Run operable when the Journal chunk is unavailable", async
     await route.abort("failed");
   });
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
-  await expect(page.locator("#game-root")).toHaveAttribute(
-    "data-game-ready",
-    "true"
-  );
+  await expectGameReady(page);
   const canvas = page.getByLabel(/Interactive maze/);
   await canvas.focus();
   await page.keyboard.press("ArrowDown");
@@ -1509,6 +1542,7 @@ test("resumes an active Run after a double-click during slow Journal loading", a
     await route.continue();
   });
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   await expect.poll(() => chunkRequested).toBe(true);
   await page.getByLabel(/Interactive maze/).focus();
   await page.keyboard.press("ArrowDown");
@@ -1549,6 +1583,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
 
   for (const direction of WINNING_PATH) {
@@ -1656,6 +1691,7 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     });
   });
   await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
+  await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
 
   let gateChallenges = 0;

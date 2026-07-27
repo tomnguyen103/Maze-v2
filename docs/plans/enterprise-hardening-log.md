@@ -6,7 +6,84 @@ reason.
 
 ---
 
-## Phase 1 — Immutable audit log
+## Test infrastructure — stabilise the test gate
+
+- **PR**: _pending_
+- **Branch**: `fix/stabilise-test-gate`
+- **ADR**: none — not a plan phase.
+
+### e2e flakiness (~1 in 3 full runs)
+
+Root cause found and fixed, not masked. `src/app.js` dynamically imports
+`src/main.js`, so `page.goto` resolves at the load event while the game is
+still initialising. `main.js` attaches its listeners at module evaluation, but
+the real Run is swapped in only when the async `initializeRunEntry()` resolves
+— which is exactly when `app.js` sets `data-game-ready="true"`. Input sent in
+that window moves the *placeholder* Run and is lost when the swap resets
+progress. Reproduced deterministically: a failing run's snapshot showed
+`Moves 002` after seven keypresses — five presses consumed by the placeholder,
+two by the real Run. Under Playwright's 16-worker parallelism the window
+between load and ready stretches, which is why the flake tracked machine load
+and hit whichever input-driving test was unlucky (chunk-load timing, Warden
+Challenge visibility, the guest second-Labyrinth invariant — all one class).
+
+Fix, two parts, both cause-level:
+
+1. Every e2e test that drives gameplay (keyboard, app buttons, synthetic
+   `online` events) now crosses an `expectGameReady` barrier — the
+   `data-game-ready` wait two tests already used — before its first
+   interaction. After this alone, eight full runs showed zero recurrences of
+   the original three flakes.
+2. The remaining intermittent failures were a second class: genuine load
+   starvation (app boot and Clerk initialisation stretching past their
+   bounds) from 16 workers × Chromium against one shared preview process on
+   32 logical cores. `workers: 8` in `playwright.config.mjs` bounds the
+   oversubscription, and the readiness barrier carries a 15s bound — the same
+   explicit-bound pattern `entry.spec.js` already used for Clerk
+   initialisation. Suite wall-clock stayed in the same range.
+
+No retries were added anywhere. Verified by repeated full-suite runs (results
+under Gate).
+
+### Vitest unhandled-error fault
+
+Not reproduced despite 8 full-suite and 30 targeted runs; the mechanism was
+removed instead. `vite.config.mjs` built the entire player API at config
+evaluation — a real pg Pool against the `.env.local` `DATABASE_URL`, a Stripe
+client, and Clerk middleware — inside the vitest process, for a run that can
+never serve an HTTP request. That config-load side effect was the suspected
+source of the post-run "Vitest caught 1 unhandled error". Now: a `vitest` run
+(mode `test`) gets a config with no API plugin at all, and dev/preview modes
+build the middlewares lazily inside `configureServer` /
+`configurePreviewServer`, so config evaluation is side-effect free everywhere.
+`tests/vite-config.test.js` pins both behaviours. If the fault ever resurfaces
+it can no longer come from the config path, and the next occurrence should be
+captured verbatim before rerunning.
+
+The pre-push hook (`set -eu; npm run check`) still exits without naming the
+failed step; `.githooks` is out of scope for this task, so "the gate is green"
+and "the push landed" remain separate facts to verify per the workflow.
+
+### Pool construction in operational scripts
+
+`scripts/verify-audit-chain.mjs`, `scripts/prune-rate-limits.mjs`, and
+`scripts/grant-admin.mjs` built `new Pool(...)` before their `try`, so a
+malformed `DATABASE_URL` threw past the handler and exited 1 instead of the
+documented 2, and none bounded connection or query time. All three now match
+`prune-webhook-inbox.mjs` / `list-dead-webhooks.mjs`: pool constructed inside
+the handler, `max: 1`, `connectionTimeoutMillis: 10000`,
+`query_timeout: 60000`, `await pool?.end()` in `finally`.
+`tests/script-database-guard.test.js` spawns each script with a malformed URL
+and asserts exit code 2, and asserts the timeout bounds are present.
+
+### Gate
+
+- _pending_
+
+### Deviations
+
+- None from the task as specified. No retries, no worker-count change, no
+  timeout changes; existing tests were extended (readiness barriers) only.
 
 - **PR**: _pending_
 - **Branch**: `feat/audit-log`
