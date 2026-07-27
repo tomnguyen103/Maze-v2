@@ -33,7 +33,10 @@ reason.
 
 - `npm run check`: green (lint, typecheck, 418 tests / 7 skipped, build, bundle
   budget all PASS).
-- `npm run check:full`: _pending_
+- `npm run check:full`: green (105 e2e passed / 5 skipped). One flake on the
+  first run — `retries the Cloud Quest choice view after its first chunk fails`,
+  a chunk-load timing test — passed on rerun and on a clean full-suite rerun.
+  This diff touches no client code.
 
 ### Deviations
 
