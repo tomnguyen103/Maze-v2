@@ -405,6 +405,15 @@ outcome of the change it failed to record.
 - `npm run check`: green (593 tests / 11 skipped).
 - `npm run check:full`: green (111 e2e / 5 skipped) on a clean run.
 
+  The unit suite has its own intermittent fault: `vitest` occasionally reports
+  "Vitest caught 1 unhandled error during the test run" with one test file not
+  completing, then passes cleanly on every rerun (four consecutive clean runs
+  each time it appeared). It surfaced twice during this phase, and the first
+  occurrence exited non-zero from the pre-push hook and silently blocked a push —
+  the branch stayed at its previous SHA and only a manual check of the remote ref
+  caught it. Unreproducible so far; likely an async pool error escaping after the
+  run ends. **"The gate is green" and "the push landed" are separate facts.**
+
   **The e2e flakiness is now a real problem, not a footnote.** Across this phase
   three separate full-suite runs failed three *different* tests — a chunk-load
   test, a Warden Challenge dialog, and the guest second-Labyrinth invariant —

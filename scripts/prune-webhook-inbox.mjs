@@ -17,7 +17,10 @@ import { createWebhookInboxStore } from "../server/webhook-inbox.js";
 const DAYS_ARGUMENT = process.argv.indexOf("--older-than-days");
 const days = DAYS_ARGUMENT === -1 ? 30 : Number(process.argv[DAYS_ARGUMENT + 1]);
 
-if (!Number.isFinite(days) || days < 1 || days > 3650) {
+// Integer, not merely finite: a fractional value produces a fractional
+// olderThanMs that only fails later at the $1::bigint cast, surfacing as a
+// generic database error instead of a usage message.
+if (!Number.isInteger(days) || days < 1 || days > 3650) {
   console.error("--older-than-days must be between 1 and 3650.");
   process.exit(2);
 }
