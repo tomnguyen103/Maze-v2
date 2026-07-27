@@ -77,7 +77,13 @@ function createHarness(options = {}) {
       options.exportUser ??
       (async (userId) => {
         exported.push(userId);
-        return { schemaVersion: 1, userId };
+        // Shaped like the real envelope so the route is exercised against what
+        // shared/export-schema.json actually describes.
+        return {
+          schema: "echo-maze-export/1",
+          generated_at: "2026-01-01T00:00:00.000Z",
+          data: { player_profile: { user_id: userId } }
+        };
       }),
     requirePermission: createPermissionGuard({
       getUserId: () => actor,
@@ -356,7 +362,13 @@ describe("admin data export", () => {
     const harness = createHarness();
     const result = await call(harness, { method: "GET", url: exportUrl });
     expect(result.statusCode).toBe(200);
-    expect(result.body).toEqual({ schemaVersion: 1, userId: "user_target" });
+    expect(result.body).toMatchObject({
+      schema: "echo-maze-export/1",
+      data: { player_profile: { user_id: "user_target" } }
+    });
+    expect(result.headers["content-disposition"]).toBe(
+      'attachment; filename="echo-maze-export-user_target.json"'
+    );
     expect(harness.exported).toEqual(["user_target"]);
     expect(harness.audits).toHaveLength(1);
     expect(harness.audits[0]).toMatchObject({
