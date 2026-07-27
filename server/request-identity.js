@@ -1,6 +1,36 @@
 import { createHash } from "node:crypto";
 
 /**
+ * Resolving the address salt needs a value that is stable across serverless
+ * containers, or the same address lands in a different bucket per invocation and
+ * neither the rate limit nor the audit `ip_hash` is comparable. `DATABASE_URL`
+ * is already a server-only secret with exactly that lifetime, so it is the
+ * default source. `REQUEST_ADDRESS_SALT` overrides it.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @returns {string} Empty only when there is no database configured at all, in
+ *   which case there is nothing to key against anyway.
+ */
+export function resolveAddressSalt(env) {
+  const configured = env.REQUEST_ADDRESS_SALT;
+  if (configured) {
+    return configured;
+  }
+  const connectionString = env.DATABASE_URL;
+  if (!connectionString) {
+    return "";
+  }
+  return createHash("sha256")
+    .update(`echo-maze:request-address:${connectionString}`)
+    .digest("hex");
+}
+
+/** @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env */
+export function trustsProxyHeaders(env) {
+  return env.TRUST_PROXY_HEADERS === "true";
+}
+
+/**
  * `x-forwarded-for` is client-controlled unless a proxy is known to rewrite it,
  * so it is honoured only when the deployment says so. Behind Vercel that header
  * is authoritative; on a directly exposed server, trusting it would let one

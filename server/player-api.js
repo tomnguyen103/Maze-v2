@@ -8,6 +8,10 @@ import { createAuditStore } from "./audit-store.js";
 import { createAuditRecorder, createRequestAuditor } from "./audit.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
+import {
+  resolveAddressSalt,
+  trustsProxyHeaders
+} from "./request-identity.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
   createLifetimeHandler,
@@ -106,18 +110,10 @@ export function createPlayerApi(env = process.env) {
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
-  const auditIpSalt = env.AUDIT_IP_SALT ?? "";
-  if (!auditIpSalt) {
-    // Audit rows are still written and the chain is still valid; only the
-    // address hash is dropped. Say so once so it is never a silent surprise.
-    console.warn(
-      "[audit] AUDIT_IP_SALT is unset; audit rows will store no address hash."
-    );
-  }
   const recordAudit = createRequestAuditor({
     recorder: createAuditRecorder({ store: createAuditStore(pool) }),
-    salt: auditIpSalt,
-    trustProxy: env.AUDIT_TRUST_PROXY === "true"
+    salt: resolveAddressSalt(env),
+    trustProxy: trustsProxyHeaders(env)
   });
   const lifetimeConfig = loadLifetimeConfig(env);
   const getUserId = (

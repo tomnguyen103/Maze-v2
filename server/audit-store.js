@@ -81,15 +81,11 @@ export function auditRowHash(prevHash, fields) {
 /**
  * Daily-rotating address hash. Raw addresses never reach the database.
  *
- * @param {string | null | undefined} address
- * @param {{ salt: string, date: string }} options
+ * Re-exported from `request-identity.js`, which is the single implementation
+ * shared with rate limiting, so the two subsystems cannot drift into hashing the
+ * same address two different ways.
  */
-export function hashClientIp(address, { salt, date }) {
-  if (!address || !salt) {
-    return null;
-  }
-  return createHash("sha256").update(`${address}:${date}:${salt}`).digest("hex");
-}
+export { hashClientAddress as hashClientIp } from "./request-identity.js";
 
 /**
  * Rebuilds the hashed field set from a stored row by routing it back through

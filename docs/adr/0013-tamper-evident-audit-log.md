@@ -51,7 +51,7 @@ else: `system`, `system:bootstrap`, `webhook:stripe`, `webhook:clerk`.
 ## Privacy
 
 No raw IP address is stored. `ip_hash` is
-`sha256(address + ':' + UTC date + ':' + AUDIT_IP_SALT)`, so addresses are not
+`sha256(address + ':' + UTC date + ':' + REQUEST_ADDRESS_SALT)`, so addresses are not
 linkable across days, following the Lantern Journal minimization precedent.
 
 Audit rows never carry learning content. Journal writes record
@@ -99,9 +99,16 @@ explicit rather than implied.
   because "the verifier could not run" is not evidence of tampering.
 - Appends set a transaction-local `lock_timeout`, so a contended chain head fails
   the audit write instead of holding a request open to the platform timeout.
-- `x-forwarded-for` is honoured only when `AUDIT_TRUST_PROXY=true`. Otherwise the
-  socket address is hashed, because a client can otherwise choose its own
+- `x-forwarded-for` is honoured only when `TRUST_PROXY_HEADERS=true`. Otherwise
+  the socket address is hashed, because a client can otherwise choose its own
   `ip_hash`.
+
+  ADR 0014 folded this ADR's original `AUDIT_IP_SALT` and `AUDIT_TRUST_PROXY`
+  into `REQUEST_ADDRESS_SALT` and `TRUST_PROXY_HEADERS`, and moved the hashing
+  itself into `server/request-identity.js`, so audit rows and rate-limit keys
+  cannot hash the same address two different ways. The salt now has a default
+  derived from `DATABASE_URL`, so `ip_hash` is populated without configuration
+  rather than silently `NULL`.
 - The append costs one extra transaction per mutation. At this product's write
   rate that is acceptable; if it stops being acceptable, the fix is a per-actor
   chain, not a mutable log.

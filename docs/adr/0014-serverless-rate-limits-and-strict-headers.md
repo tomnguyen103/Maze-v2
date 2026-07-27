@@ -143,3 +143,11 @@ they are pointless and would break the dev server.
 - `TRUST_PROXY_HEADERS` gates `x-forwarded-for`. Unset, the socket address is
   hashed, because a client that can set its own forwarded address can pick which
   budget to spend.
+- `server/request-identity.js` is the one implementation of address extraction,
+  daily hashing, and salt resolution. Phase 1 shipped its own copy in
+  `server/audit.js`, with a second pair of environment variables; this phase
+  folds `AUDIT_IP_SALT` and `AUDIT_TRUST_PROXY` into `REQUEST_ADDRESS_SALT` and
+  `TRUST_PROXY_HEADERS` and re-points `hashClientIp` at the shared function, so
+  audit rows and rate-limit keys cannot hash the same address two different ways.
+  A side effect worth stating: because the salt now has a default, audit
+  `ip_hash` is populated without configuration instead of being silently `NULL`.

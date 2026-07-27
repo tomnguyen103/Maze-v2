@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { recordProductEvent } from "./product-events.js";
 import { UNMETERED } from "./rate-limit-config.js";
@@ -6,7 +5,11 @@ import {
   createRateLimiter,
   createRateLimitStore
 } from "./rate-limit.js";
-import { createAddressHasher } from "./request-identity.js";
+import {
+  createAddressHasher,
+  resolveAddressSalt,
+  trustsProxyHeaders
+} from "./request-identity.js";
 
 /**
  * @typedef {{
@@ -23,26 +26,6 @@ import { createAddressHasher } from "./request-identity.js";
  *   userId?: string | null
  * ) => Promise<RateLimitDecision>} RateLimit
  */
-
-/**
- * Guest metering needs a salt that is stable across serverless containers, or
- * the same address lands in a different bucket per invocation and the limit
- * never bites. `DATABASE_URL` is already a server-only secret with exactly that
- * lifetime, so it is the default source. `REQUEST_ADDRESS_SALT` overrides it —
- * set that when the connection string may rotate independently.
- *
- * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
- * @param {string} connectionString
- */
-function addressSaltFor(env, connectionString) {
-  const configured = env.REQUEST_ADDRESS_SALT;
-  if (configured) {
-    return configured;
-  }
-  return createHash("sha256")
-    .update(`echo-maze:request-address:${connectionString}`)
-    .digest("hex");
-}
 
 /**
  * Builds the `rateLimit(budget, request, userId)` function that route handlers
@@ -64,8 +47,8 @@ export function createRequestRateLimiter(env = process.env) {
     onLimited: (details) => recordProductEvent("rate_limit_hit", details)
   });
   const addressHashFor = createAddressHasher({
-    salt: addressSaltFor(env, connectionString),
-    trustProxy: env.TRUST_PROXY_HEADERS === "true"
+    salt: resolveAddressSalt(env),
+    trustProxy: trustsProxyHeaders(env)
   });
 
   /** @type {RateLimit} */
