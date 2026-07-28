@@ -1,12 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "echo-maze-export/1",
+  "$id": "echo-maze-export/2",
   "title": "Echo Maze personal data export",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "generated_at", "data"],
   "properties": {
-    "schema": { "const": "echo-maze-export/1" },
+    "schema": { "const": "echo-maze-export/2" },
     "generated_at": { "type": "string" },
     "data": {
       "type": "object",
@@ -16,8 +16,12 @@
         "scores",
         "run_access",
         "lifetime_purchases",
+        "classroom_memberships",
         "quest_progress",
         "journal",
+        "class_quest_progress",
+        "class_journals",
+        "access_settings",
         "role"
       ],
       "properties": {
@@ -26,7 +30,7 @@
           "type": ["object", "null"]
         },
         "scores": {
-          "description": "score_entries rows — every accepted Score Entry.",
+          "description": "score_entries rows - every accepted Score Entry.",
           "type": "array",
           "items": { "type": "object" }
         },
@@ -40,7 +44,7 @@
               "type": ["object", "null"]
             },
             "grants": {
-              "description": "run_access_grants rows — every Run Grant.",
+              "description": "run_access_grants rows - every Run Grant.",
               "type": "array",
               "items": { "type": "object" }
             }
@@ -51,12 +55,31 @@
           "type": "array",
           "items": { "type": "object" }
         },
+        "classroom_memberships": {
+          "description": "classroom_memberships rows for every Classroom the Explorer belongs to.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
         "quest_progress": {
-          "description": "cloud_quest_progress row; null when Quest Continuity never synced.",
+          "description": "Personal Play cloud_quest_progress row; null when Quest Continuity never synced.",
           "type": ["object", "null"]
         },
         "journal": {
-          "description": "learning_journals row — the privacy-minimized Lantern Journal outcomes.",
+          "description": "Personal Play learning_journals row - the privacy-minimized Lantern Journal outcomes.",
+          "type": ["object", "null"]
+        },
+        "class_quest_progress": {
+          "description": "Class Play cloud_quest_progress rows, each identified by classroom_id.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "class_journals": {
+          "description": "Class Play learning_journals rows, each identified by classroom_id.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "access_settings": {
+          "description": "explorer_access_settings row - presentation-only accessibility preferences; null before signed-in synchronization.",
           "type": ["object", "null"]
         },
         "role": {

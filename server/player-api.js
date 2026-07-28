@@ -23,11 +23,18 @@ import {
   createRequestAuditor,
   SYSTEM_ACTORS
 } from "./audit.js";
+import { createAuditCheckpointService } from "./audit-checkpoint.js";
+import { loadAuditCheckpointConfig } from "./audit-checkpoint-config.js";
 import { exportUserSnapshot } from "./data-export.js";
 import {
   createDataExportHandler,
   DATA_EXPORT_PATH
 } from "./data-export-route.js";
+import {
+  ACCESS_SETTINGS_PATH,
+  createAccessSettingsHandler
+} from "./access-settings-route.js";
+import { createAccessSettingsStore } from "./access-settings-store.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
@@ -82,6 +89,7 @@ const PLAYER_PATHS = new Set([
   "/api/leaderboard",
   "/api/scores",
   DATA_EXPORT_PATH,
+  ACCESS_SETTINGS_PATH,
   LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
@@ -195,12 +203,17 @@ export function createPlayerApi(env = process.env) {
   const pool = getDatabasePool(connectionString);
   const rateLimit = createRequestRateLimiter(env);
   const queryAdapter = createQueryAdapter(pool);
+  const createAuditCheckpoint = checkpointRunner(
+    loadAuditCheckpointConfig(env),
+    queryAdapter
+  );
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
-  const learningJournalStore = createLearningJournalStore(queryAdapter);
-  const questProgressStore = createQuestProgressStore(queryAdapter);
+  const learningJournalStore = createLearningJournalStore(pool);
+  const accessSettingsStore = createAccessSettingsStore(queryAdapter);
+  const questProgressStore = createQuestProgressStore(pool);
   const userDeletionStore = createUserDeletionStore(pool);
   const adminStore = createAdminStore(pool);
   const questionBankStore = createQuestionBankStore(pool);
@@ -255,6 +268,11 @@ export function createPlayerApi(env = process.env) {
     exportUser: (userId) => exportUserSnapshot(pool, userId),
     getUserId,
     rateLimit,
+    recordAudit
+  });
+  const accessSettingsHandler = createAccessSettingsHandler({
+    store: accessSettingsStore,
+    getUserId,
     recordAudit
   });
   // Hoisted so the webhook inbox can reach the same service instance the
@@ -342,6 +360,7 @@ export function createPlayerApi(env = process.env) {
     inbox,
     pruneRateLimits: () => rateLimitStore.prune(),
     pruneWebhookInbox: () => inboxStore.prune(),
+    createAuditCheckpoint,
     cronSecret: env.CRON_SECRET ?? ""
   });
   const lifetimeHandler = createLifetimeHandler({
@@ -403,6 +422,10 @@ export function createPlayerApi(env = process.env) {
     });
     const unavailableLearningJournalHandler = createLearningJournalHandler({
       store: learningJournalStore,
+      getUserId: () => null
+    });
+    const unavailableAccessSettingsHandler = createAccessSettingsHandler({
+      store: accessSettingsStore,
       getUserId: () => null
     });
     const unavailableAdminHandler = createAdminHandler({
@@ -472,6 +495,10 @@ export function createPlayerApi(env = process.env) {
         // No Clerk means no identity, so the export answers 401 rather than
         // falling through.
         void unavailableDataExportHandler(request, response, next);
+        return;
+      }
+      if (pathname === ACCESS_SETTINGS_PATH) {
+        void unavailableAccessSettingsHandler(request, response, next);
         return;
       }
       if (QUEST_PROGRESS_PATHS.has(pathname)) {
@@ -565,6 +592,10 @@ export function createPlayerApi(env = process.env) {
           void dataExportHandler(request, response, next);
           return;
         }
+        if (pathname === ACCESS_SETTINGS_PATH) {
+          void accessSettingsHandler(request, response, next);
+          return;
+        }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {
           void questProgressHandler(request, response, next);
           return;
@@ -572,6 +603,49 @@ export function createPlayerApi(env = process.env) {
         void handler(request, response, next);
       }
     );
+  };
+}
+
+/**
+ * Keeps the AWS SDK out of ordinary player requests. It loads only when the
+ * configured daily maintenance path actually needs the immutable sink.
+ *
+ * @param {ReturnType<typeof loadAuditCheckpointConfig>} config
+ * @param {{
+ *   query: (
+ *     sql: string,
+ *     values?: unknown[]
+ *   ) => Promise<{ rows: Record<string, unknown>[] }>
+ * }} database
+ */
+export function checkpointRunner(
+  config,
+  database,
+  { loadSink = () => import("./audit-checkpoint-s3.js") } = {}
+) {
+  if (!config) {
+    return null;
+  }
+  /** @type {Promise<ReturnType<typeof createAuditCheckpointService>> | null} */
+  let service = null;
+  return async () => {
+    service ??= loadSink().then(
+      ({ createConfiguredAuditCheckpointSink }) =>
+        createAuditCheckpointService({
+          query: database.query,
+          sink: createConfiguredAuditCheckpointSink(config),
+          signingKey: config.signingKey,
+          retentionDays: config.retentionDays
+        })
+    );
+    let loaded;
+    try {
+      loaded = await service;
+    } catch (error) {
+      service = null;
+      throw error;
+    }
+    return loaded.create();
   };
 }
 

@@ -211,3 +211,154 @@ describe("Question bank migration", () => {
     expect(sql).not.toContain("player_id");
   });
 });
+
+describe("Explorer Access Settings sync migration", () => {
+  it("stores one bounded revisioned presentation record per Clerk identity", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0011_explorer_access_settings.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE explorer_access_settings");
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("schema_version SMALLINT NOT NULL DEFAULT 1");
+    expect(sql).toContain("CHECK (schema_version = 1)");
+    expect(sql).toContain("high_contrast BOOLEAN NOT NULL");
+    expect(sql).toContain("large_marks BOOLEAN NOT NULL");
+    expect(sql).toContain("reader_friendly_questions BOOLEAN NOT NULL");
+    expect(sql).toContain("reduced_effects BOOLEAN NOT NULL");
+    expect(sql).toContain("revision INTEGER NOT NULL DEFAULT 1");
+    expect(sql).toContain("CHECK (revision > 0)");
+    expect(sql).not.toContain("difficulty");
+    expect(sql).not.toContain("score");
+    expect(sql).not.toContain("question_text");
+    expect(sql).not.toContain("prompt");
+  });
+});
+
+describe("Audit privilege boundary migration", () => {
+  it("moves audit ownership behind one fixed-search-path definer function", async () => {
+    const expand = await readFile(
+      new URL("../db/migrations/0012_audit_privilege_boundary.sql", import.meta.url),
+      "utf8"
+    );
+    const finalize = await readFile(
+      new URL(
+        "../db/migrations/0013_audit_privilege_boundary_finalize.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(expand).toContain("CREATE ROLE echo_maze_audit_owner NOLOGIN");
+    expect(expand).toContain("CREATE ROLE echo_maze_runtime NOLOGIN");
+    expect(expand).toContain("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+    expect(expand).toContain("CREATE FUNCTION canonical_audit_json");
+    expect(expand).toContain("ADD COLUMN canonical_payload TEXT");
+    expect(expand).toContain(
+      "GRANT USAGE, CREATE ON SCHEMA public TO echo_maze_audit_owner"
+    );
+    expect(expand).toContain("CREATE FUNCTION append_audit_event");
+    expect(expand).toContain("SECURITY DEFINER");
+    expect(expand).toContain("SET search_path = pg_catalog, public");
+    expect(expand).toContain("SELECT head.row_hash");
+    expect(expand).toContain("FOR UPDATE");
+    expect(expand).toContain("public.digest");
+    expect(expand).toContain(
+      "normalized_payload := public.canonical_audit_json(payload)"
+    );
+    expect(expand).toContain("audit payload field types are invalid");
+    expect(expand).toContain(
+      "audit payload timestamp is not canonical UTC"
+    );
+    expect(expand).toContain(
+      "REVOKE ALL ON FUNCTION canonical_audit_json(JSONB) FROM PUBLIC"
+    );
+    expect(expand).toContain(
+      "GRANT EXECUTE ON FUNCTION append_audit_event(TEXT) TO PUBLIC"
+    );
+    expect(expand).not.toContain("ALTER TABLE audit_events OWNER");
+    expect(finalize).toContain(
+      "ALTER TABLE audit_events OWNER TO echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "ALTER TABLE audit_chain_head OWNER TO echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "REVOKE CREATE ON SCHEMA public FROM echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "REVOKE ALL ON TABLE audit_events FROM echo_maze_runtime"
+    );
+    expect(finalize).toContain(
+      "GRANT SELECT ON TABLE audit_events TO echo_maze_runtime"
+    );
+    expect(finalize).toContain(
+      "GRANT EXECUTE ON FUNCTION append_audit_event(TEXT) TO echo_maze_runtime"
+    );
+    expect(finalize).toContain(
+      "REVOKE EXECUTE ON FUNCTION append_audit_event(TEXT) FROM PUBLIC"
+    );
+    expect(finalize).not.toContain("GRANT INSERT ON TABLE audit_events");
+    expect(finalize).not.toContain("GRANT UPDATE ON TABLE audit_chain_head");
+  });
+});
+
+describe("Classroom forced-RLS foundation migration", () => {
+  it("adds nullable Classroom scope while preserving one Personal Play record", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0014_classroom_rls_foundation.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE classrooms");
+    expect(sql).toContain("CREATE TABLE classroom_memberships");
+    expect(sql).toContain(
+      "REFERENCES player_access(clerk_user_id) ON DELETE CASCADE"
+    );
+    expect(sql).toContain("role IN ('teacher', 'student')");
+    expect(sql).toContain("ADD COLUMN classroom_id TEXT");
+    expect(sql).toContain(
+      "UNIQUE NULLS NOT DISTINCT (clerk_user_id, classroom_id)"
+    );
+    expect(sql.match(
+      /FOREIGN KEY \(classroom_id, clerk_user_id\)/g
+    )).toHaveLength(2);
+    expect(sql.match(
+      /REFERENCES classroom_memberships\(classroom_id, clerk_user_id\)[\s\S]*?ON DELETE CASCADE/g
+    )).toHaveLength(2);
+    expect(sql).toContain("CREATE ROLE echo_maze_tenant_owner NOLOGIN");
+    expect(sql).toContain(
+      "ALTER TABLE cloud_quest_progress ENABLE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE cloud_quest_progress FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE learning_journals ENABLE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE learning_journals FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "current_setting('echo_maze.explorer_id', true)"
+    );
+    expect(sql).toContain(
+      "current_setting('echo_maze.classroom_id', true)"
+    );
+    expect(sql).toContain("ALTER TABLE classrooms OWNER TO echo_maze_tenant_owner");
+    expect(sql).toContain(
+      "ALTER TABLE classroom_memberships OWNER TO echo_maze_tenant_owner"
+    );
+    expect(sql).toContain(
+      "REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner"
+    );
+    expect(sql).toContain(
+      "GRANT SELECT ON TABLE classrooms, classroom_memberships"
+    );
+    expect(sql).not.toContain("BYPASSRLS");
+  });
+});

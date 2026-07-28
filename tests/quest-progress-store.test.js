@@ -16,11 +16,38 @@ const ROW = {
   updated_at: "2026-07-26T00:00:00.000Z"
 };
 
+/**
+ * @param {(
+ *   sql: string,
+ *   values?: unknown[]
+ * ) => Promise<{ rows: Record<string, unknown>[] }>} query
+ */
+function tenantPool(query) {
+  const clientQuery = vi.fn(async (sql, values) => {
+    if (
+      sql === "BEGIN" ||
+      sql === "COMMIT" ||
+      sql === "ROLLBACK" ||
+      sql.includes("set_config")
+    ) {
+      return { rows: [] };
+    }
+    return query(sql, values);
+  });
+  return {
+    query,
+    clientQuery,
+    connect: vi.fn(async () => ({
+      query: clientQuery,
+      release: vi.fn()
+    }))
+  };
+}
+
 describe("Cloud Quest store", () => {
   it("maps the authenticated Explorer's boundary record", async () => {
-    const pool = {
-      query: vi.fn().mockResolvedValue({ rows: [ROW] })
-    };
+    const query = vi.fn().mockResolvedValue({ rows: [ROW] });
+    const pool = tenantPool(query);
 
     await expect(
       createQuestProgressStore(pool).get("user_123")
@@ -39,7 +66,16 @@ describe("Cloud Quest store", () => {
       revision: 3,
       updatedAt: "2026-07-26T00:00:00.000Z"
     });
-    expect(pool.query).toHaveBeenCalledWith(expect.any(String), ["user_123"]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /FROM cloud_quest_progress[\s\S]+classroom_id IS NULL/
+      ),
+      ["user_123"]
+    );
+    expect(pool.clientQuery.mock.calls[1]).toEqual([
+      expect.stringContaining("set_config"),
+      ["user_123", ""]
+    ]);
   });
 
   it("inserts revision one for an empty cloud record", async () => {
@@ -48,11 +84,10 @@ describe("Cloud Quest store", () => {
       1,
       "quest_cloud_123"
     );
-    const pool = {
-      query: vi.fn().mockResolvedValue({
-        rows: [{ ...ROW, labyrinth_number: 1, completed_labyrinths: 0, revision: 1 }]
-      })
-    };
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ ...ROW, labyrinth_number: 1, completed_labyrinths: 0, revision: 1 }]
+    });
+    const pool = tenantPool(query);
 
     const result = await createQuestProgressStore(pool).save(
       "user_123",
@@ -61,16 +96,16 @@ describe("Cloud Quest store", () => {
     );
 
     expect(result).toMatchObject({ conflict: false, duplicate: false });
-    expect(pool.query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0][0]).toContain(
       "INSERT INTO player_access"
     );
-    expect(pool.query.mock.calls[0][0]).toContain("ON CONFLICT DO NOTHING");
-    expect(pool.query.mock.calls[0][0]).toContain("pg_advisory_xact_lock");
-    expect(pool.query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0][0]).toContain("ON CONFLICT DO NOTHING");
+    expect(query.mock.calls[0][0]).toContain("pg_advisory_xact_lock");
+    expect(query.mock.calls[0][0]).toContain(
       "deleted_user_tombstones"
     );
-    expect(pool.query.mock.calls[0][1][0]).toBe("user_123");
-    expect(pool.query.mock.calls[0][1].at(-1)).toMatch(/^[a-f0-9]{64}$/);
+    expect(query.mock.calls[0][1][0]).toBe("user_123");
+    expect(query.mock.calls[0][1].at(-1)).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("reports a deleted account instead of an initial-save conflict", async () => {
@@ -79,18 +114,33 @@ describe("Cloud Quest store", () => {
       1,
       "quest_cloud_123"
     );
-    const pool = {
-      query: vi.fn()
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ exists: 1 }] })
-    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ exists: 1 }] });
+    const pool = tenantPool(query);
 
     await expect(
       createQuestProgressStore(pool).save("user_123", 0, progress)
     ).rejects.toMatchObject({ name: "DeletedUserError" });
-    expect(pool.query.mock.calls[1][0]).toContain(
+    expect(query.mock.calls[1][0]).toContain(
       "FROM deleted_user_tombstones"
     );
+  });
+
+  it("reports a deleted account instead of an update conflict", async () => {
+    const progress = createQuestProgress(
+      "trail-scout",
+      4,
+      "quest_cloud_123"
+    );
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ exists: 1 }] });
+    const pool = tenantPool(query);
+
+    await expect(
+      createQuestProgressStore(pool).save("user_123", 2, progress)
+    ).rejects.toMatchObject({ name: "DeletedUserError" });
   });
 
   it("updates only the expected revision and surfaces a stale conflict", async () => {
@@ -99,11 +149,11 @@ describe("Cloud Quest store", () => {
       4,
       "quest_cloud_123"
     );
-    const pool = {
-      query: vi.fn()
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [ROW] })
-    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [ROW] });
+    const pool = tenantPool(query);
 
     const result = await createQuestProgressStore(pool).save(
       "user_123",
@@ -111,7 +161,7 @@ describe("Cloud Quest store", () => {
       progress
     );
 
-    expect(pool.query.mock.calls[0][0]).toContain("revision = $2");
+    expect(query.mock.calls[0][0]).toContain("revision = $2");
     expect(result).toMatchObject({
       conflict: true,
       duplicate: false,
@@ -127,11 +177,11 @@ describe("Cloud Quest store", () => {
       usedQuestionIds: ["question-a"],
       nextQuestionOrdinal: 1
     };
-    const pool = {
-      query: vi.fn()
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [ROW] })
-    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [ROW] });
+    const pool = tenantPool(query);
 
     await expect(
       createQuestProgressStore(pool).save("user_123", 2, progress)

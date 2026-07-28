@@ -17,11 +17,11 @@ holds everything else, organised by how authoritative it is.
 
 ## Decisions — `adr/`
 
-Architecture Decision Records 0001–0019, append-only. Read the relevant ADR
+Architecture Decision Records 0001–0022, append-only. Read the relevant ADR
 before changing game rules or server contracts; supersede with a new ADR
 rather than editing an accepted one. 0001–0012 cover game and product
-decisions; 0013–0019 record enterprise hardening and the guest-admission
-boundary.
+decisions; 0013–0022 record enterprise hardening, guest admission, signed-in
+settings continuity, audit checkpointing, and Classroom tenancy.
 
 ## Plans and evidence — `plans/`
 
@@ -32,7 +32,7 @@ detail.
 
 | Document | Status |
 |---|---|
-| [`enterprise-hardening-plan.md`](plans/enterprise-hardening-plan.md) | Phases 1–6 delivered; phases 7–9 planned, not started |
+| [`enterprise-hardening-plan.md`](plans/enterprise-hardening-plan.md) | Phases 1–7 delivered; phases 8–9 planned |
 | [`enterprise-hardening-log.md`](plans/enterprise-hardening-log.md) | Execution log: one entry per delivered hardening phase |
 | [`echo-maze-lifetime-membership-and-echo-atlas-master-plan.md`](plans/echo-maze-lifetime-membership-and-echo-atlas-master-plan.md) | Master plan for the four-plan program; implemented through PRs #49–#56 |
 | [`implementation-coverage.md`](plans/implementation-coverage.md) | Requirement-by-requirement evidence ledger for that program (all delivered; C27 deferred on external approval) |

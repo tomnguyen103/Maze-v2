@@ -15,7 +15,9 @@ describe("Clerk user deletion store", () => {
               access_deleted: true,
               grants_deleted: true,
               purchases_deleted: true,
-              journal_deleted: true
+              journal_deleted: true,
+              settings_deleted: true,
+              memberships_deleted: true
             }]
           : []
         };
@@ -30,16 +32,19 @@ describe("Clerk user deletion store", () => {
 
     expect(client.query.mock.calls.map(([sql]) => sql.trim())).toEqual([
       "BEGIN",
+      expect.stringContaining("set_config('echo_maze.explorer_id'"),
       expect.stringContaining("pg_advisory_xact_lock"),
       expect.stringContaining("INSERT INTO deleted_user_tombstones"),
       expect.stringContaining("DELETE FROM cloud_quest_progress"),
+      expect.stringContaining("DELETE FROM explorer_access_settings"),
       expect.stringContaining("DELETE FROM players"),
       expect.stringContaining("DELETE FROM player_access"),
       expect.stringContaining("AS tombstone_present"),
       "COMMIT"
     ]);
-    expect(client.query.mock.calls[1][1]).toEqual(["user_deleted"]);
-    expect(client.query.mock.calls[2][1]).toEqual([
+    expect(client.query.mock.calls[1][1]).toEqual(["user_deleted", ""]);
+    expect(client.query.mock.calls[2][1]).toEqual(["user_deleted"]);
+    expect(client.query.mock.calls[3][1]).toEqual([
       expect.stringMatching(/^[a-f0-9]{64}$/)
     ]);
     expect(client.release).toHaveBeenCalledOnce();
@@ -58,7 +63,9 @@ describe("Clerk user deletion store", () => {
               access_deleted: true,
               grants_deleted: true,
               purchases_deleted: true,
-              journal_deleted: true
+              journal_deleted: true,
+              settings_deleted: true,
+              memberships_deleted: true
             }]
           : []
         };
@@ -93,6 +100,28 @@ describe("Clerk user deletion store", () => {
       "database unavailable"
     );
     expect(client.query).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("destroys the pooled client when rollback fails", async () => {
+    const client = {
+      query: vi.fn(async (sql) => {
+        if (sql === "ROLLBACK") throw new Error("rollback failed");
+        if (sql.includes("pg_advisory_xact_lock")) {
+          throw new Error("database unavailable");
+        }
+        return { rows: [] };
+      }),
+      release: vi.fn()
+    };
+    const store = createUserDeletionStore({
+      connect: vi.fn(async () => client)
+    });
+
+    await expect(store.deleteUser("user_deleted")).rejects.toThrow(
+      "database unavailable"
+    );
+    expect(client.release).toHaveBeenCalledWith(true);
     expect(client.release).toHaveBeenCalledOnce();
   });
 });

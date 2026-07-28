@@ -15,10 +15,38 @@ const JOURNAL = {
   ]
 };
 
+/**
+ * @param {(
+ *   sql: string,
+ *   values?: unknown[]
+ * ) => Promise<{ rows: Record<string, unknown>[] }>} query
+ */
+function tenantPool(query) {
+  const clientQuery = vi.fn(async (sql, values) => {
+    if (
+      sql === "BEGIN" ||
+      sql === "COMMIT" ||
+      sql === "ROLLBACK" ||
+      sql.includes("set_config")
+    ) {
+      return { rows: [] };
+    }
+    return query(sql, values);
+  });
+  return {
+    clientQuery,
+    connect: vi.fn(async () => ({
+      query: clientQuery,
+      release: vi.fn()
+    }))
+  };
+}
+
 describe("learning Journal store", () => {
   it("returns an empty Journal when an account has no cloud copy", async () => {
     const query = vi.fn(async () => ({ rows: [] }));
-    const store = createLearningJournalStore({ query });
+    const pool = tenantPool(query);
+    const store = createLearningJournalStore(pool);
 
     await expect(store.getJournal("user_123")).resolves.toEqual({
       journal: {
@@ -28,16 +56,22 @@ describe("learning Journal store", () => {
       clearGeneration: 0
     });
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("FROM learning_journals"),
+      expect.stringMatching(
+        /FROM learning_journals[\s\S]+classroom_id IS NULL/
+      ),
       ["user_123"]
     );
+    expect(pool.clientQuery.mock.calls[1]).toEqual([
+      expect.stringContaining("set_config"),
+      ["user_123", ""]
+    ]);
   });
 
   it("ensures account access and upserts one bounded JSON Journal", async () => {
     const query = vi.fn(async () => ({
       rows: [{ journal: JOURNAL, clear_generation: 0 }]
     }));
-    const store = createLearningJournalStore({ query });
+    const store = createLearningJournalStore(tenantPool(query));
 
     await expect(
       store.saveJournal("user_123", JOURNAL, 0)
@@ -70,7 +104,7 @@ describe("learning Journal store", () => {
         };
       }
     );
-    const store = createLearningJournalStore({ query });
+    const store = createLearningJournalStore(tenantPool(query));
 
     await expect(
       store.saveJournal("user_123", JOURNAL, 3)
@@ -90,7 +124,7 @@ describe("learning Journal store", () => {
         clear_generation: 3
       }]
     }));
-    const store = createLearningJournalStore({ query });
+    const store = createLearningJournalStore(tenantPool(query));
 
     await expect(store.clearJournal("user_123")).resolves.toEqual({
       journal: { version: 1, events: [] },
@@ -113,7 +147,7 @@ describe("learning Journal store", () => {
         conflict: true
       }]
     }));
-    const store = createLearningJournalStore({ query });
+    const store = createLearningJournalStore(tenantPool(query));
 
     await expect(
       store.saveJournal("user_123", JOURNAL, 1)

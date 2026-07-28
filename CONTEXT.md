@@ -176,9 +176,40 @@ without a Warden, Vitality cost, timer, or Quest consequence.
 _Avoid_: remediation, punishment, bonus score
 
 **Explorer Access Settings**:
-Device-local presentation preferences that improve Fog, maze-mark, Question,
-or motion readability without changing geometry, timing, rules, or score.
+Presentation preferences that improve Fog, maze-mark, Question, or motion
+readability without changing geometry, timing, rules, or score. They follow a
+signed-in Explorer across devices and remain device-bound for guests.
 _Avoid_: difficulty settings, gameplay assist
+
+**Classroom**:
+A Clerk-backed learning group in which one or more Teachers can invite Students
+and view privacy-minimized learning progress.
+_Avoid_: Organization, tenant, school account
+
+**Classroom Membership**:
+The association between one Explorer and one Classroom, with either the Teacher
+or Student role.
+_Avoid_: Global role, account role, subscription
+
+**Teacher**:
+An Explorer whose Classroom Membership permits invitations and aggregate
+learning-progress views for that Classroom.
+_Avoid_: Admin, moderator, account owner
+
+**Student**:
+An Explorer whose Classroom Membership permits class-scoped play but never
+another Explorer's learning-progress view.
+_Avoid_: Child account, player role, member
+
+**Class Play**:
+Quest Progress and Lantern Journal outcomes associated with one Classroom,
+separate from the Explorer's Personal Play.
+_Avoid_: School mode, multiplayer, shared Quest
+
+**Personal Play**:
+Quest Progress and Lantern Journal outcomes that belong only to the Explorer
+and are not associated with a Classroom.
+_Avoid_: Guest play, consumer mode, solo account
 
 **Daily Shared Labyrinth**:
 One optional date-derived deterministic Run that is separate from the active

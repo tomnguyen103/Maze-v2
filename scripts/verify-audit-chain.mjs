@@ -18,6 +18,13 @@ import {
   readAuditChain,
   verifyAuditChain
 } from "../server/audit-store.js";
+import {
+  verifyRetainedAuditCheckpoints
+} from "../server/audit-checkpoint.js";
+import {
+  createConfiguredAuditCheckpointSink,
+  loadAuditCheckpointConfig
+} from "../server/audit-checkpoint-s3.js";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 
 const BATCH_ARGUMENT = process.argv.indexOf("--batch");
@@ -32,6 +39,27 @@ if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100000) {
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   console.error("DATABASE_URL is required to verify the audit chain.");
+  process.exit(2);
+}
+let normalizedConnectionString;
+try {
+  normalizedConnectionString =
+    normalizeDatabaseConnectionString(connectionString);
+} catch {
+  console.error("ERROR audit chain could not be verified. Invalid DATABASE_URL.");
+  process.exit(2);
+}
+
+let checkpointConfig;
+try {
+  checkpointConfig = loadAuditCheckpointConfig(process.env);
+  if (!checkpointConfig) {
+    throw new Error("Audit checkpoint configuration is required.");
+  }
+} catch {
+  console.error(
+    "Immutable audit checkpoint configuration is required to verify the chain."
+  );
   process.exit(2);
 }
 
@@ -79,10 +107,12 @@ let pool = null;
 /** @type {import("pg").PoolClient | null} */
 let client = null;
 try {
+  const checkpointObjects =
+    await createConfiguredAuditCheckpointSink(checkpointConfig).all();
   // Constructed inside the handler: normalizeDatabaseConnectionString throws on
   // a malformed URL, which outside `try` would bypass the documented exit code.
   pool = new Pool({
-    connectionString: normalizeDatabaseConnectionString(connectionString),
+    connectionString: normalizedConnectionString,
     max: 1,
     // Bounded so a stalled database fails the script rather than hanging a
     // scheduled run forever.
@@ -94,12 +124,25 @@ try {
     "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
   );
   const outcome = await verify(client.query.bind(client));
+  if (!outcome.broken) {
+    const anchored = await verifyRetainedAuditCheckpoints({
+      objects: checkpointObjects,
+      signingKey: checkpointConfig.signingKey,
+      query: client.query.bind(client)
+    });
+    if (!anchored.valid) {
+      outcome.broken =
+        `immutable audit checkpoint ${anchored.key} is invalid (${anchored.reason}).`;
+    }
+  }
   await client.query("COMMIT");
   if (outcome.broken) {
     console.error(`FAIL ${outcome.broken}`);
     process.exitCode = 1;
   } else {
-    console.log(`PASS audit chain intact across ${outcome.checked} rows.`);
+    console.log(
+      `PASS audit chain intact across ${outcome.checked} rows and anchored by ${checkpointObjects.length} retained checkpoints through ${checkpointObjects.at(-1)?.key}.`
+    );
   }
 } catch (error) {
   // An operational failure is not evidence of tampering, so it must not share

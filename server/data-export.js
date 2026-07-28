@@ -1,4 +1,6 @@
-export const EXPORT_SCHEMA_ID = "echo-maze-export/1";
+import { setTenantContext } from "./tenant-context.js";
+
+export const EXPORT_SCHEMA_ID = "echo-maze-export/2";
 
 /**
  * Snapshot variant: every section reads from ONE repeatable-read snapshot,
@@ -11,10 +13,15 @@ export const EXPORT_SCHEMA_ID = "echo-maze-export/1";
  */
 export async function exportUserSnapshot(pool, userId, options) {
   const client = await pool.connect();
+  let released = false;
   try {
     await client.query(
       "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
     );
+    await setTenantContext(client, {
+      explorerId: userId,
+      classroomId: null
+    });
     const exported = await buildUserExport(
       {
         query: async (sql, values) => {
@@ -22,7 +29,11 @@ export async function exportUserSnapshot(pool, userId, options) {
           return {
             rows: /** @type {Record<string, unknown>[]} */ (result.rows)
           };
-        }
+        },
+        selectClassroom: (classroomId) => setTenantContext(client, {
+          explorerId: userId,
+          classroomId
+        })
       },
       userId,
       options
@@ -30,10 +41,17 @@ export async function exportUserSnapshot(pool, userId, options) {
     await client.query("COMMIT");
     return exported;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      client.release(true);
+      released = true;
+    }
     throw error;
   } finally {
-    client.release();
+    if (!released) {
+      client.release();
+    }
   }
 }
 
@@ -42,8 +60,7 @@ export async function exportUserSnapshot(pool, userId, options) {
  * grow a column by accident just because a migration added one. Notably
  * absent on purpose: `idempotency_key` (a client-generated dedup token, not
  * player data) and any raw payment data (none is stored — Stripe identifiers
- * only, per the Lifetime Membership design). Explorer Access Settings are
- * device-local and never reach the server, so no section can exist for them.
+ * only, per the Lifetime Membership design).
  */
 const SECTION_QUERIES = {
   profile: `SELECT username, explorer_palette, playground_palette,
@@ -62,12 +79,32 @@ const SECTION_QUERIES = {
       stripe_price_id, amount, currency, status, paid_at, refunded_at,
       disputed_at, created_at, updated_at
     FROM lifetime_purchases WHERE player_id = $1 ORDER BY created_at`,
+  classroom_memberships: `SELECT classroom_id, clerk_membership_id, role,
+      created_at, updated_at
+    FROM classroom_memberships
+    WHERE clerk_user_id = $1 ORDER BY created_at, classroom_id`,
   quest_progress: `SELECT quest_id, level_id, labyrinth_number,
       completed_labyrinths, used_map_fingerprints, used_question_ids,
       next_question_ordinal, complete, revision, created_at, updated_at
-    FROM cloud_quest_progress WHERE clerk_user_id = $1`,
+    FROM cloud_quest_progress
+    WHERE clerk_user_id = $1 AND classroom_id IS NULL`,
+  class_quest_progress: `SELECT classroom_id, quest_id, level_id,
+      labyrinth_number, completed_labyrinths, used_map_fingerprints,
+      used_question_ids, next_question_ordinal, complete, revision,
+      created_at, updated_at
+    FROM cloud_quest_progress
+    WHERE clerk_user_id = $1 AND classroom_id = $2`,
   journal: `SELECT journal, clear_generation, created_at, updated_at
-    FROM learning_journals WHERE clerk_user_id = $1`,
+    FROM learning_journals
+    WHERE clerk_user_id = $1 AND classroom_id IS NULL`,
+  class_journal: `SELECT classroom_id, journal, clear_generation, created_at,
+      updated_at
+    FROM learning_journals
+    WHERE clerk_user_id = $1 AND classroom_id = $2`,
+  access_settings: `SELECT schema_version, high_contrast, large_marks,
+      reader_friendly_questions, reduced_effects, revision, created_at,
+      updated_at
+    FROM explorer_access_settings WHERE clerk_user_id = $1`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 
@@ -77,7 +114,7 @@ const SECTION_QUERIES = {
  * a deleted account yields empty sections rather than an error.
  *
  * Composable on purpose, and NOT the thing a route should wire: on a plain
- * adapter these reads are eight separate statements, so a concurrent save or
+ * adapter these reads are multiple statements, so a concurrent save or
  * deletion could produce sections describing different moments. Route through
  * `exportUserSnapshot`, which supplies a single-snapshot adapter. The seam
  * exists so tests can drive a fake adapter and so phase 7's admin export can
@@ -86,7 +123,8 @@ const SECTION_QUERIES = {
  * @param {{
  *   query: (sql: string, values?: unknown[]) => Promise<{
  *     rows: Record<string, unknown>[]
- *   }>
+ *   }>,
+ *   selectClassroom?: (classroomId: string) => Promise<void>
  * }} adapter
  * @param {string} userId
  * @param {{ now?: () => string }} [options]
@@ -96,29 +134,42 @@ export async function buildUserExport(
   userId,
   { now = () => new Date().toISOString() } = {}
 ) {
-  /** @param {keyof typeof SECTION_QUERIES} section */
-  const rowsOf = async (section) =>
-    (await adapter.query(SECTION_QUERIES[section], [userId])).rows;
+  /**
+   * @param {keyof typeof SECTION_QUERIES} section
+   * @param {unknown[]} [values]
+   */
+  const rowsOf = async (section, values = [userId]) =>
+    (await adapter.query(SECTION_QUERIES[section], values)).rows;
 
-  const [
-    profile,
-    scores,
-    access,
-    grants,
-    lifetimePurchases,
-    questProgress,
-    journal,
-    role
-  ] = await Promise.all([
-    rowsOf("profile"),
-    rowsOf("scores"),
-    rowsOf("access"),
-    rowsOf("grants"),
-    rowsOf("lifetime_purchases"),
-    rowsOf("quest_progress"),
-    rowsOf("journal"),
-    rowsOf("role")
-  ]);
+  const profile = await rowsOf("profile");
+  const scores = await rowsOf("scores");
+  const access = await rowsOf("access");
+  const grants = await rowsOf("grants");
+  const lifetimePurchases = await rowsOf("lifetime_purchases");
+  const classroomMemberships = await rowsOf("classroom_memberships");
+  const personalQuestProgress = await rowsOf("quest_progress");
+  const personalJournal = await rowsOf("journal");
+  const accessSettings = await rowsOf("access_settings");
+  const role = await rowsOf("role");
+
+  /** @type {Record<string, unknown>[]} */
+  const classQuestProgress = [];
+  /** @type {Record<string, unknown>[]} */
+  const classJournals = [];
+  for (const membership of classroomMemberships) {
+    if (typeof membership.classroom_id !== "string") continue;
+    await adapter.selectClassroom?.(membership.classroom_id);
+    const questRows = await rowsOf(
+      "class_quest_progress",
+      [userId, membership.classroom_id]
+    );
+    const journalRows = await rowsOf(
+      "class_journal",
+      [userId, membership.classroom_id]
+    );
+    classQuestProgress.push(...questRows);
+    classJournals.push(...journalRows);
+  }
 
   return {
     schema: EXPORT_SCHEMA_ID,
@@ -131,8 +182,12 @@ export async function buildUserExport(
         grants
       },
       lifetime_purchases: lifetimePurchases,
-      quest_progress: questProgress[0] ?? null,
-      journal: journal[0] ?? null,
+      classroom_memberships: classroomMemberships,
+      quest_progress: personalQuestProgress[0] ?? null,
+      journal: personalJournal[0] ?? null,
+      class_quest_progress: classQuestProgress,
+      class_journals: classJournals,
+      access_settings: accessSettings[0] ?? null,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"
     }

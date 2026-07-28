@@ -4,12 +4,6 @@ import { createHash } from "node:crypto";
 export const AUDIT_GENESIS_HASH = "0".repeat(64);
 
 /**
- * Matches createDatabasePool's connectionTimeoutMillis, so a contended append
- * gives up in the same window a new connection would.
- */
-export const LOCK_TIMEOUT_MS = 5000;
-
-/**
  * Stable-key-order JSON. Two structurally equal values always serialize
  * identically, which is what makes a recomputed row_hash comparable.
  *
@@ -72,9 +66,17 @@ export function auditEventFields(event) {
  * @param {Record<string, unknown>} fields
  */
 export function auditRowHash(prevHash, fields) {
+  return auditPayloadHash(prevHash, canonicalAuditJson(fields));
+}
+
+/**
+ * @param {string} prevHash
+ * @param {string} canonicalPayload
+ */
+function auditPayloadHash(prevHash, canonicalPayload) {
   return createHash("sha256")
     .update(prevHash)
-    .update(canonicalAuditJson(fields))
+    .update(canonicalPayload)
     .digest("hex");
 }
 
@@ -99,6 +101,24 @@ function storedFields(row) {
       row.resource_id === undefined ? null : /** @type {string | null} */ (row.resource_id),
     resourceType: String(row.resource_type)
   });
+}
+
+/** @param {Record<string, unknown>} row */
+function storedPayload(row) {
+  if (typeof row.canonical_payload !== "string") {
+    return canonicalAuditJson(storedFields(row));
+  }
+  try {
+    const parsed = JSON.parse(row.canonical_payload);
+    if (
+      canonicalAuditJson(parsed) !== canonicalAuditJson(storedFields(row))
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return row.canonical_payload;
 }
 
 /**
@@ -128,7 +148,11 @@ export function verifyAuditChain(rows, options = {}) {
         reason: "prev_hash"
       };
     }
-    if (auditRowHash(expectedPrev, storedFields(row)) !== String(row.row_hash)) {
+    const payload = storedPayload(row);
+    if (
+      payload === null ||
+      auditPayloadHash(expectedPrev, payload) !== String(row.row_hash)
+    ) {
       return {
         valid: false,
         checked,
@@ -152,6 +176,7 @@ const CHAIN_QUERY = `SELECT
    after,
    request_id,
    ip_hash,
+   canonical_payload,
    created_at,
    prev_hash,
    row_hash
@@ -177,13 +202,6 @@ export async function readAuditChain(query, { afterId = 0, limit = 10000 } = {})
 
 /**
  * @param {{
- *   connect: () => Promise<{
- *     query: (
- *       sql: string,
- *       values?: unknown[]
- *     ) => Promise<{ rows: Record<string, unknown>[] }>,
- *     release: () => void
- *   }>,
  *   query: (
  *     sql: string,
  *     values?: unknown[]
@@ -195,63 +213,15 @@ export function createAuditStore(pool) {
     /** @param {AuditEvent} event */
     async appendAudit(event) {
       const fields = auditEventFields(event);
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        // Bound the wait for the chain-head row lock. Without this a stuck
-        // append would hold a request open until the platform timeout.
-        await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT_MS}ms'`);
-        const head = await client.query(
-          `SELECT row_hash FROM audit_chain_head WHERE id = 1 FOR UPDATE`
-        );
-        const prevHash = String(head.rows[0]?.row_hash ?? AUDIT_GENESIS_HASH);
-        const rowHash = auditRowHash(prevHash, fields);
-        const inserted = await client.query(
-          `INSERT INTO audit_events (
-             actor_id,
-             actor_role,
-             action,
-             resource_type,
-             resource_id,
-             before,
-             after,
-             request_id,
-             ip_hash,
-             created_at,
-             prev_hash,
-             row_hash
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-           RETURNING id, created_at, prev_hash, row_hash`,
-          [
-            fields.actor_id,
-            fields.actor_role,
-            fields.action,
-            fields.resource_type,
-            fields.resource_id,
-            fields.before === null ? null : JSON.stringify(fields.before),
-            fields.after === null ? null : JSON.stringify(fields.after),
-            fields.request_id,
-            fields.ip_hash,
-            fields.created_at,
-            prevHash,
-            rowHash
-          ]
-        );
-        await client.query(
-          `UPDATE audit_chain_head
-           SET row_hash = $1, updated_at = now()
-           WHERE id = 1`,
-          [rowHash]
-        );
-        await client.query("COMMIT");
-        return inserted.rows[0] ?? { prev_hash: prevHash, row_hash: rowHash };
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
+      const inserted = await pool.query(
+        `SELECT id, created_at, prev_hash, row_hash
+         FROM append_audit_event($1)`,
+        [canonicalAuditJson(fields)]
+      );
+      if (!inserted.rows[0]) {
+        throw new Error("Privileged audit append returned no row.");
       }
+      return inserted.rows[0];
     },
 
     /**

@@ -112,6 +112,40 @@ describe("player client", () => {
     ).rejects.toThrow("That username is already in use.");
   });
 
+  it("preserves the current record on an optimistic settings conflict", async () => {
+    const record = {
+      settings: {
+        version: 1,
+        highContrast: true,
+        largeMarks: false,
+        readerFriendlyQuestions: true,
+        reducedEffects: false
+      },
+      revision: 4,
+      updatedAt: "2026-07-28T00:00:00.000Z"
+    };
+    const client = createPlayerApiClient({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            error: "Explorer Access Settings changed on another device.",
+            record
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/json" }
+          }
+        )
+    });
+
+    await expect(
+      client.saveAccessSettings(record.settings, 2)
+    ).rejects.toMatchObject({
+      status: 409,
+      body: { record }
+    });
+  });
+
   it("aborts a player request after its timeout", async () => {
     vi.useFakeTimers();
     try {
@@ -300,6 +334,43 @@ describe("player client", () => {
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({ progress, expectedRevision: 3 })
+      })
+    ]);
+  });
+
+  it("reads and revision-saves Explorer Access Settings", async () => {
+    const settings = {
+      version: 1,
+      highContrast: true,
+      largeMarks: false,
+      readerFriendlyQuestions: true,
+      reducedEffects: false
+    };
+    const fetchImpl = vi.fn(
+      /** @param {string | URL | Request} _path @param {RequestInit} [_options] */
+      async (_path, _options) => {
+        void _path;
+        void _options;
+        return new Response(JSON.stringify({ record: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+
+    await client.getAccessSettings();
+    await client.saveAccessSettings(settings, 3);
+
+    expect(fetchImpl.mock.calls[0][0]).toBe("/api/me/settings");
+    expect(fetchImpl.mock.calls[1]).toEqual([
+      "/api/me/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ settings, expectedRevision: 3 })
       })
     ]);
   });

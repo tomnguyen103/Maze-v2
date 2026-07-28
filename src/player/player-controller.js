@@ -92,6 +92,15 @@ export function createPlayerController({
       await clerkBrowser.initialize();
       return client.getQuestProgress();
     },
+    async getCloudAccessSettings() {
+      await clerkBrowser.initialize();
+      return client.getAccessSettings();
+    },
+    /** @param {Record<string, unknown>} settings @param {number} expectedRevision */
+    async saveCloudAccessSettings(settings, expectedRevision) {
+      await clerkBrowser.initialize();
+      return client.saveAccessSettings(settings, expectedRevision);
+    },
     /** @param {Record<string, unknown>} progress @param {number} expectedRevision */
     async saveCloudQuestProgress(progress, expectedRevision) {
       await clerkBrowser.initialize();

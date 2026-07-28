@@ -1,9 +1,10 @@
 export class PlayerApiError extends Error {
-  /** @param {string} message @param {number} status */
-  constructor(message, status) {
+  /** @param {string} message @param {number} status @param {Record<string, unknown>} [body] */
+  constructor(message, status, body = {}) {
     super(message);
     this.name = "PlayerApiError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -63,7 +64,8 @@ export function createPlayerApiClient({
           typeof body.error === "string"
             ? body.error
             : "Player services are unavailable. Guest play still works.",
-          response.status
+          response.status,
+          body
         );
       }
       return body;
@@ -141,6 +143,16 @@ export function createPlayerApiClient({
     },
     async getProfile() {
       return request("/api/profile");
+    },
+    async getAccessSettings() {
+      return request("/api/me/settings");
+    },
+    /** @param {Record<string, unknown>} settings @param {number} expectedRevision */
+    async saveAccessSettings(settings, expectedRevision) {
+      return request("/api/me/settings", {
+        method: "PUT",
+        body: JSON.stringify({ settings, expectedRevision })
+      });
     },
     async getQuestProgress() {
       return request("/api/quest-progress");

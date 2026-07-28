@@ -66,6 +66,13 @@ function fixtureAdapter() {
       created_at: "2026-01-04T00:00:00.000Z",
       updated_at: "2026-01-04T00:00:00.000Z"
     },
+    classroom_memberships: {
+      classroom_id: "org_export_1",
+      clerk_membership_id: "orgmem_export_1",
+      role: "student",
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-05T00:00:00.000Z"
+    },
     cloud_quest_progress: {
       quest_id: "quest_export_123",
       level_id: "trail-scout",
@@ -85,6 +92,16 @@ function fixtureAdapter() {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-05T00:00:00.000Z"
     },
+    explorer_access_settings: {
+      schema_version: 1,
+      high_contrast: true,
+      large_marks: false,
+      reader_friendly_questions: true,
+      reduced_effects: false,
+      revision: 2,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-05T00:00:00.000Z"
+    },
     user_roles: { role: "moderator" }
   };
   return {
@@ -101,11 +118,19 @@ function fixtureAdapter() {
       if (!table || values?.[0] !== USER) {
         return { rows: [] };
       }
+      /** @type {Record<string, unknown>} */
+      const fixture = {
+        ...rowsByTable[/** @type {keyof typeof rowsByTable} */ (table)]
+      };
+      if (
+        typeof values?.[1] === "string" &&
+        (table === "cloud_quest_progress" || table === "learning_journals")
+      ) {
+        fixture.classroom_id = values[1];
+      }
       return {
         rows: [
-          /** @type {Record<string, unknown>} */ (
-            rowsByTable[/** @type {keyof typeof rowsByTable} */ (table)]
-          )
+          /** @type {Record<string, unknown>} */ (fixture)
         ]
       };
     }
@@ -133,10 +158,29 @@ describe("buildUserExport", () => {
       checkout_session_id: "cs_test_1",
       status: "paid"
     });
+    expect(exported.data.classroom_memberships).toEqual([
+      expect.objectContaining({ classroom_id: "org_export_1" })
+    ]);
     expect(exported.data.quest_progress).toMatchObject({
       quest_id: "quest_export_123"
     });
     expect(exported.data.journal).toMatchObject({ clear_generation: 1 });
+    expect(exported.data.class_quest_progress).toEqual([
+      expect.objectContaining({
+        classroom_id: "org_export_1",
+        quest_id: "quest_export_123"
+      })
+    ]);
+    expect(exported.data.class_journals).toEqual([
+      expect.objectContaining({
+        classroom_id: "org_export_1",
+        clear_generation: 1
+      })
+    ]);
+    expect(exported.data.access_settings).toMatchObject({
+      high_contrast: true,
+      revision: 2
+    });
     expect(exported.data.role).toBe("moderator");
   });
 
@@ -150,8 +194,12 @@ describe("buildUserExport", () => {
     expect(exported.data.scores).toEqual([]);
     expect(exported.data.run_access).toEqual({ access: null, grants: [] });
     expect(exported.data.lifetime_purchases).toEqual([]);
+    expect(exported.data.classroom_memberships).toEqual([]);
     expect(exported.data.quest_progress).toBeNull();
     expect(exported.data.journal).toBeNull();
+    expect(exported.data.class_quest_progress).toEqual([]);
+    expect(exported.data.class_journals).toEqual([]);
+    expect(exported.data.access_settings).toBeNull();
     expect(exported.data.role).toBe("player");
     expect(JSON.stringify(exported)).not.toContain("Moss Runner");
   });
@@ -163,7 +211,7 @@ describe("buildUserExport", () => {
       expect(sql).toContain("$1");
     }
     // One query per exported table.
-    expect(adapter.queries).toHaveLength(8);
+    expect(adapter.queries).toHaveLength(12);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -191,26 +239,36 @@ describe("buildUserExport", () => {
 });
 
 describe("exportUserSnapshot", () => {
-  function fakeSnapshotPool({ failOn = "" } = {}) {
+  function fakeSnapshotPool({
+    failOn = "",
+    failRollback = false
+  } = {}) {
     /** @type {string[]} */
     const statements = [];
-    let released = false;
+    /** @type {unknown[][]} */
+    const parameters = [];
+    /** @type {boolean | undefined} */
+    let released;
     const client = {
       async query(/** @type {string} */ sql, /** @type {unknown[]} */ values) {
         statements.push(sql.split(/\s+/).slice(0, 2).join(" "));
+        parameters.push(values ?? []);
+        if (failRollback && sql === "ROLLBACK") {
+          throw new Error("rollback failed");
+        }
         if (failOn && sql.includes(failOn)) {
           throw new Error("boom");
         }
-        void values;
         return { rows: [] };
       },
-      release() {
-        released = true;
+      release(destroy = false) {
+        released = destroy;
       }
     };
     return {
       statements,
-      isReleased: () => released,
+      parameters,
+      releasedWith: () => released,
       async connect() {
         return client;
       }
@@ -225,10 +283,12 @@ describe("exportUserSnapshot", () => {
       { now: () => "2026-07-27T00:00:00.000Z" }
     );
     expect(pool.statements[0]).toBe("BEGIN TRANSACTION");
+    expect(pool.statements[1]).toBe("SELECT set_config('echo_maze.explorer_id',");
+    expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
-    // 8 section reads between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(10);
-    expect(pool.isReleased()).toBe(true);
+    // Context plus 9 section reads between BEGIN and COMMIT.
+    expect(pool.statements).toHaveLength(13);
+    expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });
 
@@ -241,6 +301,20 @@ describe("exportUserSnapshot", () => {
       )
     ).rejects.toThrow("boom");
     expect(pool.statements.at(-1)).toBe("ROLLBACK");
-    expect(pool.isReleased()).toBe(true);
+    expect(pool.releasedWith()).toBe(false);
+  });
+
+  it("destroys the pooled client when snapshot rollback fails", async () => {
+    const pool = fakeSnapshotPool({
+      failOn: "FROM players",
+      failRollback: true
+    });
+    await expect(
+      exportUserSnapshot(
+        /** @type {import("pg").Pool} */ (/** @type {unknown} */ (pool)),
+        "user_snapshot_1"
+      )
+    ).rejects.toThrow("boom");
+    expect(pool.releasedWith()).toBe(true);
   });
 });

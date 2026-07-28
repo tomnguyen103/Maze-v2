@@ -18,7 +18,9 @@ function verifiedClient() {
             access_deleted: true,
             grants_deleted: true,
             purchases_deleted: true,
-            journal_deleted: true
+            journal_deleted: true,
+            settings_deleted: true,
+            memberships_deleted: true
           }]
         : []
     })),
