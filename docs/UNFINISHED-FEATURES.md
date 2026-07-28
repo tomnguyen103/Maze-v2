@@ -4,7 +4,16 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 items were catalogued here; items 1-12 are delivered through the Phase 8 three-PR sequence, leaving 5 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The remaining work is the enterprise-hardening tail: Classroom-aware question budgets, SSO, content review, and scoreboard verification. Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; items 1-15 are delivered, leaving 2 open. They
+come out of a doc corpus in which the four product plans (master plan, roadmap,
+entry, membership) and all 23 `.scratch` specs/tickets are fully delivered
+through PRs #34–#63 — their unchecked checkboxes are stale, not open work.
+The remaining work is scoreboard verification. Both open items —
+cheat-resistant action replay and verified Daily ranking — are deferred by
+explicit ADR language, not oversight. A hard cross-cutting constraint repeats
+across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so
+every new endpoint must route through an existing function (enforced by
+`tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -164,44 +173,59 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] RLS denies cross-org reads even with application-layer bugs (tested)
   - [x] Teacher can create a Classroom, invite Students, and see only count-minimized progress for owned Classrooms
 
-### 13. Classroom-aware `question.fetch` rate budget — [NOT_STARTED]
+### 13. Classroom-aware `question.fetch` rate budget — [DELIVERED]
 
-- What: `GET /api/question` is hashed-address-keyed, so a classroom behind one NAT shares one 30/min budget. Both ADR 0014 and security-headers.md defer raising it until a tenant concept exists.
+- What: `GET /api/question` uses optional Clerk authentication to key signed-in
+  Explorers by user while preserving the existing address-hash budget for
+  guests.
 - Why it matters: A 30-student classroom exhausts the question budget in the first minute of a lesson.
 - Source: docs/adr/0014-serverless-rate-limits-and-strict-headers.md — "Rate limiting"; docs/security-headers.md — "Rate limits"
-- Evidence checked: `server/rate-limit-config.js` has no tenant scope; no org tables exist (see 12).
-- Touches: server/rate-limit-config.js, server/rate-limit-request.js, org tables from 12
+- Evidence checked: `server/question-api.js` composes optional Clerk middleware;
+  `server/question-route.js` passes the resolved user id to the durable limiter;
+  route tests prove signed-in users behind one address do not share a budget and
+  guests remain address-keyed.
+- Touches: server/question-api.js, server/question-route.js, tests
 - Depends on: 12
 - Effort: M
 - Acceptance criteria:
-  - [ ] Authenticated members of an org draw from a per-org or per-user budget, not per-address
-  - [ ] Anonymous budget unchanged
+  - [x] Authenticated members of an org draw from a per-org or per-user budget, not per-address
+  - [x] Anonymous budget unchanged
 
-### 14. Phase 9 — SSO / Google Workspace auto-join — [NOT_STARTED]
+### 14. Phase 9 — SSO / Google Workspace auto-join — [DELIVERED]
 
 - What: Google OAuth via Clerk; `org_domains` table with teacher domain verification; auto-create student memberships on matching-domain sign-in; public-domain blocklist; `docs/sso.md`.
 - Why it matters: Schools won't hand-provision accounts; domain auto-join is the standard onboarding path.
 - Source: docs/plans/enterprise-hardening-plan.md — Phase 9
-- Evidence checked: grep `sso|workspace` in db/, server/, api/ — not found; no docs/sso.md; depends on phase 8 which doesn't exist.
-- Touches: db/migrations/ (STOP-and-ask), Clerk config, server/webhook-inbox.js path, docs/sso.md
+- Evidence checked: migration 0017 stores one verified non-public domain per
+  Classroom behind forced RLS; Teacher GET/PUT domain routes verify the exact
+  primary email domain; minimized `user.created`/`user.updated` events request
+  an idempotent Clerk `org:member` Membership; the later signed Membership event
+  remains PostgreSQL authority. `docs/sso.md` covers setup and recovery.
+- Touches: migration 0017, existing Classroom and Clerk webhook functions,
+  Teacher UI, docs/sso.md
 - Depends on: 12
 - Effort: M
 - Acceptance criteria:
-  - [ ] Sign-in with a verified org domain auto-joins the matching org; public domains blocklisted
-  - [ ] docs/sso.md documents setup and failure modes
+  - [x] Sign-in with a verified org domain auto-joins the matching org; public domains blocklisted
+  - [x] docs/sso.md documents setup and failure modes
 
-### 15. Gate Warden curated capstone Question cards — [NOT_STARTED]
+### 15. Gate Warden curated capstone Question cards — [DELIVERED]
 
 - What: MVP Gate Wardens (Labyrinths 4/8/12/16/20) reuse the next reviewed band-matched question; the roadmap says "a later content pass may curate special capstone cards."
 - Why it matters: Milestone encounters feel identical to regular Wardens; pure content polish, code-light.
 - Source: docs/plans/echo-maze-prioritized-feature-roadmap.md — §8.2 "Question source"
-- Evidence checked: grep `capstone|boss` in src/ — no files; `src/questions/question-bank.js` has no milestone-special deck. `isGateWardenMilestone` exists (`src/questions/quest-levels.js:160-161`).
-- Touches: src/questions/question-bank.js, src/questions/quest-levels.js, content review
-- Depends on: none (7 changes the storage home if done first). NOTE: requires curation of child-appropriate content — a product/content decision; executor must stop and ask rather than author question content.
+- Evidence checked: `src/questions/question-bank.js` contains 15 reviewed
+  capstones across all five bands and three levels; the first Gate Warden
+  attempt requests the capstone kind, while retries fall back to the ordinary
+  reviewed deck. Service tests prove capstones bypass unreviewed overlays and
+  providers, and every card passes the same normalizer as the reviewed bank.
+- Touches: src/questions/question-bank.js, server/question-service.js,
+  src/main.js, tests
+- Depends on: none
 - Effort: M
 - Acceptance criteria:
-  - [ ] Gate Warden encounters draw from a curated capstone deck when available, band-matched fallback otherwise
-  - [ ] Capstone cards pass the same review/validation path as the reviewed bank
+  - [x] Gate Warden encounters draw from a curated capstone deck when available, band-matched fallback otherwise
+  - [x] Capstone cards pass the same review/validation path as the reviewed bank
 
 ### 16. Server-authoritative action replay (anti-cheat) — [NOT_STARTED]
 

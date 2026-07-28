@@ -206,6 +206,32 @@ Quest Progress and Lantern Journal outcomes associated with one Classroom,
 separate from the Explorer's Personal Play.
 _Avoid_: School mode, multiplayer, shared Quest
 
+**Classroom Question Budget**:
+The per-Explorer `question.fetch` allowance used when any signed-in Explorer
+requests a Warden Question. It prevents one shared network address from becoming
+a shared limit while keeping anonymous requests address-bound.
+_Avoid_: Classroom quota, shared school allowance, Question entitlement
+
+**Verified Classroom Domain**:
+One lower-case school email domain registered to a Classroom by a Teacher whose
+verified primary Clerk email uses that same domain. Public email providers
+cannot become Verified Classroom Domains, and one domain belongs to at most one
+Classroom.
+_Avoid_: SSO connection, email allowlist, organization claim
+
+**Domain Auto-Join**:
+The asynchronous request to add an Explorer with a verified primary email on a
+Verified Classroom Domain to the matching Clerk Organization as a Student.
+Classroom Membership remains absent until Clerk's Membership webhook reaches the
+authoritative database.
+_Avoid_: automatic database grant, domain login, implicit Teacher role
+
+**Capstone Question**:
+One reviewed, Quest-Level- and Difficulty-Band-matched Warden Question reserved
+for a Gate Warden Challenge. It changes the milestone's content emphasis, never
+its answer, Hint, Skip, Vitality, score, or Quest-wide uniqueness rules.
+_Avoid_: Boss Question, bonus Question, generated finale
+
 **Personal Play**:
 Quest Progress and Lantern Journal outcomes that belong only to the Explorer
 and are not associated with a Classroom.

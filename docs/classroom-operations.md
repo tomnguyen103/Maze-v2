@@ -10,6 +10,7 @@ every read and write. A missing or delayed webhook denies access.
 2. Keep the default roles. Echo Maze maps `org:admin` to Teacher and
    `org:member` to Student.
 3. Configure the signed `/api/clerk-webhook` endpoint for:
+   `user.created`, `user.updated`, `user.deleted`,
    `organization.created`, `organization.updated`, `organization.deleted`,
    `organizationMembership.created`, `organizationMembership.updated`, and
    `organizationMembership.deleted`.
@@ -24,13 +25,15 @@ Organization and Membership events commit through the durable inbox.
 
 ## Database release order
 
-Apply migrations 0014, 0015, and 0016 with `DATABASE_ADMIN_URL`, in that order:
+Apply migrations 0014 through 0017 with `DATABASE_ADMIN_URL`, in that order:
 
 - 0014 adds nullable Classroom scope, a non-login tenant owner, transaction-local
   context, and forced RLS while preserving Personal Play.
 - 0015 adds monotonic Clerk authority writes and Class Play writes for Quest
   Progress, Lantern Journal, and Score Entries.
 - 0016 adds a trigger-maintained count projection and the bounded Teacher read.
+- 0017 adds the forced-RLS Verified Classroom Domain mapping and bounded
+  register/read/lookup functions used by domain auto-join.
 
 The application login named by `DATABASE_URL` must inherit
 `echo_maze_runtime`. It must not be superuser, tenant-table owner, or hold
@@ -44,6 +47,7 @@ release.
 - Personal Play, which clears the selected Classroom and keeps existing rules;
 - Class Play, which stores one validated Organization id in browser storage;
 - Classroom creation for signed-in Explorers;
+- Verified Classroom Domain registration for synchronized Teachers;
 - Student invitations for database-authoritative Teachers; and
 - per-Student/per-objective counts for Teachers.
 
@@ -53,10 +57,15 @@ The API surfaces are:
 - `POST /api/classrooms`
 - `POST /api/classrooms/:id/invitations`
 - `GET /api/classrooms/:id/progress`
+- `GET /api/classrooms/:id/domain`
+- `PUT /api/classrooms/:id/domain`
 
 Creation is limited to 3/hour per signed-in user and invitations to 20/hour.
 Clerk also applies provider limits. UI visibility is never authorization:
 invitation and progress routes re-check the selected Membership in PostgreSQL.
+Domain registration also re-checks Teacher Membership, verifies the exact domain
+of the Teacher's primary verified Clerk email, rejects public mailbox providers,
+and allows one Classroom owner per domain.
 
 ## Privacy boundary
 
@@ -80,6 +89,12 @@ Membership is removed.
   inbox/dead-letter view, retry safely, then refresh `/class`.
 - Student denied after accepting: confirm the Membership event synchronized;
   never insert a local Membership manually to bypass a delayed webhook.
+- Matching-domain Student not joined: confirm migrations through 0017 are
+  applied, `user.created` and `user.updated` are subscribed, and the Clerk
+  Membership event followed the user event. See `docs/sso.md`.
+- Domain rejected: use the exact domain from the Teacher's primary verified
+  Clerk email. Public mailbox domains and domains already assigned to another
+  Classroom are intentionally rejected.
 - Invitation denied: confirm the caller is a synchronized Teacher and that
   Clerk Organizations are enabled.
 - Counts absent: confirm the Student used Class Play for that Classroom and

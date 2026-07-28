@@ -2,6 +2,7 @@ import { verifyWebhook } from "@clerk/express/webhooks";
 import { URL } from "node:url";
 import { safeErrorName } from "./safe-error-log.js";
 import { SYSTEM_ACTORS } from "./audit.js";
+import { verifiedEmailDomain } from "./classroom-domain.js";
 
 export const CLERK_WEBHOOK_PATH = "/api/clerk-webhook";
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -175,6 +176,32 @@ function deliveryPayloadFrom(event) {
   const data = /** @type {Record<string, unknown>} */ (event.data ?? {});
   if (event.type === "user.deleted") {
     return { id: requiredString(data.id) };
+  }
+  if (event.type === "user.created" || event.type === "user.updated") {
+    const primaryEmailAddressId = data.primary_email_address_id;
+    const emailAddresses = Array.isArray(data.email_addresses)
+      ? data.email_addresses
+      : [];
+    const primary = emailAddresses.find((value) => {
+      const email = /** @type {Record<string, unknown>} */ (value ?? {});
+      const verification = /** @type {Record<string, unknown>} */ (
+        email.verification ?? {}
+      );
+      return (
+        email.id === primaryEmailAddressId &&
+        verification.status === "verified"
+      );
+    });
+    const email = /** @type {Record<string, unknown>} */ (primary ?? {});
+    const emailDomain = verifiedEmailDomain(email.email_address);
+    if (!emailDomain) {
+      return null;
+    }
+    return {
+      id: requiredString(data.id),
+      emailDomain,
+      occurredAt: eventTimestamp(event)
+    };
   }
   if (
     event.type === "organization.created" ||

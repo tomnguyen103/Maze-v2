@@ -4,6 +4,16 @@ import { createClerkClient } from "@clerk/express";
  * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
  * @param {{
  *   createClient?: (options: { secretKey: string }) => {
+ *     users: {
+ *       getUser: (userId: string) => Promise<{
+ *         primaryEmailAddressId?: string | null,
+ *         emailAddresses?: {
+ *           id?: string,
+ *           emailAddress?: string,
+ *           verification?: { status?: string } | null
+ *         }[]
+ *       }>
+ *     },
  *     organizations: {
  *       createOrganization: (input: {
  *         name: string,
@@ -21,6 +31,16 @@ import { createClerkClient } from "@clerk/express";
  *         status?: string,
  *         url?: string | null
  *       }>
+ *       createOrganizationMembership: (input: {
+ *         organizationId: string,
+ *         userId: string,
+ *         role: "org:member"
+ *       }) => Promise<{ id: string }>,
+ *       getOrganizationMembershipList: (input: {
+ *         organizationId: string,
+ *         userId: string[],
+ *         limit: number
+ *       }) => Promise<{ data: { id: string }[], totalCount: number }>
  *     }
  *   }
  * }} [dependencies]
@@ -76,6 +96,74 @@ export function createClassroomProvider(
         status: invitation.status ?? "pending",
         url: invitation.url ?? null
       };
+    },
+
+    /** @param {string} userId */
+    async verifiedPrimaryEmail(userId) {
+      const user = await clerk.users.getUser(userId);
+      const primary = user.emailAddresses?.find(
+        (email) => email.id === user.primaryEmailAddressId
+      );
+      return primary?.verification?.status === "verified" &&
+        typeof primary.emailAddress === "string"
+        ? primary.emailAddress.trim().toLowerCase()
+        : null;
+    },
+
+    /**
+     * @param {{ classroomId: string, userId: string }} input
+     */
+    async autoJoinStudent({ classroomId, userId }) {
+      const existing = await existingMembership(
+        clerk,
+        classroomId,
+        userId
+      );
+      if (existing) {
+        return { created: false, membershipId: existing.id };
+      }
+      try {
+        const membership =
+          await clerk.organizations.createOrganizationMembership({
+            organizationId: classroomId,
+            userId,
+            role: "org:member"
+          });
+        return { created: true, membershipId: membership.id };
+      } catch (error) {
+        // A concurrent verified user delivery can win between the lookup and
+        // create. Re-read once: an existing Membership makes the operation
+        // idempotently successful; otherwise preserve the Clerk error for the
+        // durable inbox retry.
+        const raced = await existingMembership(clerk, classroomId, userId);
+        if (raced) {
+          return { created: false, membershipId: raced.id };
+        }
+        throw error;
+      }
     }
   };
+}
+
+/**
+ * @param {{
+ *   organizations: {
+ *     getOrganizationMembershipList: (input: {
+ *       organizationId: string,
+ *       userId: string[],
+ *       limit: number
+ *     }) => Promise<{ data: { id: string }[] }>
+ *   }
+ * }} clerk
+ * @param {string} classroomId
+ * @param {string} userId
+ */
+async function existingMembership(clerk, classroomId, userId) {
+  const memberships =
+    await clerk.organizations.getOrganizationMembershipList({
+      organizationId: classroomId,
+      userId: [userId],
+      limit: 1
+    });
+  return memberships.data[0] ?? null;
 }

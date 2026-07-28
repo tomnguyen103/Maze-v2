@@ -2,6 +2,12 @@ import {
   ClassroomAccessDeniedError,
   ClassroomContextError
 } from "./classroom-context.js";
+import {
+  ClassroomDomainConflictError,
+  ClassroomDomainInputError,
+  normalizeClassroomDomain,
+  verifiedEmailDomain
+} from "./classroom-domain.js";
 import { InputError } from "./player-validation.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
@@ -16,7 +22,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function isClassroomPath(pathname) {
   return (
     pathname === "/api/classrooms" ||
-    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:invitations|progress)$/.test(
+    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress)$/.test(
       pathname
     )
   );
@@ -100,6 +106,21 @@ function classroomId(pathname) {
  *       userId: string,
  *       classroomId: string
  *     ) => Promise<string>,
+ *     domainForTeacher: (
+ *       userId: string,
+ *       classroomId: string
+ *     ) => Promise<{
+ *       domain: string,
+ *       autoJoinEnabled: boolean
+ *     } | null>,
+ *     registerDomain: (
+ *       userId: string,
+ *       classroomId: string,
+ *       domain: string
+ *     ) => Promise<{
+ *       domain: string,
+ *       autoJoinEnabled: boolean
+ *     }>,
      *     progressForTeacher: (
      *       userId: string,
      *       classroomId: string
@@ -125,6 +146,7 @@ function classroomId(pathname) {
  *       status: string,
  *       url: string | null
  *     }>
+ *     verifiedPrimaryEmail: (userId: string) => Promise<string | null>
  *   } | null,
  *   getUserId: (
  *     request: import("node:http").IncomingMessage
@@ -213,6 +235,67 @@ export function createClassroomHandler({
       }
 
       const selectedClassroomId = classroomId(pathname);
+      if (pathname.endsWith("/domain")) {
+        await store.requireTeacher(userId, selectedClassroomId);
+        if (request.method === "GET") {
+          sendJson(response, 200, {
+            verifiedDomain: await store.domainForTeacher(
+              userId,
+              selectedClassroomId
+            )
+          });
+          return;
+        }
+        if (request.method !== "PUT") {
+          response.setHeader("allow", "GET, PUT");
+          sendJson(response, 405, {
+            error: "Use GET or PUT for the Verified Classroom Domain."
+          });
+          return;
+        }
+        if (!provider) {
+          sendJson(response, 503, {
+            error: "Classroom domain verification is not configured."
+          });
+          return;
+        }
+        const decision = await rateLimit(
+          "classroom.domain",
+          request,
+          userId
+        );
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Classroom domain changes. Try again shortly."
+          );
+          return;
+        }
+        const body = /** @type {Record<string, unknown>} */ (
+          await readJsonBody(request)
+        );
+        const domain = normalizeClassroomDomain(body.domain);
+        const verifiedEmail = await provider.verifiedPrimaryEmail(userId);
+        if (verifiedEmailDomain(verifiedEmail) !== domain) {
+          throw new ClassroomDomainInputError(
+            "Use the domain from your verified primary email."
+          );
+        }
+        const registered = await store.registerDomain(
+          userId,
+          selectedClassroomId,
+          domain
+        );
+        await recordAudit(request, {
+          actorId: userId,
+          action: "org.domain.register",
+          resource: { type: "classroom", id: selectedClassroomId },
+          after: registered
+        });
+        sendJson(response, 200, { verifiedDomain: registered });
+        return;
+      }
       if (pathname.endsWith("/progress")) {
         if (request.method !== "GET") {
           response.setHeader("allow", "GET");
@@ -277,9 +360,14 @@ export function createClassroomHandler({
     } catch (error) {
       if (
         error instanceof InputError ||
-        error instanceof ClassroomContextError
+        error instanceof ClassroomContextError ||
+        error instanceof ClassroomDomainInputError
       ) {
         sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof ClassroomDomainConflictError) {
+        sendJson(response, 409, { error: error.message });
         return;
       }
       if (error instanceof ClassroomAccessDeniedError) {

@@ -74,12 +74,13 @@ The in-process question throttle stays, unchanged, as a first line in front of
 the per-caller budget. The two limits answer different questions: "is this
 container overloading the provider?" and "is this caller over their share?"
 
-`GET /api/question` is unauthenticated by design — guests play without an
-account — so no Clerk user id exists there and it is metered by address hash for
-everyone, signed in or not. The consequence is real: a classroom behind one NAT
-shares one 30/min budget. Phase 8 introduces classrooms and is where that budget
-should be revisited; raising it now, before there is a tenant concept to raise it
-*for*, would just weaken the limit.
+`GET /api/question` remains available without an account. When Clerk resolves a
+valid signed-in session, the endpoint supplies that user id to the durable
+limiter; otherwise it preserves the original guest address-hash key. One
+classroom NAT therefore no longer forces every signed-in Explorer through one
+30/min budget, while anonymous play keeps the same protection. Authentication
+is optional on this route: a missing or invalid session degrades to the guest
+identity instead of denying Question access.
 
 Rejections are `429` with `Retry-After` and a matching `retryAfter` body field,
 and are recorded as `rate_limit_hit` product events — high volume, so a product

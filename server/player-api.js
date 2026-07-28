@@ -19,6 +19,8 @@ import {
 } from "./webhook-inbox.js";
 import { processClassroomAuthorityEvent } from "./classroom-authority.js";
 import { createClassroomAuthorityStore } from "./classroom-authority-store.js";
+import { processClassroomAutoJoinEvent } from "./classroom-domain.js";
+import { createClassroomDomainStore } from "./classroom-domain-store.js";
 import { createClassroomProvider } from "./classroom-provider.js";
 import {
   createClassroomHandler,
@@ -243,7 +245,9 @@ export function createPlayerApi(env = process.env) {
   const lifetimeConfig = loadLifetimeConfig(env);
   const inboxStore = createWebhookInboxStore(queryAdapter);
   const classroomAuthorityStore = createClassroomAuthorityStore(queryAdapter);
+  const classroomDomainStore = createClassroomDomainStore(queryAdapter);
   const classroomStore = createClassroomStore(pool);
+  const classroomProvider = createClassroomProvider(env);
   const healthHandler = createHealthHandler({
     version,
     checkDatabase: () => queryAdapter.query("SELECT 1"),
@@ -287,8 +291,8 @@ export function createPlayerApi(env = process.env) {
     recordAudit
   });
   const classroomHandler = createClassroomHandler({
-    store: classroomStore,
-    provider: createClassroomProvider(env),
+    store: { ...classroomStore, ...classroomDomainStore },
+    provider: classroomProvider,
     getUserId,
     recordAudit,
     rateLimit
@@ -367,6 +371,25 @@ export function createPlayerApi(env = process.env) {
             { actorId: SYSTEM_ACTORS.clerk, actorRole: "system" },
             classroomOutcome.action,
             classroomOutcome.resource
+          );
+        }
+        return;
+      }
+      const autoJoinOutcome = await processClassroomAutoJoinEvent(
+        {
+          store: classroomDomainStore,
+          provider: classroomProvider
+        },
+        event
+      );
+      if (autoJoinOutcome) {
+        if (autoJoinOutcome.applied) {
+          await auditRecorder.recordAudit(
+            { actorId: SYSTEM_ACTORS.clerk, actorRole: "system" },
+            autoJoinOutcome.action,
+            autoJoinOutcome.resource,
+            undefined,
+            autoJoinOutcome.metadata
           );
         }
         return;
@@ -478,7 +501,7 @@ export function createPlayerApi(env = process.env) {
       recordAudit
     });
     const unavailableClassroomHandler = createClassroomHandler({
-      store: classroomStore,
+      store: { ...classroomStore, ...classroomDomainStore },
       provider: null,
       getUserId: () => null,
       rateLimit

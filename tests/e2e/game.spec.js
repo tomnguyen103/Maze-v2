@@ -1677,7 +1677,12 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   expect(plan.finalRun.wardensDefeated).toBe(
     plan.finalRun.config.wardenCount
   );
+  /** @type {Array<string | null>} */
+  const requestedChallengeKinds = [];
   await page.route("**/api/question?**", async (route) => {
+    requestedChallengeKinds.push(
+      new URL(route.request().url()).searchParams.get("challenge")
+    );
     await route.fulfill({
       contentType: "application/json",
       status: 503,
@@ -1714,7 +1719,10 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
       labyrinthNumber: 4,
       questionOrdinal,
       seed,
-      wardenId: questionOrdinal
+      wardenId: questionOrdinal,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
     });
     questionOrdinal += 1;
     await expect(page.locator("#challenge-source")).toContainText(
@@ -1728,6 +1736,9 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   }
 
   expect(gateChallenges).toBe(1);
+  expect(requestedChallengeKinds.filter(
+    (kind) => kind === "gate-warden"
+  )).toHaveLength(1);
   await expect(page.locator("#result-seed")).toHaveText(seed);
   await expect(
     page.getByRole("group", { name: "Echo Atlas progress" })

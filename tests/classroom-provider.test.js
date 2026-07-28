@@ -11,9 +11,12 @@ describe("Clerk Classroom provider", () => {
       { CLERK_SECRET_KEY: "sk_test" },
       {
         createClient: () => ({
+          users: { getUser: vi.fn() },
           organizations: {
             createOrganization,
-            createOrganizationInvitation: vi.fn()
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(),
+            getOrganizationMembershipList: vi.fn()
           }
         })
       }
@@ -42,9 +45,12 @@ describe("Clerk Classroom provider", () => {
       { CLERK_SECRET_KEY: "sk_test" },
       {
         createClient: () => ({
+          users: { getUser: vi.fn() },
           organizations: {
             createOrganization: vi.fn(),
-            createOrganizationInvitation
+            createOrganizationInvitation,
+            createOrganizationMembership: vi.fn(),
+            getOrganizationMembershipList: vi.fn()
           }
         })
       }
@@ -63,6 +69,165 @@ describe("Clerk Classroom provider", () => {
       inviterUserId: "user_teacher_1",
       redirectUrl: "/class"
     });
+  });
+
+  it("returns only a verified primary email for domain registration", async () => {
+    const getUser = vi.fn(async () => ({
+      primaryEmailAddressId: "idn_primary",
+      emailAddresses: [
+        {
+          id: "idn_other",
+          emailAddress: "other@example.test",
+          verification: { status: "verified" }
+        },
+        {
+          id: "idn_primary",
+          emailAddress: "Teacher@School.Example",
+          verification: { status: "verified" }
+        }
+      ]
+    }));
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(),
+            getOrganizationMembershipList: vi.fn()
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.verifiedPrimaryEmail("user_teacher_1")
+    ).resolves.toBe("teacher@school.example");
+    expect(getUser).toHaveBeenCalledWith("user_teacher_1");
+  });
+
+  it("creates one Clerk Student Membership and treats repeats as success", async () => {
+    const getOrganizationMembershipList = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [], totalCount: 0 })
+      .mockResolvedValueOnce({
+        data: [{ id: "orgmem_existing" }],
+        totalCount: 1
+      });
+    const createOrganizationMembership = vi.fn(async () => ({
+      id: "orgmem_created"
+    }));
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser: vi.fn() },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership,
+            getOrganizationMembershipList
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).resolves.toEqual({
+      created: true,
+      membershipId: "orgmem_created"
+    });
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).resolves.toEqual({
+      created: false,
+      membershipId: "orgmem_existing"
+    });
+    expect(createOrganizationMembership).toHaveBeenCalledOnce();
+    expect(createOrganizationMembership).toHaveBeenCalledWith({
+      organizationId: "org_class_1",
+      userId: "user_student_1",
+      role: "org:member"
+    });
+  });
+
+  it("accepts a Membership created by a concurrent auto-join", async () => {
+    const createError = new Error("membership already exists");
+    const getOrganizationMembershipList = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [], totalCount: 0 })
+      .mockResolvedValueOnce({
+        data: [{ id: "orgmem_race_winner" }],
+        totalCount: 1
+      });
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser: vi.fn() },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(async () => {
+              throw createError;
+            }),
+            getOrganizationMembershipList
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).resolves.toEqual({
+      created: false,
+      membershipId: "orgmem_race_winner"
+    });
+    expect(getOrganizationMembershipList).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves the Clerk error when an auto-join race has no winner", async () => {
+    const createError = new Error("Clerk unavailable");
+    const getOrganizationMembershipList = vi.fn(async () => ({
+      data: [],
+      totalCount: 0
+    }));
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser: vi.fn() },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(async () => {
+              throw createError;
+            }),
+            getOrganizationMembershipList
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).rejects.toBe(createError);
+    expect(getOrganizationMembershipList).toHaveBeenCalledTimes(2);
   });
 
   it("is unavailable without a secret key", () => {

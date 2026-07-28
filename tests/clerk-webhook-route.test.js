@@ -163,6 +163,62 @@ describe("Clerk webhook", () => {
     });
   });
 
+  it("stores only the verified primary email domain for auto-join", async () => {
+    const inbox = {
+      receive: vi.fn(async () => ({
+        duplicate: false,
+        processed: true
+      }))
+    };
+    const handler = createClerkWebhookHandler({
+      deleteUser: vi.fn(),
+      inbox,
+      verifyEvent: vi.fn(async () => ({
+        type: "user.updated",
+        timestamp: 1750000000123,
+        data: {
+          id: "user_student",
+          primary_email_address_id: "idn_primary",
+          email_addresses: [
+            {
+              id: "idn_primary",
+              email_address: "Student@School.Example",
+              verification: { status: "verified" }
+            }
+          ],
+          first_name: "must-not-enter-inbox",
+          private_metadata: { secret: "must-not-enter-inbox" }
+        }
+      }))
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/clerk-webhook`, {
+        method: "POST",
+        headers: { "svix-id": "msg_user_updated" },
+        body: "{}"
+      });
+
+      expect(response.status).toBe(200);
+      expect(inbox.receive).toHaveBeenCalledWith({
+        provider: "clerk",
+        eventId: "msg_user_updated",
+        eventType: "user.updated",
+        payload: {
+          id: "user_student",
+          emailDomain: "school.example",
+          occurredAt: 1750000000123
+        }
+      });
+      expect(JSON.stringify(inbox.receive.mock.calls)).not.toContain(
+        "Student@School.Example"
+      );
+      expect(JSON.stringify(inbox.receive.mock.calls)).not.toContain(
+        "must-not-enter-inbox"
+      );
+    });
+  });
+
   it("fails closed when a Classroom event cannot enter the durable inbox", async () => {
     const inbox = { receive: vi.fn() };
     const handler = createClerkWebhookHandler({

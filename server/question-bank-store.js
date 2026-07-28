@@ -1,4 +1,4 @@
-import { normalizeQuestion } from "./question-service.js";
+import { normalizeQuestion } from "../src/questions/question-contract.js";
 import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
 
 const LEVEL_IDS = /** @type {Set<string>} */ (

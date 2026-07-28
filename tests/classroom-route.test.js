@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createClassroomHandler } from "../server/classroom-route.js";
 import { ClassroomAccessDeniedError } from "../server/classroom-context.js";
+import { ClassroomDomainConflictError } from "../server/classroom-domain.js";
 
 /**
  * @param {(request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse) => void | Promise<void>} handler
@@ -31,6 +32,14 @@ function classroomStore() {
       { id: "org_class_1", name: "Comet Crew", role: "teacher" }
     ]),
     requireTeacher: vi.fn(async () => "teacher"),
+    domainForTeacher: vi.fn(async () => ({
+      domain: "school.example",
+      autoJoinEnabled: true
+    })),
+    registerDomain: vi.fn(async (_userId, _classroomId, domain) => ({
+      domain,
+      autoJoinEnabled: true
+    })),
     progressForTeacher: vi.fn(async () => ({
       progress: [{
         studentName: "Moss",
@@ -57,7 +66,8 @@ function classroomProvider() {
       emailAddress: "student@example.com",
       status: "pending",
       url: "https://accounts.example.test/invitations/orginv_1"
-    }))
+    })),
+    verifiedPrimaryEmail: vi.fn(async () => "teacher@school.example")
   };
 }
 
@@ -73,15 +83,21 @@ describe("Classroom API", () => {
       for (const [path, method] of [
         ["/api/classrooms", "GET"],
         ["/api/classrooms", "POST"],
+        ["/api/classrooms/org_class_1/domain", "GET"],
+        ["/api/classrooms/org_class_1/domain", "PUT"],
         ["/api/classrooms/org_class_1/invitations", "POST"],
         ["/api/classrooms/org_class_1/progress", "GET"]
       ]) {
         const response = await fetch(`${origin}${path}`, {
           method,
-          ...(method === "POST"
+          ...(method === "POST" || method === "PUT"
             ? {
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ name: "Comet", email: "a@b.test" })
+                body: JSON.stringify({
+                  name: "Comet",
+                  email: "a@b.test",
+                  domain: "school.example"
+                })
               }
             : {})
         });
@@ -222,6 +238,170 @@ describe("Classroom API", () => {
     ).toBeLessThan(provider.inviteStudent.mock.invocationCallOrder[0]);
   });
 
+  it("registers only the exact domain of the Teacher's verified primary email", async () => {
+    const store = classroomStore();
+    const provider = classroomProvider();
+    const audit = vi.fn();
+    const handler = createClassroomHandler({
+      store,
+      provider,
+      getUserId: () => "user_teacher_1",
+      recordAudit: audit
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: " School.Example " })
+        }
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        verifiedDomain: {
+          domain: "school.example",
+          autoJoinEnabled: true
+        }
+      });
+    });
+
+    expect(store.requireTeacher).toHaveBeenCalledWith(
+      "user_teacher_1",
+      "org_class_1"
+    );
+    expect(provider.verifiedPrimaryEmail).toHaveBeenCalledWith(
+      "user_teacher_1"
+    );
+    expect(store.registerDomain).toHaveBeenCalledWith(
+      "user_teacher_1",
+      "org_class_1",
+      "school.example"
+    );
+    expect(audit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorId: "user_teacher_1",
+        action: "org.domain.register",
+        resource: { type: "classroom", id: "org_class_1" }
+      })
+    );
+  });
+
+  it("returns 409 when another Classroom owns the verified domain", async () => {
+    const store = classroomStore();
+    store.registerDomain.mockRejectedValue(
+      new ClassroomDomainConflictError()
+    );
+    const provider = classroomProvider();
+    const handler = createClassroomHandler({
+      store,
+      provider,
+      getUserId: () => "user_teacher_1"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "school.example" })
+        }
+      );
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({
+        error: "That school email domain belongs to another Classroom."
+      });
+    });
+
+    expect(provider.verifiedPrimaryEmail).toHaveBeenCalledWith(
+      "user_teacher_1"
+    );
+    expect(store.registerDomain).toHaveBeenCalledWith(
+      "user_teacher_1",
+      "org_class_1",
+      "school.example"
+    );
+  });
+
+  it("rate-limits domain registration before calling Clerk or PostgreSQL", async () => {
+    const store = classroomStore();
+    const provider = classroomProvider();
+    const rateLimit = vi.fn(async () => ({
+      allowed: false,
+      degraded: false,
+      limit: 5,
+      remaining: 0,
+      retryAfterSeconds: 60
+    }));
+    const handler = createClassroomHandler({
+      store,
+      provider,
+      getUserId: () => "user_teacher_1",
+      rateLimit
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "school.example" })
+        }
+      );
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("60");
+    });
+
+    expect(rateLimit).toHaveBeenCalledWith(
+      "classroom.domain",
+      expect.anything(),
+      "user_teacher_1"
+    );
+    expect(provider.verifiedPrimaryEmail).not.toHaveBeenCalled();
+    expect(store.registerDomain).not.toHaveBeenCalled();
+  });
+
+  it("rejects public or unverified Classroom domains", async () => {
+    const store = classroomStore();
+    const provider = classroomProvider();
+    const handler = createClassroomHandler({
+      store,
+      provider,
+      getUserId: () => "user_teacher_1"
+    });
+
+    await withServer(handler, async (origin) => {
+      const publicDomain = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "gmail.com" })
+        }
+      );
+      expect(publicDomain.status).toBe(400);
+
+      provider.verifiedPrimaryEmail.mockResolvedValue(
+        "teacher@different.example"
+      );
+      const mismatch = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "school.example" })
+        }
+      );
+      expect(mismatch.status).toBe(400);
+    });
+
+    expect(store.registerDomain).not.toHaveBeenCalled();
+  });
+
   it("denies Students and non-members without calling Clerk", async () => {
     const store = classroomStore();
     store.requireTeacher.mockRejectedValue(new ClassroomAccessDeniedError());
@@ -236,6 +416,16 @@ describe("Classroom API", () => {
     });
 
     await withServer(handler, async (origin) => {
+      const domain = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "school.example" })
+        }
+      );
+      expect(domain.status).toBe(403);
+
       const invite = await fetch(
         `${origin}/api/classrooms/org_class_1/invitations`,
         {
@@ -252,6 +442,7 @@ describe("Classroom API", () => {
       expect(progress.status).toBe(403);
     });
 
+    expect(provider.verifiedPrimaryEmail).not.toHaveBeenCalled();
     expect(provider.inviteStudent).not.toHaveBeenCalled();
   });
 
