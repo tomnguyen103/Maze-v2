@@ -32,6 +32,24 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
   void startGameplay();
 } else if (url.pathname === "/play") {
   void startGameplay();
+} else if (url.pathname === "/admin") {
+  // Loaded on demand: an Explorer who never opens /admin never pays for it.
+  void import("./admin/admin-controller.js")
+    .then((admin) => admin.renderAdmin(gameRoot))
+    .catch(() => {
+      // A stale deployment or an offline client rejects the import. Without
+      // this the route renders nothing at all, which reads as a broken app
+      // rather than as something to retry.
+      gameRoot.dataset.adminState = "unavailable";
+      gameRoot.innerHTML = `
+        <main class="landing-page" id="admin-main">
+          <p class="section-label">Admin</p>
+          <h1>Admin could not load.</h1>
+          <p>Reload to try again. Your Quest is unaffected.</p>
+          <a class="primary-button" href="/admin">Try again</a>
+        </main>
+      `;
+    });
 } else {
   renderLanding(gameRoot);
 }

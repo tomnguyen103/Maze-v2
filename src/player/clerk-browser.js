@@ -23,6 +23,15 @@ export function createClerkBrowser({
     get user() {
       return clerk?.user ?? null;
     },
+    /**
+     * The role ADR 0015 mirrors into `publicMetadata` on every change. It is
+     * the only role signal available before a profile fetch resolves, which is
+     * what the `/admin` guard denies on. Never an authority: the database row
+     * is, and every admin route re-checks it server-side.
+     */
+    get mirroredRole() {
+      return clerk?.user?.publicMetadata?.role ?? null;
+    },
     async openSignIn() {
       if (!(await initialize())) {
         return false;
