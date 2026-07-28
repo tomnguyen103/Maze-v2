@@ -4,7 +4,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 items were catalogued here; items 1-5 are delivered (PRs #64-#68), leaving 12 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; items 1-6 are delivered (PRs #64-#69), leaving 11 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -73,7 +73,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] Admin with `export:any` can fetch another user's export matching `shared/export-schema.json`
   - [x] Call is audited as `export.admin`; non-admin gets 403
 
-### 6. Dead-webhook surfacing for admins — [PARTIAL]
+### 6. Dead-webhook surfacing for admins — [PARTIAL] — DONE, PR #69
 
 - What: Webhook deliveries that fail five times go `dead`; today `scripts/list-dead-webhooks.mjs` (CLI, exit-nonzero) is the only consumer. ADR 0016 says "phase 7 surfaces them in the dashboard."
 - Why it matters: A dead delivery can be a lost refund; operators shouldn't need shell access to notice.
@@ -83,8 +83,8 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 - Depends on: 4 (for UI), none for API
 - Effort: S
 - Acceptance criteria:
-  - [ ] Admin API sub-path lists dead deliveries with id, type, failure count, last error
-  - [ ] Permission-gated; non-admin 403; covered by tests
+  - [x] Admin API sub-path lists dead deliveries with id, type, failure count, last error
+  - [x] Permission-gated; non-admin 403; covered by tests
 
 ### 7. Question bank in Postgres with bundled fallback — [NOT_STARTED]
 
@@ -262,7 +262,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 1, 2, 3 — independent S-size hygiene, zero risk, build momentum. Done: PRs #64-#66.
 4 — admin shell guard; unblocks all admin UI work. Done: PR #67.
-5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4. 5 done: PR #68.
+5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4. Done: PRs #68, #69.
 7 — question bank storage (migration gate: stop-and-ask).
 8 — admin dashboard UI; consumes 4+5+6+7.
 9 — settings sync (independent; migration gate).
