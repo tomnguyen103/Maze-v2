@@ -31,6 +31,9 @@ describe("the /admin route itself", () => {
     expect(app).toContain('url.pathname === "/admin"');
     // Dynamic, so the admin bundle stays off the gameplay path.
     expect(app).toMatch(/import\("\.\/admin\/admin-controller\.js"\)/);
+    // And a rejected import must still render something retryable, or a stale
+    // deployment leaves /admin blank.
+    expect(app).toMatch(/\.catch\(\(\) => \{[\s\S]*Admin could not load\./);
   });
 });
 
