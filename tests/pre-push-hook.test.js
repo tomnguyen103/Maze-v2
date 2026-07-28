@@ -25,8 +25,9 @@ function hookSteps() {
  * assertion is about the hook's reporting rather than about a real gate.
  *
  * @param {string | null} failingStep
+ * @param {number} [failureStatus]
  */
-function runHookWithStubbedNpm(failingStep) {
+function runHookWithStubbedNpm(failingStep, failureStatus = 1) {
   const directory = mkdtempSync(join(tmpdir(), "echo-maze-pre-push-"));
   writeFileSync(
     join(directory, "npm"),
@@ -35,7 +36,7 @@ function runHookWithStubbedNpm(failingStep) {
       // Invoked as `npm run <step>`; $2 is the step.
       `if [ "$2" = "${failingStep ?? "__never__"}" ]; then`,
       '  echo "stub npm failing $2" >&2',
-      "  exit 1",
+      `  exit ${failureStatus}`,
       "fi",
       "exit 0",
       ""
@@ -45,6 +46,8 @@ function runHookWithStubbedNpm(failingStep) {
   try {
     return spawnSync(/** @type {string} */ (shell), [".githooks/pre-push"], {
       encoding: "utf8",
+      // ":" regardless of platform: the PATH is read by the POSIX shell this
+      // spawns, not by Windows, and that shell splits on ":" everywhere.
       env: { ...process.env, PATH: `${directory}:${process.env.PATH ?? ""}` }
     });
   } finally {
@@ -83,8 +86,17 @@ describe("pre-push hook", () => {
   it.skipIf(!shellAvailable)("stops at the first failure", () => {
     const result = runHookWithStubbedNpm("lint");
     const output = `${result.stdout}${result.stderr}`;
-    // A push blocked by lint should not also report the later steps as run.
-    expect(output).not.toContain("build");
+    expect(result.status).not.toBe(0);
+    // A push blocked by lint should not also report any later step as run.
+    for (const later of ["typecheck", "test", "build", "check:bundle"]) {
+      expect(output).not.toContain(later);
+    }
+  });
+
+  it.skipIf(!shellAvailable)("exits with the status the step exited with", () => {
+    // Collapsing every failure to 1 would hide what the step actually reported.
+    expect(runHookWithStubbedNpm("test", 2).status).toBe(2);
+    expect(runHookWithStubbedNpm("build", 7).status).toBe(7);
   });
 
   it.skipIf(!shellAvailable)("still exits zero when every step passes", () => {

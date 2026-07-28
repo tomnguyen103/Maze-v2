@@ -10,9 +10,14 @@ STEPS="lint typecheck test build check:bundle"
 
 for step in $STEPS; do
   printf 'pre-push: %s\n' "$step"
-  if ! npm run "$step"; then
+  # Captured rather than tested with `if !`, which would discard the status the
+  # step exited with. Pushing that status back out keeps the hook transparent:
+  # what blocked the push is exactly what the step reported.
+  status=0
+  npm run "$step" || status=$?
+  if [ "$status" -ne 0 ]; then
     printf '\npre-push FAILED at: %s\n' "$step" >&2
     printf 'Re-run just that step with: npm run %s\n' "$step" >&2
-    exit 1
+    exit "$status"
   fi
 done
