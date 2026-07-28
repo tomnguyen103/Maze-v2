@@ -215,6 +215,9 @@ export function createPlayerApi(env = process.env) {
     requirePermission,
     // The same builder the self-export serves, so both produce one schema.
     exportUser: (userId) => exportUserSnapshot(pool, userId),
+    // The same rows `npm run webhooks:dead` prints, so the dashboard and the
+    // CLI cannot disagree about what is dead.
+    listDeadWebhooks: () => inboxStore.listDead(),
     recordAudit,
     mirrorRole: createClerkRoleMirror(env)
   });

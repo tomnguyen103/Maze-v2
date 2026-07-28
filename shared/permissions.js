@@ -24,7 +24,8 @@ export const ROLE_PERMISSIONS = {
     "questions:write",
     "refunds:issue",
     "users:read",
-    "users:roles:write"
+    "users:roles:write",
+    "webhooks:read"
   ],
   moderator: ["audit:read", "questions:read", "questions:write", "users:read"],
   // An Explorer's own play needs no permission. Their own data is reached

@@ -44,7 +44,8 @@ describe("the permission matrix", () => {
       "users:roles:write",
       "refunds:issue",
       "questions:publish",
-      "export:any"
+      "export:any",
+      "webhooks:read"
     ]) {
       expect(ROLE_PERMISSIONS.moderator).not.toContain(permission);
       expect(ROLE_PERMISSIONS.admin).toContain(permission);
