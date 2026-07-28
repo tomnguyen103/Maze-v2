@@ -26,6 +26,7 @@ function fixtureAdapter() {
       updated_at: "2026-01-02T00:00:00.000Z"
     },
     score_entries: {
+      classroom_id: "org_export_1",
       level_id: "trail-scout",
       labyrinth_number: 4,
       seed: "DAYLIGHT-0",
@@ -118,13 +119,20 @@ function fixtureAdapter() {
       if (!table || values?.[0] !== USER) {
         return { rows: [] };
       }
+      if (table === "score_entries" && typeof values?.[1] !== "string") {
+        return { rows: [] };
+      }
       /** @type {Record<string, unknown>} */
       const fixture = {
         ...rowsByTable[/** @type {keyof typeof rowsByTable} */ (table)]
       };
       if (
         typeof values?.[1] === "string" &&
-        (table === "cloud_quest_progress" || table === "learning_journals")
+        (
+          table === "score_entries" ||
+          table === "cloud_quest_progress" ||
+          table === "learning_journals"
+        )
       ) {
         fixture.classroom_id = values[1];
       }
@@ -149,7 +157,10 @@ describe("buildUserExport", () => {
     expect(exported.generated_at).toBe(generatedAt);
     expect(exported.data.profile).toMatchObject({ username: "Moss Runner" });
     expect(exported.data.scores).toHaveLength(1);
-    expect(exported.data.scores[0]).toMatchObject({ score: 900 });
+    expect(exported.data.scores[0]).toMatchObject({
+      classroom_id: "org_export_1",
+      score: 900
+    });
     expect(exported.data.run_access.access).toMatchObject({
       membership_state: "active"
     });
@@ -210,8 +221,8 @@ describe("buildUserExport", () => {
     for (const sql of adapter.queries) {
       expect(sql).toContain("$1");
     }
-    // One query per exported table.
-    expect(adapter.queries).toHaveLength(12);
+    // Personal sections plus three Classroom-scoped sections.
+    expect(adapter.queries).toHaveLength(13);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The

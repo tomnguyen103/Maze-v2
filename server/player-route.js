@@ -7,6 +7,11 @@ import { safeErrorName } from "./safe-error-log.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
+import {
+  ClassroomAccessDeniedError,
+  ClassroomContextError,
+  classroomIdFromRequest
+} from "./classroom-context.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
 
@@ -96,8 +101,9 @@ function isUniqueViolation(error) {
  *       globalMaxScore: number
  *     }>,
  *     submitScore: (
- *       userId: string,
- *       run: ReturnType<typeof validateScoreInput>
+     *       userId: string,
+     *       run: ReturnType<typeof validateScoreInput>,
+     *       classroomId?: string | null
  *     ) => Promise<{
  *       entry: Record<string, unknown>,
  *       duplicate: boolean
@@ -217,7 +223,8 @@ export function createPlayerApiHandler({
       }
       const result = await store.submitScore(
         userId,
-        validateScoreInput(await readJsonBody(request))
+        validateScoreInput(await readJsonBody(request)),
+        classroomIdFromRequest(request)
       );
       await recordAudit(request, {
         actorId: userId,
@@ -237,14 +244,27 @@ export function createPlayerApiHandler({
     } catch (error) {
       if (
         error instanceof InputError ||
-        isUniqueViolation(error)
+        isUniqueViolation(error) ||
+        error instanceof ClassroomContextError
       ) {
-        sendJson(response, error instanceof InputError ? 400 : 409, {
+        sendJson(
+          response,
+          error instanceof InputError ||
+            error instanceof ClassroomContextError
+            ? 400
+            : 409,
+          {
           error:
-            error instanceof InputError
+            error instanceof InputError ||
+            error instanceof ClassroomContextError
               ? error.message
               : "That username is already in use."
-        });
+          }
+        );
+        return;
+      }
+      if (error instanceof ClassroomAccessDeniedError) {
+        sendJson(response, 403, { error: error.message });
         return;
       }
       console.error("[players] API request failed", {

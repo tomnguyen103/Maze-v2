@@ -102,6 +102,90 @@ describe("Clerk webhook", () => {
     });
   });
 
+  it("stores a minimized realistic organization membership event", async () => {
+    const inbox = {
+      receive: vi.fn(async () => ({
+        duplicate: false,
+        processed: true
+      }))
+    };
+    const handler = createClerkWebhookHandler({
+      deleteUser: vi.fn(),
+      inbox,
+      verifyEvent: vi.fn(async () => ({
+        type: "organizationMembership.created",
+        timestamp: 1750000000123,
+        data: {
+          id: "orgmem_student",
+          object: "organization_membership",
+          role: "org:member",
+          organization: {
+            id: "org_classroom",
+            name: "Morning Explorers",
+            private_metadata: { secret: "must-not-enter-inbox" }
+          },
+          public_user_data: {
+            user_id: "user_student",
+            identifier: "student@example.test"
+          },
+          public_metadata: { extra: "discard" },
+          updated_at: 1750000000000
+        }
+      }))
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/clerk-webhook`, {
+        method: "POST",
+        headers: { "svix-id": "msg_membership" },
+        body: "{}"
+      });
+
+      expect(response.status).toBe(200);
+      expect(inbox.receive).toHaveBeenCalledWith({
+        provider: "clerk",
+        eventId: "msg_membership",
+        eventType: "organizationMembership.created",
+        payload: {
+          id: "orgmem_student",
+          classroomId: "org_classroom",
+          userId: "user_student",
+          role: "org:member",
+          occurredAt: 1750000000123
+        }
+      });
+      expect(JSON.stringify(inbox.receive.mock.calls)).not.toContain(
+        "student@example.test"
+      );
+      expect(JSON.stringify(inbox.receive.mock.calls)).not.toContain(
+        "must-not-enter-inbox"
+      );
+    });
+  });
+
+  it("fails closed when a Classroom event cannot enter the durable inbox", async () => {
+    const inbox = { receive: vi.fn() };
+    const handler = createClerkWebhookHandler({
+      deleteUser: vi.fn(),
+      inbox,
+      verifyEvent: vi.fn(async () => ({
+        type: "organization.deleted",
+        timestamp: 1750000000123,
+        data: { id: "org_classroom", object: "organization", deleted: true }
+      }))
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/clerk-webhook`, {
+        method: "POST",
+        body: "{}"
+      });
+
+      expect(response.status).toBe(400);
+      expect(inbox.receive).not.toHaveBeenCalled();
+    });
+  });
+
   it("returns a retryable server error when verified deletion fails", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const deleteUser = vi.fn(async () => {

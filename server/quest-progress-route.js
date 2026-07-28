@@ -5,6 +5,11 @@ import {
 } from "./quest-progress-validation.js";
 import { DeletedUserError } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
+import {
+  ClassroomAccessDeniedError,
+  ClassroomContextError,
+  classroomIdFromRequest
+} from "./classroom-context.js";
 
 export const QUEST_PROGRESS_PATHS = new Set(["/api/quest-progress"]);
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -12,8 +17,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 /**
  * @param {{
  *   store: {
- *     get: (userId: string) => Promise<unknown>,
- *     save: (userId: string, expectedRevision: number, progress: NonNullable<ReturnType<typeof import("../src/game/quest-progress.js").normalizeQuestProgress>>) => Promise<{ record: unknown, conflict: boolean, duplicate: boolean }>
+ *     get: (userId: string, classroomId?: string | null) => Promise<unknown>,
+ *     save: (userId: string, expectedRevision: number, progress: NonNullable<ReturnType<typeof import("../src/game/quest-progress.js").normalizeQuestProgress>>, classroomId?: string | null) => Promise<{ record: unknown, conflict: boolean, duplicate: boolean }>
  *   },
  *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>,
  *   recordAudit?: import("./audit.js").RecordAudit
@@ -41,8 +46,11 @@ export function createQuestProgressHandler({
         sendJson(response, 401, { error: "Sign in to continue." });
         return;
       }
+      const classroomId = classroomIdFromRequest(request);
       if (request.method === "GET") {
-        sendJson(response, 200, { record: await store.get(userId) });
+        sendJson(response, 200, {
+          record: await store.get(userId, classroomId)
+        });
         return;
       }
       if (request.method !== "PUT") {
@@ -55,7 +63,12 @@ export function createQuestProgressHandler({
       const { expectedRevision, progress } = validateCloudQuestWrite(
         await readJsonBody(request)
       );
-      const result = await store.save(userId, expectedRevision, progress);
+      const result = await store.save(
+        userId,
+        expectedRevision,
+        progress,
+        classroomId
+      );
       if (result.conflict) {
         sendJson(response, 409, {
           error: "Cloud Quest Progress changed on another device.",
@@ -66,7 +79,10 @@ export function createQuestProgressHandler({
       await recordAudit(request, {
         actorId: userId,
         action: "quest_progress.save",
-        resource: { type: "cloud_quest_progress", id: userId },
+        resource: {
+          type: "cloud_quest_progress",
+          id: classroomId ? `${userId}:${classroomId}` : userId
+        },
         before: { expectedRevision },
         after: {
           duplicate: result.duplicate,
@@ -86,6 +102,14 @@ export function createQuestProgressHandler({
     } catch (error) {
       if (error instanceof InputError) {
         sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof ClassroomContextError) {
+        sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof ClassroomAccessDeniedError) {
+        sendJson(response, 403, { error: error.message });
         return;
       }
       if (error instanceof DeletedUserError) {

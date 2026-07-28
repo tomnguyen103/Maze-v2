@@ -12,20 +12,28 @@ export class PlayerApiError extends Error {
  * @param {{
  *   fetchImpl?: typeof fetch,
  *   getToken?: () => Promise<string | null>,
+ *   getClassroomId?: () => string | null,
  *   timeoutMs?: number
  * }} [dependencies]
  */
 export function createPlayerApiClient({
   fetchImpl = fetch,
   getToken = async () => null,
+  getClassroomId = () => null,
   timeoutMs = 8000
 } = {}) {
   /**
    * @param {string} path
    * @param {RequestInit} [options]
    * @param {boolean} [authenticated]
+   * @param {boolean} [classroomScoped]
    */
-  async function request(path, options = {}, authenticated = true) {
+  async function request(
+    path,
+    options = {},
+    authenticated = true,
+    classroomScoped = false
+  ) {
     const controller = new AbortController();
     /** @type {(reason?: unknown) => void} */
     let rejectTimeout = () => {};
@@ -51,6 +59,10 @@ export function createPlayerApiClient({
       }
       if (token) {
         headers.set("authorization", `Bearer ${token}`);
+      }
+      const classroomId = classroomScoped ? getClassroomId() : null;
+      if (classroomId) {
+        headers.set("x-echo-maze-classroom-id", classroomId);
       }
       const response = await fetchImpl(path, {
         ...options,
@@ -155,7 +167,7 @@ export function createPlayerApiClient({
       });
     },
     async getQuestProgress() {
-      return request("/api/quest-progress");
+      return request("/api/quest-progress", {}, true, true);
     },
     /**
      * @param {{ username: FormDataEntryValue | string, explorerPalette: FormDataEntryValue | string, playgroundPalette: FormDataEntryValue | string }} profile
@@ -170,19 +182,27 @@ export function createPlayerApiClient({
       return request("/api/leaderboard");
     },
     async getLearningJournal() {
-      return request("/api/learning-journal");
+      return request("/api/learning-journal", {}, true, true);
     },
     /** @param {unknown} journal @param {number} clearGeneration */
     async saveLearningJournal(journal, clearGeneration) {
-      return request("/api/learning-journal", {
-        method: "PUT",
-        body: JSON.stringify({ journal, clearGeneration })
-      });
+      return request(
+        "/api/learning-journal",
+        {
+          method: "PUT",
+          body: JSON.stringify({ journal, clearGeneration })
+        },
+        true,
+        true
+      );
     },
     async clearLearningJournal() {
-      return request("/api/learning-journal", {
-        method: "DELETE"
-      });
+      return request(
+        "/api/learning-journal",
+        { method: "DELETE" },
+        true,
+        true
+      );
     },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeRun(run) {
@@ -204,10 +224,15 @@ export function createPlayerApiClient({
     },
     /** @param {Record<string, unknown>} progress @param {number} expectedRevision */
     async saveQuestProgress(progress, expectedRevision) {
-      return request("/api/quest-progress", {
-        method: "PUT",
-        body: JSON.stringify({ progress, expectedRevision })
-      });
+      return request(
+        "/api/quest-progress",
+        {
+          method: "PUT",
+          body: JSON.stringify({ progress, expectedRevision })
+        },
+        true,
+        true
+      );
     },
     async createLifetimeCheckout() {
       return request("/api/lifetime-checkout", {
@@ -223,10 +248,15 @@ export function createPlayerApiClient({
     },
     /** @param {Record<string, unknown>} run */
     async submitScore(run) {
-      return request("/api/scores", {
-        method: "POST",
-        body: JSON.stringify(run)
-      });
+      return request(
+        "/api/scores",
+        {
+          method: "POST",
+          body: JSON.stringify(run)
+        },
+        true,
+        true
+      );
     }
   };
 }

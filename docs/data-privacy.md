@@ -9,7 +9,7 @@ give the account holder both halves of their data rights.
 | Section | Table | Notes |
 |---|---|---|
 | Player Profile | `players` | username + cosmetic palettes only |
-| Score Entries | `score_entries` | bounded Run facts, server-recalculated |
+| Score Entries | `score_entries` | bounded Run facts, server-recalculated; nullable Classroom scope |
 | Run Access | `player_access`, `run_access_grants` | free-run counter, membership state, Run Grants |
 | Lifetime Membership | `lifetime_purchases` | Stripe identifiers only — no card data ever |
 | Quest Continuity | `cloud_quest_progress` | boundary-synced Quest Progress |
@@ -42,6 +42,8 @@ Run, Quest, score, Question, or shared-link state.
   call leaves an audit row naming actor and target. Worth revisiting when phase
   7 adds more routes that read another Explorer's rows — today this is the only
   one, so a stolen admin session is the threat the audit trail is there for.
+- Score Entries include `classroom_id`: null means Personal Play and a Clerk
+  Organization id means Class Play.
 
 ## Deletion
 
@@ -59,6 +61,8 @@ and Lantern Journal for that Classroom; Personal Play remains.
 
 - Webhook inbox payloads are cleared on successful processing;
   `npm run webhooks:prune` bounds how long a dead delivery can hold one.
+  Classroom authority payloads are minimized before storage to ids, role,
+  Classroom name when needed, and event time.
 - Rate-limit counters are dead weight after their window;
   `npm run prune:rate-limits` clears them.
 - Audit rows are append-only by design (tamper-evident chain, ADR 0013) and

@@ -44,9 +44,10 @@ function createStore() {
     /**
      * @param {string} userId
      * @param {Record<string, unknown>} run
+     * @param {string | null} [classroomId]
      */
-    async submitScore(userId, run) {
-      this.submittedRun = { ...run, userId };
+    async submitScore(userId, run, classroomId = null) {
+      this.submittedRun = { ...run, userId, classroomId };
       return {
         entry: { username: "Moss Runner", ...run },
         duplicate: false
@@ -212,8 +213,45 @@ describe("player API", () => {
       expect(response.status).toBe(201);
       expect(store.submittedRun).toMatchObject({
         userId: "user_123",
+        classroomId: null,
         score: 850
       });
+    });
+  });
+
+  it("binds a Class Play Score to the selected Classroom", async () => {
+    const store = createStore();
+    store.profiles.set("user_123", { ...PROFILE, userId: "user_123" });
+    const handler = createPlayerApiHandler({
+      store,
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/scores`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-echo-maze-classroom-id": "org_morning_123"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "run_01J1MOSSWATCH",
+          levelId: "trail-scout",
+          labyrinthNumber: 4,
+          seed: "MOSS-WATCH-11",
+          wardensDefeated: 2,
+          echoesCollected: 3,
+          moves: 81,
+          elapsedMs: 92000,
+          escaped: true
+        })
+      });
+      expect(response.status).toBe(201);
+    });
+
+    expect(store.submittedRun).toMatchObject({
+      userId: "user_123",
+      classroomId: "org_morning_123"
     });
   });
 });

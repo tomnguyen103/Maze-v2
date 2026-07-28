@@ -362,3 +362,50 @@ describe("Classroom forced-RLS foundation migration", () => {
     expect(sql).not.toContain("BYPASSRLS");
   });
 });
+
+describe("Classroom authority synchronization migration", () => {
+  it("adds monotonic narrow definer writes without runtime table grants", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0015_classroom_authority_and_writes.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE classroom_authority_versions");
+    expect(sql).toContain("event_timestamp BIGINT NOT NULL");
+    expect(sql).toContain("CREATE FUNCTION sync_classroom(");
+    expect(sql).toContain("CREATE FUNCTION delete_classroom(");
+    expect(sql).toContain("CREATE FUNCTION sync_classroom_membership(");
+    expect(sql).toContain("CREATE FUNCTION delete_classroom_membership(");
+    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(4);
+    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(4);
+    expect(sql).toContain("EXCLUDED.event_timestamp >");
+    expect(sql).toContain(
+      "pg_advisory_xact_lock(hashtextextended(p_user_id, 0))"
+    );
+    expect(sql).toContain(
+      "public.classroom_authority_versions.deleted = FALSE"
+    );
+    expect(sql).toContain("p_role = 'student'");
+    expect(sql).toContain("deleted_user_tombstones");
+    expect(sql).toContain("sha256(convert_to(p_user_id, 'UTF8'))");
+    expect(sql).toContain("REVOKE ALL ON FUNCTION sync_classroom");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION sync_classroom");
+    expect(sql).not.toContain(
+      "GRANT INSERT ON TABLE classrooms TO echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT INSERT ON TABLE classroom_memberships TO echo_maze_runtime"
+    );
+    expect(sql).not.toContain("BYPASSRLS");
+    expect(sql).toContain("ADD COLUMN classroom_id TEXT");
+    expect(sql).toContain(
+      "ALTER TABLE score_entries FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain("score_entries_classroom_write");
+    expect(sql).toContain("score_entries_classroom_read");
+    expect(sql).toContain("score_entries_idempotent_update");
+  });
+});

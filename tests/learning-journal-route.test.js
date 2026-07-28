@@ -119,6 +119,59 @@ describe("learning Journal API", () => {
     });
   });
 
+  it("passes one selected Classroom through every Journal operation", async () => {
+    const store = {
+      getJournal: vi.fn(async () => ({
+        journal: { version: 1, events: [] },
+        clearGeneration: 0
+      })),
+      saveJournal: vi.fn(async () => ({
+        journal: JOURNAL,
+        clearGeneration: 0
+      })),
+      clearJournal: vi.fn(async () => ({
+        journal: { version: 1, events: [] },
+        clearGeneration: 1
+      }))
+    };
+    const handler = createLearningJournalHandler({
+      store,
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      const headers = {
+        "content-type": "application/json",
+        "x-echo-maze-classroom-id": "org_morning_123"
+      };
+      await fetch(`${origin}/api/learning-journal`, { headers });
+      await fetch(`${origin}/api/learning-journal`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ journal: JOURNAL, clearGeneration: 0 })
+      });
+      await fetch(`${origin}/api/learning-journal`, {
+        method: "DELETE",
+        headers
+      });
+    });
+
+    expect(store.getJournal).toHaveBeenCalledWith(
+      "user_123",
+      "org_morning_123"
+    );
+    expect(store.saveJournal).toHaveBeenCalledWith(
+      "user_123",
+      JOURNAL,
+      0,
+      "org_morning_123"
+    );
+    expect(store.clearJournal).toHaveBeenCalledWith(
+      "user_123",
+      "org_morning_123"
+    );
+  });
+
   it("rejects raw child answer data and unexpected fields", async () => {
     const handler = createLearningJournalHandler({
       store: createStore(),

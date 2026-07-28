@@ -66,9 +66,18 @@ const SECTION_QUERIES = {
   profile: `SELECT username, explorer_palette, playground_palette,
       created_at, updated_at
     FROM players WHERE clerk_user_id = $1`,
-  scores: `SELECT level_id, labyrinth_number, seed, wardens_defeated,
+  personal_scores: `SELECT classroom_id, level_id, labyrinth_number, seed,
+      wardens_defeated, echoes_collected, moves, elapsed_ms, score, escaped,
+      created_at
+    FROM score_entries
+    WHERE player_id = $1 AND classroom_id IS NULL
+    ORDER BY created_at, id`,
+  class_scores: `SELECT classroom_id, level_id, labyrinth_number, seed,
+      wardens_defeated,
       echoes_collected, moves, elapsed_ms, score, escaped, created_at
-    FROM score_entries WHERE player_id = $1 ORDER BY created_at, id`,
+    FROM score_entries
+    WHERE player_id = $1 AND classroom_id = $2
+    ORDER BY created_at, id`,
   access: `SELECT free_runs_used, membership_state, entitlement_updated_at,
       created_at, updated_at
     FROM player_access WHERE clerk_user_id = $1`,
@@ -142,7 +151,7 @@ export async function buildUserExport(
     (await adapter.query(SECTION_QUERIES[section], values)).rows;
 
   const profile = await rowsOf("profile");
-  const scores = await rowsOf("scores");
+  const personalScores = await rowsOf("personal_scores");
   const access = await rowsOf("access");
   const grants = await rowsOf("grants");
   const lifetimePurchases = await rowsOf("lifetime_purchases");
@@ -156,9 +165,15 @@ export async function buildUserExport(
   const classQuestProgress = [];
   /** @type {Record<string, unknown>[]} */
   const classJournals = [];
+  /** @type {Record<string, unknown>[]} */
+  const classScores = [];
   for (const membership of classroomMemberships) {
     if (typeof membership.classroom_id !== "string") continue;
     await adapter.selectClassroom?.(membership.classroom_id);
+    const scoreRows = await rowsOf(
+      "class_scores",
+      [userId, membership.classroom_id]
+    );
     const questRows = await rowsOf(
       "class_quest_progress",
       [userId, membership.classroom_id]
@@ -167,6 +182,7 @@ export async function buildUserExport(
       "class_journal",
       [userId, membership.classroom_id]
     );
+    classScores.push(...scoreRows);
     classQuestProgress.push(...questRows);
     classJournals.push(...journalRows);
   }
@@ -176,7 +192,7 @@ export async function buildUserExport(
     generated_at: now(),
     data: {
       profile: profile[0] ?? null,
-      scores,
+      scores: [...personalScores, ...classScores],
       run_access: {
         access: access[0] ?? null,
         grants

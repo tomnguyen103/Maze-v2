@@ -30,7 +30,7 @@
           "type": ["object", "null"]
         },
         "scores": {
-          "description": "score_entries rows - every accepted Score Entry.",
+          "description": "score_entries rows - every accepted Score Entry; classroom_id is null for Personal Play and a Clerk Organization id for Class Play.",
           "type": "array",
           "items": { "type": "object" }
         },

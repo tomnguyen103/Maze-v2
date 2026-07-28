@@ -51,9 +51,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 12. `db/migrations/0012_audit_privilege_boundary.sql`
 13. `db/migrations/0013_audit_privilege_boundary_finalize.sql`
 14. `db/migrations/0014_classroom_rls_foundation.sql`
+15. `db/migrations/0015_classroom_authority_and_writes.sql`
 
-Migrations 0012 through 0014 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all three.
+Migrations 0012 through 0015 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all four.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -69,6 +70,18 @@ Deploy the privilege boundary in this order during a maintenance window:
    The application login must already inherit `echo_maze_runtime`, and every
    tenant query in that release must set transaction-local Explorer and
    Classroom context.
+6. For the Phase 8 organization-write release, quiesce mutating traffic, apply
+   migration 0015, and immediately deploy the matching application code. The
+   migration moves Score Entries behind forced RLS, so the old code cannot
+   submit Personal Play scores during that short gap.
+
+Configure the Clerk webhook endpoint to deliver `user.deleted`,
+`organization.created`, `organization.updated`, `organization.deleted`,
+`organizationMembership.created`, `organizationMembership.updated`, and
+`organizationMembership.deleted`. Classroom authority events are minimized,
+stored in the durable inbox, and retried idempotently. Do not enable Classroom
+creation in Clerk until migration 0015 and the matching application release are
+both deployed.
 
 Create a separate unprivileged login for `DATABASE_URL` and set its name as
 `AUDIT_RUNTIME_LOGIN` before the final command:
