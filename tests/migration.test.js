@@ -196,7 +196,7 @@ describe("Question bank migration", () => {
     expect(sql).toContain(
       "REFERENCES questions(id) ON DELETE CASCADE"
     );
-    expect(sql).toContain("CHECK (status IN ('draft', 'published', 'retired'))");
+    expect(sql).toContain("CHECK (status IN ('draft', 'published'))");
     expect(sql).toContain(
       "CHECK ((status = 'published') = (published_at IS NOT NULL))"
     );

@@ -46,7 +46,7 @@ describe("question bank store", () => {
     const [{ sql, values }] = pool.queries;
     expect(sql).toContain("status = 'published'");
     expect(sql).toContain("question_versions");
-    expect(values).toEqual(["bright-start", "foundation"]);
+    expect(values).toEqual(["bright-start", "foundation", 200]);
   });
 
   it("cycles through the deck by ordinal, like the bundled bank", async () => {
@@ -78,17 +78,43 @@ describe("question bank store", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null rather than a malformed card", async () => {
-    // A row that fails the same validation the bundled bank passes is not a
-    // card a player may see; the service then falls back.
+  it("rejects a malformed row rather than serving it", async () => {
+    // A row that fails the same validation the bundled bank passes is not
+    // something a player may see. It throws rather than reading as "nothing
+    // published", so the service reports it and still falls back.
     const store = createQuestionBankStore(
       createPool([{ content: { id: "broken", prompt: "" } }])
     );
-    const result = await store.publishedQuestion({
-      levelId: "bright-start",
-      difficultyBand: "foundation",
-      questionOrdinal: 0
-    });
-    expect(result).toBeNull();
+    await expect(
+      store.publishedQuestion({
+        levelId: "bright-start",
+        difficultyBand: "foundation",
+        questionOrdinal: 0
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects a row whose content contradicts the band it is filed under", async () => {
+    // Content and band live in different tables, so no CHECK can hold them
+    // together; a miscategorized publish would serve a foundation prompt at
+    // mastery.
+    const store = createQuestionBankStore(createPool([{ content: card("db-1") }]));
+    await expect(
+      store.publishedQuestion({
+        levelId: "bright-start",
+        difficultyBand: "mastery",
+        questionOrdinal: 0
+      })
+    ).rejects.toThrow(/difficulty band/i);
+  });
+});
+
+describe("question API composition", () => {
+  it("runs on the bundled bank alone when no database is configured", async () => {
+    const { createQuestionApi } = await import("../server/question-api.js");
+    // Constructing without DATABASE_URL must not reach for a pool.
+    expect(typeof createQuestionApi({ QUESTION_PROVIDER: "bundled" })).toBe(
+      "function"
+    );
   });
 });
