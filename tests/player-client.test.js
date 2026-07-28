@@ -338,6 +338,37 @@ describe("player client", () => {
     ]);
   });
 
+  it("binds only Class Play data calls to the selected Classroom", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ record: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getClassroomId: () => "org_morning_123"
+    });
+
+    await client.getProfile();
+    await client.getQuestProgress();
+    await client.getLearningJournal();
+    await client.submitScore({
+      idempotencyKey: "run_123",
+      levelId: "trail-scout"
+    });
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(new Headers(calls[0][1].headers).has(
+      "x-echo-maze-classroom-id"
+    )).toBe(false);
+    for (const call of calls.slice(1)) {
+      expect(
+        new Headers(call[1].headers).get("x-echo-maze-classroom-id")
+      ).toBe("org_morning_123");
+    }
+  });
+
   it("reads and revision-saves Explorer Access Settings", async () => {
     const settings = {
       version: 1,

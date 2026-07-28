@@ -3,6 +3,8 @@ import {
   DeletedUserError,
   deletedUserHash
 } from "./deleted-user-guard.js";
+import { assertClassroomMembership } from "./classroom-context.js";
+import { withTenantContext } from "./tenant-context.js";
 
 const PROFILE_COLUMNS = `
   username,
@@ -37,7 +39,14 @@ function mapScoreEntry(row) {
  *   query: (
  *     sql: string,
  *     values?: unknown[]
- *   ) => Promise<{ rows: Record<string, unknown>[] }>
+ *   ) => Promise<{ rows: Record<string, unknown>[] }>,
+ *   connect?: () => Promise<{
+ *     query: (
+ *       sql: string,
+ *       values?: unknown[]
+ *     ) => Promise<{ rows: Record<string, unknown>[] }>,
+ *     release: (destroy?: boolean) => void
+ *   }>
  * }} pool
  */
 export function createPlayerStore(pool) {
@@ -116,6 +125,7 @@ export function createPlayerStore(pool) {
              ) AS player_rank
            FROM score_entries
            WHERE escaped = TRUE
+             AND classroom_id IS NULL
          ),
          best_runs AS (
            SELECT *
@@ -168,9 +178,22 @@ export function createPlayerStore(pool) {
      *   escaped: boolean,
      *   score: number
      * }} run
+     * @param {string | null} [classroomId]
      */
-    async submitScore(userId, run) {
-      const result = await pool.query(
+    async submitScore(userId, run, classroomId = null) {
+      if (!pool.connect) {
+        throw new Error("Score storage requires a transactional pool.");
+      }
+      const transactionalPool =
+        /** @type {typeof pool & { connect: NonNullable<typeof pool.connect> }} */ (
+          pool
+        );
+      return withTenantContext(
+        transactionalPool,
+        { explorerId: userId, classroomId },
+        async (database) => {
+          await assertClassroomMembership(database, userId, classroomId);
+          const result = await database.query(
         `WITH selected_score AS (
            INSERT INTO score_entries (
              player_id,
@@ -183,10 +206,11 @@ export function createPlayerStore(pool) {
              moves,
              elapsed_ms,
              score,
-             escaped
+             escaped,
+             classroom_id
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)
-           ON CONFLICT (player_id, idempotency_key) DO UPDATE SET
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)
+           ON CONFLICT (player_id, classroom_id, idempotency_key) DO UPDATE SET
              idempotency_key = score_entries.idempotency_key
            RETURNING
              (xmax = 0) AS inserted,
@@ -218,7 +242,8 @@ export function createPlayerStore(pool) {
           run.echoesCollected,
           run.moves,
           run.elapsedMs,
-          run.score
+          run.score,
+          classroomId
         ]
       );
       const row = result.rows[0];
@@ -229,6 +254,8 @@ export function createPlayerStore(pool) {
         entry: mapScoreEntry(row),
         duplicate: row.inserted !== true
       };
+        }
+      );
     }
   };
 }

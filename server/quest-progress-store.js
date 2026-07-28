@@ -5,6 +5,7 @@ import {
   deletedUserHash
 } from "./deleted-user-guard.js";
 import { withTenantContext } from "./tenant-context.js";
+import { assertClassroomMembership } from "./classroom-context.js";
 
 const COLUMNS = `
   schema_version,
@@ -40,37 +41,43 @@ export function createQuestProgressStore(pool) {
   /**
    * @param {QueryDatabase} database
    * @param {string} userId
+   * @param {string | null} classroomId
    */
-  async function get(database, userId) {
+  async function get(database, userId, classroomId) {
     const result = await database.query(
       `SELECT ${COLUMNS}
        FROM cloud_quest_progress
        WHERE clerk_user_id = $1
-         AND classroom_id IS NULL`,
-      [userId]
+         AND classroom_id IS NOT DISTINCT FROM $2`,
+      [userId, classroomId]
     );
     return result.rows[0] ? mapRecord(result.rows[0]) : null;
   }
 
   return {
-    /** @param {string} userId */
-    get(userId) {
+    /** @param {string} userId @param {string | null} [classroomId] */
+    get(userId, classroomId = null) {
       return withTenantContext(
         pool,
-        { explorerId: userId, classroomId: null },
-        (client) => get(client, userId)
+        { explorerId: userId, classroomId },
+        async (client) => {
+          await assertClassroomMembership(client, userId, classroomId);
+          return get(client, userId, classroomId);
+        }
       );
     },
     /**
      * @param {string} userId
      * @param {number} expectedRevision
      * @param {NonNullable<ReturnType<typeof normalizeQuestProgress>>} progress
+     * @param {string | null} [classroomId]
      */
-    async save(userId, expectedRevision, progress) {
+    async save(userId, expectedRevision, progress, classroomId = null) {
       return withTenantContext(
         pool,
-        { explorerId: userId, classroomId: null },
+        { explorerId: userId, classroomId },
         async (database) => {
+          await assertClassroomMembership(database, userId, classroomId);
           const writeValues = [
             userId,
             expectedRevision,
@@ -82,11 +89,12 @@ export function createQuestProgressStore(pool) {
             JSON.stringify(progress.usedMapFingerprints),
             JSON.stringify(progress.usedQuestionIds),
             progress.nextQuestionOrdinal,
-            progress.complete
+            progress.complete,
+            classroomId
           ];
           const result = expectedRevision === 0
             ? await database.query(
-            `WITH ${activeUserGuardCtes("$11")},
+            `WITH ${activeUserGuardCtes("$12")},
              ensured_access AS (
                INSERT INTO player_access (clerk_user_id)
                SELECT $1
@@ -112,10 +120,11 @@ export function createQuestProgressStore(pool) {
                used_map_fingerprints,
                used_question_ids,
                next_question_ordinal,
-               complete
+               complete,
+               classroom_id
              )
              SELECT
-               $1, $2, $3, $4, $5, $6, $7::JSONB, $8::JSONB, $9, $10
+               $1, $2, $3, $4, $5, $6, $7::JSONB, $8::JSONB, $9, $10, $11
              FROM available_access
              LIMIT 1
              ON CONFLICT DO NOTHING
@@ -131,6 +140,7 @@ export function createQuestProgressStore(pool) {
               JSON.stringify(progress.usedQuestionIds),
               progress.nextQuestionOrdinal,
               progress.complete,
+              classroomId,
               deletedUserHash(userId)
             ]
               )
@@ -149,7 +159,7 @@ export function createQuestProgressStore(pool) {
                revision = revision + 1,
                updated_at = NOW()
              WHERE clerk_user_id = $1
-               AND classroom_id IS NULL
+               AND classroom_id IS NOT DISTINCT FROM $12
                AND revision = $2
              RETURNING ${COLUMNS}`,
             writeValues
@@ -170,7 +180,7 @@ export function createQuestProgressStore(pool) {
           if (deleted.rows.length) {
             throw new DeletedUserError();
           }
-          const record = await get(database, userId);
+          const record = await get(database, userId, classroomId);
           const duplicate =
             record !== null &&
             JSON.stringify(record.progress) === JSON.stringify(progress);

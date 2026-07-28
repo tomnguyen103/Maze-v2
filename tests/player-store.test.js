@@ -1,10 +1,38 @@
 import { createPlayerStore } from "../server/player-store.js";
 import { describe, expect, it, vi } from "vitest";
 
+/**
+ * @param {(
+ *   sql: string,
+ *   values?: unknown[]
+ * ) => Promise<{ rows: Record<string, unknown>[] }>} query
+ */
+function tenantPool(query) {
+  const clientQuery = vi.fn(async (sql, values) => {
+    if (
+      sql === "BEGIN" ||
+      sql === "COMMIT" ||
+      sql === "ROLLBACK" ||
+      sql.includes("set_config")
+    ) {
+      return { rows: [] };
+    }
+    return query(sql, values);
+  });
+  return {
+    query,
+    clientQuery,
+    connect: vi.fn(async () => ({
+      query: clientQuery,
+      release: vi.fn()
+    }))
+  };
+}
+
 describe("player store", () => {
   it("maps a stored Player Profile without leaking the Clerk id", async () => {
-    const pool = {
-      query: vi.fn().mockResolvedValue({
+    const pool = tenantPool(
+      vi.fn().mockResolvedValue({
         rows: [
           {
             username: "Moss Runner",
@@ -13,7 +41,7 @@ describe("player store", () => {
           }
         ]
       })
-    };
+    );
     const store = createPlayerStore(pool);
 
     await expect(store.getProfile("user_123")).resolves.toEqual({
@@ -93,6 +121,7 @@ describe("player store", () => {
     });
     expect(pool.query.mock.calls[0][0]).toContain("ROW_NUMBER()");
     expect(pool.query.mock.calls[0][0]).toContain("player_id");
+    expect(pool.query.mock.calls[0][0]).toContain("classroom_id IS NULL");
     expect(pool.query.mock.calls[0][0]).toContain(
       "best_runs.created_at ASC\n           ) AS rank"
     );
@@ -100,8 +129,7 @@ describe("player store", () => {
   });
 
   it("inserts an idempotent score and reports whether it was new", async () => {
-    const pool = {
-      query: vi.fn().mockResolvedValue({
+    const query = vi.fn().mockResolvedValue({
         rows: [
           {
             inserted: true,
@@ -113,8 +141,8 @@ describe("player store", () => {
             elapsed_ms: 92000
           }
         ]
-      })
-    };
+      });
+    const pool = tenantPool(query);
     const store = createPlayerStore(pool);
 
     await expect(
@@ -137,7 +165,7 @@ describe("player store", () => {
         score: 900
       }
     });
-    expect(pool.query.mock.calls[0][1]).toEqual([
+    expect(query.mock.calls[0][1]).toEqual([
       "user_123",
       "run_01J1MOSSWATCH",
       "trail-scout",
@@ -147,11 +175,72 @@ describe("player store", () => {
       2,
       81,
       92000,
-      900
+      900,
+      null
     ]);
-    expect(pool.query.mock.calls[0][0]).toContain(
-      "ON CONFLICT (player_id, idempotency_key) DO UPDATE"
+    expect(query.mock.calls[0][0]).toContain(
+      "ON CONFLICT (player_id, classroom_id, idempotency_key) DO UPDATE"
     );
-    expect(pool.query.mock.calls[0][0]).toContain("(xmax = 0) AS inserted");
+    expect(query.mock.calls[0][0]).toContain("(xmax = 0) AS inserted");
+  });
+
+  it("writes a Class Play Score only inside synchronized tenant context", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ role: "student" }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          inserted: true,
+          username: "Moss Runner",
+          score: 900,
+          level_id: "trail-scout",
+          labyrinth_number: 4,
+          moves: 81,
+          elapsed_ms: 92000
+        }]
+      });
+    const clientQuery = vi.fn(async (sql, values) => {
+      if (
+        sql === "BEGIN" ||
+        sql === "COMMIT" ||
+        sql === "ROLLBACK" ||
+        sql.includes("set_config")
+      ) {
+        return { rows: [] };
+      }
+      return query(sql, values);
+    });
+    const pool = {
+      query,
+      clientQuery,
+      connect: vi.fn(async () => ({
+        query: clientQuery,
+        release: vi.fn()
+      }))
+    };
+
+    await createPlayerStore(pool).submitScore(
+      "user_123",
+      {
+        idempotencyKey: "run_01J1MOSSWATCH",
+        levelId: "trail-scout",
+        labyrinthNumber: 4,
+        seed: "MOSS-WATCH-11",
+        wardensDefeated: 3,
+        echoesCollected: 2,
+        moves: 81,
+        elapsedMs: 92000,
+        escaped: true,
+        score: 900
+      },
+      "org_morning_123"
+    );
+
+    expect(clientQuery.mock.calls[1]).toEqual([
+      expect.stringContaining("set_config"),
+      ["user_123", "org_morning_123"]
+    ]);
+    expect(query.mock.calls[0][0]).toContain("FROM classroom_memberships");
+    expect(query.mock.calls[1][0]).toContain("classroom_id");
+    expect(query.mock.calls[1][1].at(-1)).toBe("org_morning_123");
   });
 });

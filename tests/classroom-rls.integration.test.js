@@ -5,6 +5,12 @@ import { exportUserSnapshot } from "../server/data-export.js";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { withTenantContext } from "../server/tenant-context.js";
 import { createUserDeletionStore } from "../server/user-deletion-store.js";
+import { createClassroomAuthorityStore } from "../server/classroom-authority-store.js";
+import { processClassroomAuthorityEvent } from "../server/classroom-authority.js";
+import { createQuestProgressStore } from "../server/quest-progress-store.js";
+import { createQuestProgress } from "../src/game/quest-progress.js";
+import { createLearningJournalStore } from "../server/learning-journal-store.js";
+import { createPlayerStore } from "../server/player-store.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const adminDatabaseUrl = process.env.DATABASE_ADMIN_URL ?? "";
@@ -26,7 +32,7 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
   it("forces RLS and clears pooled tenant context after commit and rollback", async () => {
     runtimePool = new Pool({
       connectionString: normalizeDatabaseConnectionString(databaseUrl),
-      max: 1
+      max: 2
     });
     adminPool = new Pool({
       connectionString: normalizeDatabaseConnectionString(adminDatabaseUrl),
@@ -39,6 +45,8 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
     const classroomA = `org_a_${suffix}`;
     const classroomB = `org_b_${suffix}`;
     const classroomC = `org_c_${suffix}`;
+    const staleClassroom = `org_stale_${suffix}`;
+    const raceExplorerId = `user_race_${suffix}`;
 
     try {
       const boundary = await runtimePool.query(
@@ -64,54 +72,172 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
           "classrooms",
           "classroom_memberships",
           "cloud_quest_progress",
-          "learning_journals"
+          "learning_journals",
+          "score_entries"
         ]]
       );
       expect(boundary.rows[0]).toMatchObject({
         rolsuper: false,
         rolbypassrls: false,
         runtime_member: true,
-        tenant_owners: Array(4).fill("echo_maze_tenant_owner")
+        tenant_owners: Array(5).fill("echo_maze_tenant_owner")
       });
       expect(boundary.rows[0]?.runtime_login).not.toBe(
         "echo_maze_tenant_owner"
       );
 
+      const authorityStore = createClassroomAuthorityStore(runtimePool);
+      let timestamp = 1000;
+      for (const [id, name] of [
+        [classroomA, "Class A"],
+        [classroomB, "Class B"],
+        [classroomC, "Class C"]
+      ]) {
+        await processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organization.created",
+          payload: { id, name, occurredAt: timestamp }
+        });
+        timestamp += 1000;
+      }
+      for (const [id, classroomId, userId] of [
+        [`orgmem_a_${suffix}`, classroomA, explorerId],
+        [`orgmem_b_${suffix}`, classroomB, explorerId],
+        [`orgmem_other_${suffix}`, classroomA, otherExplorerId]
+      ]) {
+        await processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.created",
+          payload: {
+            id,
+            classroomId,
+            userId,
+            role: "org:member",
+            occurredAt: timestamp
+          }
+        });
+        timestamp += 1000;
+      }
+
+      await processClassroomAuthorityEvent(authorityStore, {
+        eventType: "organization.created",
+        payload: {
+          id: staleClassroom,
+          name: "Stale Class",
+          occurredAt: 100
+        }
+      });
+      await processClassroomAuthorityEvent(authorityStore, {
+        eventType: "organization.deleted",
+        payload: { id: staleClassroom, occurredAt: 300 }
+      });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organization.created",
+          payload: {
+            id: staleClassroom,
+            name: "Must Not Return",
+            occurredAt: 200
+          }
+        })
+      ).resolves.toMatchObject({ applied: false });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organization.created",
+          payload: {
+            id: staleClassroom,
+            name: "Equal Timestamp Must Not Return",
+            occurredAt: 300
+          }
+        })
+      ).resolves.toMatchObject({ applied: false });
+      await expect(
+        adminPool.query("SELECT 1 FROM classrooms WHERE id = $1", [
+          staleClassroom
+        ])
+      ).resolves.toMatchObject({ rows: [] });
+
+      const equalMembershipId = `orgmem_equal_${suffix}`;
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.created",
+          payload: {
+            id: equalMembershipId,
+            classroomId: classroomB,
+            userId: otherExplorerId,
+            role: "org:admin",
+            occurredAt: timestamp
+          }
+        })
+      ).resolves.toMatchObject({ applied: true });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.updated",
+          payload: {
+            id: equalMembershipId,
+            classroomId: classroomB,
+            userId: otherExplorerId,
+            role: "org:member",
+            occurredAt: timestamp
+          }
+        })
+      ).resolves.toMatchObject({ applied: true });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.updated",
+          payload: {
+            id: equalMembershipId,
+            classroomId: classroomB,
+            userId: otherExplorerId,
+            role: "org:admin",
+            occurredAt: timestamp
+          }
+        })
+      ).resolves.toMatchObject({ applied: false });
+      await expect(
+        adminPool.query(
+          `SELECT role
+           FROM classroom_memberships
+           WHERE clerk_membership_id = $1`,
+          [equalMembershipId]
+        )
+      ).resolves.toMatchObject({ rows: [{ role: "student" }] });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.deleted",
+          payload: { id: equalMembershipId, occurredAt: timestamp }
+        })
+      ).resolves.toMatchObject({ applied: true });
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.created",
+          payload: {
+            id: equalMembershipId,
+            classroomId: classroomB,
+            userId: otherExplorerId,
+            role: "org:member",
+            occurredAt: timestamp
+          }
+        })
+      ).resolves.toMatchObject({ applied: false });
+
       const adminClient = await adminPool.connect();
       try {
         await adminClient.query("BEGIN");
         await adminClient.query(
-          `INSERT INTO player_access (clerk_user_id)
-           VALUES ($1), ($2)`,
-          [explorerId, otherExplorerId]
-        );
-        await adminClient.query(
-          `INSERT INTO classrooms (id, name)
-           VALUES
-             ($1, 'Class A'),
-             ($2, 'Class B'),
-             ($3, 'Class C')`,
-          [classroomA, classroomB, classroomC]
-        );
-        await adminClient.query(
-          `INSERT INTO classroom_memberships (
-             classroom_id,
+          `INSERT INTO players (
              clerk_user_id,
-             clerk_membership_id,
-             role
+             username,
+             username_key
            )
            VALUES
-             ($1, $3, $4, 'student'),
-             ($2, $3, $5, 'student'),
-             ($1, $6, $7, 'student')`,
+             ($1, $3, $4),
+             ($2, $5, $6)`,
           [
-            classroomA,
-            classroomB,
             explorerId,
-            `orgmem_a_${suffix}`,
-            `orgmem_b_${suffix}`,
             otherExplorerId,
-            `orgmem_other_${suffix}`
+            `Explorer ${suffix.slice(0, 8)}`,
+            `explorer ${suffix.slice(0, 8)}`,
+            `Other ${suffix.slice(0, 8)}`,
+            `other ${suffix.slice(0, 8)}`
           ]
         );
         await adminClient.query(
@@ -126,8 +252,6 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
              complete
            )
            VALUES
-             ($1, NULL, 'quest_personal_rls', 'bright-start', 1, 0, 0, FALSE),
-             ($1, $2, 'quest_class_a_rls', 'bright-start', 1, 0, 0, FALSE),
              ($1, $3, 'quest_class_b_rls', 'bright-start', 1, 0, 0, FALSE),
              ($4, $2, 'quest_other_rls', 'bright-start', 1, 0, 0, FALSE)`,
           [
@@ -143,10 +267,8 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
              classroom_id
            )
            VALUES
-             ($1, NULL),
-             ($1, $2),
-             ($1, $3)`,
-          [explorerId, classroomA, classroomB]
+             ($1, $2)`,
+          [explorerId, classroomB]
         );
         await adminClient.query("COMMIT");
       } catch (error) {
@@ -155,6 +277,49 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       } finally {
         adminClient.release();
       }
+
+      const questStore = createQuestProgressStore(runtimePool);
+      await questStore.save(
+        explorerId,
+        0,
+        createQuestProgress("bright-start", 1, "quest_personal_rls")
+      );
+      await questStore.save(
+        explorerId,
+        0,
+        createQuestProgress("bright-start", 1, "quest_class_a_rls"),
+        classroomA
+      );
+      const journalStore = createLearningJournalStore(runtimePool);
+      await journalStore.saveJournal(
+        explorerId,
+        { version: 1, events: [] },
+        0
+      );
+      await journalStore.saveJournal(
+        explorerId,
+        { version: 1, events: [] },
+        0,
+        classroomA
+      );
+      const scoreStore = createPlayerStore(runtimePool);
+      const scoreRun = {
+        idempotencyKey: `run_${suffix}`.slice(0, 128),
+        levelId: "bright-start",
+        labyrinthNumber: 1,
+        seed: suffix.slice(0, 32),
+        wardensDefeated: 2,
+        echoesCollected: 3,
+        moves: 40,
+        elapsedMs: 60000,
+        escaped: true,
+        score: 850
+      };
+      await scoreStore.submitScore(explorerId, scoreRun, classroomA);
+      await scoreStore.submitScore(explorerId, scoreRun, classroomB);
+      await expect(
+        scoreStore.submitScore(explorerId, scoreRun, classroomC)
+      ).rejects.toMatchObject({ name: "ClassroomAccessDeniedError" });
 
       const exported = await exportUserSnapshot(runtimePool, explorerId, {
         now: () => "2026-07-28T00:00:00.000Z"
@@ -170,6 +335,9 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       )).toEqual([classroomA, classroomB]);
       expect(exported.data.class_journals.map(
         (journal) => journal.classroom_id
+      )).toEqual([classroomA, classroomB]);
+      expect(exported.data.scores.map(
+        (score) => score.classroom_id
       )).toEqual([classroomA, classroomB]);
 
       await expect(
@@ -191,6 +359,14 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
               [classroomB]
             );
             expect(crossClass.rows).toEqual([]);
+
+            const crossClassScores = await client.query(
+              `SELECT id
+               FROM score_entries
+               WHERE classroom_id = $1`,
+              [classroomB]
+            );
+            expect(crossClassScores.rows).toEqual([]);
 
             const crossExplorer = await client.query(
               `SELECT record_id
@@ -240,6 +416,68 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
           runtimePool,
           { explorerId, classroomId: classroomA },
           (client) => client.query(
+            `INSERT INTO score_entries (
+               player_id,
+               idempotency_key,
+               level_id,
+               labyrinth_number,
+               seed,
+               wardens_defeated,
+               echoes_collected,
+               moves,
+               elapsed_ms,
+               score,
+               escaped,
+               classroom_id
+             )
+             VALUES (
+               $1, $2, 'bright-start', 1, $3, 1, 1, 20, 30000, 650, TRUE, $4
+             )`,
+            [
+              explorerId,
+              `crafted_${suffix}`.slice(0, 128),
+              suffix.slice(0, 32),
+              classroomC
+            ]
+          )
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          async (client) => {
+            const crossClass = await client.query(
+              `UPDATE score_entries
+               SET score = score + 1
+               WHERE player_id = $1 AND classroom_id = $2
+               RETURNING id`,
+              [explorerId, classroomB]
+            );
+            expect(crossClass.rows).toEqual([]);
+          }
+        )
+      ).resolves.toBeUndefined();
+
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          (client) => client.query(
+            `UPDATE score_entries
+             SET classroom_id = $2
+             WHERE player_id = $1 AND classroom_id = $3`,
+            [explorerId, classroomC, classroomA]
+          )
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          (client) => client.query(
             `INSERT INTO learning_journals (
                clerk_user_id,
                classroom_id
@@ -280,15 +518,33 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
              SELECT COUNT(*)::INTEGER
              FROM learning_journals
              WHERE classroom_id = $1 AND clerk_user_id = $2
-           ) AS journals`,
+           ) AS journals,
+           (
+             SELECT COUNT(*)::INTEGER
+             FROM score_entries
+             WHERE classroom_id = $1 AND player_id = $2
+           ) AS scores`,
         [classroomB, explorerId]
       );
       expect(membershipCascade.rows).toEqual([{
         progress: 0,
-        journals: 0
+        journals: 0,
+        scores: 0
       }]);
 
       await createUserDeletionStore(runtimePool).deleteUser(explorerId);
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.created",
+          payload: {
+            id: `orgmem_after_delete_${suffix}`,
+            classroomId: classroomA,
+            userId: explorerId,
+            role: "org:member",
+            occurredAt: 9000
+          }
+        })
+      ).resolves.toMatchObject({ applied: false });
       const deleted = await adminPool.query(
         `SELECT
            COUNT(*) FILTER (
@@ -303,14 +559,90 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         [explorerId]
       );
       expect(deleted.rows).toEqual([{ memberships: 0, progress: 0 }]);
+
+      const deletionClient = await adminPool.connect();
+      try {
+        await deletionClient.query("BEGIN");
+        await deletionClient.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [raceExplorerId]
+        );
+        await deletionClient.query(
+          `INSERT INTO deleted_user_tombstones (clerk_user_id_hash)
+           VALUES (encode(sha256(convert_to($1, 'UTF8')), 'hex'))`,
+          [raceExplorerId]
+        );
+
+        const raceMembershipId = `orgmem_race_${suffix}`;
+        let synchronizationSettled = false;
+        const synchronization = authorityStore.upsertMembership({
+          id: raceMembershipId,
+          classroomId: classroomA,
+          userId: raceExplorerId,
+          role: "student",
+          occurredAt: 10000
+        }).then((applied) => {
+          synchronizationSettled = true;
+          return applied;
+        });
+
+        let observedAdvisoryWait = false;
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const waiting = await deletionClient.query(
+            `SELECT COUNT(*)::INTEGER AS count
+             FROM pg_stat_activity
+             WHERE datname = current_database()
+               AND query LIKE 'SELECT sync_classroom_membership%'
+               AND wait_event = 'advisory'`
+          );
+          if (waiting.rows[0]?.count > 0) {
+            observedAdvisoryWait = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(observedAdvisoryWait).toBe(true);
+        expect(synchronizationSettled).toBe(false);
+
+        await deletionClient.query("COMMIT");
+        await expect(synchronization).resolves.toBe(false);
+        await expect(
+          deletionClient.query(
+            `SELECT
+               EXISTS (
+                 SELECT 1 FROM player_access WHERE clerk_user_id = $1
+               ) AS access_present,
+               EXISTS (
+                 SELECT 1
+                 FROM classroom_memberships
+                 WHERE clerk_membership_id = $2
+               ) AS membership_present`,
+            [raceExplorerId, raceMembershipId]
+          )
+        ).resolves.toMatchObject({
+          rows: [{
+            access_present: false,
+            membership_present: false
+          }]
+        });
+      } catch (error) {
+        await deletionClient.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        deletionClient.release();
+      }
     } finally {
       await adminPool.query(
         "DELETE FROM player_access WHERE clerk_user_id = ANY($1::TEXT[])",
-        [[explorerId, otherExplorerId]]
+        [[explorerId, otherExplorerId, raceExplorerId]]
       ).catch(() => {});
       await adminPool.query(
         "DELETE FROM classrooms WHERE id = ANY($1::TEXT[])",
-        [[classroomA, classroomB, classroomC]]
+        [[classroomA, classroomB, classroomC, staleClassroom]]
+      ).catch(() => {});
+      await adminPool.query(
+        "DELETE FROM players WHERE clerk_user_id = ANY($1::TEXT[])",
+        [[explorerId, otherExplorerId]]
       ).catch(() => {});
     }
   });

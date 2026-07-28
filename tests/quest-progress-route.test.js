@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createQuestProgressHandler } from "../server/quest-progress-route.js";
 import { createQuestProgress } from "../src/game/quest-progress.js";
 import { DeletedUserError } from "../server/deleted-user-guard.js";
+import { ClassroomAccessDeniedError } from "../server/classroom-context.js";
 
 /**
  * @param {(request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse) => void | Promise<void>} handler
@@ -89,6 +90,68 @@ describe("Cloud Quest API", () => {
       await expect(loaded.json()).resolves.toMatchObject({
         record: { progress, revision: 1 }
       });
+    });
+  });
+
+  it("passes the selected Classroom to both read and write stores", async () => {
+    const get = vi.fn(async () => null);
+    const save = vi.fn(async () => ({
+      record: null,
+      conflict: false,
+      duplicate: true
+    }));
+    const handler = createQuestProgressHandler({
+      store: { get, save },
+      getUserId: () => "user_123"
+    });
+    const progress = createQuestProgress(
+      "trail-scout",
+      4,
+      "quest_route_123"
+    );
+
+    await withServer(handler, async (origin) => {
+      const headers = {
+        "content-type": "application/json",
+        "x-echo-maze-classroom-id": "org_morning_123"
+      };
+      await fetch(`${origin}/api/quest-progress`, { headers });
+      await fetch(`${origin}/api/quest-progress`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ expectedRevision: 0, progress })
+      });
+    });
+
+    expect(get).toHaveBeenCalledWith("user_123", "org_morning_123");
+    expect(save).toHaveBeenCalledWith(
+      "user_123",
+      0,
+      progress,
+      "org_morning_123"
+    );
+  });
+
+  it("returns 403 while synchronized Membership is absent", async () => {
+    const handler = createQuestProgressHandler({
+      store: {
+        async get() {
+          throw new ClassroomAccessDeniedError();
+        },
+        async save() {
+          throw new ClassroomAccessDeniedError();
+        }
+      },
+      getUserId: () => "user_123"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/quest-progress`, {
+        headers: {
+          "x-echo-maze-classroom-id": "org_morning_123"
+        }
+      });
+      expect(response.status).toBe(403);
     });
   });
 

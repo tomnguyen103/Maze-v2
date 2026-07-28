@@ -57,13 +57,38 @@ describe("learning Journal store", () => {
     });
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /FROM learning_journals[\s\S]+classroom_id IS NULL/
+        /FROM learning_journals[\s\S]+classroom_id IS NOT DISTINCT FROM \$2/
       ),
-      ["user_123"]
+      ["user_123", null]
     );
     expect(pool.clientQuery.mock.calls[1]).toEqual([
       expect.stringContaining("set_config"),
       ["user_123", ""]
+    ]);
+  });
+
+  it("reads an independent Journal only after synchronized Membership", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ role: "student" }] })
+      .mockResolvedValueOnce({
+        rows: [{ journal: JOURNAL, clear_generation: 2 }]
+      });
+    const pool = tenantPool(query);
+
+    await expect(
+      createLearningJournalStore(pool).getJournal(
+        "user_123",
+        "org_morning_123"
+      )
+    ).resolves.toEqual({ journal: JOURNAL, clearGeneration: 2 });
+    expect(pool.clientQuery.mock.calls[1]).toEqual([
+      expect.stringContaining("set_config"),
+      ["user_123", "org_morning_123"]
+    ]);
+    expect(query.mock.calls[0][0]).toContain("FROM classroom_memberships");
+    expect(query.mock.calls[1]).toEqual([
+      expect.stringContaining("classroom_id IS NOT DISTINCT FROM $2"),
+      ["user_123", "org_morning_123"]
     ]);
   });
 
@@ -83,13 +108,13 @@ describe("learning Journal store", () => {
       expect.stringMatching(
         /INSERT INTO player_access[\s\S]+INSERT INTO learning_journals[\s\S]+ON CONFLICT[\s\S]+DISTINCT ON[\s\S]+jsonb_array_elements[\s\S]+LIMIT 200/
       ),
-      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String)]
+      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String), null]
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
         /\(learning_journals\.journal->'events'\)\s*\|\|\s*\(EXCLUDED\.journal->'events'\)/
       ),
-      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String)]
+      ["user_123", JSON.stringify(JOURNAL), 0, expect.any(String), null]
     );
   });
 
@@ -135,7 +160,7 @@ describe("learning Journal store", () => {
       expect.stringMatching(
         /INSERT INTO learning_journals[\s\S]+clear_generation[\s\S]+\+ 1/
       ),
-      ["user_123", expect.any(String)]
+      ["user_123", expect.any(String), null]
     );
   });
 

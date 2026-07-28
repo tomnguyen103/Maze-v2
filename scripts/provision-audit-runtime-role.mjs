@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import { normalizeDatabaseConnectionString } from "../server/database.js";

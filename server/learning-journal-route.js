@@ -8,6 +8,11 @@ import {
   JournalClearConflictError
 } from "./learning-journal-store.js";
 import { DeletedUserError } from "./deleted-user-guard.js";
+import {
+  ClassroomAccessDeniedError,
+  ClassroomContextError,
+  classroomIdFromRequest
+} from "./classroom-context.js";
 
 export const LEARNING_JOURNAL_PATH = "/api/learning-journal";
 const MAX_BODY_BYTES = 128 * 1024;
@@ -23,9 +28,9 @@ const EVENT_KEYS = [
 /**
  * @param {{
  *   store: {
- *     getJournal: (userId: string) => Promise<unknown>,
- *     saveJournal: (userId: string, journal: unknown, clearGeneration: number) => Promise<unknown>,
- *     clearJournal: (userId: string) => Promise<unknown>
+ *     getJournal: (userId: string, classroomId?: string | null) => Promise<unknown>,
+ *     saveJournal: (userId: string, journal: unknown, clearGeneration: number, classroomId?: string | null) => Promise<unknown>,
+ *     clearJournal: (userId: string, classroomId?: string | null) => Promise<unknown>
  *   },
  *   getUserId: (request: import("node:http").IncomingMessage) => string | null | Promise<string | null>,
  *   recordAudit?: import("./audit.js").RecordAudit
@@ -53,8 +58,13 @@ export function createLearningJournalHandler({
         sendJson(response, 401, { error: "Sign in to sync the Lantern Journal." });
         return;
       }
+      const classroomId = classroomIdFromRequest(request);
       if (request.method === "GET") {
-        sendJson(response, 200, normalizeState(await store.getJournal(userId)));
+        sendJson(
+          response,
+          200,
+          normalizeState(await store.getJournal(userId, classroomId))
+        );
         return;
       }
       if (request.method === "PUT") {
@@ -68,14 +78,22 @@ export function createLearningJournalHandler({
         }
         const journal = input.journal;
         const state = normalizeState(
-          await store.saveJournal(userId, journal, input.clearGeneration)
+          await store.saveJournal(
+            userId,
+            journal,
+            input.clearGeneration,
+            classroomId
+          )
         );
         // Audit rows carry counts only. Journal minimization forbids storing
         // reviewed Question outcomes anywhere outside the Journal itself.
         await recordAudit(request, {
           actorId: userId,
           action: "journal.sync",
-          resource: { type: "learning_journal", id: userId },
+          resource: {
+            type: "learning_journal",
+            id: classroomId ? `${userId}:${classroomId}` : userId
+          },
           after: {
             clearGeneration: state.clearGeneration,
             eventCount: state.journal.events.length
@@ -85,11 +103,16 @@ export function createLearningJournalHandler({
         return;
       }
       if (request.method === "DELETE") {
-        const state = normalizeState(await store.clearJournal(userId));
+        const state = normalizeState(
+          await store.clearJournal(userId, classroomId)
+        );
         await recordAudit(request, {
           actorId: userId,
           action: "journal.clear",
-          resource: { type: "learning_journal", id: userId },
+          resource: {
+            type: "learning_journal",
+            id: classroomId ? `${userId}:${classroomId}` : userId
+          },
           after: { clearGeneration: state.clearGeneration }
         });
         sendJson(response, 200, state);
@@ -102,6 +125,14 @@ export function createLearningJournalHandler({
     } catch (error) {
       if (error instanceof JournalInputError) {
         sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof ClassroomContextError) {
+        sendJson(response, 400, { error: error.message });
+        return;
+      }
+      if (error instanceof ClassroomAccessDeniedError) {
+        sendJson(response, 403, { error: error.message });
         return;
       }
       if (error instanceof JournalClearConflictError) {

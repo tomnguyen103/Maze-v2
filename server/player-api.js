@@ -17,6 +17,8 @@ import {
   createWebhookInbox,
   createWebhookInboxStore
 } from "./webhook-inbox.js";
+import { processClassroomAuthorityEvent } from "./classroom-authority.js";
+import { createClassroomAuthorityStore } from "./classroom-authority-store.js";
 import { createAuditStore } from "./audit-store.js";
 import {
   createAuditRecorder,
@@ -207,7 +209,7 @@ export function createPlayerApi(env = process.env) {
     loadAuditCheckpointConfig(env),
     queryAdapter
   );
-  const store = createPlayerStore(queryAdapter);
+  const store = createPlayerStore(pool);
   const accessStore = createRunAccessStore(pool);
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
@@ -233,6 +235,7 @@ export function createPlayerApi(env = process.env) {
   const roleResolver = createRoleResolver({ store: roleStore });
   const lifetimeConfig = loadLifetimeConfig(env);
   const inboxStore = createWebhookInboxStore(queryAdapter);
+  const classroomAuthorityStore = createClassroomAuthorityStore(queryAdapter);
   const healthHandler = createHealthHandler({
     version,
     checkDatabase: () => queryAdapter.query("SELECT 1"),
@@ -337,6 +340,20 @@ export function createPlayerApi(env = process.env) {
             outcome: result?.outcome ?? null
           }
         );
+        return;
+      }
+      const classroomOutcome = await processClassroomAuthorityEvent(
+        classroomAuthorityStore,
+        event
+      );
+      if (classroomOutcome) {
+        if (classroomOutcome.applied) {
+          await auditRecorder.recordAudit(
+            { actorId: SYSTEM_ACTORS.clerk, actorRole: "system" },
+            classroomOutcome.action,
+            classroomOutcome.resource
+          );
+        }
         return;
       }
       if (event.eventType === "user.deleted") {

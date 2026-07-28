@@ -68,13 +68,40 @@ describe("Cloud Quest store", () => {
     });
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /FROM cloud_quest_progress[\s\S]+classroom_id IS NULL/
+        /FROM cloud_quest_progress[\s\S]+classroom_id IS NOT DISTINCT FROM \$2/
       ),
-      ["user_123"]
+      ["user_123", null]
     );
     expect(pool.clientQuery.mock.calls[1]).toEqual([
       expect.stringContaining("set_config"),
       ["user_123", ""]
+    ]);
+  });
+
+  it("selects one independent synchronized Classroom record", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ role: "student" }] })
+      .mockResolvedValueOnce({ rows: [ROW] });
+    const pool = tenantPool(query);
+
+    await expect(
+      createQuestProgressStore(pool).get(
+        "user_123",
+        "org_morning_123"
+      )
+    ).resolves.toMatchObject({ revision: 3 });
+
+    expect(pool.clientQuery.mock.calls[1]).toEqual([
+      expect.stringContaining("set_config"),
+      ["user_123", "org_morning_123"]
+    ]);
+    expect(query.mock.calls[0]).toEqual([
+      expect.stringContaining("FROM classroom_memberships"),
+      ["org_morning_123", "user_123"]
+    ]);
+    expect(query.mock.calls[1]).toEqual([
+      expect.stringContaining("classroom_id IS NOT DISTINCT FROM $2"),
+      ["user_123", "org_morning_123"]
     ]);
   });
 
