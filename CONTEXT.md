@@ -207,9 +207,9 @@ separate from the Explorer's Personal Play.
 _Avoid_: School mode, multiplayer, shared Quest
 
 **Classroom Question Budget**:
-The per-Explorer `question.fetch` allowance used when a signed-in Classroom
-Member requests a Warden Question. It prevents one school network address from
-becoming a shared limit while keeping anonymous requests address-bound.
+The per-Explorer `question.fetch` allowance used when any signed-in Explorer
+requests a Warden Question. It prevents one shared network address from becoming
+a shared limit while keeping anonymous requests address-bound.
 _Avoid_: Classroom quota, shared school allowance, Question entitlement
 
 **Verified Classroom Domain**:

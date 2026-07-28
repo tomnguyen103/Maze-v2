@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createClassroomHandler } from "../server/classroom-route.js";
 import { ClassroomAccessDeniedError } from "../server/classroom-context.js";
+import { ClassroomDomainConflictError } from "../server/classroom-domain.js";
 
 /**
  * @param {(request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse) => void | Promise<void>} handler
@@ -285,6 +286,43 @@ describe("Classroom API", () => {
         action: "org.domain.register",
         resource: { type: "classroom", id: "org_class_1" }
       })
+    );
+  });
+
+  it("returns 409 when another Classroom owns the verified domain", async () => {
+    const store = classroomStore();
+    store.registerDomain.mockRejectedValue(
+      new ClassroomDomainConflictError()
+    );
+    const provider = classroomProvider();
+    const handler = createClassroomHandler({
+      store,
+      provider,
+      getUserId: () => "user_teacher_1"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/domain`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: "school.example" })
+        }
+      );
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({
+        error: "That school email domain belongs to another Classroom."
+      });
+    });
+
+    expect(provider.verifiedPrimaryEmail).toHaveBeenCalledWith(
+      "user_teacher_1"
+    );
+    expect(store.registerDomain).toHaveBeenCalledWith(
+      "user_teacher_1",
+      "org_class_1",
+      "school.example"
     );
   });
 

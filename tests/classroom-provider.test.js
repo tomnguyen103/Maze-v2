@@ -160,6 +160,76 @@ describe("Clerk Classroom provider", () => {
     });
   });
 
+  it("accepts a Membership created by a concurrent auto-join", async () => {
+    const createError = new Error("membership already exists");
+    const getOrganizationMembershipList = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [], totalCount: 0 })
+      .mockResolvedValueOnce({
+        data: [{ id: "orgmem_race_winner" }],
+        totalCount: 1
+      });
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser: vi.fn() },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(async () => {
+              throw createError;
+            }),
+            getOrganizationMembershipList
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).resolves.toEqual({
+      created: false,
+      membershipId: "orgmem_race_winner"
+    });
+    expect(getOrganizationMembershipList).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves the Clerk error when an auto-join race has no winner", async () => {
+    const createError = new Error("Clerk unavailable");
+    const getOrganizationMembershipList = vi.fn(async () => ({
+      data: [],
+      totalCount: 0
+    }));
+    const provider = createClassroomProvider(
+      { CLERK_SECRET_KEY: "sk_test" },
+      {
+        createClient: () => ({
+          users: { getUser: vi.fn() },
+          organizations: {
+            createOrganization: vi.fn(),
+            createOrganizationInvitation: vi.fn(),
+            createOrganizationMembership: vi.fn(async () => {
+              throw createError;
+            }),
+            getOrganizationMembershipList
+          }
+        })
+      }
+    );
+
+    await expect(
+      provider?.autoJoinStudent({
+        classroomId: "org_class_1",
+        userId: "user_student_1"
+      })
+    ).rejects.toBe(createError);
+    expect(getOrganizationMembershipList).toHaveBeenCalledTimes(2);
+  });
+
   it("is unavailable without a secret key", () => {
     expect(createClassroomProvider({})).toBeNull();
   });

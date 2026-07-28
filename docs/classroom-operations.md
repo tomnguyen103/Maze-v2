@@ -10,7 +10,7 @@ every read and write. A missing or delayed webhook denies access.
 2. Keep the default roles. Echo Maze maps `org:admin` to Teacher and
    `org:member` to Student.
 3. Configure the signed `/api/clerk-webhook` endpoint for:
-   `user.created`, `user.updated`,
+   `user.created`, `user.updated`, `user.deleted`,
    `organization.created`, `organization.updated`, `organization.deleted`,
    `organizationMembership.created`, `organizationMembership.updated`, and
    `organizationMembership.deleted`.

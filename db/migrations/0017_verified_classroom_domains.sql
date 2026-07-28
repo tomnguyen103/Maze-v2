@@ -6,6 +6,7 @@ CREATE TABLE public_email_domains (
   domain TEXT PRIMARY KEY
     CHECK (
       domain = lower(domain)
+      AND char_length(domain) BETWEEN 4 AND 253
       AND domain ~
         '^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
     )
@@ -1134,6 +1135,7 @@ CREATE TABLE org_domains (
   domain TEXT PRIMARY KEY
     CHECK (
       domain = lower(domain)
+      AND char_length(domain) BETWEEN 4 AND 253
       AND domain ~
         '^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
     ),
@@ -1172,6 +1174,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   IF p_domain <> lower(p_domain)
+     OR char_length(p_domain) NOT BETWEEN 4 AND 253
      OR p_domain !~
        '^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
      OR EXISTS (

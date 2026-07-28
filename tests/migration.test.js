@@ -255,6 +255,12 @@ describe("Verified Classroom Domain migration", () => {
     expect(sql).toContain("role = 'teacher'");
     expect(sql).toContain("CREATE FUNCTION classroom_for_verified_domain");
     expect(sql).toContain("ALTER TABLE org_domains FORCE ROW LEVEL SECURITY");
+    expect(
+      sql.match(/char_length\(domain\) BETWEEN 4 AND 253/g)
+    ).toHaveLength(2);
+    expect(sql).toContain(
+      "char_length(p_domain) NOT BETWEEN 4 AND 253"
+    );
     const generatedDomains = generatedPublicEmailDomains(sql);
     expect(generatedDomains).toEqual([...PUBLIC_EMAIL_DOMAINS].sort());
     expect(sql).not.toContain("INSERT INTO classroom_memberships");

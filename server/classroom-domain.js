@@ -87,6 +87,9 @@ export async function processClassroomAutoJoinEvent(
   ) {
     return null;
   }
+  if (!provider) {
+    return null;
+  }
   const payload = /** @type {Record<string, unknown>} */ (
     event.payload ?? {}
   );
@@ -96,9 +99,6 @@ export async function processClassroomAutoJoinEvent(
   const classroomId = await store.classroomForDomain(domain);
   if (!classroomId) {
     return null;
-  }
-  if (!provider) {
-    throw new Error("Classroom auto-join is not configured.");
   }
   const membership = await provider.autoJoinStudent({
     classroomId,

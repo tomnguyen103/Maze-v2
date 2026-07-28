@@ -128,4 +128,26 @@ describe("Verified Classroom Domains", () => {
       )
     ).resolves.toMatchObject({ applied: false });
   });
+
+  it("skips auto-join deliveries when the Clerk provider is disabled", async () => {
+    const classroomForDomain = vi.fn();
+
+    await expect(
+      processClassroomAutoJoinEvent(
+        {
+          store: { classroomForDomain },
+          provider: null
+        },
+        {
+          eventType: "user.created",
+          payload: {
+            id: "user_student_1",
+            emailDomain: "school.example",
+            occurredAt: 1750000000123
+          }
+        }
+      )
+    ).resolves.toBeNull();
+    expect(classroomForDomain).not.toHaveBeenCalled();
+  });
 });
