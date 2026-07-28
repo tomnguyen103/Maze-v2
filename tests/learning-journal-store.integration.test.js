@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { createLearningJournalStore } from "../server/learning-journal-store.js";
@@ -22,27 +22,11 @@ describe.runIf(runIntegration)("learning Journal store on PostgreSQL", () => {
          to_regclass('public.learning_journals') AS journal_name,
          to_regclass('public.deleted_user_tombstones') AS tombstone_name`
     );
-    if (!existing.rows[0]?.journal_name) {
-      const migration = await readFile(
-        new URL("../db/migrations/0005_lantern_journal.sql", import.meta.url),
-        "utf8"
-      );
-      await pool.query(migration);
-    } else {
-      if (!existing.rows[0]?.tombstone_name) {
-        await pool.query(
-          `CREATE TABLE IF NOT EXISTS deleted_user_tombstones (
-             clerk_user_id_hash CHAR(64) PRIMARY KEY
-               CHECK (clerk_user_id_hash ~ '^[a-f0-9]{64}$'),
-             deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-           )`
-        );
-      }
-      await pool.query(
-        `ALTER TABLE learning_journals
-         ADD COLUMN IF NOT EXISTS clear_generation INTEGER NOT NULL DEFAULT 0
-           CHECK (clear_generation >= 0)`
-      );
+    if (
+      !existing.rows[0]?.journal_name ||
+      !existing.rows[0]?.tombstone_name
+    ) {
+      throw new Error("Apply the repository migrations before integration tests.");
     }
   });
 
@@ -52,8 +36,8 @@ describe.runIf(runIntegration)("learning Journal store on PostgreSQL", () => {
 
   it("atomically retains existing and incoming events", async () => {
     if (!pool) throw new Error("Database pool was not initialized.");
-    const connection = await pool.connect();
-    const store = createLearningJournalStore(connection);
+    const store = createLearningJournalStore(pool);
+    const userId = `user_${randomUUID().replaceAll("-", "")}`;
     const first = {
       version: 1,
       events: [
@@ -81,49 +65,28 @@ describe.runIf(runIntegration)("learning Journal store on PostgreSQL", () => {
       ]
     };
 
-    try {
-      await connection.query("BEGIN");
-      await store.saveJournal("journal_postgres_integration", first, 0);
-      const merged = await store.saveJournal(
-        "journal_postgres_integration",
-        second,
-        0
-      );
-      expect(
-        /** @type {typeof first} */ (merged.journal).events
-      ).toEqual([...first.events, ...second.events]);
-    } finally {
-      await connection.query("ROLLBACK");
-      connection.release();
-    }
+    await store.saveJournal(userId, first, 0);
+    const merged = await store.saveJournal(userId, second, 0);
+    expect(
+      /** @type {typeof first} */ (merged.journal).events
+    ).toEqual([...first.events, ...second.events]);
   });
 
   it("creates a first Journal at a non-zero clear generation", async () => {
     if (!pool) throw new Error("Database pool was not initialized.");
-    const connection = await pool.connect();
-    const store = createLearningJournalStore(connection);
-    const userId = "journal_nonzero_generation_integration";
+    const store = createLearningJournalStore(pool);
+    const userId = `user_${randomUUID().replaceAll("-", "")}`;
     const journal = {
       version: 1,
       events: []
     };
 
-    try {
-      await connection.query("BEGIN");
-      await connection.query(
-        "DELETE FROM player_access WHERE clerk_user_id = $1",
-        [userId]
-      );
-      await expect(
-        store.saveJournal(userId, journal, 3)
-      ).resolves.toEqual({
-        journal,
-        clearGeneration: 3
-      });
-    } finally {
-      await connection.query("ROLLBACK");
-      connection.release();
-    }
+    await expect(
+      store.saveJournal(userId, journal, 3)
+    ).resolves.toEqual({
+      journal,
+      clearGeneration: 3
+    });
   });
 
   it("blocks an authenticated write that was waiting while deletion committed", async () => {

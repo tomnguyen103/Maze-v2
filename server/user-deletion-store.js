@@ -1,4 +1,5 @@
 import { deletedUserHash } from "./deleted-user-guard.js";
+import { setTenantContext } from "./tenant-context.js";
 
 /**
  * @param {{
@@ -7,7 +8,7 @@ import { deletedUserHash } from "./deleted-user-guard.js";
  *       sql: string,
  *       values?: unknown[]
  *     ) => Promise<{ rows?: Record<string, unknown>[] }>,
- *     release: () => void
+ *     release: (destroy?: boolean) => void
  *   }>
  * }} pool
  */
@@ -16,8 +17,13 @@ export function createUserDeletionStore(pool) {
     /** @param {string} userId */
     async deleteUser(userId) {
       const client = await pool.connect();
+      let released = false;
       try {
         await client.query("BEGIN");
+        await setTenantContext(client, {
+          explorerId: userId,
+          classroomId: null
+        });
         await client.query(
           "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
           [userId]
@@ -86,7 +92,11 @@ export function createUserDeletionStore(pool) {
               NOT EXISTS (
                 SELECT 1 FROM explorer_access_settings
                 WHERE clerk_user_id = $1
-              ) AS settings_deleted`,
+              ) AS settings_deleted,
+              NOT EXISTS (
+                SELECT 1 FROM classroom_memberships
+                WHERE clerk_user_id = $1
+              ) AS memberships_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -94,10 +104,17 @@ export function createUserDeletionStore(pool) {
         }
         await client.query("COMMIT");
       } catch (error) {
-        await client.query("ROLLBACK");
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          client.release(true);
+          released = true;
+        }
         throw error;
       } finally {
-        client.release();
+        if (!released) {
+          client.release();
+        }
       }
     }
   };
@@ -108,7 +125,7 @@ function deletionVerified(row) {
   return Boolean(
     row &&
     typeof row === "object" &&
-    Object.values(row).length === 9 &&
+    Object.values(row).length === 10 &&
     Object.values(row).every((value) => value === true)
   );
 }

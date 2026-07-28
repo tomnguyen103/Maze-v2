@@ -303,3 +303,62 @@ describe("Audit privilege boundary migration", () => {
     expect(finalize).not.toContain("GRANT UPDATE ON TABLE audit_chain_head");
   });
 });
+
+describe("Classroom forced-RLS foundation migration", () => {
+  it("adds nullable Classroom scope while preserving one Personal Play record", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0014_classroom_rls_foundation.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE classrooms");
+    expect(sql).toContain("CREATE TABLE classroom_memberships");
+    expect(sql).toContain(
+      "REFERENCES player_access(clerk_user_id) ON DELETE CASCADE"
+    );
+    expect(sql).toContain("role IN ('teacher', 'student')");
+    expect(sql).toContain("ADD COLUMN classroom_id TEXT");
+    expect(sql).toContain(
+      "UNIQUE NULLS NOT DISTINCT (clerk_user_id, classroom_id)"
+    );
+    expect(sql.match(
+      /FOREIGN KEY \(classroom_id, clerk_user_id\)/g
+    )).toHaveLength(2);
+    expect(sql.match(
+      /REFERENCES classroom_memberships\(classroom_id, clerk_user_id\)[\s\S]*?ON DELETE CASCADE/g
+    )).toHaveLength(2);
+    expect(sql).toContain("CREATE ROLE echo_maze_tenant_owner NOLOGIN");
+    expect(sql).toContain(
+      "ALTER TABLE cloud_quest_progress ENABLE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE cloud_quest_progress FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE learning_journals ENABLE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE learning_journals FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain(
+      "current_setting('echo_maze.explorer_id', true)"
+    );
+    expect(sql).toContain(
+      "current_setting('echo_maze.classroom_id', true)"
+    );
+    expect(sql).toContain("ALTER TABLE classrooms OWNER TO echo_maze_tenant_owner");
+    expect(sql).toContain(
+      "ALTER TABLE classroom_memberships OWNER TO echo_maze_tenant_owner"
+    );
+    expect(sql).toContain(
+      "REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner"
+    );
+    expect(sql).toContain(
+      "GRANT SELECT ON TABLE classrooms, classroom_memberships"
+    );
+    expect(sql).not.toContain("BYPASSRLS");
+  });
+});

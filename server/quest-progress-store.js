@@ -4,6 +4,7 @@ import {
   DeletedUserError,
   deletedUserHash
 } from "./deleted-user-guard.js";
+import { withTenantContext } from "./tenant-context.js";
 
 const COLUMNS = `
   schema_version,
@@ -20,48 +21,71 @@ const COLUMNS = `
 `;
 
 /**
- * @param {{
+ * @typedef {{
  *   query: (
  *     sql: string,
  *     values?: unknown[]
  *   ) => Promise<{ rows: Record<string, unknown>[] }>
+ * }} QueryDatabase
+ */
+
+/**
+ * @param {QueryDatabase & {
+ *   connect: () => Promise<QueryDatabase & {
+ *     release: (destroy?: boolean) => void
+ *   }>
  * }} pool
  */
 export function createQuestProgressStore(pool) {
-  /** @param {string} userId */
-  async function get(userId) {
-    const result = await pool.query(
+  /**
+   * @param {QueryDatabase} database
+   * @param {string} userId
+   */
+  async function get(database, userId) {
+    const result = await database.query(
       `SELECT ${COLUMNS}
        FROM cloud_quest_progress
-       WHERE clerk_user_id = $1`,
+       WHERE clerk_user_id = $1
+         AND classroom_id IS NULL`,
       [userId]
     );
     return result.rows[0] ? mapRecord(result.rows[0]) : null;
   }
 
   return {
-    get,
+    /** @param {string} userId */
+    get(userId) {
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        (client) => get(client, userId)
+      );
+    },
     /**
      * @param {string} userId
      * @param {number} expectedRevision
      * @param {NonNullable<ReturnType<typeof normalizeQuestProgress>>} progress
      */
     async save(userId, expectedRevision, progress) {
-      const writeValues = [
-        userId,
-        expectedRevision,
-        progress.version,
-        progress.questId,
-        progress.levelId,
-        progress.labyrinthNumber,
-        progress.completedLabyrinths,
-        JSON.stringify(progress.usedMapFingerprints),
-        JSON.stringify(progress.usedQuestionIds),
-        progress.nextQuestionOrdinal,
-        progress.complete
-      ];
-      const result = expectedRevision === 0
-        ? await pool.query(
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        async (database) => {
+          const writeValues = [
+            userId,
+            expectedRevision,
+            progress.version,
+            progress.questId,
+            progress.levelId,
+            progress.labyrinthNumber,
+            progress.completedLabyrinths,
+            JSON.stringify(progress.usedMapFingerprints),
+            JSON.stringify(progress.usedQuestionIds),
+            progress.nextQuestionOrdinal,
+            progress.complete
+          ];
+          const result = expectedRevision === 0
+            ? await database.query(
             `WITH ${activeUserGuardCtes("$11")},
              ensured_access AS (
                INSERT INTO player_access (clerk_user_id)
@@ -109,8 +133,8 @@ export function createQuestProgressStore(pool) {
               progress.complete,
               deletedUserHash(userId)
             ]
-          )
-        : await pool.query(
+              )
+            : await database.query(
             `UPDATE cloud_quest_progress
              SET
                schema_version = $3,
@@ -125,37 +149,40 @@ export function createQuestProgressStore(pool) {
                revision = revision + 1,
                updated_at = NOW()
              WHERE clerk_user_id = $1
+               AND classroom_id IS NULL
                AND revision = $2
              RETURNING ${COLUMNS}`,
             writeValues
-          );
-      if (result.rows[0]) {
-        return {
-          record: mapRecord(result.rows[0]),
-          conflict: false,
-          duplicate: false
-        };
-      }
-      if (expectedRevision === 0) {
-        const deleted = await pool.query(
-          `SELECT 1
-           FROM deleted_user_tombstones
-           WHERE clerk_user_id_hash = $1`,
-          [deletedUserHash(userId)]
-        );
-        if (deleted.rows.length) {
-          throw new DeletedUserError();
+              );
+          if (result.rows[0]) {
+            return {
+              record: mapRecord(result.rows[0]),
+              conflict: false,
+              duplicate: false
+            };
+          }
+          if (expectedRevision === 0) {
+            const deleted = await database.query(
+              `SELECT 1
+               FROM deleted_user_tombstones
+               WHERE clerk_user_id_hash = $1`,
+              [deletedUserHash(userId)]
+            );
+            if (deleted.rows.length) {
+              throw new DeletedUserError();
+            }
+          }
+          const record = await get(database, userId);
+          const duplicate =
+            record !== null &&
+            JSON.stringify(record.progress) === JSON.stringify(progress);
+          return {
+            record,
+            conflict: !duplicate,
+            duplicate
+          };
         }
-      }
-      const record = await get(userId);
-      const duplicate =
-        record !== null &&
-        JSON.stringify(record.progress) === JSON.stringify(progress);
-      return {
-        record,
-        conflict: !duplicate,
-        duplicate
-      };
+      );
     }
   };
 }

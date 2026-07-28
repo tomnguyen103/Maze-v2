@@ -42,6 +42,8 @@ Delivery follows expand-contract in three independently green pull requests:
 ## Consequences
 
 - Global roles remain separate from Classroom Memberships.
+- Removing a Classroom Membership cascades that Explorer's Class Play records;
+  Personal Play is unaffected.
 - Clerk webhooks are eventually consistent, so newly changed membership may
   temporarily deny access but can never grant broader database access.
 - Consumer gameplay and Lifetime Membership remain account-scoped and unchanged.

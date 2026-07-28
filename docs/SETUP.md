@@ -50,16 +50,22 @@ For Vercel, connect the Neon project and apply the migrations in order:
 11. `db/migrations/0011_explorer_access_settings.sql`
 12. `db/migrations/0012_audit_privilege_boundary.sql`
 13. `db/migrations/0013_audit_privilege_boundary_finalize.sql`
+14. `db/migrations/0014_classroom_rls_foundation.sql`
 
-Migrations 0012 and 0013 are the exception to the single-credential setup. Use
-`DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for both. Deploy
-the privilege boundary in this order so audit writes remain available:
+Migrations 0012 through 0014 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all three.
+Deploy the privilege boundary in this order so audit writes remain available:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
 2. Deploy the application code that uses `append_audit_event(text)`.
 3. Apply migration 0013 to transfer audit-object ownership.
 4. Immediately run `npm run audit:provision` to strip the named login's legacy
    direct grants, grant the constrained runtime role, and remove PUBLIC execute.
+5. Apply migration 0014 with the Phase 8 foundation release. It transfers the
+   Classroom tenant tables to a non-login owner and forces row-level security.
+   The application login must already inherit `echo_maze_runtime`, and every
+   tenant query in that release must set transaction-local Explorer and
+   Classroom context.
 
 Create a separate unprivileged login for `DATABASE_URL` and set its name as
 `AUDIT_RUNTIME_LOGIN` before the final command:
@@ -79,6 +85,20 @@ denied.
 Keep `DATABASE_ADMIN_URL` and `AUDIT_RUNTIME_LOGIN` in the operator shell used
 for migrations and provisioning. Do not store the admin URL in Vercel or any
 application-runtime environment.
+
+To prove the Classroom boundary against a disposable migrated database, provide
+the unprivileged runtime URL plus the admin URL used only for test fixtures:
+
+```bash
+RUN_DATABASE_INTEGRATION=1 \
+DATABASE_URL=your-disposable-runtime-url \
+DATABASE_ADMIN_URL=your-disposable-admin-url \
+npx vitest run tests/classroom-rls.integration.test.js
+```
+
+The proof rejects a superuser, `BYPASSRLS`, or tenant-table owner runtime. It
+also verifies cross-Class reads return no rows and pooled context clears after
+both commit and rollback. Never point the fixture-producing proof at production.
 
 Then set:
 

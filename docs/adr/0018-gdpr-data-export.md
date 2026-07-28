@@ -23,6 +23,12 @@ minimisation for a child audience.
 - **Every query binds the requesting user id**, so the builder is structurally
   unable to leak another Explorer's rows; a deleted account yields empty
   sections, not an error.
+- **Schema v2 includes signed-in Explorer Access Settings, Classroom
+  Memberships, and both Personal and Class Play learning records.** The
+  snapshot transaction selects one database-authoritative Classroom at a time
+  while collecting Class Play, preserving the forced-RLS boundary. Composite
+  membership foreign keys ensure Class Play cannot outlive the Membership
+  needed to discover and export it.
 - **`GET /api/me/export`** dispatches inside the player API behind Clerk
   auth, metered by the phase 3 `export.self` budget (2/hour), audited as
   `export.self` with the audit write sequenced *before* the body is sent, so
@@ -37,9 +43,8 @@ minimisation for a child audience.
 
 ## Consequences
 
-- Explorer Access Settings do not appear in the export: they are
-  device-local and never reach the server. Documented in the schema and
-  `docs/data-privacy.md` rather than faked with an empty section.
+- Guest Explorer Access Settings remain device-local. Signed-in settings and
+  Classroom data are included explicitly in export schema v2.
 - The export contains Stripe identifiers (session, payment intent, price).
   They are the account holder's own transaction references; no card data
   exists anywhere to leak.

@@ -4,6 +4,7 @@ import {
   DeletedUserError,
   deletedUserHash
 } from "./deleted-user-guard.js";
+import { withTenantContext } from "./tenant-context.js";
 
 export class JournalClearConflictError extends Error {
   /** @param {number} clearGeneration */
@@ -15,19 +16,34 @@ export class JournalClearConflictError extends Error {
 }
 
 /**
- * @param {{ query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }} pool
+ * @param {{
+ *   connect: () => Promise<{
+ *     query: (
+ *       sql: string,
+ *       values?: unknown[]
+ *     ) => Promise<{ rows: Record<string, unknown>[] }>,
+ *     release: (destroy?: boolean) => void
+ *   }>
+ * }} pool
  */
 export function createLearningJournalStore(pool) {
   return {
     /** @param {string} userId */
     async getJournal(userId) {
-      const result = await pool.query(
-        `SELECT journal, clear_generation
-         FROM learning_journals
-         WHERE clerk_user_id = $1`,
-        [userId]
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        async (database) => {
+          const result = await database.query(
+            `SELECT journal, clear_generation
+             FROM learning_journals
+             WHERE clerk_user_id = $1
+               AND classroom_id IS NULL`,
+            [userId]
+          );
+          return journalState(result.rows[0]);
+        }
       );
-      return journalState(result.rows[0]);
     },
 
     /**
@@ -36,8 +52,12 @@ export function createLearningJournalStore(pool) {
      * @param {number} clearGeneration
      */
     async saveJournal(userId, journal, clearGeneration) {
-      const result = await pool.query(
-        `WITH ${activeUserGuardCtes("$4")},
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        async (database) => {
+          const result = await database.query(
+            `WITH ${activeUserGuardCtes("$4")},
          ensured_access AS (
            INSERT INTO player_access (clerk_user_id)
            SELECT $1
@@ -62,7 +82,7 @@ export function createLearningJournalStore(pool) {
            SELECT $1, $2::jsonb, $3
            FROM available_access
            LIMIT 1
-           ON CONFLICT (clerk_user_id) DO UPDATE SET
+           ON CONFLICT (clerk_user_id, classroom_id) DO UPDATE SET
              journal = jsonb_build_object(
                'version',
                1,
@@ -99,27 +119,34 @@ export function createLearningJournalStore(pool) {
          SELECT journal, clear_generation, TRUE AS conflict
          FROM learning_journals
          WHERE clerk_user_id = $1
+           AND classroom_id IS NULL
            AND NOT EXISTS (SELECT 1 FROM saved)
          LIMIT 1`,
-        [
-          userId,
-          JSON.stringify(journal),
-          clearGeneration,
-          deletedUserHash(userId)
-        ]
+            [
+              userId,
+              JSON.stringify(journal),
+              clearGeneration,
+              deletedUserHash(userId)
+            ]
+          );
+          const row = result.rows[0];
+          if (!row) throw new DeletedUserError();
+          if (row.conflict) {
+            throw new JournalClearConflictError(Number(row.clear_generation));
+          }
+          return journalState(row);
+        }
       );
-      const row = result.rows[0];
-      if (!row) throw new DeletedUserError();
-      if (row.conflict) {
-        throw new JournalClearConflictError(Number(row.clear_generation));
-      }
-      return journalState(row);
     },
 
     /** @param {string} userId */
     async clearJournal(userId) {
-      const result = await pool.query(
-        `WITH ${activeUserGuardCtes("$2")},
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        async (database) => {
+          const result = await database.query(
+            `WITH ${activeUserGuardCtes("$2")},
          ensured_access AS (
            INSERT INTO player_access (clerk_user_id)
            SELECT $1
@@ -146,15 +173,17 @@ export function createLearningJournalStore(pool) {
            1
          FROM available_access
          LIMIT 1
-         ON CONFLICT (clerk_user_id) DO UPDATE SET
+         ON CONFLICT (clerk_user_id, classroom_id) DO UPDATE SET
            journal = '{"version":1,"events":[]}'::jsonb,
            clear_generation = learning_journals.clear_generation + 1,
            updated_at = NOW()
          RETURNING journal, clear_generation`,
-        [userId, deletedUserHash(userId)]
+            [userId, deletedUserHash(userId)]
+          );
+          if (!result.rows[0]) throw new DeletedUserError();
+          return journalState(result.rows[0]);
+        }
       );
-      if (!result.rows[0]) throw new DeletedUserError();
-      return journalState(result.rows[0]);
     }
   };
 }
