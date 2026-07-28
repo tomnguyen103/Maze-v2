@@ -103,6 +103,16 @@ function fixtureAdapter() {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-05T00:00:00.000Z"
     },
+    verified_daily_submissions: {
+      daily_date: "2026-07-26",
+      daily_version: 1,
+      score: 900,
+      wardens_defeated: 2,
+      echoes_collected: 4,
+      moves: 76,
+      elapsed_ms: 7600,
+      verified_at: "2026-07-26T12:00:00.000Z"
+    },
     user_roles: { role: "moderator" }
   };
   return {
@@ -192,6 +202,13 @@ describe("buildUserExport", () => {
       high_contrast: true,
       revision: 2
     });
+    expect(exported.data.verified_daily_results).toEqual([
+      expect.objectContaining({
+        daily_date: "2026-07-26",
+        score: 900,
+        moves: 76
+      })
+    ]);
     expect(exported.data.role).toBe("moderator");
   });
 
@@ -211,6 +228,7 @@ describe("buildUserExport", () => {
     expect(exported.data.class_quest_progress).toEqual([]);
     expect(exported.data.class_journals).toEqual([]);
     expect(exported.data.access_settings).toBeNull();
+    expect(exported.data.verified_daily_results).toEqual([]);
     expect(exported.data.role).toBe("player");
     expect(JSON.stringify(exported)).not.toContain("Moss Runner");
   });
@@ -222,7 +240,7 @@ describe("buildUserExport", () => {
       expect(sql).toContain("$1");
     }
     // Personal sections plus three Classroom-scoped sections.
-    expect(adapter.queries).toHaveLength(13);
+    expect(adapter.queries).toHaveLength(14);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -297,8 +315,8 @@ describe("exportUserSnapshot", () => {
     expect(pool.statements[1]).toBe("SELECT set_config('echo_maze.explorer_id',");
     expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
-    // Context plus 9 section reads between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(13);
+    // Context plus 11 section reads between BEGIN and COMMIT.
+    expect(pool.statements).toHaveLength(14);
     expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });

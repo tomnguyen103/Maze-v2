@@ -30,7 +30,7 @@ Run, Quest, score, Question, or shared-link state.
 - Returns a versioned envelope conforming to the checked-in contract
   `shared/export-schema.json` (structurally pinned by unit test — the schema
   file itself documents per-section constraints for external consumers):
-  `{ "schema": "echo-maze-export/2", "generated_at": …, "data": { … } }`,
+  `{ "schema": "echo-maze-export/3", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows. Classroom Memberships and Personal/Class Play

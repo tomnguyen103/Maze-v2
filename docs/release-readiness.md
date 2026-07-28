@@ -29,7 +29,7 @@ remote `main`.
 | Daily Shared Labyrinth | Daily contract/storage tests and `tests/e2e/daily.spec.js` | Desktop, mobile, UTC rollover, expired link, Quest isolation | Pass - integrated closure candidate |
 | Account deletion | Signed Clerk webhook, deletion-store, and migration tests | Retry-safe transactional cascade | Pass - integrated closure candidate |
 | Billing disable and rollback | Access-config tests and `docs/lifetime-membership-operations.md` | Desktop/mobile starts, entitlement preserved, webhook retained | Pass - integrated closure candidate |
-| Explorer Access Settings profile sync | Settings adapter/controller/route/store and export/deletion tests | Guest local-only, signed-in optimistic sync, conflict, device change | Pass - export schema `echo-maze-export/2` approved |
+| Explorer Access Settings profile sync | Settings adapter/controller/route/store and export/deletion tests | Guest local-only, signed-in optimistic sync, conflict, device change | Pass - export schema `echo-maze-export/3` approved |
 | Audit ownership and immutable checkpoints | Migration, append-function, checkpoint adapter, chain verifier, and operations-contract tests | Non-owner runtime, create-only checkpoints, retained-anchor verification | Pass - adapter configured for `<immutable sink/bucket>`; live sink provisioning remains external |
 | Classroom authority and Class Play isolation | Authority, tenant-context, RLS, route/store/controller tests plus `tests/e2e/classroom.spec.js` | Signed-out, empty, Student, Teacher, loading, stale, error; desktop/mobile/200%/keyboard/reduced motion | Pass - live PostgreSQL cross-Class denial and count-only Teacher read |
 

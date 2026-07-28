@@ -83,7 +83,7 @@ function createHarness(options = {}) {
         // Shaped like the real envelope so the route is exercised against what
         // shared/export-schema.json actually describes.
         return {
-          schema: "echo-maze-export/2",
+          schema: "echo-maze-export/3",
           generated_at: "2026-01-01T00:00:00.000Z",
           data: { player_profile: { user_id: userId } }
         };
@@ -383,7 +383,7 @@ describe("admin data export", () => {
     const result = await call(harness, { method: "GET", url: exportUrl });
     expect(result.statusCode).toBe(200);
     expect(result.body).toMatchObject({
-      schema: "echo-maze-export/2",
+      schema: "echo-maze-export/3",
       data: { player_profile: { user_id: "user_target" } }
     });
     expect(result.headers["content-disposition"]).toBe(

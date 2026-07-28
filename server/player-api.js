@@ -46,6 +46,12 @@ import {
 } from "./access-settings-route.js";
 import { createAccessSettingsStore } from "./access-settings-store.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
+import {
+  DAILY_LEADERBOARD_PATH,
+  DAILY_PATHS,
+  createDailyHandler
+} from "./daily-route.js";
+import { createDailyStore } from "./daily-store.js";
 import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
 import { createRequestLogger } from "./request-log.js";
@@ -92,12 +98,17 @@ import { createRunAccessStore } from "./run-access-store.js";
 import { recordProductEvent } from "./product-events.js";
 import { createStripeLifetimeProvider } from "./stripe-lifetime.js";
 import { createUserDeletionStore } from "./user-deletion-store.js";
+import {
+  createDailyContract,
+  utcDateKey
+} from "../src/game/daily-labyrinth.js";
 import { URL } from "node:url";
 
 const PLAYER_PATHS = new Set([
   "/api/profile",
   "/api/leaderboard",
   "/api/scores",
+  ...DAILY_PATHS,
   DATA_EXPORT_PATH,
   ACCESS_SETTINGS_PATH,
   LEARNING_JOURNAL_PATH,
@@ -200,7 +211,31 @@ export function createPlayerApi(env = process.env) {
         response.statusCode = 200;
         response.setHeader("content-type", "application/json; charset=utf-8");
         response.setHeader("cache-control", "no-store");
-        response.end(JSON.stringify({ entries: [], globalMaxScore: 0 }));
+        response.end(
+          JSON.stringify({
+            verification: "casual-v1",
+            entries: [],
+            globalMaxScore: 0
+          })
+        );
+        return;
+      }
+      if (
+        pathname === DAILY_LEADERBOARD_PATH &&
+        request.method === "GET"
+      ) {
+        const daily = createDailyContract(utcDateKey());
+        response.statusCode = 200;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader("cache-control", "no-store");
+        response.end(
+          JSON.stringify({
+            date: daily.date,
+            contractVersion: daily.version,
+            verification: "verified-replay-v1",
+            entries: []
+          })
+        );
         return;
       }
       sendError(
@@ -219,6 +254,7 @@ export function createPlayerApi(env = process.env) {
     queryAdapter
   );
   const store = createPlayerStore(pool);
+  const dailyStore = createDailyStore(pool);
   const accessStore = createRunAccessStore(pool);
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
@@ -273,6 +309,13 @@ export function createPlayerApi(env = process.env) {
     recordAudit,
     rateLimit,
     accessFor
+  });
+  const dailyHandler = createDailyHandler({
+    store: dailyStore,
+    getUserId,
+    getProfile: (userId) => store.getProfile(userId),
+    recordAudit,
+    rateLimit
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
@@ -483,6 +526,12 @@ export function createPlayerApi(env = process.env) {
       store: accessSettingsStore,
       getUserId: () => null
     });
+    const unavailableDailyHandler = createDailyHandler({
+      store: dailyStore,
+      getUserId: () => null,
+      getProfile: (userId) => store.getProfile(userId),
+      rateLimit
+    });
     const unavailableAdminHandler = createAdminHandler({
       store: roleStore,
       requirePermission: createPermissionGuard({
@@ -571,6 +620,10 @@ export function createPlayerApi(env = process.env) {
         void unavailableQuestProgressHandler(request, response, next);
         return;
       }
+      if (DAILY_PATHS.has(pathname)) {
+        void unavailableDailyHandler(request, response, next);
+        return;
+      }
       void unavailableAuthHandler(request, response, next);
     };
   }
@@ -618,6 +671,7 @@ export function createPlayerApi(env = process.env) {
     }
     if (
       pathname === "/api/leaderboard" ||
+      pathname === DAILY_LEADERBOARD_PATH ||
       pathname === "/api/access/config" ||
       pathname === "/api/access/guest-runs"
     ) {
@@ -626,6 +680,10 @@ export function createPlayerApi(env = process.env) {
         pathname === "/api/access/guest-runs"
       ) {
         void accessHandler(request, response, next);
+        return;
+      }
+      if (pathname === DAILY_LEADERBOARD_PATH) {
+        void dailyHandler(request, response, next);
         return;
       }
       void handler(request, response, next);
@@ -669,6 +727,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {
           void questProgressHandler(request, response, next);
+          return;
+        }
+        if (DAILY_PATHS.has(pathname)) {
+          void dailyHandler(request, response, next);
           return;
         }
         void handler(request, response, next);

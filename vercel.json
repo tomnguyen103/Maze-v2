@@ -17,6 +17,14 @@
       "destination": "/api/leaderboard?_healthRoute=ready"
     },
     {
+      "source": "/api/daily/leaderboard",
+      "destination": "/api/leaderboard?_dailyRoute=leaderboard"
+    },
+    {
+      "source": "/api/daily/scores",
+      "destination": "/api/leaderboard?_dailyRoute=scores"
+    },
+    {
       "source": "/api/me/export",
       "destination": "/api/profile?_meRoute=export"
     },

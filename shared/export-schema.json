@@ -1,12 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "echo-maze-export/2",
+  "$id": "echo-maze-export/3",
   "title": "Echo Maze personal data export",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "generated_at", "data"],
   "properties": {
-    "schema": { "const": "echo-maze-export/2" },
+    "schema": { "const": "echo-maze-export/3" },
     "generated_at": { "type": "string" },
     "data": {
       "type": "object",
@@ -22,6 +22,7 @@
         "class_quest_progress",
         "class_journals",
         "access_settings",
+        "verified_daily_results",
         "role"
       ],
       "properties": {
@@ -81,6 +82,11 @@
         "access_settings": {
           "description": "explorer_access_settings row - presentation-only accessibility preferences; null before signed-in synchronization.",
           "type": ["object", "null"]
+        },
+        "verified_daily_results": {
+          "description": "Server-replayed Daily result submissions. Client idempotency tokens are excluded.",
+          "type": "array",
+          "items": { "type": "object" }
         },
         "role": {
           "description": "user_roles row; absence of a row means player.",

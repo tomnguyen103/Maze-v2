@@ -153,7 +153,8 @@ export function createPlayerApiHandler({
         const leaderboard = await store.getLeaderboard();
         sendJson(response, 200, {
           entries: leaderboard.entries.map(publicScoreEntry),
-          globalMaxScore: leaderboard.globalMaxScore
+          globalMaxScore: leaderboard.globalMaxScore,
+          verification: "casual-v1"
         });
         return;
       }
@@ -239,7 +240,8 @@ export function createPlayerApiHandler({
       });
       sendJson(response, result.duplicate ? 200 : 201, {
         entry: publicScoreEntry(result.entry),
-        duplicate: result.duplicate
+        duplicate: result.duplicate,
+        verification: "casual-v1"
       });
     } catch (error) {
       if (

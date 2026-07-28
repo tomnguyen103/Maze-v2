@@ -1,6 +1,6 @@
 import { setTenantContext } from "./tenant-context.js";
 
-export const EXPORT_SCHEMA_ID = "echo-maze-export/2";
+export const EXPORT_SCHEMA_ID = "echo-maze-export/3";
 
 /**
  * Snapshot variant: every section reads from ONE repeatable-read snapshot,
@@ -114,6 +114,11 @@ const SECTION_QUERIES = {
       reader_friendly_questions, reduced_effects, revision, created_at,
       updated_at
     FROM explorer_access_settings WHERE clerk_user_id = $1`,
+  verified_daily_results: `SELECT daily_date, daily_version, score,
+      wardens_defeated, echoes_collected, moves, elapsed_ms, verified_at
+    FROM verified_daily_submissions
+    WHERE player_id = $1
+    ORDER BY daily_date, verified_at`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 
@@ -159,6 +164,7 @@ export async function buildUserExport(
   const personalQuestProgress = await rowsOf("quest_progress");
   const personalJournal = await rowsOf("journal");
   const accessSettings = await rowsOf("access_settings");
+  const verifiedDailyResults = await rowsOf("verified_daily_results");
   const role = await rowsOf("role");
 
   /** @type {Record<string, unknown>[]} */
@@ -204,6 +210,7 @@ export async function buildUserExport(
       class_quest_progress: classQuestProgress,
       class_journals: classJournals,
       access_settings: accessSettings[0] ?? null,
+      verified_daily_results: verifiedDailyResults,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"
     }

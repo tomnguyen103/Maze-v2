@@ -3,6 +3,34 @@ import { describe, expect, it } from "vitest";
 import { PUBLIC_EMAIL_DOMAINS } from "../server/classroom-domain.js";
 
 describe("Run Access migration", () => {
+  it("adds bounded replay-verified Daily submissions and one best entry", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0018_verified_daily_entries.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE verified_daily_submissions");
+    expect(sql).toContain("CREATE TABLE verified_daily_entries");
+    expect(sql).toContain("daily_version = 1");
+    expect(sql).toContain("elapsed_ms BETWEEN 0 AND 14400000");
+    expect(sql).toContain(
+      "PRIMARY KEY (player_id, daily_date, idempotency_key)"
+    );
+    expect(sql).toContain("PRIMARY KEY (player_id, daily_date)");
+    expect(sql).toContain("verified_daily_entries_ranking_idx");
+    expect(sql).toContain("score DESC");
+    expect(sql).toContain("moves ASC");
+    expect(sql).toContain("achieved_at ASC");
+    expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
+    expect(sql).toContain("FORCE ROW LEVEL SECURITY");
+    expect(sql).toContain("TO echo_maze_runtime");
+    expect(sql).not.toContain("email");
+    expect(sql).not.toContain("question");
+    expect(sql).not.toContain("action_log");
+  });
   it("creates an additive allowance and immutable Run-fact ledger", async () => {
     const sql = await readFile(
       new URL("../db/migrations/0002_run_access.sql", import.meta.url),
