@@ -5,6 +5,7 @@ import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const ROLE_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/role$/;
+const EXPORT_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/export$/;
 
 /** @param {string} pathname */
 export function isAdminPath(pathname) {
@@ -28,6 +29,7 @@ export function isAdminPath(pathname) {
  *     { allowed: true, userId: string, role: import("../shared/permissions.js").Role } |
  *     { allowed: false, status: 401 | 403, error: string }
  *   >,
+ *   exportUser?: (userId: string) => Promise<unknown>,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} dependencies
@@ -35,10 +37,14 @@ export function isAdminPath(pathname) {
 export function createAdminHandler({
   store,
   requirePermission,
+  exportUser = async () => {
+    throw new Error("Admin export is not configured.");
+  },
   recordAudit = async () => {},
   mirrorRole = async () => {}
 }) {
   const checkRoleWrite = requirePermission("users:roles:write");
+  const checkExportAny = requirePermission("export:any");
 
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -51,8 +57,22 @@ export function createAdminHandler({
       next?.();
       return;
     }
-    // The permission check runs before shape checks, so an unauthorized caller
-    // cannot map the admin surface by reading 404s and 405s.
+    // Each sub-path carries its own permission — `export:any` and
+    // `users:roles:write` are separate grants — but the check still runs before
+    // any shape check, so an unauthorized caller cannot map the admin surface
+    // by reading 404s and 405s. An unmatched path is checked against the
+    // narrowest permission here, so it answers exactly as a real route would.
+    const exportMatch = EXPORT_PATH.exec(pathname);
+    if (exportMatch) {
+      const decision = await checkExportAny(request);
+      if (!decision.allowed) {
+        sendJson(response, decision.status, { error: decision.error });
+        return;
+      }
+      await handleExport(request, response, decision, exportMatch[1]);
+      return;
+    }
+
     const decision = await checkRoleWrite(request);
     if (!decision.allowed) {
       sendJson(response, decision.status, { error: decision.error });
@@ -133,6 +153,46 @@ export function createAdminHandler({
       sendJson(response, 503, { error: "Role changes are unavailable." });
     }
   };
+
+  /**
+   * GDPR/support export of any Explorer's data. Reuses the self-export builder
+   * unchanged, so the payload an admin sees is byte-identical to the one the
+   * Explorer can download themselves — one schema, one code path.
+   *
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {{ userId: string, role: import("../shared/permissions.js").Role }} decision
+   * @param {string} targetUserId
+   */
+  async function handleExport(request, response, decision, targetUserId) {
+    if (request.method !== "GET") {
+      response.setHeader("allow", "GET");
+      sendJson(response, 405, { error: "Use GET for an Explorer's export." });
+      return;
+    }
+    try {
+      const exported = await exportUser(targetUserId);
+      // Sequenced before the body, like the self-export: reading another
+      // Explorer's data always has its audit attempt behind it.
+      await recordAudit(request, {
+        actorId: decision.userId,
+        actorRole: decision.role,
+        action: "export.admin",
+        resource: { type: "player_account", id: targetUserId }
+      });
+      response.statusCode = 200;
+      response.setHeader("content-type", "application/json; charset=utf-8");
+      response.setHeader("cache-control", "no-store");
+      response.setHeader(
+        "content-disposition",
+        `attachment; filename="echo-maze-export-${targetUserId}.json"`
+      );
+      response.end(JSON.stringify(exported));
+    } catch (error) {
+      console.error("[admin] export failed", { name: safeErrorName(error) });
+      sendJson(response, 503, { error: "Exports are unavailable." });
+    }
+  }
 }
 
 class AdminInputError extends Error {}

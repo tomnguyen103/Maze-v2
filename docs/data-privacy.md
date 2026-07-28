@@ -30,8 +30,13 @@ reach the server, so they cannot appear in a server-side export.
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows.
-- The phase 7 admin variant reuses the same builder under the `export:any`
-  permission, audited as `export.admin`.
+- The admin variant, `GET /api/admin/users/:id/export`, reuses the same builder
+  under the `export:any` permission, audited as `export.admin` with the target
+  Explorer as the resource. Admin-only: a moderator holds `users:read` but not
+  `export:any` and gets 403. Unmetered: the grant is a trusted role and every
+  call leaves an audit row naming actor and target. Worth revisiting when phase
+  7 adds more routes that read another Explorer's rows — today this is the only
+  one, so a stolen admin session is the threat the audit trail is there for.
 
 ## Deletion
 
