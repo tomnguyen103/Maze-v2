@@ -151,7 +151,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] Append path works without the app role owning audit tables (or via SECURITY DEFINER)
   - [x] Checkpoint adapter and opt-in immutable-sink proof land outside the DB; `verify-audit-chain` validates retained anchors
 
-### 12. Phase 8 — Multi-tenancy: classrooms/orgs + Postgres RLS — [DELIVERED] — DONE, PRs #81, #82, and the Phase 8 release PR
+### 12. Phase 8 — Multi-tenancy: classrooms/orgs + Postgres RLS — [DELIVERED] — DONE, PRs #81-#83
 
 - What: Clerk Organizations for a teacher/classroom model; `organizations`/`org_memberships` tables; nullable `org_id` on tenant-scoped tables; Postgres RLS via `SET LOCAL app.org_id` per request; teacher dashboard at `/class`. Plan mandates a three-PR migration-first sequence.
 - Why it matters: Unlocks the education market the hardening plan targets; plan calls it the riskiest phase.

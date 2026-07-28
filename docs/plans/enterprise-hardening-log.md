@@ -804,7 +804,7 @@ Two findings plus one nitpick, all fixed:
 
 ## Phase 8 — Classroom multi-tenancy and PostgreSQL RLS
 
-- **PRs**: #81, #82, and the Phase 8 release PR
+- **PRs**: #81, #82, and #83
 - **Branches**: `feat/settings-audit-rls`, `feat/classroom-authority-play`,
   `feat/classroom-workspace-release`
 - **ADRs**: `docs/adr/0020-signed-in-access-settings-sync.md`,

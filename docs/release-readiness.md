@@ -95,7 +95,7 @@ Stripe test transaction.
 PRs #81 and #82 were merged under the approved dependency-blocking fallback
 after CodeRabbit confirmed its review limit. Their mandatory post-merge reviews
 remain open until the refill trigger posts a completed review and its one-time
-findings read is resolved. The Phase 8 release PR must also complete the normal
+findings read is resolved. PR #83 must also complete the normal
 CodeRabbit protocol, or carry the same explicit post-merge obligation only if
 the confirmed limit blocks the sole remaining deliverable.
 
