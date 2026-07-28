@@ -5,7 +5,6 @@ import {
   auditRowHash,
   canonicalAuditJson,
   createAuditStore,
-  LOCK_TIMEOUT_MS,
   readAuditChain,
   verifyAuditChain
 } from "../server/audit-store.js";
@@ -20,72 +19,30 @@ function createFakePool(options = {}) {
   /** @type {Record<string, unknown>[]} */
   const inserted = [];
   let head = AUDIT_GENESIS_HASH;
-  // Models the one-row FOR UPDATE lock: a transaction that takes the chain head
-  // blocks every other transaction until it commits or rolls back.
-  /** @type {Promise<void>} */
-  let lock = Promise.resolve();
-  const createClient = () => ({
-    /** @type {(() => void) | null} */
-    releaseLock: null,
+  return {
+    calls,
+    inserted,
     /**
      * @param {string} sql
      * @param {unknown[]} [values]
      */
     async query(sql, values = []) {
       calls.push({ sql, values });
-      if (sql.includes("FROM audit_chain_head")) {
-        const waitFor = lock;
-        lock = new Promise((resolve) => {
-          this.releaseLock = resolve;
-        });
-        await waitFor;
-        return { rows: [{ row_hash: head }] };
-      }
-      if (sql === "COMMIT" || sql === "ROLLBACK") {
-        this.releaseLock?.();
-        this.releaseLock = null;
-        return { rows: [] };
-      }
-      if (sql.includes("INSERT INTO audit_events")) {
+      if (sql.includes("append_audit_event")) {
+        const fields = JSON.parse(String(values[0]));
+        const canonicalPayload = canonicalAuditJson(fields);
+        const rowHash = auditRowHash(head, fields);
         const row = {
-          actor_id: values[0],
-          actor_role: values[1],
-          action: values[2],
-          resource_type: values[3],
-          resource_id: values[4],
-          // pg round-trips JSONB parameters back as parsed values.
-          before: values[5] === null ? null : JSON.parse(String(values[5])),
-          after: values[6] === null ? null : JSON.parse(String(values[6])),
-          request_id: values[7],
-          ip_hash: values[8],
-          created_at: values[9],
-          prev_hash: values[10],
-          row_hash: values[11]
+          ...fields,
+          canonical_payload: canonicalPayload,
+          prev_hash: head,
+          row_hash: rowHash
         };
         inserted.push(row);
+        head = rowHash;
         return { rows: [{ id: inserted.length, ...row }] };
       }
-      if (sql.includes("UPDATE audit_chain_head")) {
-        head = String(values[0]);
-        return { rows: [] };
-      }
       return { rows: options.rows?.shift() ?? [] };
-    },
-    release() {}
-  });
-  const readOnlyClient = createClient();
-  return {
-    calls,
-    inserted,
-    async connect() {
-      return createClient();
-    },
-    /**
-     * @param {string} sql
-     * @param {unknown[]} [values]
-     */
-    async query(sql, values) {
-      return readOnlyClient.query(sql, values);
     }
   };
 }
@@ -306,29 +263,16 @@ describe("verifyAuditChain", () => {
 });
 
 describe("createAuditStore", () => {
-  it("locks the chain head before appending", async () => {
+  it("delegates one canonical payload to the privileged append function", async () => {
     const pool = createFakePool();
     await createAuditStore(pool).appendAudit(sampleEvent);
-    const lock = pool.calls.find((call) =>
-      call.sql.includes("FROM audit_chain_head")
-    );
-    expect(lock?.sql).toContain("FOR UPDATE");
-    expect(pool.calls[0].sql).toBe("BEGIN");
-    expect(pool.calls.at(-1)?.sql).toBe("COMMIT");
-  });
-
-  it("bounds the chain-head lock wait before taking it", async () => {
-    const pool = createFakePool();
-    await createAuditStore(pool).appendAudit(sampleEvent);
-    const timeoutIndex = pool.calls.findIndex((call) =>
-      call.sql.includes("SET LOCAL lock_timeout")
-    );
-    const lockIndex = pool.calls.findIndex((call) =>
-      call.sql.includes("FROM audit_chain_head")
-    );
-    expect(timeoutIndex).toBeGreaterThan(-1);
-    expect(timeoutIndex).toBeLessThan(lockIndex);
-    expect(pool.calls[timeoutIndex].sql).toContain(String(LOCK_TIMEOUT_MS));
+    expect(pool.calls).toHaveLength(1);
+    expect(pool.calls[0].sql).toContain("append_audit_event");
+    expect(pool.calls[0].values).toEqual([
+      canonicalAuditJson(auditEventFields(sampleEvent))
+    ]);
+    expect(pool.calls[0].sql).not.toContain("INSERT INTO audit_events");
+    expect(pool.calls[0].sql).not.toContain("UPDATE audit_chain_head");
   });
 
   it("links each row to the previous row_hash", async () => {
@@ -354,35 +298,19 @@ describe("createAuditStore", () => {
     expect(verifyAuditChain(rows)).toEqual({ valid: true, checked: 3 });
   });
 
-  it("rolls back and rethrows when the insert fails", async () => {
+  it("rethrows when the privileged append function fails", async () => {
     const failing = {
-      async connect() {
-        return {
-          /** @param {string} sql */
-          async query(sql) {
-            if (sql.includes("INSERT INTO audit_events")) {
-              throw new Error("insert failed");
-            }
-            if (sql.includes("FROM audit_chain_head")) {
-              return { rows: [{ row_hash: AUDIT_GENESIS_HASH }] };
-            }
-            calls.push(sql);
-            return { rows: [] };
-          },
-          release() {}
-        };
+      async query() {
+        throw new Error("append failed");
       }
     };
-    /** @type {string[]} */
-    const calls = [];
     await expect(
       createAuditStore(
         /** @type {Parameters<typeof createAuditStore>[0]} */ (
           /** @type {unknown} */ (failing)
         )
       ).appendAudit(sampleEvent)
-    ).rejects.toThrow("insert failed");
-    expect(calls).toContain("ROLLBACK");
+    ).rejects.toThrow("append failed");
   });
 
   it("reads the chain in insertion order for verification", async () => {

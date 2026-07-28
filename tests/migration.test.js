@@ -235,3 +235,71 @@ describe("Explorer Access Settings sync migration", () => {
     expect(sql).not.toContain("prompt");
   });
 });
+
+describe("Audit privilege boundary migration", () => {
+  it("moves audit ownership behind one fixed-search-path definer function", async () => {
+    const expand = await readFile(
+      new URL("../db/migrations/0012_audit_privilege_boundary.sql", import.meta.url),
+      "utf8"
+    );
+    const finalize = await readFile(
+      new URL(
+        "../db/migrations/0013_audit_privilege_boundary_finalize.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(expand).toContain("CREATE ROLE echo_maze_audit_owner NOLOGIN");
+    expect(expand).toContain("CREATE ROLE echo_maze_runtime NOLOGIN");
+    expect(expand).toContain("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+    expect(expand).toContain("CREATE FUNCTION canonical_audit_json");
+    expect(expand).toContain("ADD COLUMN canonical_payload TEXT");
+    expect(expand).toContain(
+      "GRANT USAGE, CREATE ON SCHEMA public TO echo_maze_audit_owner"
+    );
+    expect(expand).toContain("CREATE FUNCTION append_audit_event");
+    expect(expand).toContain("SECURITY DEFINER");
+    expect(expand).toContain("SET search_path = pg_catalog, public");
+    expect(expand).toContain("SELECT head.row_hash");
+    expect(expand).toContain("FOR UPDATE");
+    expect(expand).toContain("public.digest");
+    expect(expand).toContain(
+      "normalized_payload := public.canonical_audit_json(payload)"
+    );
+    expect(expand).toContain("audit payload field types are invalid");
+    expect(expand).toContain(
+      "audit payload timestamp is not canonical UTC"
+    );
+    expect(expand).toContain(
+      "REVOKE ALL ON FUNCTION canonical_audit_json(JSONB) FROM PUBLIC"
+    );
+    expect(expand).toContain(
+      "GRANT EXECUTE ON FUNCTION append_audit_event(TEXT) TO PUBLIC"
+    );
+    expect(expand).not.toContain("ALTER TABLE audit_events OWNER");
+    expect(finalize).toContain(
+      "ALTER TABLE audit_events OWNER TO echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "ALTER TABLE audit_chain_head OWNER TO echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "REVOKE CREATE ON SCHEMA public FROM echo_maze_audit_owner"
+    );
+    expect(finalize).toContain(
+      "REVOKE ALL ON TABLE audit_events FROM echo_maze_runtime"
+    );
+    expect(finalize).toContain(
+      "GRANT SELECT ON TABLE audit_events TO echo_maze_runtime"
+    );
+    expect(finalize).toContain(
+      "GRANT EXECUTE ON FUNCTION append_audit_event(TEXT) TO echo_maze_runtime"
+    );
+    expect(finalize).not.toContain(
+      "REVOKE EXECUTE ON FUNCTION append_audit_event(TEXT) FROM PUBLIC"
+    );
+    expect(finalize).not.toContain("GRANT INSERT ON TABLE audit_events");
+    expect(finalize).not.toContain("GRANT UPDATE ON TABLE audit_chain_head");
+  });
+});

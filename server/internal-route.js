@@ -3,6 +3,8 @@ import { timingSafeEqual } from "node:crypto";
 import { URL } from "node:url";
 
 export const INTERNAL_RETRY_PATH = "/api/internal/webhook-retry";
+export const INTERNAL_AUDIT_CHECKPOINT_PATH =
+  "/api/internal/audit-checkpoint";
 
 /** @param {string} pathname */
 export function isInternalPath(pathname) {
@@ -52,6 +54,7 @@ function secretMatches(candidate, expected) {
  *   } | null,
  *   pruneRateLimits?: (() => Promise<number>) | null,
  *   pruneWebhookInbox?: (() => Promise<number>) | null,
+ *   createAuditCheckpoint?: (() => Promise<Record<string, unknown>>) | null,
  *   cronSecret?: string
  * }} dependencies
  */
@@ -59,6 +62,7 @@ export function createInternalHandler({
   inbox,
   pruneRateLimits = null,
   pruneWebhookInbox = null,
+  createAuditCheckpoint = null,
   cronSecret = ""
 }) {
   /**
@@ -87,7 +91,10 @@ export function createInternalHandler({
       sendJson(response, 401, { error: "Unauthorized." });
       return;
     }
-    if (pathname !== INTERNAL_RETRY_PATH) {
+    if (
+      pathname !== INTERNAL_RETRY_PATH &&
+      pathname !== INTERNAL_AUDIT_CHECKPOINT_PATH
+    ) {
       sendJson(response, 404, { error: "Unknown internal route." });
       return;
     }
@@ -96,11 +103,31 @@ export function createInternalHandler({
     if (request.method !== "GET" && request.method !== "POST") {
       response.setHeader("allow", "GET, POST");
       sendJson(response, 405, {
-        error: "Use GET or POST for the webhook retry."
+        error: "Use GET or POST for internal maintenance."
       });
       return;
     }
+    if (pathname === INTERNAL_AUDIT_CHECKPOINT_PATH) {
+      if (!createAuditCheckpoint) {
+        sendJson(response, 503, {
+          error: "Audit checkpointing is not configured."
+        });
+        return;
+      }
+      const checkpoint = await runCheckpoint(createAuditCheckpoint);
+      if (checkpoint.failed) {
+        sendJson(response, 503, {
+          error: "Audit checkpointing is unavailable."
+        });
+        return;
+      }
+      sendJson(response, 200, { checkpoint: checkpoint.value });
+      return;
+    }
+
+    const checkpointing = runCheckpoint(createAuditCheckpoint);
     if (!inbox) {
+      await checkpointing;
       sendJson(response, 503, { error: "Webhook inbox is not configured." });
       return;
     }
@@ -122,12 +149,47 @@ export function createInternalHandler({
       });
     }
     const [rateLimits, webhookInbox] = await pruning;
+    const checkpoint = await checkpointing;
+    if (checkpoint.failed) {
+      sendJson(response, 503, {
+        error: "Daily audit checkpointing is unavailable."
+      });
+      return;
+    }
     if (retry === null) {
       sendJson(response, 503, { error: "Webhook retry is unavailable." });
       return;
     }
-    sendJson(response, 200, { ...retry, pruned: { rateLimits, webhookInbox } });
+    const body = { ...retry, pruned: { rateLimits, webhookInbox } };
+    sendJson(
+      response,
+      200,
+      checkpoint.configured
+        ? { ...body, checkpoint: checkpoint.value }
+        : body
+    );
   };
+}
+
+/**
+ * @param {(() => Promise<Record<string, unknown>>) | null} checkpoint
+ */
+async function runCheckpoint(checkpoint) {
+  if (!checkpoint) {
+    return { configured: false, failed: false, value: null };
+  }
+  try {
+    return {
+      configured: true,
+      failed: false,
+      value: await checkpoint()
+    };
+  } catch (error) {
+    console.error("[internal] audit checkpoint failed", {
+      name: safeErrorName(error)
+    });
+    return { configured: true, failed: true, value: null };
+  }
 }
 
 /**

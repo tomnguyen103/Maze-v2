@@ -79,7 +79,55 @@ describe.runIf(runIntegration)("Audit store on PostgreSQL", () => {
     });
   });
 
-  it("refuses UPDATE and DELETE on the append-only table", async () => {
+  it("canonicalizes caller formatting inside the trusted append boundary", async () => {
+    if (!pool) throw new Error("Database pool was not initialized.");
+    const inserted = await pool.query(
+      `SELECT id FROM append_audit_event(
+        '{ "action": "profile.update",
+           "actor_id": "audit_noncanonical",
+           "actor_role": "player",
+           "after": null,
+           "before": null,
+           "created_at": "2026-07-28T12:00:00.000Z",
+           "ip_hash": null,
+           "request_id": "req_noncanonical",
+           "resource_id": "audit_noncanonical",
+           "resource_type": "player_profile" }'
+      )`
+    );
+    const rows = await createAuditStore(pool).readChain({
+      afterId: Number(inserted.rows[0].id) - 1,
+      limit: 1
+    });
+    expect(rows[0].canonical_payload).toBe(
+      '{"action":"profile.update","actor_id":"audit_noncanonical","actor_role":"player","after":null,"before":null,"created_at":"2026-07-28T12:00:00.000Z","ip_hash":null,"request_id":"req_noncanonical","resource_id":"audit_noncanonical","resource_type":"player_profile"}'
+    );
+    expect(
+      verifyAuditChain(rows, {
+        expectedPrevHash: String(rows[0].prev_hash)
+      })
+    ).toEqual({ valid: true, checked: 1 });
+  });
+
+  it("rejects field coercion and non-UTC timestamp normalization", async () => {
+    if (!pool) throw new Error("Database pool was not initialized.");
+    await expect(
+      pool.query(
+        `SELECT id FROM append_audit_event(
+          '{"action":7,"actor_id":"audit_bad_type","actor_role":"player","after":null,"before":null,"created_at":"2026-07-28T12:00:00.000Z","ip_hash":null,"request_id":null,"resource_id":null,"resource_type":"player_profile"}'
+        )`
+      )
+    ).rejects.toThrow(/field types/);
+    await expect(
+      pool.query(
+        `SELECT id FROM append_audit_event(
+          '{"action":"profile.update","actor_id":"audit_bad_time","actor_role":"player","after":null,"before":null,"created_at":"2026-07-28T07:00:00.000-05:00","ip_hash":null,"request_id":null,"resource_id":null,"resource_type":"player_profile"}'
+        )`
+      )
+    ).rejects.toThrow(/canonical UTC/);
+  });
+
+  it("gives the runtime login no direct audit-table mutation privilege", async () => {
     if (!pool) throw new Error("Database pool was not initialized.");
     const store = createAuditStore(pool);
     const row = await store.appendAudit(event("immutable"));
@@ -88,12 +136,12 @@ describe.runIf(runIntegration)("Audit store on PostgreSQL", () => {
         "role.grant",
         row.id
       ])
-    ).rejects.toThrow(/append-only/);
+    ).rejects.toThrow(/permission denied/);
     await expect(
       pool.query("DELETE FROM audit_events WHERE id = $1", [row.id])
-    ).rejects.toThrow(/append-only/);
+    ).rejects.toThrow(/permission denied/);
     await expect(pool.query("TRUNCATE audit_events")).rejects.toThrow(
-      /append-only/
+      /permission denied/
     );
   });
 });

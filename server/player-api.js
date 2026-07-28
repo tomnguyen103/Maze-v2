@@ -23,6 +23,8 @@ import {
   createRequestAuditor,
   SYSTEM_ACTORS
 } from "./audit.js";
+import { createAuditCheckpointService } from "./audit-checkpoint.js";
+import { loadAuditCheckpointConfig } from "./audit-checkpoint-config.js";
 import { exportUserSnapshot } from "./data-export.js";
 import {
   createDataExportHandler,
@@ -201,6 +203,10 @@ export function createPlayerApi(env = process.env) {
   const pool = getDatabasePool(connectionString);
   const rateLimit = createRequestRateLimiter(env);
   const queryAdapter = createQueryAdapter(pool);
+  const createAuditCheckpoint = checkpointRunner(
+    loadAuditCheckpointConfig(env),
+    queryAdapter
+  );
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
   const guestDemoStore = createGuestDemoStore(pool);
@@ -354,6 +360,7 @@ export function createPlayerApi(env = process.env) {
     inbox,
     pruneRateLimits: () => rateLimitStore.prune(),
     pruneWebhookInbox: () => inboxStore.prune(),
+    createAuditCheckpoint,
     cronSecret: env.CRON_SECRET ?? ""
   });
   const lifetimeHandler = createLifetimeHandler({
@@ -596,6 +603,38 @@ export function createPlayerApi(env = process.env) {
         void handler(request, response, next);
       }
     );
+  };
+}
+
+/**
+ * Keeps the AWS SDK out of ordinary player requests. It loads only when the
+ * configured daily maintenance path actually needs the immutable sink.
+ *
+ * @param {ReturnType<typeof loadAuditCheckpointConfig>} config
+ * @param {{
+ *   query: (
+ *     sql: string,
+ *     values?: unknown[]
+ *   ) => Promise<{ rows: Record<string, unknown>[] }>
+ * }} database
+ */
+function checkpointRunner(config, database) {
+  if (!config) {
+    return null;
+  }
+  /** @type {Promise<ReturnType<typeof createAuditCheckpointService>> | null} */
+  let service = null;
+  return async () => {
+    service ??= import("./audit-checkpoint-s3.js").then(
+      ({ createConfiguredAuditCheckpointSink }) =>
+        createAuditCheckpointService({
+          query: database.query,
+          sink: createConfiguredAuditCheckpointSink(config),
+          signingKey: config.signingKey,
+          retentionDays: config.retentionDays
+        })
+    );
+    return (await service).create();
   };
 }
 

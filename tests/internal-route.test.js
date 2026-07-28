@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInternalHandler, isInternalPath } from "../server/internal-route.js";
+import {
+  createInternalHandler,
+  INTERNAL_AUDIT_CHECKPOINT_PATH,
+  isInternalPath
+} from "../server/internal-route.js";
 
 /**
  * @param {{ method?: string, url: string, secret?: string }} options
@@ -49,6 +53,85 @@ describe("isInternalPath", () => {
 });
 
 describe("internal webhook retry endpoint", () => {
+  it("writes an immutable audit checkpoint through the machine-only route", async () => {
+    const createAuditCheckpoint = vi.fn(async () => ({
+      key: "audit-checkpoints/v1/0001-a.json",
+      maxId: 1,
+      rowHash: "a".repeat(64),
+      duplicate: false
+    }));
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      createAuditCheckpoint,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+
+    await handler(
+      createRequest({
+        method: "POST",
+        url: INTERNAL_AUDIT_CHECKPOINT_PATH,
+        secret: SECRET
+      }),
+      response,
+      undefined
+    );
+
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body).toMatchObject({
+      checkpoint: {
+        key: "audit-checkpoints/v1/0001-a.json",
+        maxId: 1,
+        duplicate: false
+      }
+    });
+  });
+
+  it("adds checkpointing to the existing daily maintenance run", async () => {
+    const createAuditCheckpoint = vi.fn(async () => ({
+      key: "audit-checkpoints/v1/0002-b.json",
+      maxId: 2,
+      rowHash: "b".repeat(64),
+      duplicate: false
+    }));
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      createAuditCheckpoint,
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+
+    await handler(
+      createRequest({ method: "GET", url: RETRY, secret: SECRET }),
+      response,
+      undefined
+    );
+
+    expect(createAuditCheckpoint).toHaveBeenCalledOnce();
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body.checkpoint).toMatchObject({ maxId: 2 });
+  });
+
+  it("fails the maintenance request closed when configured checkpointing fails", async () => {
+    const handler = createInternalHandler({
+      inbox: workingInbox,
+      createAuditCheckpoint: async () => {
+        throw new Error("s3 secret credential");
+      },
+      cronSecret: SECRET
+    });
+    const { response, captured } = createResponse();
+
+    await handler(
+      createRequest({ method: "GET", url: RETRY, secret: SECRET }),
+      response,
+      undefined
+    );
+
+    expect(captured.statusCode).toBe(503);
+    expect(JSON.stringify(captured.body)).not.toContain("credential");
+  });
+
   it("runs the retry loop and reports the outcome", async () => {
     const handler = createInternalHandler({
       inbox: workingInbox,
