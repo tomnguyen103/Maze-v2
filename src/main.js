@@ -27,6 +27,10 @@ import {
   normalizeSeed
 } from "./game/game-session.js";
 import {
+  appendRunAction,
+  createRunActionLog
+} from "./game/run-action-log.js";
+import {
   createRunAccessId,
   isAdmittedRunResume,
   runLocatorMatches,
@@ -232,6 +236,7 @@ let run = createRun(
   normalizedLocationSeed ?? activeRunLocator?.seed ?? createSeed(),
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
+let runActionLog = createRunActionLog();
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
@@ -1035,6 +1040,7 @@ function startRun(locator, daily = null) {
     locator.seed,
     getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
   );
+  runActionLog = createRunActionLog();
   if (!daily) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
@@ -2004,6 +2010,7 @@ function transition(action) {
   const previous = run;
   const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
+  runActionLog = appendRunAction(runActionLog, previous, action, run);
   const eventType = run.event.type;
   const wardenMode = summarizeWardenMode(run);
   const eventChanged =
