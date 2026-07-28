@@ -21,6 +21,7 @@ function poolWith(responses) {
   };
   return {
     queries,
+    query: client.query,
     async connect() {
       return client;
     }
@@ -36,6 +37,21 @@ const run = {
 };
 
 describe("guest demo store", () => {
+  it("finds only an exact admitted marker for a throttled retry", async () => {
+    const pool = poolWith([{ rows: [{ count: 1 }] }]);
+    const store = createGuestDemoStore(pool, {
+      today: () => "2026-07-27"
+    });
+    await expect(store.admittedGuestRun(addressHash, run)).resolves.toEqual({
+      allowed: true,
+      duplicate: true,
+      freeRunsRemaining: 0,
+      state: "guest-demo"
+    });
+    expect(pool.queries[0].sql).not.toContain("FOR UPDATE");
+    expect(JSON.stringify(pool.queries)).not.toContain(run.runId);
+  });
+
   it("admits the first unique Run and stores only opaque hashes", async () => {
     const pool = poolWith([
       {},
@@ -71,12 +87,16 @@ describe("guest demo store", () => {
     const stored = JSON.stringify(pool.queries);
     expect(stored).not.toContain("127.0.0.1");
     expect(stored).not.toContain("access_01J1MOSSWATCH");
-    expect(stored).not.toContain("seed-guest-demo");
-    expect(stored).not.toContain("easy-1");
+    expect(stored).not.toContain(run.seed);
+    expect(stored).not.toContain(run.levelId);
     expect(stored).toContain(addressHash);
     expect(pool.queries[1].sql).toContain("ON CONFLICT (key) DO NOTHING");
     expect(pool.queries[2].sql).toContain("FOR UPDATE");
     expect(pool.queries[3].sql).toContain("window_start < $2");
+    expect(pool.queries[6].sql).toContain("ON CONFLICT (key) DO UPDATE");
+    expect(pool.queries[6].sql).toContain(
+      "rate_limit_counters.window_start < EXCLUDED.window_start"
+    );
   });
 
   it("blocks a second unique Run in the same daily address bucket", async () => {

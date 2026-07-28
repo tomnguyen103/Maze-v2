@@ -117,6 +117,17 @@ describe("renderAdmin", () => {
 
   it("renders only the tools a moderator may use", async () => {
     const client = staffClient();
+    client.listAdminUsers.mockResolvedValue({
+      users: [
+        {
+          userId: "user_1",
+          username: "Nova",
+          role: "player",
+          membershipState: "none"
+        }
+      ],
+      hasMore: true
+    });
     await renderAdmin(root, {
       clerk: stubClerk("moderator"),
       loadProfile: async () => ({
@@ -138,6 +149,9 @@ describe("renderAdmin", () => {
     expect(root.textContent).not.toContain("Operations pulse");
     expect(root.textContent).not.toContain("Membership support");
     expect(root.textContent).not.toContain("Dead deliveries");
+    expect(root.textContent).toContain(
+      "Additional accounts are not shown in this directory."
+    );
     expect(client.listAdminUsers).toHaveBeenCalledTimes(1);
     expect(client.listAdminQuestions).toHaveBeenCalledTimes(1);
     expect(client.listAdminAudit).toHaveBeenCalledTimes(1);
@@ -218,7 +232,12 @@ describe("renderAdmin", () => {
       .mockImplementation(() => {});
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+      .mockImplementation(
+        /** @this {HTMLAnchorElement} */
+        function clickExport() {
+          expect(this.isConnected).toBe(true);
+        }
+      );
     await renderAdmin(root, {
       clerk: stubClerk("admin"),
       loadProfile: async () => ({
@@ -236,7 +255,10 @@ describe("renderAdmin", () => {
       expect(client.exportAdminUser).toHaveBeenCalledWith("user_1");
       expect(createObjectUrl).toHaveBeenCalledTimes(1);
     });
-    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:admin-export");
+    await vi.waitFor(() => {
+      expect(revokeObjectUrl).toHaveBeenCalledWith("blob:admin-export");
+    });
+    expect(document.querySelector("a[download]")).toBeNull();
     click.mockRestore();
     createObjectUrl.mockRestore();
     revokeObjectUrl.mockRestore();
@@ -273,6 +295,42 @@ describe("renderAdmin", () => {
     expect(root.textContent).toContain("Delete failed.");
     Reflect.deleteProperty(window, "confirm");
   });
+
+  it("does not turn a failed membership lookup into a false no-record result", async () => {
+    const client = staffClient();
+    client.getAdminMembership.mockRejectedValue(
+      new Error("Membership lookup unavailable.")
+    );
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: {
+          role: "admin",
+          permissions: ["audit:read", "refunds:issue"]
+        }
+      }),
+      client
+    });
+    const form = root.querySelector("[data-form='membership']");
+    const input = root.querySelector("[name='membership-user']");
+    expect(form).toBeInstanceOf(HTMLFormElement);
+    expect(input).toBeInstanceOf(HTMLInputElement);
+    if (
+      !(form instanceof HTMLFormElement) ||
+      !(input instanceof HTMLInputElement)
+    ) {
+      throw new Error("Expected membership lookup form.");
+    }
+    input.value = "user_1";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(client.getAdminMembership).toHaveBeenCalledWith("user_1");
+      expect(root.textContent).toContain("Membership lookup unavailable.");
+    });
+    expect(root.textContent).not.toContain(
+      "No membership record exists for that Explorer."
+    );
+  });
 });
 
 function staffClient() {
@@ -285,7 +343,8 @@ function staffClient() {
           role: "player",
           membershipState: "none"
         }
-      ]
+      ],
+      hasMore: false
     })),
     exportAdminUser: vi.fn(async () => ({ version: 1, data: {} })),
     listAdminQuestions: vi.fn(async () => ({

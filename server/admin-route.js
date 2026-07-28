@@ -39,7 +39,10 @@ export function isAdminPath(pathname) {
  *       previousRole: import("../shared/permissions.js").Role,
  *       role: string
  *     }>
- *     listUsers?: () => Promise<Record<string, unknown>[]>,
+ *     listUsers?: () => Promise<{
+ *       users: Record<string, unknown>[],
+ *       hasMore: boolean
+ *     }>,
  *     membershipFor?: (userId: string) => Promise<Record<string, unknown> | null>,
  *     listAuditEvents?: (options: {
  *       beforeId: number | null,
@@ -157,7 +160,7 @@ export function createAdminHandler({
     }
   ].map((route) => ({
     ...route,
-    checks: Object.fromEntries(
+    checks: new Map(
       Object.entries(route.permissions).map(([method, permission]) => [
         method,
         requirePermission(permission)
@@ -189,7 +192,7 @@ export function createAdminHandler({
       }
     }
     const decision = await (
-      route?.checks[request.method ?? ""] ?? checkUnknownRoute
+      route?.checks.get(request.method ?? "") ?? checkUnknownRoute
     )(request);
     if (!decision.allowed) {
       sendJson(response, decision.status, { error: decision.error });
@@ -329,9 +332,9 @@ export function createAdminHandler({
       return;
     }
     try {
-      const users = await configured(store.listUsers, "Explorer listing")();
+      const directory = await configured(store.listUsers, "Explorer listing")();
       await auditRead(request, decision, "users.read", "player_accounts");
-      sendJson(response, 200, { users });
+      sendJson(response, 200, directory);
     } catch (error) {
       unavailable(response, "Explorer listing", error);
     }
@@ -706,6 +709,8 @@ function questionDraft(body, id) {
     typeof body.levelId !== "string" ||
     typeof body.difficultyBand !== "string" ||
     !Number.isSafeInteger(body.questionOrdinal) ||
+    Number(body.questionOrdinal) < 0 ||
+    Number(body.questionOrdinal) > 32_767 ||
     !body.content ||
     typeof body.content !== "object" ||
     Array.isArray(body.content)

@@ -92,13 +92,15 @@ Classify the case before taking action:
 ## Refund and dispute handling
 
 The staff workbench may initiate a full refund for the latest paid Lifetime
-Membership purchase. That request is audited before Stripe is contacted and
-uses a stable purchase-scoped idempotency key. Initiating the refund does not
-edit `player_access` and never removes completed Quest Progress, Run Records,
-Score Entries, Journal history, or an already-issued Run Grant. Entitlement
-changes only after the existing signed Stripe webhook path confirms the
-provider state; a refund then blocks the next new Run while an active Run may
-finish.
+Membership purchase. Stripe receives a stable purchase-scoped idempotency key,
+so retries converge on one provider refund. After Stripe accepts the request,
+the successful result is appended to the audit trail; a provider failure is
+reported as an operation failure and does not claim a completed refund audit.
+Initiating the refund does not edit `player_access` and never removes completed
+Quest Progress, Run Records, Score Entries, Journal history, or an
+already-issued Run Grant. Entitlement changes only after the existing signed
+Stripe webhook path confirms the provider state; a refund then blocks the next
+new Run while an active Run may finish.
 
 1. Confirm the provider event is signed and belongs to the fixed one-time test
    Price. Never infer a refund or dispute from browser state or a screenshot.

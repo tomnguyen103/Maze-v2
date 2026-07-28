@@ -20,7 +20,8 @@ holds everything else, organised by how authoritative it is.
 Architecture Decision Records 0001–0019, append-only. Read the relevant ADR
 before changing game rules or server contracts; supersede with a new ADR
 rather than editing an accepted one. 0001–0012 cover game and product
-decisions; 0013–0018 record enterprise-hardening phases 1–6.
+decisions; 0013–0019 record enterprise hardening and the guest-admission
+boundary.
 
 ## Plans and evidence — `plans/`
 

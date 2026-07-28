@@ -24,12 +24,14 @@ a daily rotating, salted address hash, with the raw address never stored.
 address hash. It uses the existing `rate_limit_counters` table rather than a new
 identity table:
 
+- a generous address-based request budget runs before the admission
+  transaction, protecting the public endpoint from connection and lock bursts;
 - one locked counter row records whether that daily hash spent its guest Run;
 - one opaque marker records the admitted decision for a hashed
-  `(daily address hash, Run id)` pair;
-- the raw address and raw Run id never reach Postgres;
-- retrying the same Run id returns the first decision, so a lost response does
-  not consume a second Run or block the admitted Run on reload.
+  `(daily address hash, Run id, seed, Quest Level, Labyrinth Number)` tuple;
+- the raw address and raw Run facts never reach Postgres;
+- retrying the same Run locator returns the first decision, so a lost response
+  does not consume a second Run or block the admitted Run on reload.
 
 Blocked Run ids create no marker or audit row: after the daily allowance is
 spent, the locked bucket already determines every later denial. This prevents

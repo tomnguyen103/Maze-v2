@@ -119,7 +119,7 @@ CREATE TABLE user_roles (
 
 **Implementation**:
 - `server/rate-limit.js` — Postgres-backed fixed-window-with-burst counter (serverless-safe): `rate_limit_counters(key TEXT PRIMARY KEY, window_start TIMESTAMPTZ, count INT)` with `INSERT ... ON CONFLICT` atomic upsert. Key = `route:userId` (signed-in) or `route:ipHash` (guest). Returns `429` with `Retry-After`.
-- Budgets (config in `server/rate-limit-config.js`): question fetch 30/min, score submit 10/min, checkout create 5/min, profile write 10/min, export 2/hour. Generous — protective, not punitive.
+- Budgets (config in `server/rate-limit-config.js`): guest Run start 20/min, question fetch 30/min, score submit 10/min, checkout create 5/min, profile write 10/min, export 2/hour. Generous — protective, not punitive.
 - Headers: extend `vercel.json` + Express: `Content-Security-Policy` (script-src 'self' + Clerk + Stripe domains only), `X-Content-Type-Options`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` minimal, `Strict-Transport-Security`. Verify Clerk/Stripe still load under CSP via Playwright e2e.
 - Rate-limit hits recorded as `product-events` (not audit — high volume).
 

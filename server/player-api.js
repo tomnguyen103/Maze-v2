@@ -371,6 +371,7 @@ export function createPlayerApi(env = process.env) {
       env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true" &&
       lifetimeConfig !== null,
     guestDemoEnforcementEnabled: Boolean(addressSalt),
+    rateLimit,
     recordEvent: recordProductEvent,
     recordAudit
   });
@@ -387,7 +388,8 @@ export function createPlayerApi(env = process.env) {
       addressHashFor,
       getUserId: () => null,
       enforcementEnabled: false,
-      guestDemoEnforcementEnabled: Boolean(addressSalt)
+      guestDemoEnforcementEnabled: Boolean(addressSalt),
+      rateLimit
     });
     const unavailableLifetimeHandler = createLifetimeHandler({
       getUserId: () => null,

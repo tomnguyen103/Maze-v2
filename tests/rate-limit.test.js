@@ -48,6 +48,10 @@ function createFakeStore(options = {}) {
 
 describe("RATE_LIMIT_BUDGETS", () => {
   it("matches the budgets the plan specifies", () => {
+    expect(RATE_LIMIT_BUDGETS["guest-run.start"]).toEqual({
+      limit: 20,
+      windowMs: 60_000
+    });
     expect(RATE_LIMIT_BUDGETS["question.fetch"]).toEqual({
       limit: 30,
       windowMs: 60_000

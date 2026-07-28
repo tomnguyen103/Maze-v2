@@ -1,4 +1,5 @@
 import { URL } from "node:url";
+import { sendRateLimited } from "./rate-limit-request.js";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
@@ -112,6 +113,20 @@ async function readRunRequest(request) {
  *       freeRunsRemaining: number,
  *       state: string
  *     }>
+ *     admittedGuestRun?: (
+ *       addressHash: string,
+ *       run: {
+ *         runId: string,
+ *         seed: string,
+ *         levelId: string,
+ *         labyrinthNumber: number
+ *       }
+ *     ) => Promise<{
+ *       allowed: boolean,
+ *       duplicate: boolean,
+ *       freeRunsRemaining: number,
+ *       state: string
+ *     } | null>
  *   },
  *   addressHashFor?: (
  *     request: import("node:http").IncomingMessage
@@ -121,6 +136,7 @@ async function readRunRequest(request) {
  *   ) => string | null | Promise<string | null>,
  *   enforcementEnabled?: boolean,
  *   guestDemoEnforcementEnabled?: boolean,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit,
  *   recordEvent?: (
  *     eventName: string,
  *     fields: Record<string, unknown>
@@ -135,6 +151,13 @@ export function createRunAccessHandler({
   getUserId,
   enforcementEnabled = false,
   guestDemoEnforcementEnabled = false,
+  rateLimit = async () => ({
+    allowed: true,
+    degraded: true,
+    limit: 0,
+    remaining: 0,
+    retryAfterSeconds: 0
+  }),
   recordEvent = () => {},
   recordAudit = async () => {}
 }) {
@@ -175,6 +198,52 @@ export function createRunAccessHandler({
         }
         const runRequest = await readRunRequest(request);
         const addressHash = addressHashFor(request);
+        if (guestDemoEnforcementEnabled) {
+          const limitDecision = await rateLimit(
+            "guest-run.start",
+            request,
+            null
+          );
+          if (!limitDecision.allowed) {
+            if (
+              guestStore &&
+              addressHash &&
+              typeof guestStore.admittedGuestRun === "function"
+            ) {
+              try {
+                const admitted = await guestStore.admittedGuestRun(
+                  addressHash,
+                  runRequest
+                );
+                if (admitted) {
+                  recordEvent("guest_demo_access_decision", {
+                    degraded: false,
+                    duplicate: true,
+                    enforcementEnabled: true,
+                    metered: true,
+                    outcome: "admitted"
+                  });
+                  sendJson(response, 200, {
+                    ...admitted,
+                    degraded: false,
+                    guestDemoEnforcementEnabled: true,
+                    metered: true
+                  });
+                  return;
+                }
+              } catch {
+                // A throttle remains protective if the optional read-only
+                // idempotency lookup is unavailable.
+              }
+            }
+            sendRateLimited(
+              response,
+              limitDecision,
+              "Too many guest Runs were started. Try again shortly."
+            );
+            return;
+          }
+        }
         let metered = false;
         let degraded = false;
         let result;

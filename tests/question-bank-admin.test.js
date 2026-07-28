@@ -18,7 +18,7 @@ const card = {
   learningObjectiveId: "bright-combine-groups"
 };
 
-/** @param {Record<string, unknown>[][]} responses */
+/** @param {(Record<string, unknown>[] | { error: Error })[]} responses */
 function transactionPool(responses) {
   /** @type {{ sql: string, values: unknown[] }[]} */
   const queries = [];
@@ -27,8 +27,12 @@ function transactionPool(responses) {
     /** @param {string} sql @param {unknown[]} [values] */
     async query(sql, values = []) {
       queries.push({ sql, values });
-      const rows = responses[responseIndex] ?? [];
+      const next = responses[responseIndex] ?? [];
       responseIndex += 1;
+      if (!Array.isArray(next) && next.error) {
+        throw next.error;
+      }
+      const rows = Array.isArray(next) ? next : [];
       return { rows };
     },
     release() {}
@@ -38,8 +42,12 @@ function transactionPool(responses) {
     /** @param {string} sql @param {unknown[]} [values] */
     async query(sql, values = []) {
       queries.push({ sql, values });
-      const rows = responses[responseIndex] ?? [];
+      const next = responses[responseIndex] ?? [];
       responseIndex += 1;
+      if (!Array.isArray(next) && next.error) {
+        throw next.error;
+      }
+      const rows = Array.isArray(next) ? next : [];
       return { rows };
     },
     async connect() {
@@ -99,6 +107,47 @@ describe("question bank admin writes", () => {
       }, "admin_1")
     ).rejects.toThrow(/difficulty band/i);
     expect(pool.queries).toEqual([]);
+  });
+
+  it("rejects ordinals outside the Postgres SMALLINT range before querying", async () => {
+    const pool = transactionPool([]);
+    const store = createQuestionBankStore(pool);
+    await expect(
+      store.saveDraft(
+        {
+          id: "math-1",
+          levelId: "bright-start",
+          difficultyBand: "foundation",
+          questionOrdinal: 32_768,
+          content: card
+        },
+        "admin_1"
+      )
+    ).rejects.toThrow(/metadata/i);
+    expect(pool.queries).toEqual([]);
+  });
+
+  it("maps an occupied deck position to an admin input error", async () => {
+    const conflict = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+      constraint:
+        "questions_level_id_difficulty_band_question_ordinal_key"
+    });
+    const pool = transactionPool([[], { error: conflict }, []]);
+    const store = createQuestionBankStore(pool);
+    await expect(
+      store.saveDraft(
+        {
+          id: "math-2",
+          levelId: "bright-start",
+          difficultyBand: "foundation",
+          questionOrdinal: 0,
+          content: { ...card, id: "math-2" }
+        },
+        "admin_1"
+      )
+    ).rejects.toThrow(/already in use/i);
+    expect(pool.queries.at(-1)?.sql).toBe("ROLLBACK");
   });
 
   it("does not let a draft move an existing published question", async () => {

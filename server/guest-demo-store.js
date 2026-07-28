@@ -12,6 +12,10 @@ const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
  * the spent bucket already reproduces their denial; this prevents write spam.
  *
  * @param {{
+ *   query: (
+ *     sql: string,
+ *     values?: unknown[]
+ *   ) => Promise<{ rows: Record<string, unknown>[] }>,
  *   connect: () => Promise<{
  *     query: (
  *       sql: string,
@@ -28,6 +32,26 @@ export function createGuestDemoStore(
 ) {
   return {
     /**
+     * Read-only escape hatch for a throttled retry. It never admits a new Run:
+     * only an exact marker already written for today's full locator is returned.
+     *
+     * @param {string} addressHash
+     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+     */
+    async admittedGuestRun(addressHash, run) {
+      validateIdentity(addressHash, run);
+      const result = await pool.query(
+        `SELECT count
+         FROM rate_limit_counters
+         WHERE key = $1 AND window_start = $2`,
+        [markerKeyFor(addressHash, run), windowStartFor(today())]
+      );
+      return Number(result.rows[0]?.count) === 1
+        ? decision(true, true)
+        : null;
+    },
+
+    /**
      * @param {string} addressHash
      * @param {{
      *   runId: string,
@@ -37,26 +61,10 @@ export function createGuestDemoStore(
      * }} run
      */
     async authorizeGuestRun(addressHash, run) {
-      if (!ADDRESS_HASH_PATTERN.test(addressHash)) {
-        throw new Error("Guest address hash is invalid.");
-      }
-      if (!RUN_ID_PATTERN.test(run.runId)) {
-        throw new Error("Guest Run id is invalid.");
-      }
-      const date = today();
-      const windowStart = `${date}T00:00:00.000Z`;
+      validateIdentity(addressHash, run);
+      const windowStart = windowStartFor(today());
       const bucketKey = `guest-demo:${addressHash}`;
-      const markerKey = `guest-run:${createHash("sha256")
-        .update(
-          JSON.stringify([
-            addressHash,
-            run.runId,
-            run.seed,
-            run.levelId,
-            run.labyrinthNumber
-          ])
-        )
-        .digest("hex")}`;
+      const markerKey = markerKeyFor(addressHash, run);
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -104,9 +112,14 @@ export function createGuestDemoStore(
         }
         if (allowed) {
           await client.query(
-            `INSERT INTO rate_limit_counters (
+           `INSERT INTO rate_limit_counters (
                key, window_start, count, updated_at
-             ) VALUES ($1, $2, 1, now())`,
+              ) VALUES ($1, $2, 1, now())
+              ON CONFLICT (key) DO UPDATE
+                SET window_start = EXCLUDED.window_start,
+                    count = 1,
+                    updated_at = now()
+              WHERE rate_limit_counters.window_start < EXCLUDED.window_start`,
             [markerKey, windowStart]
           );
         }
@@ -124,6 +137,39 @@ export function createGuestDemoStore(
       }
     }
   };
+}
+
+/** @param {string} addressHash @param {{ runId: string }} run */
+function validateIdentity(addressHash, run) {
+  if (!ADDRESS_HASH_PATTERN.test(addressHash)) {
+    throw new Error("Guest address hash is invalid.");
+  }
+  if (!RUN_ID_PATTERN.test(run.runId)) {
+    throw new Error("Guest Run id is invalid.");
+  }
+}
+
+/** @param {string} date */
+function windowStartFor(date) {
+  return `${date}T00:00:00.000Z`;
+}
+
+/**
+ * @param {string} addressHash
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+ */
+function markerKeyFor(addressHash, run) {
+  return `guest-run:${createHash("sha256")
+    .update(
+      JSON.stringify([
+        addressHash,
+        run.runId,
+        run.seed,
+        run.levelId,
+        run.labyrinthNumber
+      ])
+    )
+    .digest("hex")}`;
 }
 
 /** @param {boolean} allowed @param {boolean} duplicate */

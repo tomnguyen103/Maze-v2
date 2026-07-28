@@ -56,7 +56,10 @@ function harness(role = "admin") {
     },
     async listUsers() {
       calls.push("users");
-      return [{ userId: "user_1", username: "Nova", role: "player" }];
+      return {
+        users: [{ userId: "user_1", username: "Nova", role: "player" }],
+        hasMore: false
+      };
     },
     /** @param {string} userId */
     async membershipFor(userId) {
@@ -206,6 +209,18 @@ describe("admin dashboard read routes", () => {
       body: { error: "You do not have access to that." }
     });
   });
+
+  it("does not treat inherited object names as permission checks", async () => {
+    const target = harness("moderator");
+    const result = await call(target, {
+      method: "constructor",
+      url: "/api/admin/questions"
+    });
+    expect(result).toEqual({
+      statusCode: 403,
+      body: { error: "You do not have access to that." }
+    });
+  });
 });
 
 describe("admin question editing", () => {
@@ -243,6 +258,38 @@ describe("admin question editing", () => {
     expect(target.audits).toEqual([
       expect.objectContaining({ action: "question.draft.write" })
     ]);
+  });
+
+  it("lets a moderator save a draft without publish authority", async () => {
+    const target = harness("moderator");
+    const result = await call(target, {
+      method: "PUT",
+      url: "/api/admin/questions/math-1",
+      body: {
+        levelId: "bright-start",
+        difficultyBand: "foundation",
+        questionOrdinal: 0,
+        content
+      }
+    });
+    expect(result.statusCode).toBe(200);
+    expect(target.calls).toContain("draft:math-1:admin_1");
+  });
+
+  it("rejects a negative question ordinal at the route boundary", async () => {
+    const target = harness();
+    const result = await call(target, {
+      method: "PUT",
+      url: "/api/admin/questions/math-1",
+      body: {
+        levelId: "bright-start",
+        difficultyBand: "foundation",
+        questionOrdinal: -1,
+        content
+      }
+    });
+    expect(result.statusCode).toBe(400);
+    expect(target.calls).not.toContain("draft:math-1:admin_1");
   });
 
   it("publishes one version and audits it", async () => {

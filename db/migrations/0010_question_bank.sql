@@ -17,14 +17,15 @@ CREATE TABLE questions (
   id TEXT PRIMARY KEY,
   -- The Quest Level and difficulty band a Warden Question belongs to. The service looks up
   -- exactly this pair, so it is the shape the index serves.
-  level_id TEXT NOT NULL,
+  level_id TEXT NOT NULL
+    CHECK (level_id IN ('bright-start', 'trail-scout', 'maze-master')),
   difficulty_band TEXT NOT NULL
     CHECK (difficulty_band IN (
       'foundation', 'developing', 'capable', 'advanced', 'mastery'
     )),
-  -- Position within the band's deck. The published deck cycles by ordinal the
-  -- way the bundled deck does; a partially published deck is simply a shorter
-  -- deck, so ordinals wrap over what is live rather than over what is authored.
+  -- Exact position within the band's deck. Missing database ordinals fall back
+  -- to the bundled generator, so a partial editorial overlay cannot repeat one
+  -- published card across the rest of the deck.
   question_ordinal SMALLINT NOT NULL CHECK (question_ordinal >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

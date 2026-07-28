@@ -30,15 +30,18 @@ export function createAdminStore(pool) {
          LEFT JOIN user_roles r ON r.user_id = i.user_id
          LEFT JOIN player_access a ON a.clerk_user_id = i.user_id
          ORDER BY COALESCE(p.username, i.user_id), i.user_id
-         LIMIT 500`
+         LIMIT 501`
       );
-      return result.rows.map((row) => ({
-        userId: String(row.user_id),
-        username: nullableText(row.username),
-        role: String(row.role),
-        membershipState: String(row.membership_state),
-        createdAt: nullableIso(row.created_at)
-      }));
+      return {
+        users: result.rows.slice(0, 500).map((row) => ({
+          userId: String(row.user_id),
+          username: nullableText(row.username),
+          role: String(row.role),
+          membershipState: String(row.membership_state),
+          createdAt: nullableIso(row.created_at)
+        })),
+        hasMore: result.rows.length > 500
+      };
     },
 
     /** @param {string} userId */

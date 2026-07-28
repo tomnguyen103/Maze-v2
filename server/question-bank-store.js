@@ -175,7 +175,7 @@ export function createQuestionBankStore(pool) {
         };
       } catch (error) {
         await rollback(client);
-        throw error;
+        throw draftWriteError(error);
       } finally {
         client.release();
       }
@@ -267,7 +267,8 @@ function validateDraft(input) {
     !LEVEL_IDS.has(input.levelId) ||
     typeof input.difficultyBand !== "string" ||
     !Number.isSafeInteger(input.questionOrdinal) ||
-    Number(input.questionOrdinal) < 0
+    Number(input.questionOrdinal) < 0 ||
+    Number(input.questionOrdinal) > 32_767
   ) {
     throw new QuestionBankInputError(
       "Warden Question metadata is not valid."
@@ -292,6 +293,24 @@ function validateDraft(input) {
     );
   }
   return normalized;
+}
+
+/** @param {unknown} error */
+function draftWriteError(error) {
+  const databaseError =
+    error && typeof error === "object"
+      ? /** @type {Record<string, unknown>} */ (error)
+      : {};
+  if (
+    databaseError.code === "23505" &&
+    databaseError.constraint ===
+      "questions_level_id_difficulty_band_question_ordinal_key"
+  ) {
+    return new QuestionBankInputError(
+      "That Quest Level, difficulty band, and question ordinal are already in use."
+    );
+  }
+  return error;
 }
 
 /**

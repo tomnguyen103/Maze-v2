@@ -203,11 +203,11 @@ function renderUsers(panel, value, { mayChangeRoles, mayExport }) {
         option.selected = role === user.role;
         select.append(option);
       }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.saveRole = userId;
-      button.textContent = "Save role";
-      field.append(label, select, button);
+      const saveRoleButton = document.createElement("button");
+      saveRoleButton.type = "button";
+      saveRoleButton.dataset.saveRole = userId;
+      saveRoleButton.textContent = "Save role";
+      field.append(label, select, saveRoleButton);
     }
     if (mayExport) {
       const exportButton = button("Export data");
@@ -222,6 +222,12 @@ function renderUsers(panel, value, { mayChangeRoles, mayExport }) {
     }
   }
   panel.append(table);
+  if (asRecord(value).hasMore === true) {
+    const notice = document.createElement("p");
+    notice.textContent =
+      "Showing the first 500 Explorers. Additional accounts are not shown in this directory.";
+    panel.append(notice);
+  }
 }
 
 /**
@@ -549,9 +555,13 @@ async function handleSubmit(event, root, client) {
   if (form.dataset.form === "membership") {
     event.preventDefault();
     const userId = String(new FormData(form).get("membership-user") ?? "").trim();
-    const result = asRecord(await action(root, submitter(form), () =>
+    const loaded = await action(root, submitter(form), () =>
       client.getAdminMembership(userId)
-    ));
+    );
+    if (loaded === null) {
+      return;
+    }
+    const result = asRecord(loaded);
     renderMembershipResult(root, asRecord(result.membership), userId);
   } else if (form.dataset.form === "question") {
     event.preventDefault();
@@ -644,8 +654,12 @@ function downloadJson(value, filename) {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 0);
 }
 
 /** @param {HTMLElement} root @param {string} message */

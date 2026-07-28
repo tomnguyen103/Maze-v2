@@ -192,6 +192,9 @@ describe("Question bank migration", () => {
 
     expect(sql).toContain("CREATE TABLE questions");
     expect(sql).toContain("CREATE TABLE question_versions");
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
     expect(sql).toContain("UNIQUE (level_id, difficulty_band, question_ordinal)");
     expect(sql).toContain(
       "REFERENCES questions(id) ON DELETE CASCADE"

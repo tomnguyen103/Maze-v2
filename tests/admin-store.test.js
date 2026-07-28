@@ -27,18 +27,36 @@ describe("admin store", () => {
       }
     ]);
     const store = createAdminStore(pool);
-    await expect(store.listUsers()).resolves.toEqual([
-      {
-        userId: "user_1",
-        username: "Nova",
-        role: "moderator",
-        membershipState: "active",
-        createdAt: "2026-01-01T00:00:00.000Z"
-      }
-    ]);
+    await expect(store.listUsers()).resolves.toEqual({
+      users: [
+        {
+          userId: "user_1",
+          username: "Nova",
+          role: "moderator",
+          membershipState: "active",
+          createdAt: "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      hasMore: false
+    });
     expect(pool.queries[0].sql).toContain("UNION");
     expect(pool.queries[0].sql).toContain("user_roles");
     expect(pool.queries[0].sql).toContain("player_access");
+    expect(pool.queries[0].sql).toContain("LIMIT 501");
+  });
+
+  it("surfaces when the Explorer directory is truncated", async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      user_id: `user_${index}`,
+      username: null,
+      role: "player",
+      membership_state: "none",
+      created_at: null
+    }));
+    const store = createAdminStore(poolWith(rows));
+    const result = await store.listUsers();
+    expect(result.users).toHaveLength(500);
+    expect(result.hasMore).toBe(true);
   });
 
   it("returns the latest purchase used for membership support", async () => {

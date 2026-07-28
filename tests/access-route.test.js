@@ -105,6 +105,93 @@ describe("Run Access API", () => {
     });
   });
 
+  it("throttles guest Run bursts before opening a database transaction", async () => {
+    const authorizeGuestRun = vi.fn();
+    const admittedGuestRun = vi.fn(async () => null);
+    const rateLimit = vi.fn(async () => ({
+      allowed: false,
+      degraded: false,
+      limit: 20,
+      remaining: 0,
+      retryAfterSeconds: 30
+    }));
+    const handler = createRunAccessHandler({
+      store: { getAccess: vi.fn(), authorizeRun: vi.fn() },
+      guestStore: { authorizeGuestRun, admittedGuestRun },
+      addressHashFor: () => "a".repeat(64),
+      getUserId: () => null,
+      guestDemoEnforcementEnabled: true,
+      rateLimit
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/access/guest-runs`, {
+        method: "POST",
+        body: JSON.stringify({
+          runId: "access_01J1MOSSWATCH",
+          seed: "MOSS-WATCH-11",
+          levelId: "trail-scout",
+          labyrinthNumber: 4
+        })
+      });
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("30");
+      expect(rateLimit).toHaveBeenCalledWith(
+        "guest-run.start",
+        expect.anything(),
+        null
+      );
+      expect(authorizeGuestRun).not.toHaveBeenCalled();
+      expect(admittedGuestRun).toHaveBeenCalledWith(
+        "a".repeat(64),
+        expect.objectContaining({ runId: "access_01J1MOSSWATCH" })
+      );
+    });
+  });
+
+  it("preserves an admitted Run retry after the request budget is spent", async () => {
+    const authorizeGuestRun = vi.fn();
+    const admittedGuestRun = vi.fn(async () => ({
+      allowed: true,
+      duplicate: true,
+      freeRunsRemaining: 0,
+      state: "guest-demo"
+    }));
+    const handler = createRunAccessHandler({
+      store: { getAccess: vi.fn(), authorizeRun: vi.fn() },
+      guestStore: { authorizeGuestRun, admittedGuestRun },
+      addressHashFor: () => "a".repeat(64),
+      getUserId: () => null,
+      guestDemoEnforcementEnabled: true,
+      rateLimit: async () => ({
+        allowed: false,
+        degraded: false,
+        limit: 20,
+        remaining: 0,
+        retryAfterSeconds: 30
+      })
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/access/guest-runs`, {
+        method: "POST",
+        body: JSON.stringify({
+          runId: "access_01J1MOSSWATCH",
+          seed: "MOSS-WATCH-11",
+          levelId: "trail-scout",
+          labyrinthNumber: 4
+        })
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        allowed: true,
+        duplicate: true,
+        metered: true
+      });
+      expect(authorizeGuestRun).not.toHaveBeenCalled();
+    });
+  });
+
   it("fails open when durable guest enforcement is unavailable", async () => {
     const recordEvent = vi.fn();
     const authorizeGuestRun = vi.fn(async () => {
