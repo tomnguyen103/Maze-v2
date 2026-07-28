@@ -217,7 +217,7 @@ export function createPlayerApi(env = process.env) {
     exportUser: (userId) => exportUserSnapshot(pool, userId),
     // The same rows `npm run webhooks:dead` prints, so the dashboard and the
     // CLI cannot disagree about what is dead.
-    listDeadWebhooks: (options) => inboxStore.listDead(options),
+    listDeadWebhooks: () => inboxStore.listDead(),
     recordAudit,
     mirrorRole: createClerkRoleMirror(env)
   });

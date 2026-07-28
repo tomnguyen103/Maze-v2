@@ -7,8 +7,6 @@ const MAX_BODY_BYTES = 4 * 1024;
 const ROLE_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/role$/;
 const EXPORT_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/export$/;
 const DEAD_WEBHOOKS_PATH = /^\/api\/admin\/webhooks\/dead$/;
-const DEFAULT_DEAD_WEBHOOK_LIMIT = 100;
-const MAX_DEAD_WEBHOOK_LIMIT = 200;
 
 /** @param {string} pathname */
 export function isAdminPath(pathname) {
@@ -16,7 +14,8 @@ export function isAdminPath(pathname) {
 }
 
 /**
- * Admin API. Every route is permission-checked and audited; there is no
+ * Admin API. Every route is permission-checked and every route that changes
+ * something, or discloses an Explorer's own data, is audited; there is no
  * unguarded path in this file.
  *
  * @param {{
@@ -33,9 +32,7 @@ export function isAdminPath(pathname) {
  *     { allowed: false, status: 401 | 403, error: string }
  *   >,
  *   exportUser?: (userId: string) => Promise<unknown>,
- *   listDeadWebhooks?: (options: { limit: number }) => Promise<
- *     Record<string, unknown>[]
- *   >,
+ *   listDeadWebhooks?: () => Promise<Record<string, unknown>[]>,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} dependencies
@@ -79,22 +76,27 @@ export function createAdminHandler({
       next?.();
       return;
     }
-    const route = routes.find((candidate) =>
-      candidate.pattern.test(url.pathname)
-    );
+    /** @type {(typeof routes)[number] | undefined} */
+    let route;
+    /** @type {RegExpExecArray | null} */
+    let match = null;
+    for (const candidate of routes) {
+      match = candidate.pattern.exec(url.pathname);
+      if (match) {
+        route = candidate;
+        break;
+      }
+    }
     const decision = await (route?.check ?? checkUnknownRoute)(request);
     if (!decision.allowed) {
       sendJson(response, decision.status, { error: decision.error });
       return;
     }
-    if (!route) {
+    if (!route || !match) {
       sendJson(response, 404, { error: "Unknown admin route." });
       return;
     }
-    const match = /** @type {RegExpExecArray} */ (
-      route.pattern.exec(url.pathname)
-    );
-    await route.handle(request, response, decision, match[1], url);
+    await route.handle(request, response, decision, match[1]);
   };
 
   /**
@@ -221,20 +223,15 @@ export function createAdminHandler({
    *
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
-   * @param {unknown} _decision
-   * @param {string | undefined} _match
-   * @param {URL} url
    */
-  async function handleDeadWebhooks(request, response, _decision, _match, url) {
+  async function handleDeadWebhooks(request, response) {
     if (request.method !== "GET") {
       response.setHeader("allow", "GET");
       sendJson(response, 405, { error: "Use GET to list dead deliveries." });
       return;
     }
     try {
-      const rows = await listDeadWebhooks({
-        limit: readLimit(url.searchParams.get("limit"))
-      });
+      const rows = await listDeadWebhooks();
       sendJson(response, 200, {
         deliveries: rows.map((row) => ({
           provider: String(row.provider),
@@ -259,20 +256,6 @@ export function createAdminHandler({
       });
     }
   }
-}
-
-/**
- * An out-of-range or unparseable limit is answered with the default rather than
- * a 400: this is a listing, and a bad page size is not worth a failed request.
- *
- * @param {string | null} raw
- */
-function readLimit(raw) {
-  const parsed = Number(raw);
-  if (raw === null || raw === "" || !Number.isInteger(parsed) || parsed < 1) {
-    return DEFAULT_DEAD_WEBHOOK_LIMIT;
-  }
-  return Math.min(parsed, MAX_DEAD_WEBHOOK_LIMIT);
 }
 
 class AdminInputError extends Error {}

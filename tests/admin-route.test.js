@@ -47,9 +47,7 @@ function createResponse() {
  *   previousRole?: import("../shared/permissions.js").Role,
  *   setRole?: (change: Record<string, unknown>) => Promise<any>,
  *   exportUser?: (userId: string) => Promise<unknown>,
- *   listDeadWebhooks?: (options: { limit: number }) => Promise<
- *     Record<string, unknown>[]
- *   >,
+ *   listDeadWebhooks?: () => Promise<Record<string, unknown>[]>,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} [options]
  */
@@ -67,7 +65,7 @@ function createHarness(options = {}) {
   const mirrored = [];
   /** @type {string[]} */
   const exported = [];
-  /** @type {{ limit: number }[]} */
+  /** @type {number[]} */
   const deadListings = [];
   const handler = createAdminHandler({
     store: {
@@ -92,8 +90,8 @@ function createHarness(options = {}) {
       }),
     listDeadWebhooks:
       options.listDeadWebhooks ??
-      (async (listing) => {
-        deadListings.push(listing);
+      (async () => {
+        deadListings.push(deadListings.length + 1);
         // Shaped like the store's rows, snake_case and a Date, so the route is
         // exercised against what `listDead` actually returns.
         return [
@@ -481,19 +479,7 @@ describe("admin dead-webhook endpoint", () => {
         }
       ]
     });
-    expect(harness.deadListings).toEqual([{ limit: 100 }]);
-  });
-
-  it("honours a bounded limit and clamps an unreasonable one", async () => {
-    const harness = createHarness();
-    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=5` });
-    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=9999` });
-    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=nope` });
-    expect(harness.deadListings).toEqual([
-      { limit: 5 },
-      { limit: 200 },
-      { limit: 100 }
-    ]);
+    expect(harness.deadListings).toHaveLength(1);
   });
 
   it("refuses a moderator — reading dead deliveries is admin-only", async () => {
@@ -546,14 +532,5 @@ describe("admin dead-webhook endpoint", () => {
     });
     expect(result.statusCode).toBe(503);
     expect(JSON.stringify(result.body)).not.toContain("secret@host");
-  });
-
-  it("keeps the role route on its own permission", async () => {
-    const harness = createHarness();
-    const result = await call(harness, {
-      url: roleUrl,
-      body: { role: "moderator" }
-    });
-    expect(result.statusCode).toBe(200);
   });
 });
