@@ -182,3 +182,32 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("ALTER TABLE lifetime_purchases");
   });
 });
+
+describe("Question bank migration", () => {
+  it("stores versioned cards with exactly one published version each", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0010_question_bank.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE questions");
+    expect(sql).toContain("CREATE TABLE question_versions");
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
+    expect(sql).toContain("UNIQUE (level_id, difficulty_band, question_ordinal)");
+    expect(sql).toContain(
+      "REFERENCES questions(id) ON DELETE CASCADE"
+    );
+    expect(sql).toContain("CHECK (status IN ('draft', 'published'))");
+    expect(sql).toContain("edited_by TEXT NOT NULL");
+    expect(sql).toContain(
+      "CHECK ((status = 'published') = (published_at IS NOT NULL))"
+    );
+    expect(sql).toContain("CREATE UNIQUE INDEX question_versions_published_idx");
+    expect(sql).toContain("WHERE status = 'published'");
+    // No player identity belongs in content storage.
+    expect(sql).not.toContain("clerk_user_id");
+    expect(sql).not.toContain("player_id");
+  });
+});

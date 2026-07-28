@@ -1,7 +1,6 @@
-import { createQuestionHandler } from "../server/question-route.js";
-import { createQuestionService } from "../server/question-service.js";
+import { createQuestionApi } from "../server/question-api.js";
 
-const handler = createQuestionHandler(createQuestionService());
+const handler = createQuestionApi();
 
 /**
  * @param {import("node:http").IncomingMessage} request

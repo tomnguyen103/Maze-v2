@@ -28,6 +28,35 @@ function stripeSession(overrides = {}) {
 }
 
 describe("Stripe lifetime adapter", () => {
+  it("issues one full refund per purchase with a stable idempotency key", async () => {
+    const createRefund = vi.fn().mockResolvedValue({
+      id: "re_echo",
+      status: "pending"
+    });
+    const provider = createStripeLifetimeProvider({
+      appOrigin: "https://maze.example",
+      priceId: "price_echo_test",
+      stripe: {
+        checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
+        paymentIntents: { retrieve: vi.fn() },
+        refunds: { create: createRefund },
+        webhooks: { constructEvent: vi.fn() }
+      },
+      webhookSecret: "whsec_test"
+    });
+
+    await expect(
+      provider.issueRefund({
+        paymentIntentId: "pi_echo",
+        purchaseId: "purchase_123"
+      })
+    ).resolves.toEqual({ refundId: "re_echo", status: "pending" });
+    expect(createRefund).toHaveBeenCalledWith(
+      { payment_intent: "pi_echo" },
+      { idempotencyKey: "echo-maze-refund:purchase_123" }
+    );
+  });
+
   it("creates only the fixed one-time Checkout contract with an idempotency key", async () => {
     const create = vi.fn().mockResolvedValue(
       stripeSession({

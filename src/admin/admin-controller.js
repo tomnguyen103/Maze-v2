@@ -1,6 +1,9 @@
 import { resolveAdminAccess } from "./admin-access.js";
 import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
+import { can } from "../player/can.js";
+import { renderAdminWorkbench } from "./admin-view.js";
+import "./admin.css";
 
 const DENIAL_COPY = {
   role: {
@@ -17,10 +20,11 @@ const DENIAL_COPY = {
   }
 };
 
+/** @typedef {Pick<ReturnType<typeof createPlayerApiClient>, "listAdminUsers" | "exportAdminUser" | "updateAdminRole" | "listAdminQuestions" | "saveAdminQuestion" | "publishAdminQuestion" | "deleteAdminQuestion" | "getAdminMembership" | "issueAdminRefund" | "listAdminAudit" | "getAdminMetrics" | "listDeadWebhooks">} AdminClient */
+
 /**
- * The `/admin` shell. Phase 7's dashboard hangs off this; today it renders the
- * frame and the guard, and nothing here fetches admin data — a denied Explorer
- * causes no admin request at all.
+ * The `/admin` shell. It renders the guard first, so a denied Explorer causes
+ * no admin request; authorized staff then load only their permitted tools.
  *
  * Staff, not admins alone: the gate is `audit:read`, so a moderator reaches the
  * shell and then sees only what their own permissions allow, the same way
@@ -33,7 +37,8 @@ const DENIAL_COPY = {
  *     initialize: () => Promise<boolean>,
  *     mirroredRole: unknown
  *   },
- *   loadProfile?: () => Promise<unknown>
+ *   loadProfile?: () => Promise<unknown>,
+ *   client?: AdminClient
  * }} [dependencies]
  */
 export async function renderAdmin(root, dependencies = {}) {
@@ -43,17 +48,21 @@ export async function renderAdmin(root, dependencies = {}) {
   // state from anyway. Phase 7 revisits that when it adds one.
   const createClerk = dependencies.createClerk ?? createClerkBrowser;
   const clerk = dependencies.clerk ?? createClerk();
+  const defaultClient = createPlayerApiClient({
+    getToken: async () => {
+      const token = await /** @type {{ getToken?: () => Promise<unknown> }} */ (
+        clerk
+      ).getToken?.();
+      return typeof token === "string" ? token : null;
+    }
+  });
+  const client =
+    dependencies.client ??
+    (dependencies.loadProfile
+      ? unavailableAdminClient()
+      : defaultClient);
   const loadProfile =
-    dependencies.loadProfile ??
-    (() =>
-      createPlayerApiClient({
-        getToken: async () => {
-          const token = await /** @type {{ getToken?: () => Promise<unknown> }} */ (
-            clerk
-          ).getToken?.();
-          return typeof token === "string" ? token : null;
-        }
-      }).getProfile());
+    dependencies.loadProfile ?? (() => defaultClient.getProfile());
 
   renderFrame(root, "Checking access…");
   // Clerk has to load before the mirror exists. A failure to load leaves an
@@ -72,15 +81,55 @@ export async function renderAdmin(root, dependencies = {}) {
     renderFrame(root, copy.body, result.reason, copy.title, true);
     return result;
   }
-  renderFrame(
-    root,
-    "No admin tools are wired up yet.",
-    "allowed",
-    "Admin",
-    false,
-    `Signed in as ${roleOf(result.access)}.`
-  );
+  const data = await loadWorkbenchData(result.access, client);
+  renderAdminWorkbench(root, { access: result.access, client, data });
   return result;
+}
+
+/** @param {unknown} access @param {AdminClient} client */
+async function loadWorkbenchData(access, client) {
+  /** @type {[string, string, () => Promise<unknown>][]} */
+  const tasks = [
+    ["users", "users:read", () => client.listAdminUsers()],
+    ["questions", "questions:read", () => client.listAdminQuestions()],
+    ["audit", "audit:read", () => client.listAdminAudit()],
+    ["metrics", "refunds:issue", () => client.getAdminMetrics()],
+    ["dead", "webhooks:read", () => client.listDeadWebhooks()]
+  ];
+  const values = await Promise.all(
+    tasks.map(async ([key, permission, load]) => {
+      if (!can(access, permission)) {
+        return [key, null];
+      }
+      try {
+        return [key, await load()];
+      } catch {
+        return [key, null];
+      }
+    })
+  );
+  return Object.fromEntries(values);
+}
+
+/** @returns {AdminClient} */
+function unavailableAdminClient() {
+  const unavailable = async () => {
+    throw new Error("Admin data is unavailable.");
+  };
+  return {
+    listAdminUsers: unavailable,
+    exportAdminUser: unavailable,
+    updateAdminRole: unavailable,
+    listAdminQuestions: unavailable,
+    saveAdminQuestion: unavailable,
+    publishAdminQuestion: unavailable,
+    deleteAdminQuestion: unavailable,
+    getAdminMembership: unavailable,
+    issueAdminRefund: unavailable,
+    listAdminAudit: unavailable,
+    getAdminMetrics: unavailable,
+    listDeadWebhooks: unavailable
+  };
 }
 
 /**
@@ -131,10 +180,4 @@ function setText(root, selector, text) {
   if (element) {
     element.textContent = text;
   }
-}
-
-/** @param {unknown} access */
-function roleOf(access) {
-  const role = /** @type {Record<string, unknown>} */ (access ?? {}).role;
-  return typeof role === "string" ? role : "staff";
 }

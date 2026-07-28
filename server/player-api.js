@@ -8,6 +8,7 @@ import {
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
 import { createAdminHandler, isAdminPath } from "./admin-route.js";
+import { createAdminStore } from "./admin-store.js";
 import {
   createInternalHandler,
   isInternalPath
@@ -34,10 +35,12 @@ import { createRequestLogger } from "./request-log.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
 import { createRateLimitStore } from "./rate-limit.js";
 import {
+  createAddressHasher,
   reportAddressSalt,
   resolveAddressSalt,
   trustsProxyHeaders
 } from "./request-identity.js";
+import { createGuestDemoStore } from "./guest-demo-store.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
 import {
   createLifetimeHandler,
@@ -63,6 +66,7 @@ import {
   QUEST_PROGRESS_PATHS
 } from "./quest-progress-route.js";
 import { createQuestProgressStore } from "./quest-progress-store.js";
+import { createQuestionBankStore } from "./question-bank-store.js";
 import {
   ACCESS_PATHS,
   createRunAccessHandler
@@ -146,7 +150,31 @@ export function createPlayerApi(env = process.env) {
         response.statusCode = 200;
         response.setHeader("content-type", "application/json; charset=utf-8");
         response.setHeader("cache-control", "no-store");
-        response.end(JSON.stringify({ enforcementEnabled: false }));
+        response.end(
+          JSON.stringify({
+            enforcementEnabled: false,
+            guestDemoEnforcementEnabled: false
+          })
+        );
+        return;
+      }
+      if (
+        pathname === "/api/access/guest-runs" &&
+        request.method === "POST"
+      ) {
+        response.statusCode = 200;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader("cache-control", "no-store");
+        response.end(
+          JSON.stringify({
+            allowed: true,
+            duplicate: false,
+            freeRunsRemaining: 0,
+            state: "guest-demo",
+            guestDemoEnforcementEnabled: false,
+            metered: false
+          })
+        );
         return;
       }
       if (pathname === "/api/leaderboard" && request.method === "GET") {
@@ -169,15 +197,23 @@ export function createPlayerApi(env = process.env) {
   const queryAdapter = createQueryAdapter(pool);
   const store = createPlayerStore(queryAdapter);
   const accessStore = createRunAccessStore(pool);
+  const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
   const learningJournalStore = createLearningJournalStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
+  const adminStore = createAdminStore(pool);
+  const questionBankStore = createQuestionBankStore(pool);
   reportAddressSalt(env);
+  const addressSalt = resolveAddressSalt(env);
+  const addressHashFor = createAddressHasher({
+    salt: addressSalt,
+    trustProxy: trustsProxyHeaders(env)
+  });
   const auditRecorder = createAuditRecorder({ store: createAuditStore(pool) });
   const recordAudit = createRequestAuditor({
     recorder: auditRecorder,
-    salt: resolveAddressSalt(env),
+    salt: addressSalt,
     trustProxy: trustsProxyHeaders(env)
   });
   const roleStore = createRoleStore(queryAdapter);
@@ -210,17 +246,6 @@ export function createPlayerApi(env = process.env) {
     rateLimit,
     accessFor
   });
-  const adminHandler = createAdminHandler({
-    store: roleStore,
-    requirePermission,
-    // The same builder the self-export serves, so both produce one schema.
-    exportUser: (userId) => exportUserSnapshot(pool, userId),
-    // The same rows `npm run webhooks:dead` prints, so the dashboard and the
-    // CLI cannot disagree about what is dead.
-    listDeadWebhooks: () => inboxStore.listDead(),
-    recordAudit,
-    mirrorRole: createClerkRoleMirror(env)
-  });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
     getUserId,
@@ -234,19 +259,38 @@ export function createPlayerApi(env = process.env) {
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
-  const lifetimeService = lifetimeConfig
-    ? createLifetimeService({
+  const lifetimeProvider = lifetimeConfig
+    ? createStripeLifetimeProvider({
+        appOrigin: lifetimeConfig.appOrigin,
+        priceId: lifetimeConfig.priceId,
+        stripe: new Stripe(lifetimeConfig.secretKey),
+        webhookSecret: lifetimeConfig.webhookSecret
+      })
+    : null;
+  const lifetimeService =
+    lifetimeConfig && lifetimeProvider
+      ? createLifetimeService({
         config: lifetimeConfig,
-        provider: createStripeLifetimeProvider({
-          appOrigin: lifetimeConfig.appOrigin,
-          priceId: lifetimeConfig.priceId,
-          stripe: new Stripe(lifetimeConfig.secretKey),
-          webhookSecret: lifetimeConfig.webhookSecret
-        }),
+        provider: lifetimeProvider,
         recordEvent: recordProductEvent,
         store: lifetimeStore
       })
-    : unavailableLifetimeService();
+      : unavailableLifetimeService();
+  const adminHandler = createAdminHandler({
+    store: { ...adminStore, setRole: roleStore.setRole },
+    questionStore: questionBankStore,
+    requirePermission,
+    // The same builder the self-export serves, so both produce one schema.
+    exportUser: (userId) => exportUserSnapshot(pool, userId),
+    // The same rows `npm run webhooks:dead` prints, so the dashboard and the
+    // CLI cannot disagree about what is dead.
+    listDeadWebhooks: () => inboxStore.listDead(),
+    refundPayment: lifetimeProvider
+      ? (payment) => lifetimeProvider.issueRefund(payment)
+      : undefined,
+    recordAudit,
+    mirrorRole: createClerkRoleMirror(env)
+  });
   const inbox = createWebhookInbox({
     store: inboxStore,
     /**
@@ -320,10 +364,14 @@ export function createPlayerApi(env = process.env) {
   });
   const accessHandler = createRunAccessHandler({
     store: accessStore,
+    guestStore: guestDemoStore,
+    addressHashFor,
     getUserId,
     enforcementEnabled:
       env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true" &&
       lifetimeConfig !== null,
+    guestDemoEnforcementEnabled: Boolean(addressSalt),
+    rateLimit,
     recordEvent: recordProductEvent,
     recordAudit
   });
@@ -336,8 +384,12 @@ export function createPlayerApi(env = process.env) {
     });
     const unavailableAccessHandler = createRunAccessHandler({
       store: accessStore,
+      guestStore: guestDemoStore,
+      addressHashFor,
       getUserId: () => null,
-      enforcementEnabled: false
+      enforcementEnabled: false,
+      guestDemoEnforcementEnabled: Boolean(addressSalt),
+      rateLimit
     });
     const unavailableLifetimeHandler = createLifetimeHandler({
       getUserId: () => null,
@@ -472,9 +524,13 @@ export function createPlayerApi(env = process.env) {
     }
     if (
       pathname === "/api/leaderboard" ||
-      pathname === "/api/access/config"
+      pathname === "/api/access/config" ||
+      pathname === "/api/access/guest-runs"
     ) {
-      if (pathname === "/api/access/config") {
+      if (
+        pathname === "/api/access/config" ||
+        pathname === "/api/access/guest-runs"
+      ) {
         void accessHandler(request, response, next);
         return;
       }

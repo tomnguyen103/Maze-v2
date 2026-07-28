@@ -1,8 +1,8 @@
 # Echo Maze — Enterprise Hardening Plan
 
-Status: phases 1–6 DELIVERED (PRs #57–#60, #62, #63; ADRs 0013–0018; see
-`enterprise-hardening-log.md` for per-phase evidence and deviations). Phases
-7–9 remain PLANNED and not started.
+Status: phases 1–7 DELIVERED (PRs #57–#60, #62, #63, #67–#70; ADRs 0013–0019;
+see `enterprise-hardening-log.md` and the phase 7 delivery note below for
+evidence and deviations). Phases 8–9 remain PLANNED and not started.
 Created: 2026-07-26
 Source: senior-architect review of the codebase (Clerk auth, Postgres + migrations, Stripe lifetime checkout, Clerk/Stripe webhooks, ~50 test files, bundle budget gate, Vercel serverless).
 
@@ -119,7 +119,7 @@ CREATE TABLE user_roles (
 
 **Implementation**:
 - `server/rate-limit.js` — Postgres-backed fixed-window-with-burst counter (serverless-safe): `rate_limit_counters(key TEXT PRIMARY KEY, window_start TIMESTAMPTZ, count INT)` with `INSERT ... ON CONFLICT` atomic upsert. Key = `route:userId` (signed-in) or `route:ipHash` (guest). Returns `429` with `Retry-After`.
-- Budgets (config in `server/rate-limit-config.js`): question fetch 30/min, score submit 10/min, checkout create 5/min, profile write 10/min, export 2/hour. Generous — protective, not punitive.
+- Budgets (config in `server/rate-limit-config.js`): guest Run start 20/min, question fetch 30/min, score submit 10/min, checkout create 5/min, profile write 10/min, export 2/hour. Generous — protective, not punitive.
 - Headers: extend `vercel.json` + Express: `Content-Security-Policy` (script-src 'self' + Clerk + Stripe domains only), `X-Content-Type-Options`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` minimal, `Strict-Transport-Security`. Verify Clerk/Stripe still load under CSP via Playwright e2e.
 - Rate-limit hits recorded as `product-events` (not audit — high volume).
 
@@ -198,6 +198,32 @@ CREATE TABLE webhook_inbox (
 ---
 
 ## Phase 7 — Admin dashboard + question bank in Postgres
+
+**Delivery note (PR #70)**: the bundled Warden Question bank is a deterministic,
+unbounded generator rather than the finite source array assumed when this plan
+was drafted. A finite SQL seed would silently cap Quest-wide uniqueness and
+could not be byte-identical for later ordinals. The delivered design therefore
+uses published Postgres rows as an editorial overlay and the bundled generator
+as the floor whenever a band has no published rows or Postgres is unavailable.
+DB-hit, empty-bank, invalid-row, and DB-failure fallback tests replace the
+inapplicable finite-seed equivalence test. Versions record `edited_by`; draft
+writers cannot move or delete live content, and publish authority owns every
+live-content change.
+
+The consolidated backlog intentionally narrows the operator surface to the
+repo-owned data and permissions: a local Explorer directory (not a Clerk
+backend search), paged audit viewing, dead-letter viewing, and database-backed
+DAU/Run/conversion plus inventory tiles. Manual dead-letter replay is not
+exposed under the read-only `webhooks:read` grant; the existing signed inbox
+retry path remains the only replay mechanism until a separate mutation
+permission and confirmation contract are approved.
+
+Admin mutations use ADR 0013's existing outcome-only, best-effort recorder:
+failed or no-op operations do not create false history, while an audit-store
+outage is logged and counted without rewriting the completed domain action.
+Strict atomic coupling between every domain write, Stripe request, and the
+audit chain is not claimed by phase 7; that reliability/tamper-resistance work
+belongs with consolidated backlog item 11's separate-owner append path.
 
 **What**: `/admin` SPA area (RBAC-gated) with user management, question CRUD + draft/publish, membership/refund lookup, audit viewer, dead-letter viewer, metrics tiles. Content moves from source arrays to DB with versioning.
 

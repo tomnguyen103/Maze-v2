@@ -178,6 +178,71 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
   ).toBeVisible();
 });
 
+test("server guest admission survives local storage clearing", async ({
+  page
+}) => {
+  const decisions = new Map();
+  let admittedRunId = "";
+  await page.route("**/api/access/config", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        enforcementEnabled: false,
+        guestDemoEnforcementEnabled: true
+      })
+    })
+  );
+  await page.route("**/api/access/guest-runs", async (route) => {
+    const request = route.request().postDataJSON();
+    const runId = String(request.runId);
+    if (!admittedRunId) {
+      admittedRunId = runId;
+    }
+    const allowed = runId === admittedRunId;
+    const duplicate = decisions.has(runId);
+    decisions.set(runId, allowed);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        allowed,
+        duplicate,
+        freeRunsRemaining: 0,
+        state: "guest-demo",
+        guestDemoEnforcementEnabled: true,
+        metered: true
+      })
+    });
+  });
+
+  await page.goto(
+    "/play?seed=SERVER-FIRST&level=bright-start&labyrinth=1"
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#seed-value")).toHaveText("SERVER-FIRST");
+  expect(admittedRunId).toMatch(/^access_[A-Za-z0-9_-]+$/);
+
+  await page.evaluate(() => {
+    localStorage.removeItem("echo-maze:demo-access:v1");
+    localStorage.removeItem("echo-maze:active-run:v1");
+  });
+  await page.goto(
+    "/play?seed=SERVER-SECOND&level=bright-start&labyrinth=1"
+  );
+  await expectGameReady(page);
+
+  await expect(
+    page.getByRole("dialog", { name: "Create an account for three free Runs." })
+  ).toBeVisible();
+  expect(new Set(decisions.keys()).size).toBe(2);
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("echo-maze:demo-access:v1"))
+    )
+    .toContain('"completed":true');
+});
+
 test("hands the top layer from the demo gate to Clerk account creation", async ({
   page
 }, testInfo) => {

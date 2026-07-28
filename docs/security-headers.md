@@ -87,6 +87,7 @@ so the limits hold across serverless invocations.
 
 | Budget | Allowance | Endpoint |
 |---|---|---|
+| `guest-run.start` | 20 / min | `POST /api/access/guest-runs` (address-keyed; before the admission transaction) |
 | `question.fetch` | 30 / min | `GET /api/question` (address-keyed; see below) |
 | `score.submit` | 10 / min | `POST /api/scores` |
 | `profile.write` | 10 / min | `PUT /api/profile` |

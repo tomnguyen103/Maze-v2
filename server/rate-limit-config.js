@@ -11,6 +11,7 @@
  * `export.self` is consumed by the phase 6 data-export endpoint.
  */
 export const RATE_LIMIT_BUDGETS = {
+  "guest-run.start": { limit: 20, windowMs: 60_000 },
   "question.fetch": { limit: 30, windowMs: 60_000 },
   "score.submit": { limit: 10, windowMs: 60_000 },
   "lifetime.checkout": { limit: 5, windowMs: 60_000 },

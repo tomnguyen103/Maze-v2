@@ -1,4 +1,5 @@
 import { DEFAULT_ROLE, isRole } from "../shared/permissions.js";
+import { QuestionBankInputError } from "./question-bank-store.js";
 import { RoleWriteError } from "./rbac.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { URL } from "node:url";
@@ -6,7 +7,21 @@ import { URL } from "node:url";
 const MAX_BODY_BYTES = 4 * 1024;
 const ROLE_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/role$/;
 const EXPORT_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/export$/;
+const USERS_PATH = /^\/api\/admin\/users$/;
+const QUESTIONS_PATH = /^\/api\/admin\/questions$/;
+const QUESTION_PATH =
+  /^\/api\/admin\/questions\/([A-Za-z0-9_-]{1,255})$/;
+const QUESTION_PUBLISH_PATH =
+  /^\/api\/admin\/questions\/([A-Za-z0-9_-]{1,255})\/publish$/;
+const MEMBERSHIP_PATH =
+  /^\/api\/admin\/memberships\/([A-Za-z0-9_-]{1,255})$/;
+const REFUND_PATH =
+  /^\/api\/admin\/memberships\/([A-Za-z0-9_-]{1,255})\/refund$/;
+const AUDIT_PATH = /^\/api\/admin\/audit$/;
+const METRICS_PATH = /^\/api\/admin\/metrics$/;
 const DEAD_WEBHOOKS_PATH = /^\/api\/admin\/webhooks\/dead$/;
+
+/** @typedef {{ userId: string, role: import("../shared/permissions.js").Role }} AdminDecision */
 
 /** @param {string} pathname */
 export function isAdminPath(pathname) {
@@ -24,6 +39,28 @@ export function isAdminPath(pathname) {
  *       previousRole: import("../shared/permissions.js").Role,
  *       role: string
  *     }>
+ *     listUsers?: () => Promise<{
+ *       users: Record<string, unknown>[],
+ *       hasMore: boolean
+ *     }>,
+ *     membershipFor?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *     listAuditEvents?: (options: {
+ *       beforeId: number | null,
+ *       limit: number
+ *     }) => Promise<Record<string, unknown>[]>,
+ *     dashboardMetrics?: () => Promise<Record<string, number>>
+ *   },
+ *   questionStore?: {
+ *     listQuestions: () => Promise<Record<string, unknown>[]>,
+ *     saveDraft: (input: {
+ *       id: string,
+ *       levelId: string,
+ *       difficultyBand: string,
+ *       questionOrdinal: number,
+ *       content: unknown
+ *     }, editedBy: string) => Promise<unknown>,
+ *     publishVersion: (id: string, version: number) => Promise<unknown>,
+ *     deleteQuestion: (id: string) => Promise<unknown>
  *   },
  *   requirePermission: (permission: string) => (
  *     request: import("node:http").IncomingMessage
@@ -33,18 +70,26 @@ export function isAdminPath(pathname) {
  *   >,
  *   exportUser?: (userId: string) => Promise<unknown>,
  *   listDeadWebhooks?: () => Promise<Record<string, unknown>[]>,
+ *   refundPayment?: (payment: {
+ *     paymentIntentId: string,
+ *     purchaseId: string
+ *   }) => Promise<{ refundId: string, status: string }>,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} dependencies
  */
 export function createAdminHandler({
   store,
+  questionStore = unavailableQuestionStore(),
   requirePermission,
   exportUser = async () => {
     throw new Error("Admin export is not configured.");
   },
   listDeadWebhooks = async () => {
     throw new Error("The webhook inbox is not configured.");
+  },
+  refundPayment = async () => {
+    throw new Error("Refunds are not configured.");
   },
   recordAudit = async () => {},
   mirrorRole = async () => {}
@@ -55,14 +100,73 @@ export function createAdminHandler({
   // checked against the fallback permission below, so it answers exactly as a
   // real route would.
   const routes = [
-    { pattern: ROLE_PATH, permission: "users:roles:write", handle: handleRole },
-    { pattern: EXPORT_PATH, permission: "export:any", handle: handleExport },
+    {
+      pattern: ROLE_PATH,
+      permissions: { POST: "users:roles:write" },
+      handle: handleRole
+    },
+    {
+      pattern: EXPORT_PATH,
+      permissions: { GET: "export:any" },
+      handle: handleExport
+    },
+    {
+      pattern: USERS_PATH,
+      permissions: { GET: "users:read" },
+      handle: handleUsers
+    },
+    {
+      pattern: QUESTIONS_PATH,
+      permissions: { GET: "questions:read" },
+      handle: handleQuestions
+    },
+    {
+      pattern: QUESTION_PUBLISH_PATH,
+      permissions: { POST: "questions:publish" },
+      handle: handleQuestionPublish
+    },
+    {
+      pattern: QUESTION_PATH,
+      permissions: {
+        PUT: "questions:write",
+        DELETE: "questions:publish"
+      },
+      handle: handleQuestion
+    },
+    {
+      pattern: REFUND_PATH,
+      permissions: { POST: "refunds:issue" },
+      handle: handleRefund
+    },
+    {
+      pattern: MEMBERSHIP_PATH,
+      permissions: { GET: "refunds:issue" },
+      handle: handleMembership
+    },
+    {
+      pattern: AUDIT_PATH,
+      permissions: { GET: "audit:read" },
+      handle: handleAudit
+    },
+    {
+      pattern: METRICS_PATH,
+      permissions: { GET: "refunds:issue" },
+      handle: handleMetrics
+    },
     {
       pattern: DEAD_WEBHOOKS_PATH,
-      permission: "webhooks:read",
+      permissions: { GET: "webhooks:read" },
       handle: handleDeadWebhooks
     }
-  ].map((route) => ({ ...route, check: requirePermission(route.permission) }));
+  ].map((route) => ({
+    ...route,
+    checks: new Map(
+      Object.entries(route.permissions).map(([method, permission]) => [
+        method,
+        requirePermission(permission)
+      ])
+    )
+  }));
   const checkUnknownRoute = requirePermission("users:roles:write");
 
   /**
@@ -87,7 +191,9 @@ export function createAdminHandler({
         break;
       }
     }
-    const decision = await (route?.check ?? checkUnknownRoute)(request);
+    const decision = await (
+      route?.checks.get(request.method ?? "") ?? checkUnknownRoute
+    )(request);
     if (!decision.allowed) {
       sendJson(response, decision.status, { error: decision.error });
       return;
@@ -216,6 +322,249 @@ export function createAdminHandler({
   }
 
   /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   */
+  async function handleUsers(request, response, decision) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to list Explorers.");
+      return;
+    }
+    try {
+      const directory = await configured(store.listUsers, "Explorer listing")();
+      await auditRead(request, decision, "users.read", "player_accounts");
+      sendJson(response, 200, directory);
+    } catch (error) {
+      unavailable(response, "Explorer listing", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   */
+  async function handleQuestions(request, response, decision) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to list Warden Questions.");
+      return;
+    }
+    try {
+      const questions = await questionStore.listQuestions();
+      await auditRead(request, decision, "questions.read", "questions");
+      sendJson(response, 200, { questions });
+    } catch (error) {
+      unavailable(response, "Warden Question listing", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   * @param {string} questionId
+   */
+  async function handleQuestion(request, response, decision, questionId) {
+    if (request.method === "PUT") {
+      try {
+        const body = await readJsonBody(request);
+        const draft = questionDraft(body, questionId);
+        const result = await questionStore.saveDraft(draft, decision.userId);
+        await auditMutation(request, decision, "question.draft.write", {
+          type: "question",
+          id: questionId
+        });
+        sendJson(response, 200, result);
+      } catch (error) {
+        adminFailure(response, "Warden Question draft", error);
+      }
+      return;
+    }
+    if (request.method === "DELETE") {
+      try {
+        const result = await questionStore.deleteQuestion(questionId);
+        await auditMutation(request, decision, "question.delete", {
+          type: "question",
+          id: questionId
+        });
+        sendJson(response, 200, result);
+      } catch (error) {
+        adminFailure(response, "Warden Question deletion", error);
+      }
+      return;
+    }
+    methodNotAllowed(
+      response,
+      "PUT, DELETE",
+      "Use PUT to save a draft or DELETE to remove a Warden Question."
+    );
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   * @param {string} questionId
+   */
+  async function handleQuestionPublish(
+    request,
+    response,
+    decision,
+    questionId
+  ) {
+    if (request.method !== "POST") {
+      methodNotAllowed(
+        response,
+        "POST",
+        "Use POST to publish a Warden Question."
+      );
+      return;
+    }
+    try {
+      const body = await readJsonBody(request);
+      const version = positiveInteger(body.version, "Version");
+      const result = await questionStore.publishVersion(questionId, version);
+      await auditMutation(request, decision, "question.publish", {
+        type: "question",
+        id: questionId
+      });
+      sendJson(response, 200, result);
+    } catch (error) {
+      adminFailure(response, "Warden Question publishing", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   * @param {string} userId
+   */
+  async function handleMembership(request, response, decision, userId) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to look up a membership.");
+      return;
+    }
+    try {
+      const membership = await configured(
+        store.membershipFor,
+        "Membership lookup"
+      )(userId);
+      await auditRead(
+        request,
+        decision,
+        "membership.read",
+        "player_access",
+        userId
+      );
+      sendJson(response, 200, { membership });
+    } catch (error) {
+      unavailable(response, "Membership lookup", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   * @param {string} userId
+   */
+  async function handleRefund(request, response, decision, userId) {
+    if (request.method !== "POST") {
+      methodNotAllowed(response, "POST", "Use POST to issue a refund.");
+      return;
+    }
+    try {
+      const membership = await configured(
+        store.membershipFor,
+        "Membership lookup"
+      )(userId);
+      const record = /** @type {Record<string, unknown>} */ (membership ?? {});
+      const paymentIntentId = String(record.paymentIntentId ?? "");
+      const purchaseId = String(record.purchaseId ?? "");
+      if (
+        record.membershipState !== "active" ||
+        record.purchaseStatus !== "paid" ||
+        !paymentIntentId ||
+        !purchaseId
+      ) {
+        throw new AdminInputError(
+          "This Explorer does not have a refundable Lifetime Membership."
+        );
+      }
+      const refund = await refundPayment({ paymentIntentId, purchaseId });
+      await auditMutation(request, decision, "refund.issue", {
+        type: "lifetime_purchase",
+        id: purchaseId
+      });
+      sendJson(response, 202, { userId, ...refund });
+    } catch (error) {
+      adminFailure(response, "Refund", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   */
+  async function handleAudit(request, response, decision) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to read the audit trail.");
+      return;
+    }
+    try {
+      const url = new URL(request.url ?? "", "http://local");
+      const beforeId = optionalPositiveInteger(
+        url.searchParams.get("before"),
+        "Before"
+      );
+      const limit = optionalPositiveInteger(
+        url.searchParams.get("limit"),
+        "Limit"
+      );
+      const pageSize = Math.min(limit ?? 50, 100);
+      const events = await configured(
+        store.listAuditEvents,
+        "Audit trail"
+      )({ beforeId, limit: pageSize });
+      await auditRead(request, decision, "audit.read", "audit_events");
+      sendJson(response, 200, {
+        events,
+        nextBefore:
+          events.length === pageSize
+            ? Number(events[events.length - 1]?.id) || null
+            : null
+      });
+    } catch (error) {
+      adminFailure(response, "Audit trail", error);
+    }
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   */
+  async function handleMetrics(request, response, decision) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to read admin metrics.");
+      return;
+    }
+    try {
+      const metrics = await configured(
+        store.dashboardMetrics,
+        "Admin metrics"
+      )();
+      await auditRead(request, decision, "metrics.read", "admin_metrics");
+      sendJson(response, 200, { metrics });
+    } catch (error) {
+      unavailable(response, "Admin metrics", error);
+    }
+  }
+
+  /**
    * Dead deliveries the retry loop gave up on: each one is a provider state
    * change that was never applied, and until now `npm run webhooks:dead` was
    * the only way to see one. Read-only, so there is nothing to audit beyond the
@@ -223,8 +572,9 @@ export function createAdminHandler({
    *
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
+   * @param {{ userId: string, role: import("../shared/permissions.js").Role }} decision
    */
-  async function handleDeadWebhooks(request, response) {
+  async function handleDeadWebhooks(request, response, decision) {
     if (request.method !== "GET") {
       response.setHeader("allow", "GET");
       sendJson(response, 405, { error: "Use GET to list dead deliveries." });
@@ -232,6 +582,12 @@ export function createAdminHandler({
     }
     try {
       const rows = await listDeadWebhooks();
+      await auditRead(
+        request,
+        decision,
+        "webhooks.dead.read",
+        "webhook_inbox"
+      );
       sendJson(response, 200, {
         deliveries: rows.map((row) => ({
           provider: String(row.provider),
@@ -256,9 +612,159 @@ export function createAdminHandler({
       });
     }
   }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {AdminDecision} decision
+   * @param {string} action
+   * @param {string} resourceType
+   * @param {string | null} [resourceId]
+   */
+  async function auditRead(
+    request,
+    decision,
+    action,
+    resourceType,
+    resourceId = null
+  ) {
+    await recordAudit(request, {
+      actorId: decision.userId,
+      actorRole: decision.role,
+      action,
+      resource: { type: resourceType, id: resourceId }
+    });
+  }
+
+  /**
+   * @param {import("node:http").IncomingMessage} request
+   * @param {AdminDecision} decision
+   * @param {string} action
+   * @param {{ type: string, id: string | null }} resource
+   */
+  async function auditMutation(request, decision, action, resource) {
+    try {
+      await recordAudit(request, {
+        actorId: decision.userId,
+        actorRole: decision.role,
+        action,
+        resource
+      });
+    } catch (error) {
+      console.error("[admin] mutation audit failed", {
+        name: safeErrorName(error)
+      });
+    }
+  }
 }
 
 class AdminInputError extends Error {}
+
+function unavailableQuestionStore() {
+  const fail = async () => {
+    throw new Error("The Warden Question editor is not configured.");
+  };
+  return {
+    listQuestions: fail,
+    saveDraft: fail,
+    publishVersion: fail,
+    deleteQuestion: fail
+  };
+}
+
+/**
+ * @template {(...args: any[]) => any} T
+ * @param {T | undefined} value
+ * @param {string} name
+ * @returns {T}
+ */
+function configured(value, name) {
+  if (typeof value !== "function") {
+    throw new Error(`${name} is not configured.`);
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label */
+function positiveInteger(value, label) {
+  if (!Number.isSafeInteger(value) || Number(value) < 1) {
+    throw new AdminInputError(`${label} must be a positive integer.`);
+  }
+  return Number(value);
+}
+
+/** @param {string | null} value @param {string} label */
+function optionalPositiveInteger(value, label) {
+  if (value === null || value === "") {
+    return null;
+  }
+  return positiveInteger(Number(value), label);
+}
+
+/**
+ * @param {Record<string, unknown>} body
+ * @param {string} id
+ */
+function questionDraft(body, id) {
+  if (
+    typeof body.levelId !== "string" ||
+    typeof body.difficultyBand !== "string" ||
+    !Number.isSafeInteger(body.questionOrdinal) ||
+    Number(body.questionOrdinal) < 0 ||
+    Number(body.questionOrdinal) > 32_767 ||
+    !body.content ||
+    typeof body.content !== "object" ||
+    Array.isArray(body.content)
+  ) {
+    throw new AdminInputError(
+      "Warden Question metadata and content are required."
+    );
+  }
+  return {
+    id,
+    levelId: body.levelId,
+    difficultyBand: body.difficultyBand,
+    questionOrdinal: Number(body.questionOrdinal),
+    content: body.content
+  };
+}
+
+/**
+ * @param {import("node:http").ServerResponse} response
+ * @param {string} allow
+ * @param {string} error
+ */
+function methodNotAllowed(response, allow, error) {
+  response.setHeader("allow", allow);
+  sendJson(response, 405, { error });
+}
+
+/**
+ * @param {import("node:http").ServerResponse} response
+ * @param {string} operation
+ * @param {unknown} error
+ */
+function adminFailure(response, operation, error) {
+  if (
+    error instanceof AdminInputError ||
+    error instanceof QuestionBankInputError
+  ) {
+    sendJson(response, 400, { error: error.message });
+    return;
+  }
+  unavailable(response, operation, error);
+}
+
+/**
+ * @param {import("node:http").ServerResponse} response
+ * @param {string} operation
+ * @param {unknown} error
+ */
+function unavailable(response, operation, error) {
+  console.error(`[admin] ${operation.toLowerCase()} failed`, {
+    name: safeErrorName(error)
+  });
+  sendJson(response, 503, { error: `${operation} is unavailable.` });
+}
 
 /** @param {import("node:http").IncomingMessage} request */
 async function readJsonBody(request) {

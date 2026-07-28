@@ -17,6 +17,23 @@ export function createStripeLifetimeProvider(configuration) {
   const { appOrigin, priceId, stripe, webhookSecret } = configuration;
   return {
     /**
+     * Starts the provider refund. Entitlement is intentionally left alone:
+     * the signed Stripe webhook is the authority that moves it to refunded.
+     *
+     * @param {{ paymentIntentId: string, purchaseId: string }} payment
+     */
+    async issueRefund(payment) {
+      const refund = await stripe.refunds.create(
+        { payment_intent: payment.paymentIntentId },
+        { idempotencyKey: `echo-maze-refund:${payment.purchaseId}` }
+      );
+      return {
+        refundId: String(refund.id ?? ""),
+        status: String(refund.status ?? "pending")
+      };
+    },
+
+    /**
      * @param {{ purchaseId: string, userId: string }} purchase
      */
     async createCheckout(purchase) {

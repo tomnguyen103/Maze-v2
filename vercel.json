@@ -29,6 +29,10 @@
       "destination": "/api/access?_accessRoute=runs"
     },
     {
+      "source": "/api/access/guest-runs",
+      "destination": "/api/access?_accessRoute=guest-runs"
+    },
+    {
       "source": "/play",
       "destination": "/index.html"
     },

@@ -328,3 +328,110 @@ describe("Quest Questions", () => {
     expect(limiter.allow()).toBe(true);
   });
 });
+
+describe("question bank in Postgres", () => {
+  const DATABASE_QUESTION = {
+    ...GENERATED_QUESTION,
+    id: "db-scout-1",
+    prompt: "What is 7 × 3?",
+    choices: [
+      { id: "a", label: "18" },
+      { id: "b", label: "21" },
+      { id: "c", label: "24" }
+    ],
+    answerId: "b",
+    explanation: "Seven groups of three make twenty-one."
+  };
+
+  it("serves the published database card when a bank is configured", async () => {
+    /** @type {Record<string, unknown>[]} */
+    const lookups = [];
+    const service = createQuestionService({
+      env: { QUESTION_PROVIDER: "bundled" },
+      questionBank: {
+        async publishedQuestion(lookup) {
+          lookups.push(lookup);
+          return DATABASE_QUESTION;
+        }
+      }
+    });
+
+    const result = await service.getQuestion(REQUEST);
+
+    expect(result.source).toBe("database");
+    expect(result.question).toMatchObject({ id: "db-scout-1" });
+    expect(lookups).toEqual([
+      {
+        levelId: "trail-scout",
+        difficultyBand: getBundledQuestion(REQUEST).difficultyBand,
+        questionOrdinal: 0
+      }
+    ]);
+  });
+
+  it("falls back to the bundled deck when the database is unreachable", async () => {
+    /** @type {unknown[]} */
+    const errors = [];
+    const service = createQuestionService({
+      env: { QUESTION_PROVIDER: "bundled" },
+      onQuestionBankError: (error) => errors.push(error),
+      questionBank: {
+        async publishedQuestion() {
+          throw new Error("connection terminated unexpectedly");
+        }
+      }
+    });
+
+    const result = await service.getQuestion(REQUEST);
+
+    expect(result.source).toBe("bundled");
+    expect(result.question).toEqual(getBundledQuestion(REQUEST));
+    expect(errors).toHaveLength(1);
+  });
+
+  it("falls back to the bundled deck when nothing is published yet", async () => {
+    const service = createQuestionService({
+      env: { QUESTION_PROVIDER: "bundled" },
+      questionBank: {
+        async publishedQuestion() {
+          return null;
+        }
+      }
+    });
+
+    const result = await service.getQuestion(REQUEST);
+
+    expect(result.source).toBe("bundled");
+    expect(result.question).toEqual(getBundledQuestion(REQUEST));
+  });
+
+  it("anchors provider output to the published card, not the bundled one", async () => {
+    // The reviewed template a generated Question must reproduce comes from the
+    // bank when one is configured; otherwise a published edit would be ignored
+    // by every AI-served card.
+    /** @type {string[]} */
+    const prompts = [];
+    const service = createQuestionService({
+      env: { NODE_ENV: "development" },
+      questionBank: {
+        async publishedQuestion() {
+          return DATABASE_QUESTION;
+        }
+      },
+      fetchImpl: async (_url, options) => {
+        prompts.push(String(options.body));
+        return {
+          ok: true,
+          json: async () => ({
+            message: { content: JSON.stringify(DATABASE_QUESTION) }
+          })
+        };
+      }
+    });
+
+    const result = await service.getQuestion(REQUEST);
+
+    expect(result.source).toBe("ollama");
+    expect(prompts[0]).toContain("What is 7 × 3?");
+  });
+});

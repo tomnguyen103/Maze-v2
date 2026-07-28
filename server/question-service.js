@@ -29,8 +29,15 @@ import { getQuestLevel } from "../src/questions/quest-levels.js";
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
- *   source: "ollama" | "gemini" | "bundled"
+ *   source: "ollama" | "gemini" | "database" | "bundled"
  * }} QuestionResult
+ * @typedef {{
+ *   publishedQuestion: (lookup: {
+ *     levelId: string,
+ *     difficultyBand: string,
+ *     questionOrdinal: number
+ *   }) => Promise<WardenQuestion | null>
+ * }} QuestionBank
  * @typedef {(input: string, init: RequestInit) => Promise<{
  *   ok: boolean,
  *   status?: number,
@@ -381,12 +388,16 @@ function selectProvider(env) {
  *   env?: NodeJS.ProcessEnv,
  *   fetchImpl?: FetchLike,
  *   onProviderError?: (error: unknown) => void,
+ *   questionBank?: QuestionBank | null,
+ *   onQuestionBankError?: (error: unknown) => void,
  *   now?: () => number,
  *   providerCooldownMs?: number
  * }} [options]
  */
 export function createQuestionService(options = {}) {
   const env = options.env ?? globalThis.process.env;
+  const questionBank = options.questionBank ?? null;
+  const onQuestionBankError = options.onQuestionBankError ?? (() => {});
   const fetchImpl =
     options.fetchImpl ?? /** @type {FetchLike} */ (globalThis.fetch);
   const onProviderError = options.onProviderError ?? (() => {});
@@ -411,13 +422,46 @@ export function createQuestionService(options = {}) {
     }
   }
 
+  /**
+   * The reviewed card this encounter is anchored to: the published database
+   * version when a bank is configured and reachable, otherwise the bundled one.
+   * Everything downstream — the template a generated Question must reproduce,
+   * and the card served when no provider answers — reads this, so a published
+   * edit reaches players through every path at once.
+   *
+   * @param {QuestionRequest} request
+   * @returns {Promise<{ question: WardenQuestion, fromDatabase: boolean }>}
+   */
+  async function resolveReviewedQuestion(request) {
+    const bundled = getBundledQuestion(request);
+    if (!questionBank) {
+      return { question: bundled, fromDatabase: false };
+    }
+    try {
+      const published = await questionBank.publishedQuestion({
+        levelId: request.levelId,
+        difficultyBand: bundled.difficultyBand,
+        questionOrdinal: request.questionOrdinal
+      });
+      if (published) {
+        return { question: published, fromDatabase: true };
+      }
+    } catch (error) {
+      // A database outage degrades to yesterday's content, never to no
+      // content: the bundled bank ships in the deployment itself.
+      onQuestionBankError(error);
+    }
+    return { question: bundled, fromDatabase: false };
+  }
+
   /** @param {QuestionRequest} request @returns {Promise<QuestionResult>} */
   async function generateQuestion(request) {
     const provider = selectProvider(env);
     const encounterKey =
       `${request.levelId}:${request.seed}:${request.wardenId}`;
     const previousQuestion = previousQuestions.get(encounterKey);
-    const reviewedQuestion = getBundledQuestion(request);
+    const reviewed = await resolveReviewedQuestion(request);
+    const reviewedQuestion = reviewed.question;
 
     try {
       if (now() >= providerRetryAt && provider === "ollama") {
@@ -458,8 +502,10 @@ export function createQuestionService(options = {}) {
     }
 
     const result = {
-      question: getBundledQuestion(request),
-      source: /** @type {"bundled"} */ ("bundled")
+      question: reviewedQuestion,
+      source: /** @type {"database" | "bundled"} */ (
+        reviewed.fromDatabase ? "database" : "bundled"
+      )
     };
     rememberPreviousQuestion(encounterKey, result.question);
     return result;

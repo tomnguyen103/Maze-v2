@@ -4,7 +4,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 items were catalogued here; items 1-6 are delivered (PRs #64-#69), leaving 11 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The dominant theme is the enterprise-hardening tail: phases 7 (admin dashboard + question bank in Postgres), 8 (multi-tenancy/RLS), and 9 (SSO) are declared PLANNED and have essentially no code, though phase 7's RBAC permission matrix is already plumbed and waiting. The riskiest gaps are the tamper-*evident*-but-not-tamper-*proof* audit chain (an app-role attacker can drop the triggers and rechain) and the purely client-side guest demo gate (clearing storage resets the free Run forever). Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0018: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; items 1-8 and 10 are delivered (PRs #64-#70), leaving 8 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The remaining work is the enterprise-hardening tail: settings sync, tamper-proof audit anchoring, multi-tenancy/RLS, SSO, content review, and scoreboard verification. Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -86,31 +86,31 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] Admin API sub-path lists dead deliveries with id, type, failure count, last error
   - [x] Permission-gated; non-admin 403; covered by tests
 
-### 7. Question bank in Postgres with bundled fallback — [NOT_STARTED]
+### 7. Question bank in Postgres with bundled fallback — [DELIVERED] — DONE, PR #70
 
 - What: Move question content from the bundled `src/questions/question-bank.js` into DB tables (`questions`, `question_versions`) with draft/publish versioning, keeping the bundled bank as fallback when the DB is unreachable.
 - Why it matters: Content updates currently require a code deploy; phase 7's question CRUD needs a storage home first.
 - Source: docs/plans/enterprise-hardening-plan.md — Phase 7
-- Evidence checked: Glob `db/migrations/` — 0001–0009 only, no question tables; grep `pool|database|pg` in `server/question-service.js` — no matches (reads bundled bank only). `questions:read/write/publish` permissions declared in `shared/permissions.js:18-33` with zero consuming routes.
-- Touches: new db/migrations/0010_question_bank.sql, server/question-service.js, server/admin-route.js (CRUD), tests
-- Depends on: none (CRUD UI depends on 8). NOTE: requires a schema migration — the autonomous executor must STOP and ask before this item per its forbidden-actions list.
+- Evidence checked: `db/migrations/0010_question_bank.sql` defines constrained question/version tables; `server/question-bank-store.js` serves exact published ordinal overlays and `server/question-service.js` falls back to the bundled generator for absent, invalid, or unavailable DB content. Admin draft/publish/delete routes consume `questions:*` permissions.
+- Touches: db/migrations/0010_question_bank.sql, server/question-bank-store.js, server/question-service.js, server/admin-route.js, tests
+- Depends on: none; the migration was explicitly approved for this delivery.
 - Effort: L
 - Acceptance criteria:
-  - [ ] Reviewed questions served from DB when configured; bundled bank fallback verified by test
-  - [ ] Draft/publish versioning with only published questions reaching players
+  - [x] Reviewed questions served from DB when configured; bundled bank fallback verified by test
+  - [x] Draft/publish versioning with only published questions reaching players
 
-### 8. Admin dashboard UI — [NOT_STARTED]
+### 8. Admin dashboard UI — [DELIVERED] — DONE, PR #70
 
 - What: The `/admin` SPA area from phase 7: user listing and role management, question CRUD, membership/refund lookup, audit-log viewer, dead-letter viewer, metrics tiles. Only the role-change endpoint (`POST /api/admin/users/:id/role`) and RBAC plumbing exist.
 - Why it matters: ADR 0015 admits "the moderator role currently grants nothing enforceable" — the permission matrix is dead weight until this ships.
 - Source: docs/plans/enterprise-hardening-plan.md — Phase 7 (plan header: "Phases 7–9 remain PLANNED and not started"); docs/adr/0015-database-authoritative-roles.md — Decision
-- Evidence checked: No `src/admin/` dir; grep `requirePermission` in server/ — only `users:roles:write` enforced (`server/admin-route.js:41`); `audit:read`, `questions:*`, `refunds:issue`, `users:read` unconsumed.
-- Touches: new src/admin/ (controller/view pattern per src/player/), server/admin-route.js, server/audit-store.js (read path), api/admin.js
+- Evidence checked: `src/admin/admin-view.js` renders permission-aware users, questions, membership/refund, audit, dead-delivery, metrics, and export surfaces. `server/admin-route.js` has method-specific guards for every declared permission, and `server/admin-store.js` supplies the operator read models.
+- Touches: src/admin/, server/admin-route.js, server/admin-store.js, server/question-bank-store.js, server/stripe-lifetime.js, api/admin.js, tests
 - Depends on: 4, 5, 6, 7
 - Effort: L
 - Acceptance criteria:
-  - [ ] Each declared permission in shared/permissions.js has at least one enforced consuming route + UI surface
-  - [ ] Audit viewer pages through audit_events; role changes and refund lookups audited
+  - [x] Each declared permission in shared/permissions.js has at least one enforced consuming route + UI surface
+  - [x] Audit viewer pages through audit_events; role changes and refund lookups audited
 
 ### 9. Explorer Access Settings profile sync — [NOT_STARTED]
 
@@ -125,18 +125,18 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [ ] Signed-in Explorer's settings persist across devices; guests stay device-local
   - [ ] Synced settings appear in the GDPR export and deletion path
 
-### 10. Guest demo server-side entitlement enforcement — [PARTIAL]
+### 10. Guest demo server-side entitlement enforcement — [DELIVERED] — DONE, PR #70
 
 - What: The one-free-Run guest demo boundary is browser-local only; clearing storage resets it indefinitely. ADR 0007 made *signed-in* Run Access server-authoritative; the guest gate was named out-of-scope, not solved.
 - Why it matters: The free-demo funnel to the $5.99 membership is trivially bypassable by anonymous users.
 - Source: docs/adr/0006-demo-account-gate.md — Consequences ("server-side entitlement enforcement is outside this change")
-- Evidence checked: grep `demo` in server/, api/, db/ — zero matches. Signed-in half exists: `db/migrations/0002_run_access.sql`, `server/run-access-route.js`, `server/run-access-store.js`.
-- Touches: server/run-access-route.js, server/rate-limit.js (hashed-address approach), src/game/demo-access.js
-- Depends on: none. NOTE: identifying anonymous guests robustly may be a product decision (privacy vs. enforcement) — executor should stop and ask if the approach is ambiguous.
+- Evidence checked: `server/guest-demo-store.js` enforces one admitted Run per daily hashed-address bucket with full-Run idempotency; `server/run-access-route.js` exposes the public admission boundary with pre-transaction throttling and fail-open degradation; ADR 0019 records the privacy tradeoff.
+- Touches: server/guest-demo-store.js, server/run-access-route.js, server/rate-limit-config.js, server/player-api.js, src/player/player-controller.js, tests
+- Depends on: none; the daily rotating hash approach was explicitly approved and stores neither raw addresses nor raw Run facts.
 - Effort: M
 - Acceptance criteria:
-  - [ ] A repeat guest from the same hashed address cannot mint unlimited free Runs by clearing storage
-  - [ ] Privacy posture (daily-rotating hash, no raw address storage) preserved per ADR 0014
+  - [x] A repeat guest from the same hashed address cannot mint unlimited free Runs by clearing storage
+  - [x] Privacy posture (daily-rotating hash, no raw address storage) preserved per ADR 0014
 
 ### 11. Audit-chain tamper-proofing (separate owner + external anchoring) — [NOT_STARTED]
 
@@ -263,10 +263,9 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 1, 2, 3 — independent S-size hygiene, zero risk, build momentum. Done: PRs #64-#66.
 4 — admin shell guard; unblocks all admin UI work. Done: PR #67.
 5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4. Done: PRs #68, #69.
-7 — question bank storage (migration gate: stop-and-ask).
-8 — admin dashboard UI; consumes 4+5+6+7.
+7, 8 — question bank storage and admin dashboard UI. Done: PR #70.
 9 — settings sync (independent; migration gate).
-10 — guest demo enforcement (independent; product-decision gate on approach).
+10 — guest demo enforcement. Done: PR #70.
 11 — audit anchoring (independent; migration + infra gate).
 12 — phase 8 multi-tenancy (large; after admin surface exists to operate it).
 13, 14 — hard-depend on 12.
