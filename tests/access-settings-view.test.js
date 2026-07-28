@@ -77,7 +77,7 @@ describe("Explorer Access Settings dialog", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("saves the preview and reset commits the canonical design", () => {
+  it("saves the preview and reset commits the canonical design", async () => {
     const storage = createStorage();
     const onApply = vi.fn();
     const view = createAccessSettingsView({ storage, onApply });
@@ -94,6 +94,11 @@ describe("Explorer Access Settings dialog", () => {
     document.getElementById("access-settings-form")?.dispatchEvent(
       new SubmitEvent("submit", { bubbles: true, cancelable: true })
     );
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
+      ).toMatchObject({ largeMarks: true })
+    );
     expect(
       JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
     ).toMatchObject({ largeMarks: true });
@@ -104,8 +109,81 @@ describe("Explorer Access Settings dialog", () => {
       JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
     ).toEqual(DEFAULT_ACCESS_SETTINGS);
     expect(largeMarks.checked).toBe(false);
-    expect(document.getElementById("access-settings-status")?.textContent).toBe(
-      "Canonical design restored."
+    await vi.waitFor(() =>
+      expect(document.getElementById("access-settings-status")?.textContent).toBe(
+        "Canonical design restored."
+      )
     );
+  });
+
+  it("keeps the dialog open and restores the cloud record on conflict", async () => {
+    const storage = createStorage();
+    const cloud = {
+      ...DEFAULT_ACCESS_SETTINGS,
+      highContrast: true,
+      readerFriendlyQuestions: true
+    };
+    const view = createAccessSettingsView({
+      storage,
+      onSave: vi.fn().mockResolvedValue({
+        settings: cloud,
+        close: false,
+        synced: true,
+        conflict: true,
+        message:
+          "Settings changed on another device. Current cloud settings restored."
+      })
+    });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("settings-trigger")
+    );
+    const dialog = /** @type {HTMLDialogElement} */ (
+      document.getElementById("access-settings-dialog")
+    );
+
+    view.show(trigger);
+    document.getElementById("access-settings-form")?.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true })
+    );
+
+    await vi.waitFor(() =>
+      expect(document.getElementById("access-settings-status")?.textContent)
+        .toContain("another device")
+    );
+    expect(dialog.open).toBe(true);
+    expect(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY)).toBe(
+      JSON.stringify(cloud)
+    );
+    expect(
+      /** @type {HTMLInputElement} */ (
+        document.getElementById("access-high-contrast")
+      ).checked
+    ).toBe(true);
+  });
+
+  it("accepts a cloud refresh before opening", () => {
+    const storage = createStorage();
+    const cloud = {
+      ...DEFAULT_ACCESS_SETTINGS,
+      largeMarks: true
+    };
+    const onApply = vi.fn();
+    const view = createAccessSettingsView({ storage, onApply });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("settings-trigger")
+    );
+
+    view.replaceSavedSettings(cloud);
+    view.show(trigger);
+
+    expect(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY)).toBe(
+      JSON.stringify(cloud)
+    );
+    expect(
+      /** @type {HTMLInputElement} */ (
+        document.getElementById("access-large-marks")
+      ).checked
+    ).toBe(true);
+    expect(onApply).toHaveBeenLastCalledWith(cloud);
   });
 });

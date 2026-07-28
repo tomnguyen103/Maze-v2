@@ -1,4 +1,4 @@
-export const EXPORT_SCHEMA_ID = "echo-maze-export/1";
+export const EXPORT_SCHEMA_ID = "echo-maze-export/2";
 
 /**
  * Snapshot variant: every section reads from ONE repeatable-read snapshot,
@@ -42,8 +42,7 @@ export async function exportUserSnapshot(pool, userId, options) {
  * grow a column by accident just because a migration added one. Notably
  * absent on purpose: `idempotency_key` (a client-generated dedup token, not
  * player data) and any raw payment data (none is stored — Stripe identifiers
- * only, per the Lifetime Membership design). Explorer Access Settings are
- * device-local and never reach the server, so no section can exist for them.
+ * only, per the Lifetime Membership design).
  */
 const SECTION_QUERIES = {
   profile: `SELECT username, explorer_palette, playground_palette,
@@ -68,6 +67,10 @@ const SECTION_QUERIES = {
     FROM cloud_quest_progress WHERE clerk_user_id = $1`,
   journal: `SELECT journal, clear_generation, created_at, updated_at
     FROM learning_journals WHERE clerk_user_id = $1`,
+  access_settings: `SELECT schema_version, high_contrast, large_marks,
+      reader_friendly_questions, reduced_effects, revision, created_at,
+      updated_at
+    FROM explorer_access_settings WHERE clerk_user_id = $1`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 
@@ -108,6 +111,7 @@ export async function buildUserExport(
     lifetimePurchases,
     questProgress,
     journal,
+    accessSettings,
     role
   ] = await Promise.all([
     rowsOf("profile"),
@@ -117,6 +121,7 @@ export async function buildUserExport(
     rowsOf("lifetime_purchases"),
     rowsOf("quest_progress"),
     rowsOf("journal"),
+    rowsOf("access_settings"),
     rowsOf("role")
   ]);
 
@@ -133,6 +138,7 @@ export async function buildUserExport(
       lifetime_purchases: lifetimePurchases,
       quest_progress: questProgress[0] ?? null,
       journal: journal[0] ?? null,
+      access_settings: accessSettings[0] ?? null,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"
     }

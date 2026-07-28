@@ -177,6 +177,10 @@ describe("Vercel function budget", () => {
         {
           source: "/api/me/export",
           destination: "/api/profile?_meRoute=export"
+        },
+        {
+          source: "/api/me/settings",
+          destination: "/api/profile?_meRoute=settings"
         }
       ])
     );
@@ -184,6 +188,7 @@ describe("Vercel function budget", () => {
     for (const [incoming, expectedUrl, expectedStatus] of [
       // 503, not a hang: this shim runs without DATABASE_URL in unit tests.
       ["/api/profile?_meRoute=export", "/api/me/export", 503],
+      ["/api/profile?_meRoute=settings", "/api/me/settings", 503],
       // The rewritten value is attacker-controlled: anything unknown must be
       // answered, never fall through to a next?.() that does not exist.
       [

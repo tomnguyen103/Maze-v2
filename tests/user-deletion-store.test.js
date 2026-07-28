@@ -15,7 +15,8 @@ describe("Clerk user deletion store", () => {
               access_deleted: true,
               grants_deleted: true,
               purchases_deleted: true,
-              journal_deleted: true
+              journal_deleted: true,
+              settings_deleted: true
             }]
           : []
         };
@@ -33,6 +34,7 @@ describe("Clerk user deletion store", () => {
       expect.stringContaining("pg_advisory_xact_lock"),
       expect.stringContaining("INSERT INTO deleted_user_tombstones"),
       expect.stringContaining("DELETE FROM cloud_quest_progress"),
+      expect.stringContaining("DELETE FROM explorer_access_settings"),
       expect.stringContaining("DELETE FROM players"),
       expect.stringContaining("DELETE FROM player_access"),
       expect.stringContaining("AS tombstone_present"),
@@ -58,7 +60,8 @@ describe("Clerk user deletion store", () => {
               access_deleted: true,
               grants_deleted: true,
               purchases_deleted: true,
-              journal_deleted: true
+              journal_deleted: true,
+              settings_deleted: true
             }]
           : []
         };

@@ -35,6 +35,11 @@ export function createUserDeletionStore(pool) {
           [userId]
         );
         await client.query(
+          `DELETE FROM explorer_access_settings
+           WHERE clerk_user_id = $1`,
+          [userId]
+        );
+        await client.query(
           `DELETE FROM players
            WHERE clerk_user_id = $1`,
           [userId]
@@ -74,10 +79,14 @@ export function createUserDeletionStore(pool) {
                SELECT 1 FROM lifetime_purchases
                WHERE player_id = $1
              ) AS purchases_deleted,
-             NOT EXISTS (
-               SELECT 1 FROM learning_journals
-               WHERE clerk_user_id = $1
-             ) AS journal_deleted`,
+              NOT EXISTS (
+                SELECT 1 FROM learning_journals
+                WHERE clerk_user_id = $1
+              ) AS journal_deleted,
+              NOT EXISTS (
+                SELECT 1 FROM explorer_access_settings
+                WHERE clerk_user_id = $1
+              ) AS settings_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -99,7 +108,7 @@ function deletionVerified(row) {
   return Boolean(
     row &&
     typeof row === "object" &&
-    Object.values(row).length === 8 &&
+    Object.values(row).length === 9 &&
     Object.values(row).every((value) => value === true)
   );
 }

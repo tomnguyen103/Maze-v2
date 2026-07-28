@@ -177,11 +177,37 @@ describe("composed player API", () => {
     });
   });
 
+  it("requires sign-in for synced Access Settings when Clerk is absent", async () => {
+    const handler = createPlayerApi({
+      DATABASE_URL: "postgresql://test:test@127.0.0.1:1/echo"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/me/settings`);
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toEqual({
+        error: "Sign in to continue."
+      });
+    });
+  });
+
   it("keeps the data export closed without storage", async () => {
     const handler = createPlayerApi({});
 
     await withServer(handler, async (origin) => {
       const response = await fetch(`${origin}/api/me/export`);
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringMatching(/Guest play still works/i)
+      });
+    });
+  });
+
+  it("keeps synced Access Settings closed without storage", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/me/settings`);
       expect(response.status).toBe(503);
       await expect(response.json()).resolves.toMatchObject({
         error: expect.stringMatching(/Guest play still works/i)

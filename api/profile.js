@@ -2,10 +2,10 @@ import { createPlayerApi } from "../server/player-api.js";
 
 const handler = createPlayerApi();
 
-const ME_ROUTES = new Set(["export"]);
+const ME_ROUTES = new Set(["export", "settings"]);
 
 /**
- * Also hosts `/api/me/export` via a vercel.json rewrite: the project sits at
+ * Also hosts `/api/me/*` via validated vercel.json rewrites: the project sits at
  * the 12-function Hobby ceiling, so the personal-data namespace has to share
  * an existing function. The rewritten value is attacker-controlled; anything
  * but the known routes answers 404 rather than reaching a `next?.()` that

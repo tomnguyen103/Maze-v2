@@ -15,9 +15,11 @@ give the account holder both halves of their data rights.
 | Quest Continuity | `cloud_quest_progress` | boundary-synced Quest Progress |
 | Lantern Journal | `learning_journals` | privacy-minimized outcomes (no prompts, no answers) |
 | Role | `user_roles` | absence means `player` |
+| Explorer Access Settings | `explorer_access_settings` | four presentation-only booleans + optimistic revision |
 
-Explorer Access Settings are device-local presentation preferences and never
-reach the server, so they cannot appear in a server-side export.
+Guests keep Explorer Access Settings only on their device. Signed-in Explorers
+sync the same four presentation-only choices to their profile. They never enter
+Run, Quest, score, Question, or shared-link state.
 
 ## Export (`GET /api/me/export`)
 
@@ -26,7 +28,7 @@ reach the server, so they cannot appear in a server-side export.
 - Returns a versioned envelope conforming to the checked-in contract
   `shared/export-schema.json` (structurally pinned by unit test — the schema
   file itself documents per-section constraints for external consumers):
-  `{ "schema": "echo-maze-export/1", "generated_at": …, "data": { … } }`,
+  `{ "schema": "echo-maze-export/2", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows.
@@ -45,6 +47,8 @@ Clerk account deletion (webhook `user.deleted`, or the operational tool
 `deleted_user_tombstones` keeps only a SHA-256 hash so a re-delivered webhook
 stays idempotent. Deletion then export yields empty sections — the export
 endpoint deliberately does not error for a deleted or empty account.
+The deletion transaction explicitly removes and verifies the signed-in
+Explorer Access Settings record.
 
 ## Retention
 

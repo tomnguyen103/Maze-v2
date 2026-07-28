@@ -47,6 +47,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 8. `db/migrations/0008_user_roles.sql`
 9. `db/migrations/0009_webhook_inbox.sql`
 10. `db/migrations/0010_question_bank.sql`
+11. `db/migrations/0011_explorer_access_settings.sql`
 
 Then set:
 

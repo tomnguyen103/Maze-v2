@@ -21,6 +21,10 @@
       "destination": "/api/profile?_meRoute=export"
     },
     {
+      "source": "/api/me/settings",
+      "destination": "/api/profile?_meRoute=settings"
+    },
+    {
       "source": "/api/access/config",
       "destination": "/api/access?_accessRoute=config"
     },

@@ -85,6 +85,16 @@ function fixtureAdapter() {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-05T00:00:00.000Z"
     },
+    explorer_access_settings: {
+      schema_version: 1,
+      high_contrast: true,
+      large_marks: false,
+      reader_friendly_questions: true,
+      reduced_effects: false,
+      revision: 2,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-05T00:00:00.000Z"
+    },
     user_roles: { role: "moderator" }
   };
   return {
@@ -137,6 +147,10 @@ describe("buildUserExport", () => {
       quest_id: "quest_export_123"
     });
     expect(exported.data.journal).toMatchObject({ clear_generation: 1 });
+    expect(exported.data.access_settings).toMatchObject({
+      high_contrast: true,
+      revision: 2
+    });
     expect(exported.data.role).toBe("moderator");
   });
 
@@ -152,6 +166,7 @@ describe("buildUserExport", () => {
     expect(exported.data.lifetime_purchases).toEqual([]);
     expect(exported.data.quest_progress).toBeNull();
     expect(exported.data.journal).toBeNull();
+    expect(exported.data.access_settings).toBeNull();
     expect(exported.data.role).toBe("player");
     expect(JSON.stringify(exported)).not.toContain("Moss Runner");
   });
@@ -163,7 +178,7 @@ describe("buildUserExport", () => {
       expect(sql).toContain("$1");
     }
     // One query per exported table.
-    expect(adapter.queries).toHaveLength(8);
+    expect(adapter.queries).toHaveLength(9);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -226,8 +241,8 @@ describe("exportUserSnapshot", () => {
     );
     expect(pool.statements[0]).toBe("BEGIN TRANSACTION");
     expect(pool.statements.at(-1)).toBe("COMMIT");
-    // 8 section reads between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(10);
+    // 9 section reads between BEGIN and COMMIT.
+    expect(pool.statements).toHaveLength(11);
     expect(pool.isReleased()).toBe(true);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });

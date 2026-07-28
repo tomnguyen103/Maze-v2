@@ -211,3 +211,27 @@ describe("Question bank migration", () => {
     expect(sql).not.toContain("player_id");
   });
 });
+
+describe("Explorer Access Settings sync migration", () => {
+  it("stores one bounded revisioned presentation record per Clerk identity", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0011_explorer_access_settings.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE explorer_access_settings");
+    expect(sql).toContain("clerk_user_id TEXT PRIMARY KEY");
+    expect(sql).toContain("schema_version SMALLINT NOT NULL DEFAULT 1");
+    expect(sql).toContain("CHECK (schema_version = 1)");
+    expect(sql).toContain("high_contrast BOOLEAN NOT NULL");
+    expect(sql).toContain("large_marks BOOLEAN NOT NULL");
+    expect(sql).toContain("reader_friendly_questions BOOLEAN NOT NULL");
+    expect(sql).toContain("reduced_effects BOOLEAN NOT NULL");
+    expect(sql).toContain("revision INTEGER NOT NULL DEFAULT 1");
+    expect(sql).toContain("CHECK (revision > 0)");
+    expect(sql).not.toContain("difficulty");
+    expect(sql).not.toContain("score");
+    expect(sql).not.toContain("question_text");
+    expect(sql).not.toContain("prompt");
+  });
+});

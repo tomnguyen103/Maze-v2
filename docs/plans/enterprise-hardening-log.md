@@ -55,7 +55,8 @@ not a plan phase) sits between phases 4 and 5, where it landed chronologically.
    demo convenience for a log whose whole value is being unfalsifiable.
 3. **Explorer Access Settings have no audit call site.** They are device-local
    presentation preferences that never reach the server, so there is no mutating
-   endpoint to audit.
+   endpoint to audit. **Closed by ADR 0020 / backlog item 9:** signed-in saves
+   now use a bounded audited endpoint; guests remain device-local.
 4. **New env var**: `AUDIT_IP_SALT`. Unset means `ip_hash` is `NULL` — the audit
    row is still written and the chain is still valid. Documented in `README.md`;
    `.env.example` was deliberately left untouched because it is out of scope for
@@ -777,6 +778,8 @@ Two findings plus one nitpick, all fixed:
 2. **Explorer Access Settings are not a section.** They are device-local and
    never reach the server (phase 1 already recorded this); the export
    documents the fact instead of shipping a permanently empty section.
+   **Closed by ADR 0020 / backlog item 9:** the approved v2 contract adds the
+   signed-in record explicitly.
 3. **`score_entries` and `user_roles` are exported** although the plan's
    list omits them — the acceptance criterion "every user-owned table
    represented" wins over the narrative list.

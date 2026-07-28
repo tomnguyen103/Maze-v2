@@ -62,9 +62,11 @@ import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
 import {
-  applyAccessSettings,
-  loadAccessSettings
+  applyAccessSettings
 } from "./player/access-settings.js";
+import {
+  createAccessSettingsContinuity
+} from "./player/access-settings-continuity.js";
 import { createPlayerController } from "./player/player-controller.js";
 import {
   createLanternJournal
@@ -255,6 +257,22 @@ const playerController = createPlayerController({
     elements.journalStatus.textContent = message;
   }
 });
+const accessSettingsContinuity = createAccessSettingsContinuity({
+  client: {
+    getAccessSettings: () => playerController.getCloudAccessSettings(),
+    saveAccessSettings: (settings, expectedRevision) =>
+      playerController.saveCloudAccessSettings(settings, expectedRevision)
+  },
+  onApply: (settings) => {
+    applyAccessSettings(settings);
+    renderer.render(run);
+  },
+  onStatus: (message) => {
+    if (message) {
+      announce(message);
+    }
+  }
+});
 /** @type {Promise<ReturnType<typeof import("./player/quest-conflict-view.js").createQuestConflictView>> | null} */
 let questConflictViewPromise = null;
 let questConflictViewRetry = false;
@@ -312,7 +330,6 @@ const atlasView = createQuestAtlasView({
     resumeAfterAtlas = false;
   }
 });
-applyAccessSettings(loadAccessSettings());
 /** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
 let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
@@ -505,8 +522,7 @@ elements.settingsButton.addEventListener("click", async () => {
             }
             resumeAfterAccessSettings = false;
           },
-          onSave: () =>
-            announce("Explorer Access Settings saved on this device.")
+          onSave: (settings) => accessSettingsContinuity.save(settings)
         })
       );
     }
@@ -1721,6 +1737,11 @@ function syncDemoAccountAction(signedIn) {
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
+  void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
+    void accessSettingsViewPromise
+      ?.then((view) => view.replaceSavedSettings(record.settings))
+      .catch(() => {});
+  });
   void loadQuestContinuityController().then((controller) => {
     if (!controller) {
       return false;

@@ -28,6 +28,11 @@ import {
   createDataExportHandler,
   DATA_EXPORT_PATH
 } from "./data-export-route.js";
+import {
+  ACCESS_SETTINGS_PATH,
+  createAccessSettingsHandler
+} from "./access-settings-route.js";
+import { createAccessSettingsStore } from "./access-settings-store.js";
 import { createQueryAdapter, getDatabasePool } from "./database.js";
 import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
@@ -82,6 +87,7 @@ const PLAYER_PATHS = new Set([
   "/api/leaderboard",
   "/api/scores",
   DATA_EXPORT_PATH,
+  ACCESS_SETTINGS_PATH,
   LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
@@ -200,6 +206,7 @@ export function createPlayerApi(env = process.env) {
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
   const learningJournalStore = createLearningJournalStore(queryAdapter);
+  const accessSettingsStore = createAccessSettingsStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(queryAdapter);
   const userDeletionStore = createUserDeletionStore(pool);
   const adminStore = createAdminStore(pool);
@@ -255,6 +262,11 @@ export function createPlayerApi(env = process.env) {
     exportUser: (userId) => exportUserSnapshot(pool, userId),
     getUserId,
     rateLimit,
+    recordAudit
+  });
+  const accessSettingsHandler = createAccessSettingsHandler({
+    store: accessSettingsStore,
+    getUserId,
     recordAudit
   });
   // Hoisted so the webhook inbox can reach the same service instance the
@@ -405,6 +417,10 @@ export function createPlayerApi(env = process.env) {
       store: learningJournalStore,
       getUserId: () => null
     });
+    const unavailableAccessSettingsHandler = createAccessSettingsHandler({
+      store: accessSettingsStore,
+      getUserId: () => null
+    });
     const unavailableAdminHandler = createAdminHandler({
       store: roleStore,
       requirePermission: createPermissionGuard({
@@ -472,6 +488,10 @@ export function createPlayerApi(env = process.env) {
         // No Clerk means no identity, so the export answers 401 rather than
         // falling through.
         void unavailableDataExportHandler(request, response, next);
+        return;
+      }
+      if (pathname === ACCESS_SETTINGS_PATH) {
+        void unavailableAccessSettingsHandler(request, response, next);
         return;
       }
       if (QUEST_PROGRESS_PATHS.has(pathname)) {
@@ -563,6 +583,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (pathname === DATA_EXPORT_PATH) {
           void dataExportHandler(request, response, next);
+          return;
+        }
+        if (pathname === ACCESS_SETTINGS_PATH) {
+          void accessSettingsHandler(request, response, next);
           return;
         }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {

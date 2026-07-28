@@ -14,7 +14,11 @@ import {
  *   storage?: AccessSettingsStorage,
  *   onApply?: (settings: AccessSettings) => void,
  *   onClose?: () => void,
- *   onSave?: (settings: AccessSettings) => void
+ *   onSave?: (settings: AccessSettings) => void | Promise<{
+ *     settings?: AccessSettings,
+ *     close?: boolean,
+ *     message?: string
+ *   }>
  * }} [options]
  */
 export function createAccessSettingsView({
@@ -49,28 +53,46 @@ export function createAccessSettingsView({
     elements.status.textContent = "Previewing. Save to keep these settings.";
     onApply(readControls(elements));
   });
-  elements.form.addEventListener("submit", (event) => {
+  elements.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       savedSettings = saveAccessSettings(readControls(elements), storage);
       onApply(savedSettings);
-      onSave(savedSettings);
-      elements.dialog.close();
+      elements.status.textContent = "Saving settings…";
+      const result = await onSave(savedSettings);
+      if (result?.settings) {
+        savedSettings = saveAccessSettings(result.settings, storage);
+        syncControls(savedSettings);
+        onApply(savedSettings);
+      }
+      elements.status.textContent = result?.message ?? "Settings saved.";
+      if (result?.close !== false) {
+        elements.dialog.close();
+      }
     } catch {
       elements.status.textContent =
-        "Settings could not be saved on this device.";
+        "Settings could not be saved. Your current presentation is still active.";
     }
   });
-  elements.reset.addEventListener("click", () => {
+  elements.reset.addEventListener("click", async () => {
     try {
       savedSettings = saveAccessSettings(DEFAULT_ACCESS_SETTINGS, storage);
       syncControls(savedSettings);
       onApply(savedSettings);
-      onSave(savedSettings);
-      elements.status.textContent = "Canonical design restored.";
+      elements.status.textContent = "Restoring canonical design…";
+      const result = await onSave(savedSettings);
+      if (result?.settings) {
+        savedSettings = saveAccessSettings(result.settings, storage);
+        syncControls(savedSettings);
+        onApply(savedSettings);
+      }
+      elements.status.textContent =
+        result?.close === false
+          ? result.message ?? "Settings could not be reset."
+          : "Canonical design restored.";
     } catch {
       elements.status.textContent =
-        "Settings could not be reset on this device.";
+        "Settings could not be reset. Your current presentation is still active.";
     }
   });
   elements.close.addEventListener("click", () => elements.dialog.close());
@@ -88,6 +110,12 @@ export function createAccessSettingsView({
   });
 
   return {
+    /** @param {AccessSettings} settings */
+    replaceSavedSettings(settings) {
+      savedSettings = saveAccessSettings(settings, storage);
+      syncControls(savedSettings);
+      onApply(savedSettings);
+    },
     /** @param {HTMLElement} trigger */
     show(trigger) {
       returnFocus = trigger;
