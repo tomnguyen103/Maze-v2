@@ -241,3 +241,26 @@ _Avoid_: Guest play, consumer mode, solo account
 One optional date-derived deterministic Run that is separate from the active
 Quest and uses a reviewed Question order shared by every Explorer for that date.
 _Avoid_: ranked tournament, streak, daily reward
+
+**Run Action Log**:
+A bounded, versioned sequence of player actions and cumulative Run time needed
+to reproduce state-changing gameplay from a trusted Run contract.
+_Avoid_: event stream, replay video, analytics log
+
+**Verified Run**:
+A terminal Run reconstructed by the server from a trusted seed, allowed
+configuration, trusted Question sequence, and a valid Run Action Log. Its
+outcome and score facts are derived by replay rather than accepted from the
+browser.
+_Avoid_: trusted client score, anti-cheat score, server-hosted Run
+
+**Verified Daily Entry**:
+One authenticated Explorer's best escaped Verified Run for one canonical UTC
+Daily Shared Labyrinth date.
+_Avoid_: Daily Personal Best, Score Entry, streak
+
+**Verified Daily Board**:
+The public bounded ranking of Verified Daily Entries for the current UTC Daily
+Shared Labyrinth. Higher Run Score ranks first, followed by fewer Moves and
+earlier server verification.
+_Avoid_: Global Scoreboard, Daily reward, tournament
