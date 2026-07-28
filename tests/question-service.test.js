@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   QUEST_LEVELS,
   getQuestLevel
@@ -279,7 +279,7 @@ describe("Quest Questions", () => {
     expect(
       parseQuestionRequest(
         new URL(
-          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7"
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7&challenge=gate-warden"
         )
       )
     ).toEqual({
@@ -288,8 +288,16 @@ describe("Quest Questions", () => {
       wardenId: 2,
       attempt: 1,
       labyrinthNumber: 5,
-      questionOrdinal: 7
+      questionOrdinal: 7,
+      challengeKind: "gate-warden"
     });
+    expect(
+      parseQuestionRequest(
+        new URL(
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7"
+        )
+      ).challengeKind
+    ).toBe("warden");
     expect(() =>
       parseQuestionRequest(
         new URL(
@@ -311,6 +319,13 @@ describe("Quest Questions", () => {
         )
       )
     ).toThrow(/Labyrinth/i);
+    expect(() =>
+      parseQuestionRequest(
+        new URL(
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7&challenge=unknown"
+        )
+      )
+    ).toThrow(/challenge/i);
   });
 
   it("limits public Question generation requests per server window", () => {
@@ -367,6 +382,29 @@ describe("question bank in Postgres", () => {
         questionOrdinal: 0
       }
     ]);
+  });
+
+  it("serves the curated Gate Warden capstone without provider or database replacement", async () => {
+    const publishedQuestion = vi.fn(async () => DATABASE_QUESTION);
+    const fetchImpl = vi.fn();
+    /** @type {import("../server/question-service.js").QuestionRequest} */
+    const request = {
+      ...REQUEST,
+      challengeKind: "gate-warden"
+    };
+    const service = createQuestionService({
+      env: { NODE_ENV: "development" },
+      questionBank: { publishedQuestion },
+      fetchImpl
+    });
+
+    const result = await service.getQuestion(request);
+
+    expect(result.source).toBe("bundled");
+    expect(result.question).toEqual(getBundledQuestion(request));
+    expect(result.question.id).toBe("capstone-trail-scout-foundation");
+    expect(publishedQuestion).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("falls back to the bundled deck when the database is unreachable", async () => {

@@ -101,6 +101,31 @@ export function createPlayerApiClient({
         `/api/classrooms/${encodeURIComponent(classroomId)}/progress`
       );
     },
+    /** @param {string} classroomId */
+    async getClassroomDomain(classroomId) {
+      const payload = await request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/domain`
+      );
+      return classroomDomainFrom(payload);
+    },
+    /** @param {string} classroomId @param {string} domain */
+    async registerClassroomDomain(classroomId, domain) {
+      const payload = await request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/domain`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ domain })
+        }
+      );
+      const registered = classroomDomainFrom(payload);
+      if (!registered.domain) {
+        throw new PlayerApiError(
+          "Classroom service returned an invalid domain.",
+          502
+        );
+      }
+      return { domain: registered.domain };
+    },
     /** @param {string} classroomId @param {string} email */
     async inviteClassroomStudent(classroomId, email) {
       return request(
@@ -284,6 +309,23 @@ export function createPlayerApiClient({
         true
       );
     }
+  };
+}
+
+/** @param {unknown} payload */
+function classroomDomainFrom(payload) {
+  const body = payload && typeof payload === "object"
+    ? /** @type {Record<string, unknown>} */ (payload)
+    : {};
+  const verifiedDomain =
+    body.verifiedDomain && typeof body.verifiedDomain === "object"
+      ? /** @type {Record<string, unknown>} */ (body.verifiedDomain)
+      : {};
+  return {
+    domain:
+      typeof verifiedDomain.domain === "string"
+        ? verifiedDomain.domain
+        : null
   };
 }
 

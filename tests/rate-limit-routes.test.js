@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PassThrough } from "node:stream";
 import { createLifetimeHandler } from "../server/lifetime-route.js";
 import { createPlayerApiHandler } from "../server/player-route.js";
+import { createQuestionApi } from "../server/question-api.js";
 import { createQuestionHandler } from "../server/question-route.js";
 
 /**
@@ -297,6 +298,27 @@ describe("rate limiting on Lifetime Checkout creation", () => {
 });
 
 describe("rate limiting on Question fetch", () => {
+  it("meters an authenticated Classroom Member by Explorer id", async () => {
+    const limiter = stubRateLimit({ allowed: true });
+    const handler = createQuestionHandler(
+      { getQuestion: async () => ({ question: {} }) },
+      {
+        getUserId: () => "user_student",
+        rateLimit: limiter.rateLimit
+      }
+    );
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({ method: "GET", url: questionUrl }),
+      response,
+      undefined
+    );
+    expect((await finished).statusCode).toBe(200);
+    expect(limiter.calls).toEqual([
+      { budget: "question.fetch", userId: "user_student" }
+    ]);
+  });
+
   it("meters guest fetches without a user id", async () => {
     const limiter = stubRateLimit({ allowed: true });
     const handler = createQuestionHandler(
@@ -363,5 +385,31 @@ describe("rate limiting on Question fetch", () => {
     expect(blocked.statusCode).toBe(429);
     // The per-caller budget was never consulted: the instance throttle came first.
     expect(limiter.calls).toHaveLength(1);
+  });
+
+  it("composes optional Clerk identity and the durable limiter in the serverless API", async () => {
+    const limiter = stubRateLimit({ allowed: true });
+    const handler = createQuestionApi(
+      {
+        CLERK_PUBLISHABLE_KEY: "pk_test_example",
+        CLERK_SECRET_KEY: "sk_test_example",
+        QUESTION_PROVIDER: "bundled"
+      },
+      {
+        authenticate: (_request, _response, next) => next(),
+        getUserId: () => "user_student",
+        rateLimit: limiter.rateLimit
+      }
+    );
+    const { response, finished } = createResponse();
+    await handler(
+      createRequest({ method: "GET", url: questionUrl }),
+      response,
+      undefined
+    );
+    expect((await finished).statusCode).toBe(200);
+    expect(limiter.calls).toEqual([
+      { budget: "question.fetch", userId: "user_student" }
+    ]);
   });
 });

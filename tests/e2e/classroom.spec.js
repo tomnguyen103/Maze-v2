@@ -75,6 +75,15 @@ test("renders the Classroom browser state matrix and Teacher workflows", async (
   await expect(page.getByText("3 correct")).toBeVisible();
   await expect(page.locator("#game-root")).not.toContainText("user_student_1");
 
+  await expect(
+    page.getByRole("heading", { name: "Verified school domain" })
+  ).toBeVisible();
+  await page.getByLabel("School email domain").fill("learn.school.example");
+  await page.getByRole("button", { name: "Save domain" }).click();
+  await expect(page.getByText(
+    "learn.school.example is ready for verified student accounts."
+  )).toBeVisible();
+
   await page.getByLabel("Classroom name").fill("Aurora Crew");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText(/Aurora Crew was created/)).toBeVisible();
@@ -181,6 +190,9 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
           }],
           truncated: false
         }),
+        getClassroomDomain: async () => ({ domain: null }),
+        /** @param {string} _classroomId @param {string} domain */
+        registerClassroomDomain: async (_classroomId, domain) => ({ domain }),
         /** @param {string} _classroomId @param {string} emailAddress */
         inviteClassroomStudent: async (_classroomId, emailAddress) => ({
           invitation: {

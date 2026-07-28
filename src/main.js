@@ -2175,6 +2175,9 @@ async function loadChallengeQuestion() {
     seed: run.seed,
     wardenId: run.challenge.wardenId,
     attempt: run.challenge.attempt,
+    challengeKind: /** @type {"warden" | "gate-warden"} */ (
+      run.challenge.kind === "gate-warden" ? "gate-warden" : "warden"
+    ),
     labyrinthNumber: currentLabyrinthNumber,
     questionOrdinal: questProgress.nextQuestionOrdinal
   };
@@ -2199,7 +2202,14 @@ async function loadChallengeQuestion() {
   for (let offset = 0; offset < 20; offset += 1) {
     const request = {
       ...challengeSnapshot,
-      questionOrdinal: challengeSnapshot.questionOrdinal + offset
+      questionOrdinal: challengeSnapshot.questionOrdinal + offset,
+      challengeKind: /** @type {"warden" | "gate-warden"} */ (
+        offset === 0 &&
+          challengeSnapshot.attempt === 0 &&
+          challengeSnapshot.challengeKind === "gate-warden"
+          ? "gate-warden"
+          : "warden"
+      )
     };
     let question;
     let source = "bundled";
@@ -2210,7 +2220,8 @@ async function loadChallengeQuestion() {
         warden: String(request.wardenId),
         attempt: String(request.attempt),
         labyrinth: String(request.labyrinthNumber),
-        question: String(request.questionOrdinal)
+        question: String(request.questionOrdinal),
+        challenge: request.challengeKind
       });
       const response = await fetch(`/api/question?${parameters}`);
       if (!response.ok) {
@@ -2270,6 +2281,7 @@ async function loadChallengeQuestion() {
  *   seed: string,
  *   wardenId: number,
  *   attempt: number,
+ *   challengeKind: "warden" | "gate-warden",
  *   labyrinthNumber: number,
  *   questionOrdinal: number
  * }} request
@@ -2280,6 +2292,7 @@ function questionRequestIdentifier(request) {
     request.seed,
     request.wardenId,
     request.attempt,
+    request.challengeKind,
     request.labyrinthNumber,
     request.questionOrdinal
   ].join(":");

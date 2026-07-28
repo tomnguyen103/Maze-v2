@@ -76,6 +76,10 @@ describe("RATE_LIMIT_BUDGETS", () => {
       limit: 3,
       windowMs: 3_600_000
     });
+    expect(RATE_LIMIT_BUDGETS["classroom.domain"]).toEqual({
+      limit: 5,
+      windowMs: 3_600_000
+    });
     expect(RATE_LIMIT_BUDGETS["classroom.invite"]).toEqual({
       limit: 20,
       windowMs: 3_600_000

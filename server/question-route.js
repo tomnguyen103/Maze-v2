@@ -5,6 +5,7 @@ import { URL } from "node:url";
 
 /** @type {Set<string>} */
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
+const CHALLENGE_KINDS = new Set(["warden", "gate-warden"]);
 const SEED_PATTERN = /^[a-z0-9-]{1,32}$/i;
 
 /**
@@ -27,12 +28,16 @@ function boundedInteger(value, name, minimum, maximum) {
 export function parseQuestionRequest(url) {
   const levelId = url.searchParams.get("level") ?? "";
   const seed = url.searchParams.get("seed") ?? "";
+  const challengeKind = url.searchParams.get("challenge") ?? "warden";
 
   if (!LEVEL_IDS.has(levelId)) {
     throw new Error("Quest Level is not supported.");
   }
   if (!SEED_PATTERN.test(seed)) {
     throw new Error("Run seed is not valid.");
+  }
+  if (!CHALLENGE_KINDS.has(challengeKind)) {
+    throw new Error("Challenge kind is not supported.");
   }
 
   return {
@@ -51,7 +56,8 @@ export function parseQuestionRequest(url) {
       "Question",
       0,
       5000
-    )
+    ),
+    challengeKind
   };
 }
 
@@ -104,6 +110,9 @@ export function createQuestionRateLimiter(options = {}) {
  *   maxRequests?: number,
  *   windowMs?: number,
  *   now?: () => number,
+ *   getUserId?: (
+ *     request: import("node:http").IncomingMessage
+ *   ) => string | null,
  *   rateLimit?: import("./rate-limit-request.js").RateLimit
  * }} [options]
  */
@@ -112,6 +121,7 @@ export function createQuestionHandler(questionService, options = {}) {
   // container pushes at the question provider; the per-caller budget is durable
   // across serverless invocations and stops one Explorer spending the rest.
   const instanceThrottle = createQuestionRateLimiter(options);
+  const getUserId = options.getUserId ?? (() => null);
   const rateLimit = options.rateLimit ?? (async () => UNMETERED);
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -140,7 +150,12 @@ export function createQuestionHandler(questionService, options = {}) {
       );
       return;
     }
-    const decision = await rateLimit("question.fetch", request, null);
+    const resolvedUserId = getUserId(request);
+    const userId =
+      typeof resolvedUserId === "string" && resolvedUserId
+        ? resolvedUserId
+        : null;
+    const decision = await rateLimit("question.fetch", request, userId);
     if (!decision.allowed) {
       sendRateLimited(
         response,

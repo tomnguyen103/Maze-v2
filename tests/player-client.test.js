@@ -9,9 +9,41 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 describe("player client", () => {
+  it("unwraps the verified Classroom Domain response for the workspace", async () => {
+    const responses = [
+      { verifiedDomain: null },
+      {
+        verifiedDomain: {
+          domain: "students.school.example",
+          autoJoinEnabled: true
+        }
+      }
+    ];
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify(responses.shift()), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({ fetchImpl });
+
+    await expect(client.getClassroomDomain("org_class_1")).resolves.toEqual({
+      domain: null
+    });
+    await expect(
+      client.registerClassroomDomain(
+        "org_class_1",
+        "students.school.example"
+      )
+    ).resolves.toEqual({ domain: "students.school.example" });
+  });
+
   it("maps Classroom workspace actions to the shared guarded namespace", async () => {
     const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true }), {
+      new Response(JSON.stringify({
+        ok: true,
+        verifiedDomain: { domain: "school.example" }
+      }), {
         status: 200,
         headers: { "content-type": "application/json" }
       })
@@ -21,6 +53,8 @@ describe("player client", () => {
     await client.listClassrooms();
     await client.createClassroom("Aurora Lab");
     await client.getClassroomProgress("org_class_1");
+    await client.getClassroomDomain("org_class_1");
+    await client.registerClassroomDomain("org_class_1", "school.example");
     await client.inviteClassroomStudent(
       "org_class_1",
       "student@example.com"
@@ -31,6 +65,8 @@ describe("player client", () => {
       "/api/classrooms",
       "/api/classrooms",
       "/api/classrooms/org_class_1/progress",
+      "/api/classrooms/org_class_1/domain",
+      "/api/classrooms/org_class_1/domain",
       "/api/classrooms/org_class_1/invitations"
     ]);
     expect(calls[1][1]).toEqual(
@@ -39,7 +75,13 @@ describe("player client", () => {
         body: JSON.stringify({ name: "Aurora Lab" })
       })
     );
-    expect(calls[3][1]).toEqual(
+    expect(calls[4][1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ domain: "school.example" })
+      })
+    );
+    expect(calls[5][1]).toEqual(
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ email: "student@example.com" })

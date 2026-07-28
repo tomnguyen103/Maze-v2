@@ -3,6 +3,7 @@ import {
   getQuestLevel
 } from "./quest-levels.js";
 import { getLearningMetadata } from "./learning-objectives.js";
+import { normalizeQuestion } from "./question-contract.js";
 
 /**
  * @typedef {{
@@ -24,7 +25,8 @@ import { getLearningMetadata } from "./learning-objectives.js";
  *   wardenId: number,
  *   attempt?: number,
  *   labyrinthNumber?: number,
- *   questionOrdinal?: number
+ *   questionOrdinal?: number,
+ *   challengeKind?: "warden" | "gate-warden"
  * }} QuestionRequest
  * @typedef {readonly [
  *   string,
@@ -194,6 +196,30 @@ const CURRICULUM_QUESTIONS = Object.freeze({
       ["If A implies B, and B implies C, while C is false, what follows?", ["A is false", "A is true", "B and C are true"], 0, "Trace the chain and rule out causes of a false result.", "A would force B and then C, so A must be false."],
       ["Which operation always preserves a fraction's value?", ["multiply numerator and denominator equally", "add only to the numerator", "subtract only from the denominator"], 0, "The top and bottom must change by the same factor.", "Multiplying both parts by the same nonzero number preserves value."]
     ])
+  ])
+});
+
+const CAPSTONE_QUESTIONS = Object.freeze({
+  "bright-start": Object.freeze([
+    ["Which word means the same as tiny?", ["small", "loud", "late"], 0, "Think about something that takes up very little room.", "Tiny and small describe the same size."],
+    ["Which word means the opposite of begin?", ["borrow", "finish", "whisper"], 1, "Think about what happens when an activity is complete.", "Finish is the opposite of begin."],
+    ["In the sentence 'Nia glanced at the map,' what does glanced mean?", ["folded carefully", "forgot completely", "looked quickly"], 2, "Picture a short look before moving on.", "Glanced means looked quickly."],
+    ["A fragile shell must be carried carefully. What does fragile mean?", ["easily broken", "very noisy", "hard to find"], 0, "Think about why the shell needs gentle hands.", "Fragile means easily broken."],
+    ["The Explorer was reluctant to cross before checking the map. What does reluctant mean?", ["ready immediately", "not eager to act", "unable to read"], 1, "The Explorer needs more confidence before moving.", "Reluctant means not eager or willing to act."]
+  ]),
+  "trail-scout": Object.freeze([
+    ["Boots are muddy and an umbrella is dripping by the door. What most likely happened?", ["it rained recently", "the room was painted", "a meal was cooked"], 0, "Combine the clues from both objects.", "Mud and a dripping umbrella suggest recent rain."],
+    ["Cal packs a flashlight, sleeping bag, and tent. What is Cal probably planning?", ["a short swim", "an overnight camp", "a music lesson"], 1, "Think about one activity that uses all three items.", "A flashlight, sleeping bag, and tent are useful for an overnight camp."],
+    ["At a fork in the trail, Bea checks the map before walking. Why?", ["to count the trees", "to fold the paper", "to choose the correct trail"], 2, "Ask what a map helps a traveler decide.", "Checking the map helps Bea choose the correct trail."],
+    ["Several seedlings bend toward a sunny window. What is the best inference?", ["the plants are growing toward light", "the window is getting smaller", "the soil is turning to glass"], 0, "Notice what all the seedlings are facing.", "The seedlings bend toward the light from the window."],
+    ["A bridge notice says the crossing is unsafe, so the group takes a longer route. What does this show?", ["the map was lost", "evidence changed the plan", "the longer route is always faster"], 1, "Connect the warning to the group's next choice.", "The safety notice provided evidence that changed the group's plan."]
+  ]),
+  "maze-master": Object.freeze([
+    ["What causes the regular cycle of day and night on Earth?", ["Earth rotates on its axis", "the Moon blocks the Sun", "the Sun circles Earth each day"], 0, "Think about which body turns during one day.", "Earth's rotation brings different places into and out of sunlight."],
+    ["Water vapor cools high in the atmosphere and forms cloud droplets. Which process occurred?", ["evaporation", "condensation", "erosion"], 1, "Think about a gas changing into liquid droplets.", "Condensation changes cooled water vapor into liquid droplets."],
+    ["Why do Earth’s seasons repeat each year?", ["Earth spins faster in summer", "clouds move between hemispheres", "Earth's tilted axis changes sunlight angles during its orbit"], 2, "Consider both Earth's tilt and its yearly path.", "Earth's axial tilt changes sunlight angles as Earth orbits the Sun."],
+    ["Matching fossils are found on continents now separated by an ocean. What idea does this best support?", ["the continents were once joined", "all fossils formed underwater", "the ocean has never changed"], 0, "Ask how the same organisms could appear on distant land.", "Matching fossils support the idea that the continents were once connected."],
+    ["If the atmosphere gains more heat-trapping gas while other conditions stay similar, what is the most direct effect?", ["less sunlight reaches space", "more outgoing heat is retained", "Earth stops rotating"], 1, "Track what a heat-trapping gas does to energy leaving Earth.", "More heat-trapping gas retains more outgoing heat in the atmosphere."]
   ])
 });
 
@@ -576,17 +602,45 @@ function cloneQuestion(question) {
   };
 }
 
-/** @param {QuestionRequest} request @returns {WardenQuestion} */
+/**
+ * @param {QuestionRequest} request
+ * @param {{ capstoneQuestions?: Record<string, readonly unknown[]> }} [options]
+ * @returns {WardenQuestion}
+ */
 export function getBundledQuestion({
   levelId,
   attempt = 0,
   labyrinthNumber = 1,
-  questionOrdinal = attempt
-}) {
+  questionOrdinal = attempt,
+  challengeKind = "warden"
+}, options = {}) {
   const level = getQuestLevel(levelId);
   const band = getDifficultyBand(labyrinthNumber);
   const ordinal = Math.max(0, Math.trunc(questionOrdinal));
   const difficultyRank = level.number * 10 + band.index + 1;
+  if (challengeKind === "gate-warden") {
+    const capstoneQuestions =
+      options.capstoneQuestions ?? CAPSTONE_QUESTIONS;
+    const deck = capstoneQuestions[level.id];
+    const card = Array.isArray(deck) ? deck[band.index] : undefined;
+    if (card) {
+      try {
+        return normalizeQuestion({
+          ...createCurriculumQuestion(
+            `capstone-${level.id}-${band.id}`,
+            scenarioFor(level.number * 100 + band.index),
+            /** @type {CurriculumCard} */ (card),
+            band.id,
+            difficultyRank
+          ),
+          ...getLearningMetadata(level.id, 4)
+        });
+      } catch {
+        // Curated content must never strand a Run. Fall through to the
+        // ordinary reviewed generator at the same Level, Band, and ordinal.
+      }
+    }
+  }
   let question;
   if (level.id === "bright-start") {
     question = createBrightQuestion(

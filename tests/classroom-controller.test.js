@@ -53,6 +53,13 @@ function workspaceClient() {
       progress: [],
       truncated: false
     })),
+    getClassroomDomain: vi.fn(async () => ({
+      /** @type {string | null} */
+      domain: null
+    })),
+    registerClassroomDomain: vi.fn(async (_classroomId, domain) => ({
+      domain
+    })),
     inviteClassroomStudent: vi.fn(async () => ({
       invitation: {
         id: "orginv_default",
@@ -226,6 +233,45 @@ describe("Classroom workspace", () => {
       expect(clipboard.writeText).toHaveBeenCalledWith(
         "https://accounts.example.test/invitations/orginv_1"
       )
+    );
+  });
+
+  it("lets a Teacher register the verified domain used for automatic joins", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.getClassroomDomain.mockResolvedValue({
+      domain: "students.school.example"
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+
+    await vi.waitFor(() => {
+      expect(client.getClassroomDomain).toHaveBeenCalledWith("org_class_1");
+      expect(root.textContent).toContain("students.school.example");
+    });
+
+    const panel = root.querySelector(
+      "[data-teacher-classroom='org_class_1']"
+    );
+    const input = panel?.querySelector("input[name='domain']");
+    const form = panel?.querySelector("[data-classroom-domain]");
+    expect(input).toBeInstanceOf(HTMLInputElement);
+    if (input instanceof HTMLInputElement) {
+      input.value = "learn.school.example";
+    }
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() =>
+      expect(client.registerClassroomDomain).toHaveBeenCalledWith(
+        "org_class_1",
+        "learn.school.example"
+      )
+    );
+    expect(root.textContent).toContain(
+      "learn.school.example is ready for verified student accounts"
     );
   });
 

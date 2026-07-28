@@ -1,10 +1,12 @@
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import {
   LEARNING_OBJECTIVE_IDS,
-  LEARNING_TOPIC_IDS,
-  isLearningMetadata
+  LEARNING_TOPIC_IDS
 } from "../src/questions/learning-objectives.js";
+import { normalizeQuestion } from "../src/questions/question-contract.js";
 import { getQuestLevel } from "../src/questions/quest-levels.js";
+
+export { normalizeQuestion };
 
 /**
  * @typedef {{
@@ -13,7 +15,8 @@ import { getQuestLevel } from "../src/questions/quest-levels.js";
  *   wardenId: number,
  *   attempt: number,
  *   labyrinthNumber: number,
- *   questionOrdinal: number
+ *   questionOrdinal: number,
+ *   challengeKind?: "warden" | "gate-warden"
  * }} QuestionRequest
  * @typedef {{
  *   id: string,
@@ -93,123 +96,6 @@ export const QUESTION_SCHEMA = Object.freeze({
     "learningObjectiveId"
   ]
 });
-
-/** @param {unknown} value @param {string} name @param {number} maxLength */
-function requiredText(value, name, maxLength) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`Question ${name} must be text.`);
-  }
-
-  const text = value.trim();
-  if (text.length > maxLength) {
-    throw new Error(`Question ${name} is too long.`);
-  }
-
-  return text;
-}
-
-/**
- * @param {unknown} rawQuestion
- * @param {string} [fallbackId]
- * @returns {WardenQuestion}
- */
-export function normalizeQuestion(rawQuestion, fallbackId = "generated-question") {
-  if (!rawQuestion || typeof rawQuestion !== "object") {
-    throw new Error("Question must be an object.");
-  }
-  const raw = /** @type {Record<string, unknown>} */ (rawQuestion);
-  if (!Array.isArray(raw.choices) || raw.choices.length !== 3) {
-    throw new Error("Question must have exactly three choices.");
-  }
-
-  const choices = raw.choices.map((choice) => {
-    if (!choice || typeof choice !== "object") {
-      throw new Error("Each Question choice must be an object.");
-    }
-    const candidate = /** @type {Record<string, unknown>} */ (choice);
-
-    return {
-      id: requiredText(candidate.id, "choice id", 12),
-      label: requiredText(candidate.label, "choice label", 80)
-    };
-  });
-  const choiceIds = choices.map((choice) => choice.id);
-  if (new Set(choiceIds).size !== choiceIds.length) {
-    throw new Error("Question choice ids must be unique.");
-  }
-
-  const answerId = requiredText(raw.answerId, "answer", 12);
-  if (!choiceIds.includes(answerId)) {
-    throw new Error("Question answer must match a choice.");
-  }
-  const prompt = requiredText(raw.prompt, "prompt", 240);
-  if (/(?:^|\n)\s*[abc][).:]\s/iu.test(prompt)) {
-    throw new Error("Question prompt must not repeat the answer choices.");
-  }
-  const hint = requiredText(raw.hint, "hint", 120);
-  const explanation = requiredText(raw.explanation, "explanation", 240);
-  const difficultyBand = requiredText(
-    raw.difficultyBand,
-    "difficulty band",
-    20
-  );
-  if (
-    !["foundation", "developing", "capable", "advanced", "mastery"].includes(
-      difficultyBand
-    )
-  ) {
-    throw new Error("Question difficulty band is not supported.");
-  }
-  const difficultyRank = Number(raw.difficultyRank);
-  if (
-    !Number.isInteger(difficultyRank) ||
-    difficultyRank < 1 ||
-    difficultyRank > 99
-  ) {
-    throw new Error("Question difficulty rank is not valid.");
-  }
-  const topicId = requiredText(raw.topicId, "topic id", 40);
-  const learningObjectiveId = requiredText(
-    raw.learningObjectiveId,
-    "learning objective id",
-    80
-  );
-  if (!isLearningMetadata(topicId, learningObjectiveId)) {
-    throw new Error("Question learning metadata is not reviewed.");
-  }
-  const childFacingText = [
-    prompt,
-    hint,
-    explanation,
-    ...choices.map((choice) => choice.label)
-  ].join(" ");
-  if (
-    /\b(?:alcohol|blood|drug|gun|hate|kill|murder|nude|racist|sex|suicide|weapon)\b/iu.test(
-      childFacingText
-    ) ||
-    /\b(?:your address|your name|your password|your phone|where do you live)\b/iu.test(
-      childFacingText
-    )
-  ) {
-    throw new Error("Question did not pass kid-safe content checks.");
-  }
-
-  return {
-    id:
-      typeof raw.id === "string" && raw.id.trim()
-        ? raw.id.trim().slice(0, 80)
-        : fallbackId,
-    prompt,
-    choices,
-    answerId,
-    hint,
-    difficultyBand,
-    difficultyRank,
-    topicId,
-    learningObjectiveId,
-    explanation
-  };
-}
 
 /**
  * @param {QuestionRequest} request
@@ -434,7 +320,7 @@ export function createQuestionService(options = {}) {
    */
   async function resolveReviewedQuestion(request) {
     const bundled = getBundledQuestion(request);
-    if (!questionBank) {
+    if (!questionBank || request.challengeKind === "gate-warden") {
       return { question: bundled, fromDatabase: false };
     }
     try {
@@ -462,6 +348,14 @@ export function createQuestionService(options = {}) {
     const previousQuestion = previousQuestions.get(encounterKey);
     const reviewed = await resolveReviewedQuestion(request);
     const reviewedQuestion = reviewed.question;
+    if (request.challengeKind === "gate-warden") {
+      const result = {
+        question: reviewedQuestion,
+        source: /** @type {"bundled"} */ ("bundled")
+      };
+      rememberPreviousQuestion(encounterKey, result.question);
+      return result;
+    }
 
     try {
       if (now() >= providerRetryAt && provider === "ollama") {
@@ -555,7 +449,7 @@ export function createQuestionService(options = {}) {
 
 /** @param {QuestionRequest} request */
 function questionKey(request) {
-  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}`;
+  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}`;
 }
 
 /**

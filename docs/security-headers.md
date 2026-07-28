@@ -88,22 +88,24 @@ so the limits hold across serverless invocations.
 | Budget | Allowance | Endpoint |
 |---|---|---|
 | `guest-run.start` | 20 / min | `POST /api/access/guest-runs` (address-keyed; before the admission transaction) |
-| `question.fetch` | 30 / min | `GET /api/question` (address-keyed; see below) |
+| `question.fetch` | 30 / min | `GET /api/question` (signed-in user or guest address; see below) |
 | `score.submit` | 10 / min | `POST /api/scores` |
 | `profile.write` | 10 / min | `PUT /api/profile` |
 | `lifetime.checkout` | 5 / min | `POST /api/lifetime-checkout` |
 | `export.self` | 2 / hour | `GET /api/me/export` (phase 6) |
 | `classroom.create` | 3 / hour | `POST /api/classrooms` |
+| `classroom.domain` | 5 / hour | `PUT /api/classrooms/:id/domain` |
 | `classroom.invite` | 20 / hour | `POST /api/classrooms/:id/invitations` |
 
 Keys are `budget:user:<clerk id>` when signed in and `budget:ip:<address hash>`
 for guests — a daily-rotating hash, never a raw address.
 
-`GET /api/question` is unauthenticated by design, so no user id exists there and
-it is address-keyed for everyone. A classroom behind one NAT therefore shares one
-30/min budget. Classroom-aware Question budgeting remains a separately scoped
-follow-up; the approved Phase 8 release explicitly excludes it. Classroom
-creation and invitation mutations are signed-in-user-keyed by the budgets above.
+`GET /api/question` remains usable without signing in. Its optional Clerk
+middleware supplies a verified user id when a session exists, so signed-in
+Explorers receive independent per-user budgets even behind one classroom NAT.
+Requests without a valid session preserve the original guest address-hash
+budget. Classroom creation and invitation mutations are also
+signed-in-user-keyed by the budgets above.
 
 Windows are fixed. A full budget is spendable instantly — that is the intended
 burst, since normal play is bursty — and up to two budgets can cross one

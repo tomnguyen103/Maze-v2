@@ -37,6 +37,13 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
      *       progress?: Record<string, unknown>[],
      *       truncated?: boolean
      *     }>,
+ *     getClassroomDomain: (classroomId: string) => Promise<{
+ *       domain: string | null
+ *     }>,
+ *     registerClassroomDomain: (
+ *       classroomId: string,
+ *       domain: string
+ *     ) => Promise<{ domain: string }>,
  *     inviteClassroomStudent: (
  *       classroomId: string,
  *       email: string
@@ -407,9 +414,12 @@ export async function renderClassroom(root, dependencies = {}) {
   function teacherPanel(entry) {
     const panel = document.createElement("section");
     let progressEpoch = 0;
+    let domainEpoch = 0;
     panel.className = "classroom-panel classroom-panel--teacher";
     panel.dataset.teacherClassroom = entry.id;
     const inviteInputId = `classroom-invite-email-${entry.id}`;
+    const domainInputId = `classroom-domain-${entry.id}`;
+    const domainStatusId = `classroom-domain-status-${entry.id}`;
     panel.innerHTML = `
       <div class="classroom-panel__heading">
         <div>
@@ -417,6 +427,45 @@ export async function renderClassroom(root, dependencies = {}) {
           <h2></h2>
         </div>
         <span class="classroom-privacy">Counts only</span>
+      </div>
+      <div class="classroom-domain">
+        <p class="section-label">Automatic roster</p>
+        <h3>Verified school domain</h3>
+        <p class="classroom-domain__copy">
+          Students can join after Clerk verifies a primary email on this exact
+          domain. Public email domains are not accepted.
+        </p>
+        <form
+          class="classroom-form"
+          data-classroom-domain="${entry.id}"
+          aria-busy="true"
+        >
+          <label for="${domainInputId}">School email domain</label>
+          <div class="classroom-form__row">
+            <input
+              id="${domainInputId}"
+              name="domain"
+              type="text"
+              inputmode="url"
+              autocapitalize="none"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="students.school.example"
+              pattern="(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}"
+              aria-describedby="${domainStatusId}"
+              required
+            />
+            <button class="primary-button" type="submit" disabled>
+              Save domain
+            </button>
+          </div>
+          <p
+            class="classroom-form__status"
+            id="${domainStatusId}"
+            role="status"
+            aria-live="polite"
+          >Checking the current domain...</p>
+        </form>
       </div>
       <form class="classroom-form" data-classroom-invite="${entry.id}">
         <label for="${inviteInputId}">Student email</label>
@@ -451,6 +500,74 @@ export async function renderClassroom(root, dependencies = {}) {
     `;
     const title = panel.querySelector("h2");
     if (title) title.textContent = entry.name;
+    const domainForm = /** @type {HTMLFormElement} */ (
+      panel.querySelector("[data-classroom-domain]")
+    );
+    const domainInput = /** @type {HTMLInputElement} */ (
+      domainForm.querySelector("input[name='domain']")
+    );
+    const domainSubmit = /** @type {HTMLButtonElement} */ (
+      domainForm.querySelector("button[type='submit']")
+    );
+    const domainStatus = /** @type {HTMLElement} */ (
+      domainForm.querySelector(".classroom-form__status")
+    );
+    let domainWasEdited = false;
+    domainInput.addEventListener("input", () => {
+      domainWasEdited = true;
+      domainInput.removeAttribute("aria-invalid");
+      if (domainForm.dataset.state === "error") {
+        delete domainForm.dataset.state;
+        domainStatus.setAttribute("role", "status");
+        domainStatus.textContent =
+          "Use the domain after @ in your verified school email.";
+      }
+    });
+    domainInput.addEventListener("blur", () => {
+      if (domainInput.value && !domainInput.checkValidity()) {
+        showDomainError(
+          "Enter a full school domain, such as students.school.example."
+        );
+      }
+    });
+    domainForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!domainInput.checkValidity()) {
+        showDomainError(
+          "Enter a full school domain, such as students.school.example."
+        );
+        domainInput.focus();
+        return;
+      }
+      domainSubmit.disabled = true;
+      domainSubmit.textContent = "Saving...";
+      domainForm.dataset.state = "loading";
+      domainForm.setAttribute("aria-busy", "true");
+      domainStatus.setAttribute("role", "status");
+      domainStatus.textContent = "Verifying your Clerk primary email...";
+      try {
+        const result = await client.registerClassroomDomain(
+          entry.id,
+          domainInput.value
+        );
+        domainInput.value = result.domain;
+        domainWasEdited = false;
+        domainForm.dataset.state = "success";
+        domainStatus.textContent =
+          `${result.domain} is ready for verified student accounts.`;
+      } catch (error) {
+        showDomainError(
+          readableError(
+            error,
+            "Domain registration failed. Check the domain and try again."
+          )
+        );
+      } finally {
+        domainForm.removeAttribute("aria-busy");
+        domainSubmit.disabled = false;
+        domainSubmit.textContent = "Save domain";
+      }
+    });
     const form = /** @type {HTMLFormElement} */ (
       panel.querySelector("[data-classroom-invite]")
     );
@@ -490,8 +607,47 @@ export async function renderClassroom(root, dependencies = {}) {
     panel
       .querySelector("[data-action='refresh-progress']")
       ?.addEventListener("click", () => void loadProgress());
+    void loadDomain();
     void loadProgress();
     return panel;
+
+    /** @param {string} message */
+    function showDomainError(message) {
+      domainForm.dataset.state = "error";
+      domainInput.setAttribute("aria-invalid", "true");
+      domainStatus.setAttribute("role", "alert");
+      domainStatus.textContent = message;
+    }
+
+    async function loadDomain() {
+      const requestEpoch = ++domainEpoch;
+      try {
+        const result = await client.getClassroomDomain(entry.id);
+        if (requestEpoch !== domainEpoch) return;
+        if (!domainWasEdited && typeof result.domain === "string") {
+          domainInput.value = result.domain;
+        }
+        domainForm.dataset.state =
+          typeof result.domain === "string" ? "success" : "ready";
+        domainStatus.textContent =
+          typeof result.domain === "string"
+            ? `${result.domain} is the verified automatic-join domain.`
+            : "Use the domain after @ in your verified school email.";
+      } catch (error) {
+        if (requestEpoch !== domainEpoch) return;
+        showDomainError(
+          readableError(
+            error,
+            "The current domain could not load. You can still try to save it."
+          )
+        );
+      } finally {
+        if (requestEpoch === domainEpoch) {
+          domainForm.removeAttribute("aria-busy");
+          domainSubmit.disabled = false;
+        }
+      }
+    }
 
     async function loadProgress() {
       const requestEpoch = ++progressEpoch;

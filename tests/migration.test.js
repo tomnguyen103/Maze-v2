@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { PUBLIC_EMAIL_DOMAINS } from "../server/classroom-domain.js";
 
 describe("Run Access migration", () => {
   it("creates an additive allowance and immutable Run-fact ledger", async () => {
@@ -235,6 +236,41 @@ describe("Explorer Access Settings sync migration", () => {
     expect(sql).not.toContain("prompt");
   });
 });
+
+describe("Verified Classroom Domain migration", () => {
+  it("keeps domain ownership unique and Membership grants webhook-authoritative", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0017_verified_classroom_domains.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE org_domains");
+    expect(sql).toContain("domain TEXT PRIMARY KEY");
+    expect(sql).toContain("classroom_id TEXT NOT NULL UNIQUE");
+    expect(sql).toContain("auto_join_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+    expect(sql).toContain("CREATE FUNCTION register_classroom_domain");
+    expect(sql).toContain("role = 'teacher'");
+    expect(sql).toContain("CREATE FUNCTION classroom_for_verified_domain");
+    expect(sql).toContain("ALTER TABLE org_domains FORCE ROW LEVEL SECURITY");
+    const generatedDomains = generatedPublicEmailDomains(sql);
+    expect(generatedDomains).toEqual([...PUBLIC_EMAIL_DOMAINS].sort());
+    expect(sql).not.toContain("INSERT INTO classroom_memberships");
+  });
+});
+
+/** @param {string} sql */
+function generatedPublicEmailDomains(sql) {
+  const block = sql.match(
+    /-- BEGIN GENERATED PUBLIC EMAIL DOMAINS([\s\S]*?)-- END GENERATED PUBLIC EMAIL DOMAINS/
+  )?.[1];
+  if (!block) {
+    throw new Error("Generated public email domain block is missing.");
+  }
+  return [...block.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+}
 
 describe("Audit privilege boundary migration", () => {
   it("moves audit ownership behind one fixed-search-path definer function", async () => {

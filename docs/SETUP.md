@@ -5,8 +5,10 @@ preserved from the root README.
 
 ## Run locally
 
-Requires Node.js 22 or newer. Local development defaults to Ollama with
-`mistral:latest`:
+Requires Node.js 22.x; `.node-version` pins the Windows-verified 22.23.1
+runtime. Node 24.15.0 intermittently aborts Vitest workers on Windows, so it is
+outside this repository's tested runtime contract. Local development defaults
+to Ollama with `mistral:latest`:
 
 ```bash
 npm install
@@ -53,9 +55,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 14. `db/migrations/0014_classroom_rls_foundation.sql`
 15. `db/migrations/0015_classroom_authority_and_writes.sql`
 16. `db/migrations/0016_classroom_teacher_progress.sql`
+17. `db/migrations/0017_verified_classroom_domains.sql`
 
-Migrations 0012 through 0016 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all five.
+Migrations 0012 through 0017 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all six.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -79,8 +82,12 @@ Deploy the privilege boundary in this order during a maintenance window:
    `/class` release. It backfills and trigger-maintains count-only Classroom
    progress, then exposes one bounded Teacher function. It does not grant the
    runtime direct reads of Student journals or the count projection.
+8. Apply migration 0017 before deploying Verified Classroom Domain registration
+   or enabling Google auto-join. It adds one forced-RLS domain mapping per
+   Classroom and exposes only bounded definer functions to the runtime.
 
-Configure the Clerk webhook endpoint to deliver `user.deleted`,
+Configure the Clerk webhook endpoint to deliver `user.created`, `user.updated`,
+`user.deleted`,
 `organization.created`, `organization.updated`, `organization.deleted`,
 `organizationMembership.created`, `organizationMembership.updated`, and
 `organizationMembership.deleted`. Classroom authority events are minimized,
@@ -88,7 +95,8 @@ stored in the durable inbox, and retried idempotently. Do not enable Classroom
 creation in Clerk until migration 0015 and the matching application release are
 both deployed. Keep Clerk's default `org:admin` and `org:member` roles; Echo
 Maze maps them to Teacher and Student. See `docs/classroom-operations.md` for
-the full setup, delayed-webhook behavior, and rollback order.
+the Classroom boundary and `docs/sso.md` for Google setup, domain auto-join,
+delayed-webhook behavior, and failure recovery.
 
 Create a separate unprivileged login for `DATABASE_URL` and set its name as
 `AUDIT_RUNTIME_LOGIN` before the final command:
@@ -127,14 +135,17 @@ both commit and rollback. Never point the fixture-producing proof at production.
 
 Rollback moves in reverse and never drops a boundary while code still uses it:
 
-1. Disable access to `/class` and deploy code that no longer calls the
+1. Disable Verified Classroom Domain registration and auto-join, deploy code
+   that no longer calls migration 0017 functions, then remove `org_domains` and
+   its three bounded functions.
+2. Disable access to `/class` and deploy code that no longer calls the
    Classroom creation, invitation, or Teacher-progress endpoints.
-2. Quiesce writes. Drop the migration 0016 progress trigger and functions, then
+3. Quiesce writes. Drop the migration 0016 progress trigger and functions, then
    its count table and `classrooms_member_list` policy.
-3. Deploy code that no longer sends Class Play writes before reversing migration
+4. Deploy code that no longer sends Class Play writes before reversing migration
    0015. Existing Class Play data must be exported or deliberately retired
    before columns or authority tables are removed.
-4. Reverse migration 0014 last. Never remove forced RLS while an application
+5. Reverse migration 0014 last. Never remove forced RLS while an application
    version can still issue tenant queries.
 
 There is intentionally no automatic down migration: Classroom membership

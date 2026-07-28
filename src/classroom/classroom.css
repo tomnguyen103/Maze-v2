@@ -175,6 +175,24 @@
   margin-block-start: var(--space-5);
 }
 
+.classroom-domain {
+  margin-block-start: var(--space-6);
+  padding-block-end: var(--space-6);
+  border-block-end: 2px solid var(--color-line);
+}
+
+.classroom-domain h3 {
+  margin: var(--space-1) 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.classroom-domain__copy {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
 .classroom-form label {
   display: block;
   margin-block-end: var(--space-2);
@@ -191,10 +209,10 @@
   min-width: 0;
   min-height: 2.8125rem;
   padding: var(--space-3);
-  border: 2px solid var(--color-line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
-  outline: 0.2rem solid transparent;
-  outline-offset: 0.12rem;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
   background: var(--color-paper);
   color: var(--color-ink);
   font: 500 1rem/1.2 var(--font-body);
@@ -210,6 +228,24 @@
 
 .classroom-form input:user-invalid {
   border-color: var(--color-warden);
+}
+
+.classroom-form[data-state="error"] input {
+  border-color: var(--color-warden);
+}
+
+.classroom-form[data-state="success"] input {
+  border-color: var(--color-gate);
+}
+
+.classroom-form[data-state="error"] .classroom-form__status {
+  color: var(--color-ink);
+  font-weight: 650;
+}
+
+.classroom-form[data-state="success"] .classroom-form__status {
+  color: var(--color-ink);
+  font-weight: 650;
 }
 
 .classroom-form input:disabled {

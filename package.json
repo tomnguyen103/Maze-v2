@@ -18,6 +18,7 @@
     "verify:audit": "node scripts/verify-audit-chain.mjs",
     "audit:provision": "node scripts/provision-audit-runtime-role.mjs",
     "prune:rate-limits": "node scripts/prune-rate-limits.mjs",
+    "sync:public-domains": "node scripts/sync-public-email-domains.mjs",
     "grant:admin": "node scripts/grant-admin.mjs",
     "webhooks:dead": "node scripts/list-dead-webhooks.mjs",
     "webhooks:prune": "node scripts/prune-webhook-inbox.mjs",
@@ -26,7 +27,7 @@
     "check:full": "npm run check && npm run test:e2e"
   },
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1096.0",

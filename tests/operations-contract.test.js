@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const envExample = readFileSync(".env.example", "utf8");
+const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+const setup = readFileSync("docs/SETUP.md", "utf8");
 const operations = readFileSync(
   "docs/lifetime-membership-operations.md",
   "utf8"
@@ -93,6 +95,12 @@ describe("environment documentation contract", () => {
 });
 
 describe("release operations contract", () => {
+  it("pins the Windows-verified Node 22 runtime line", () => {
+    expect(packageJson.engines.node).toBe("22.x");
+    expect(readFileSync(".node-version", "utf8").trim()).toBe("22.23.1");
+    expect(setup).toContain("Requires Node.js 22.x");
+  });
+
   it("keeps production enforcement and live billing disabled by default", () => {
     expect(envExample).toContain("RUN_ACCESS_ENFORCEMENT_ENABLED=false");
     expect(envExample).not.toMatch(/\bsk_live_/);

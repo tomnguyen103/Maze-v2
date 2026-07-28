@@ -12,6 +12,7 @@ import { createQuestProgress } from "../src/game/quest-progress.js";
 import { createLearningJournalStore } from "../server/learning-journal-store.js";
 import { createPlayerStore } from "../server/player-store.js";
 import { createClassroomStore } from "../server/classroom-store.js";
+import { createClassroomDomainStore } from "../server/classroom-domain-store.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const adminDatabaseUrl = process.env.DATABASE_ADMIN_URL ?? "";
@@ -72,6 +73,7 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         [[
           "classrooms",
           "classroom_memberships",
+          "org_domains",
           "cloud_quest_progress",
           "learning_journals",
           "score_entries"
@@ -81,7 +83,7 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         rolsuper: false,
         rolbypassrls: false,
         runtime_member: true,
-        tenant_owners: Array(5).fill("echo_maze_tenant_owner")
+        tenant_owners: Array(6).fill("echo_maze_tenant_owner")
       });
       expect(boundary.rows[0]?.runtime_login).not.toBe(
         "echo_maze_tenant_owner"
@@ -230,6 +232,86 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
           }
         })
       ).resolves.toMatchObject({ applied: false });
+
+      const classroomBTeacherMembership = `orgmem_teacher_b_${suffix}`;
+      await expect(
+        processClassroomAuthorityEvent(authorityStore, {
+          eventType: "organizationMembership.created",
+          payload: {
+            id: classroomBTeacherMembership,
+            classroomId: classroomB,
+            userId: otherExplorerId,
+            role: "org:admin",
+            occurredAt: timestamp + 1
+          }
+        })
+      ).resolves.toMatchObject({ applied: true });
+
+      const domainStore = createClassroomDomainStore(runtimePool);
+      const verifiedDomain = `school-${suffix.slice(0, 12)}.example`;
+      await expect(
+        domainStore.registerDomain(
+          explorerId,
+          classroomA,
+          verifiedDomain
+        )
+      ).resolves.toEqual({
+        domain: verifiedDomain,
+        autoJoinEnabled: true
+      });
+      await expect(
+        domainStore.domainForTeacher(explorerId, classroomA)
+      ).resolves.toEqual({
+        domain: verifiedDomain,
+        autoJoinEnabled: true
+      });
+      await expect(
+        domainStore.domainForTeacher(otherExplorerId, classroomA)
+      ).resolves.toBeNull();
+      await expect(
+        domainStore.registerDomain(
+          otherExplorerId,
+          classroomA,
+          `student-${suffix.slice(0, 12)}.example`
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        domainStore.classroomForDomain(verifiedDomain)
+      ).resolves.toBe(classroomA);
+      await expect(
+        domainStore.registerDomain(
+          otherExplorerId,
+          classroomB,
+          verifiedDomain
+        )
+      ).rejects.toMatchObject({
+        name: "ClassroomDomainConflictError"
+      });
+      await expect(
+        domainStore.registerDomain(
+          otherExplorerId,
+          classroomB,
+          "gmail.com"
+        )
+      ).rejects.toMatchObject({ code: "22023" });
+      await expect(
+        runtimePool.query("SELECT domain FROM org_domains")
+      ).rejects.toMatchObject({ code: "42501" });
+      await adminPool.query(
+        `UPDATE org_domains
+         SET auto_join_enabled = FALSE
+         WHERE domain = $1`,
+        [verifiedDomain]
+      );
+      await expect(
+        domainStore.classroomForDomain(verifiedDomain)
+      ).resolves.toBeNull();
+      await adminPool.query(
+        `UPDATE org_domains
+         SET auto_join_enabled = TRUE
+         WHERE domain = $1`,
+        [verifiedDomain]
+      );
 
       const adminClient = await adminPool.connect();
       try {
@@ -607,6 +689,12 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       }]);
 
       await createUserDeletionStore(runtimePool).deleteUser(explorerId);
+      await expect(
+        adminPool.query(
+          "SELECT domain FROM org_domains WHERE domain = $1",
+          [verifiedDomain]
+        )
+      ).resolves.toMatchObject({ rows: [] });
       await expect(
         processClassroomAuthorityEvent(authorityStore, {
           eventType: "organizationMembership.created",
