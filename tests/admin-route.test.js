@@ -47,6 +47,9 @@ function createResponse() {
  *   previousRole?: import("../shared/permissions.js").Role,
  *   setRole?: (change: Record<string, unknown>) => Promise<any>,
  *   exportUser?: (userId: string) => Promise<unknown>,
+ *   listDeadWebhooks?: (options: { limit: number }) => Promise<
+ *     Record<string, unknown>[]
+ *   >,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
  * }} [options]
  */
@@ -64,6 +67,8 @@ function createHarness(options = {}) {
   const mirrored = [];
   /** @type {string[]} */
   const exported = [];
+  /** @type {{ limit: number }[]} */
+  const deadListings = [];
   const handler = createAdminHandler({
     store: {
       setRole:
@@ -85,6 +90,23 @@ function createHarness(options = {}) {
           data: { player_profile: { user_id: userId } }
         };
       }),
+    listDeadWebhooks:
+      options.listDeadWebhooks ??
+      (async (listing) => {
+        deadListings.push(listing);
+        // Shaped like the store's rows, snake_case and a Date, so the route is
+        // exercised against what `listDead` actually returns.
+        return [
+          {
+            provider: "stripe",
+            event_id: "evt_1",
+            event_type: "checkout.session.completed",
+            attempts: 5,
+            last_error: "TypeError",
+            received_at: new Date("2026-01-01T00:00:00.000Z")
+          }
+        ];
+      }),
     requirePermission: createPermissionGuard({
       getUserId: () => actor,
       resolver: { roleFor: async () => role }
@@ -98,7 +120,7 @@ function createHarness(options = {}) {
         mirrored.push([userId, nextRole]);
       })
   });
-  return { handler, audits, writes, mirrored, exported };
+  return { handler, audits, writes, mirrored, exported, deadListings };
 }
 
 /**
@@ -434,5 +456,104 @@ describe("admin data export", () => {
     const real = await call(harness, { method: "GET", url: exportUrl });
     // A caller who may not use either route cannot tell them apart.
     expect(unknown.statusCode).toBe(real.statusCode);
+  });
+});
+
+const deadWebhooksUrl = "/api/admin/webhooks/dead";
+
+describe("admin dead-webhook endpoint", () => {
+  it("lists dead deliveries for an admin", async () => {
+    const harness = createHarness();
+    const result = await call(harness, {
+      method: "GET",
+      url: deadWebhooksUrl
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toEqual({
+      deliveries: [
+        {
+          provider: "stripe",
+          eventId: "evt_1",
+          eventType: "checkout.session.completed",
+          attempts: 5,
+          lastError: "TypeError",
+          receivedAt: "2026-01-01T00:00:00.000Z"
+        }
+      ]
+    });
+    expect(harness.deadListings).toEqual([{ limit: 100 }]);
+  });
+
+  it("honours a bounded limit and clamps an unreasonable one", async () => {
+    const harness = createHarness();
+    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=5` });
+    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=9999` });
+    await call(harness, { method: "GET", url: `${deadWebhooksUrl}?limit=nope` });
+    expect(harness.deadListings).toEqual([
+      { limit: 5 },
+      { limit: 200 },
+      { limit: 100 }
+    ]);
+  });
+
+  it("refuses a moderator — reading dead deliveries is admin-only", async () => {
+    const harness = createHarness({ actor: "mod_1", role: "moderator" });
+    const result = await call(harness, {
+      method: "GET",
+      url: deadWebhooksUrl
+    });
+    expect(result.statusCode).toBe(403);
+    expect(harness.deadListings).toEqual([]);
+  });
+
+  it("refuses a player and a signed-out caller", async () => {
+    const player = createHarness({ actor: "user_1", role: "player" });
+    const playerResult = await call(player, {
+      method: "GET",
+      url: deadWebhooksUrl
+    });
+    expect(playerResult.statusCode).toBe(403);
+    const signedOut = createHarness({ actor: null });
+    const signedOutResult = await call(signedOut, {
+      method: "GET",
+      url: deadWebhooksUrl
+    });
+    expect(signedOutResult.statusCode).toBe(401);
+    expect(player.deadListings).toEqual([]);
+    expect(signedOut.deadListings).toEqual([]);
+  });
+
+  it("rejects a method other than GET", async () => {
+    const harness = createHarness();
+    const result = await call(harness, {
+      method: "POST",
+      url: deadWebhooksUrl
+    });
+    expect(result.statusCode).toBe(405);
+    expect(result.headers.allow).toBe("GET");
+    expect(harness.deadListings).toEqual([]);
+  });
+
+  it("does not leak the failure when the inbox cannot be read", async () => {
+    const harness = createHarness({
+      listDeadWebhooks: async () => {
+        throw new Error("postgres://user:secret@host is unreachable");
+      }
+    });
+    const result = await call(harness, {
+      method: "GET",
+      url: deadWebhooksUrl
+    });
+    expect(result.statusCode).toBe(503);
+    expect(JSON.stringify(result.body)).not.toContain("secret@host");
+  });
+
+  it("keeps the role route on its own permission", async () => {
+    const harness = createHarness();
+    const result = await call(harness, {
+      url: roleUrl,
+      body: { role: "moderator" }
+    });
+    expect(result.statusCode).toBe(200);
   });
 });

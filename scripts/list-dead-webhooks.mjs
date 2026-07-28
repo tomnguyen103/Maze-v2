@@ -2,8 +2,9 @@
 // Lists webhook deliveries that exhausted their retries.
 //
 // A dead row is one the retry loop gave up on, so it represents a state change
-// the provider believes happened and we never applied. Phase 7's admin
-// dashboard surfaces these; until then this is the way to see them.
+// the provider believes happened and we never applied. `GET
+// /api/admin/webhooks/dead` serves the same rows to an admin; this stays the
+// way to see them from a shell and to gate a deploy on the exit code.
 //
 // Exit codes: 0 none dead, 1 at least one dead row, 2 could not run.
 //
