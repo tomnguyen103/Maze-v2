@@ -1,0 +1,360 @@
+/* Hallmark · macrostructure: Workbench (locked by design.md) · genre: playful · theme: Hum · page: Classroom · nav: N7 compact slab · footer: none (app workspace) · pre-emit critique: P5 H5 E5 S5 R5 V4 · slop: pass (1–58) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+
+.classroom-nav {
+  display: grid;
+  min-height: 4rem;
+  padding: var(--space-2) max(var(--space-4), calc((100vw - 76rem) / 2));
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-5);
+  border-bottom: 2px solid var(--color-line);
+  background: var(--color-nav);
+}
+
+.classroom-nav > p {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.92rem;
+  font-weight: 560;
+}
+
+.classroom-nav .wordmark {
+  display: inline-flex;
+  font-size: 1.25rem;
+}
+
+.classroom-nav__actions,
+.classroom-actions,
+.classroom-invitation-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.control-link {
+  display: inline-flex;
+  min-height: 2.8125rem;
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.classroom-workbench {
+  width: min(100% - 2rem, 76rem);
+  margin-inline: auto;
+  padding-block: clamp(var(--space-6), 5vw, var(--space-10));
+}
+
+.classroom-heading {
+  display: grid;
+  align-items: end;
+  gap: var(--space-5);
+}
+
+.classroom-heading h1 {
+  max-width: 16ch;
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 5vw, 4.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+  overflow-wrap: anywhere;
+}
+
+.classroom-heading > p {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: clamp(1rem, 1.8vw, 1.16rem);
+}
+
+.classroom-status {
+  min-height: 1.5rem;
+  margin: var(--space-6) 0 var(--space-4);
+  padding-block: var(--space-2);
+  border-block: 1px solid var(--color-line-soft);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.classroom-grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.classroom-panel,
+.classroom-message {
+  min-width: 0;
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-offset);
+}
+
+.classroom-panel--memberships {
+  background: var(--color-stone-raised);
+}
+
+.classroom-panel--create {
+  background: var(--color-nav);
+}
+
+.classroom-panel--teacher {
+  grid-column: 1 / -1;
+}
+
+.classroom-message {
+  max-width: 44rem;
+}
+
+.classroom-message--error {
+  border-color: var(--color-warden);
+}
+
+.classroom-panel h2,
+.classroom-message h2 {
+  margin: var(--space-2) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3vw, 2.3rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.classroom-panel__heading,
+.classroom-progress__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.classroom-list,
+.progress-list {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+}
+
+.classroom-card,
+.progress-card,
+.classroom-empty {
+  padding: var(--space-4);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+}
+
+.classroom-card h3,
+.classroom-empty h3,
+.progress-card h4 {
+  margin: var(--space-1) 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.classroom-card > p:not(.section-label),
+.classroom-empty > p:not(.section-label) {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--color-ink-muted);
+}
+
+.classroom-form {
+  margin-block-start: var(--space-5);
+}
+
+.classroom-form label {
+  display: block;
+  margin-block-end: var(--space-2);
+  font-weight: 700;
+}
+
+.classroom-form__row {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.classroom-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.8125rem;
+  padding: var(--space-3);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  outline: 0.2rem solid transparent;
+  outline-offset: 0.12rem;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font: 500 1rem/1.2 var(--font-body);
+}
+
+.classroom-form input:focus-visible {
+  outline-color: var(--color-focus);
+}
+
+.classroom-form input:hover:not(:disabled) {
+  background: var(--color-stone-raised);
+}
+
+.classroom-form input:user-invalid {
+  border-color: var(--color-warden);
+}
+
+.classroom-form input:disabled {
+  background: var(--color-stone);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.classroom-form__status {
+  min-height: 1.45em;
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink-muted);
+  font-size: 0.86rem;
+}
+
+.classroom-invitation-result {
+  margin-block-start: var(--space-3);
+}
+
+.classroom-privacy {
+  display: inline-flex;
+  min-height: 2rem;
+  padding-inline: var(--space-3);
+  align-items: center;
+  border: 2px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-signal);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.classroom-progress {
+  margin-block-start: var(--space-7);
+  padding-block-start: var(--space-5);
+  border-block-start: 2px solid var(--color-line);
+}
+
+.progress-card__objective {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
+.progress-card ul {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.progress-card li {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  background: var(--color-stone);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.classroom-inline-error {
+  padding: var(--space-3);
+  border: 2px solid var(--color-warden);
+  color: var(--color-ink);
+  background: var(--color-paper);
+}
+
+.classroom-inline-note {
+  margin-block: var(--space-3);
+  padding: var(--space-3);
+  border: 2px solid var(--color-line);
+  background: var(--color-stone);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.classroom-loading {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.classroom-loading span {
+  display: block;
+  height: 3.5rem;
+  border: 2px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-stone);
+  animation: classroom-pulse 1.4s var(--ease-out) infinite alternate;
+}
+
+@keyframes classroom-pulse {
+  to {
+    background: var(--color-stone-raised);
+  }
+}
+
+@media (min-width: 40rem) {
+  .classroom-heading {
+    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  }
+
+  .classroom-form__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .classroom-list,
+  .progress-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 60rem) {
+  .classroom-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
+  }
+}
+
+@media (max-width: 42rem) {
+  .classroom-nav {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .classroom-nav > p {
+    display: none;
+  }
+
+  .classroom-nav__actions {
+    grid-column: 1;
+    justify-content: start;
+  }
+
+  .classroom-heading h1 {
+    font-size: clamp(1.8rem, 11vw, 2.6rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classroom-loading span {
+    animation: none;
+  }
+}

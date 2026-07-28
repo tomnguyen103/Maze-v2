@@ -16,7 +16,10 @@ describe("vite config side effects", () => {
   it("registers no API middleware plugin for a vitest run", () => {
     const resolved = factory({ mode: "test", command: "serve" });
     expect(resolved.plugins ?? []).toEqual([]);
-    expect(resolved.test).toEqual({ include: ["tests/*.test.js"] });
+    expect(resolved.test).toEqual({
+      include: ["tests/*.test.js"],
+      maxWorkers: 8
+    });
   });
 
   it("keeps the API plugin for dev and preview servers", () => {

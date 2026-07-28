@@ -409,3 +409,60 @@ describe("Classroom authority synchronization migration", () => {
     expect(sql).toContain("score_entries_idempotent_update");
   });
 });
+
+describe("Classroom Teacher read boundary migration", () => {
+  it("projects journals into count-only rows behind one bounded definer read", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0016_classroom_teacher_progress.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("CREATE TABLE classroom_progress_counts");
+    expect(sql).toContain(
+      "CREATE FUNCTION refresh_classroom_progress_counts()"
+    );
+    expect(sql).toContain(
+      "CREATE TRIGGER learning_journals_refresh_classroom_progress_counts"
+    );
+    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(2);
+    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(2);
+    expect(sql).toContain(
+      "ALTER TABLE classroom_progress_counts FORCE ROW LEVEL SECURITY"
+    );
+    expect(sql).toContain("classroom_progress_counts_teacher_read");
+    expect(sql).toContain(
+      "classroom_progress_counts_tenant_owner_insert"
+    );
+    expect(sql).toContain(
+      "classroom_progress_counts_tenant_owner_delete"
+    );
+    expect(sql).not.toContain(
+      "classroom_progress_counts_tenant_owner_write"
+    );
+    expect(sql).toContain("CREATE FUNCTION read_classroom_progress");
+    expect(sql).toContain("role = 'teacher'");
+    expect(sql).toContain("role = 'student'");
+    expect(sql).toContain("learningObjectiveId");
+    expect(sql).toContain("COUNT(*) FILTER");
+    expect(sql).toContain("COUNT(*) OVER () > 500 AS truncated");
+    expect(sql).toContain("LIMIT 500");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION read_classroom_progress(TEXT) FROM PUBLIC"
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION read_classroom_progress(TEXT)"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE learning_journals TO echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE classroom_progress_counts TO echo_maze_runtime"
+    );
+    expect(sql).not.toMatch(/\bstudent_id\b/);
+    expect(sql).not.toMatch(/prompt|answer_text|selected_answer/i);
+    expect(sql).not.toContain("BYPASSRLS");
+  });
+});

@@ -17,6 +17,7 @@ give the account holder both halves of their data rights.
 | Role | `user_roles` | absence means `player` |
 | Explorer Access Settings | `explorer_access_settings` | four presentation-only booleans + optimistic revision |
 | Classroom Memberships | `classroom_memberships` | Clerk membership id, Classroom id, and Teacher/Student role |
+| Classroom Progress Counts | `classroom_progress_counts` | per-Student/per-objective correct, wrong, Hint, Skip, and total counts only |
 
 Guests keep Explorer Access Settings only on their device. Signed-in Explorers
 sync the same four presentation-only choices to their profile. They never enter
@@ -44,6 +45,12 @@ Run, Quest, score, Question, or shared-link state.
   one, so a stolen admin session is the threat the audit trail is there for.
 - Score Entries include `classroom_id`: null means Personal Play and a Clerk
   Organization id means Class Play.
+- A Teacher can read only the count projection for a selected Classroom where
+  the database-authoritative Membership role is Teacher. The projection has no
+  prompt, answer, Question timestamp, or raw Journal JSON. Students and
+  non-members cannot execute a successful Teacher read, and the application
+  runtime has no direct `SELECT` grant on either Student journals or the count
+  table.
 
 ## Deletion
 
@@ -55,7 +62,8 @@ endpoint deliberately does not error for a deleted or empty account.
 The deletion transaction explicitly removes and verifies the signed-in
 Explorer Access Settings and Classroom Membership records.
 Removing one Classroom Membership also removes that Explorer's Quest Progress
-and Lantern Journal for that Classroom; Personal Play remains.
+and Lantern Journal for that Classroom. Its derived progress counts cascade
+with the Membership. Personal Play remains.
 
 ## Retention
 

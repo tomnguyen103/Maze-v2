@@ -19,6 +19,12 @@ import {
 } from "./webhook-inbox.js";
 import { processClassroomAuthorityEvent } from "./classroom-authority.js";
 import { createClassroomAuthorityStore } from "./classroom-authority-store.js";
+import { createClassroomProvider } from "./classroom-provider.js";
+import {
+  createClassroomHandler,
+  isClassroomPath
+} from "./classroom-route.js";
+import { createClassroomStore } from "./classroom-store.js";
 import { createAuditStore } from "./audit-store.js";
 import {
   createAuditRecorder,
@@ -138,6 +144,7 @@ export function createPlayerApi(env = process.env) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
       if (
         !PLAYER_PATHS.has(pathname) &&
+        !isClassroomPath(pathname) &&
         !isAdminPath(pathname) &&
         !isInternalPath(pathname) &&
         !isHealthPath(pathname)
@@ -236,6 +243,7 @@ export function createPlayerApi(env = process.env) {
   const lifetimeConfig = loadLifetimeConfig(env);
   const inboxStore = createWebhookInboxStore(queryAdapter);
   const classroomAuthorityStore = createClassroomAuthorityStore(queryAdapter);
+  const classroomStore = createClassroomStore(pool);
   const healthHandler = createHealthHandler({
     version,
     checkDatabase: () => queryAdapter.query("SELECT 1"),
@@ -277,6 +285,13 @@ export function createPlayerApi(env = process.env) {
     store: accessSettingsStore,
     getUserId,
     recordAudit
+  });
+  const classroomHandler = createClassroomHandler({
+    store: classroomStore,
+    provider: createClassroomProvider(env),
+    getUserId,
+    recordAudit,
+    rateLimit
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
@@ -462,6 +477,12 @@ export function createPlayerApi(env = process.env) {
       rateLimit,
       recordAudit
     });
+    const unavailableClassroomHandler = createClassroomHandler({
+      store: classroomStore,
+      provider: null,
+      getUserId: () => null,
+      rateLimit
+    });
     /**
      * @param {import("node:http").IncomingMessage} request
      * @param {import("node:http").ServerResponse} response
@@ -471,6 +492,7 @@ export function createPlayerApi(env = process.env) {
       const pathname = new URL(request.url ?? "", "http://local").pathname;
       if (
         PLAYER_PATHS.has(pathname) ||
+        isClassroomPath(pathname) ||
         isAdminPath(pathname) ||
         isInternalPath(pathname) ||
         isHealthPath(pathname)
@@ -494,6 +516,10 @@ export function createPlayerApi(env = process.env) {
         // No Clerk means no admin identity, so every admin route is 401 rather
         // than silently unguarded.
         void unavailableAdminHandler(request, response, next);
+        return;
+      }
+      if (isClassroomPath(pathname)) {
+        void unavailableClassroomHandler(request, response, next);
         return;
       }
       if (ACCESS_PATHS.has(pathname)) {
@@ -540,6 +566,7 @@ export function createPlayerApi(env = process.env) {
     const pathname = new URL(request.url ?? "", "http://local").pathname;
     if (
       !PLAYER_PATHS.has(pathname) &&
+      !isClassroomPath(pathname) &&
       !isAdminPath(pathname) &&
       !isInternalPath(pathname) &&
       !isHealthPath(pathname)
@@ -591,6 +618,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (isAdminPath(pathname)) {
           void adminHandler(request, response, next);
+          return;
+        }
+        if (isClassroomPath(pathname)) {
+          void classroomHandler(request, response, next);
           return;
         }
         if (ACCESS_PATHS.has(pathname)) {

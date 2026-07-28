@@ -12,6 +12,7 @@ import {
 } from "./player-state.js";
 import { createClerkBrowser } from "./clerk-browser.js";
 import { createJournalContinuity } from "../learning/journal-continuity.js";
+import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
 
 /**
  * @typedef {{
@@ -66,7 +67,9 @@ export function createPlayerController({
   let playerState = { ...INITIAL_PLAYER_STATE };
   let score = 0;
   const client = createPlayerApiClient({
-    getToken: clerkBrowser.getToken
+    getToken: clerkBrowser.getToken,
+    getClassroomId: () =>
+      loadSelectedClassroom(globalThis.localStorage, clerkBrowser.user?.id)
   });
   const journalContinuity = createJournalContinuity({
     client,
@@ -373,6 +376,10 @@ export function createPlayerController({
   /** @param {boolean} [loading] */
   function renderAuth(loading = false) {
     const signedIn = Boolean(clerkBrowser.user);
+    const classroomLink = document.getElementById("classroom-link");
+    if (classroomLink instanceof HTMLAnchorElement) {
+      classroomLink.hidden = !signedIn;
+    }
     elements.name.textContent = loading
       ? "Loading…"
       : playerState.profile?.username ?? (signedIn ? "New Explorer" : "Guest");

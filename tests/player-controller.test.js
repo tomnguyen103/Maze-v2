@@ -54,8 +54,16 @@ const client = {
 vi.mock("../src/player/clerk-browser.js", () => ({
   createClerkBrowser: () => clerkBrowser
 }));
+const createPlayerApiClient = vi.fn(
+  /** @param {{ getClassroomId?: () => string | null }} [_options] */
+  (_options) => {
+    void _options;
+    return client;
+  }
+);
+
 vi.mock("../src/player/player-client.js", () => ({
-  createPlayerApiClient: () => client,
+  createPlayerApiClient,
   createRunIdempotencyKey: vi.fn(() => "run-key")
 }));
 vi.mock("../src/player/palettes.js", () => ({
@@ -98,7 +106,26 @@ describe("Player Profile dialog", () => {
       <button id="scoreboard-button"></button>
       <p id="scoreboard-status"></p>
       <button id="player-sign-out"></button>
+      <a id="classroom-link" href="/class" hidden>Classroom</a>
     `;
+  });
+
+  it("binds Class Play storage to scoped calls and shows useful navigation", async () => {
+    localStorage.setItem(
+      "echo-maze:selected-classroom:v1:user_123",
+      "org_class_1"
+    );
+    createPlayerController();
+
+    const options = createPlayerApiClient.mock.calls.at(-1)?.[0];
+    expect(options?.getClassroomId?.()).toBe("org_class_1");
+    await vi.waitFor(() => {
+      expect(
+        /** @type {HTMLAnchorElement} */ (
+          document.getElementById("classroom-link")
+        ).hidden
+      ).toBe(false);
+    });
   });
 
   it("closes the required first-login dialog after a successful save", async () => {

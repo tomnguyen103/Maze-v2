@@ -85,6 +85,32 @@ export function createPlayerApiClient({
   }
 
   return {
+    async listClassrooms() {
+      return request("/api/classrooms");
+    },
+    /** @param {string} name */
+    async createClassroom(name) {
+      return request("/api/classrooms", {
+        method: "POST",
+        body: JSON.stringify({ name })
+      });
+    },
+    /** @param {string} classroomId */
+    async getClassroomProgress(classroomId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/progress`
+      );
+    },
+    /** @param {string} classroomId @param {string} email */
+    async inviteClassroomStudent(classroomId, email) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/invitations`,
+        {
+          method: "POST",
+          body: JSON.stringify({ email })
+        }
+      );
+    },
     async listAdminUsers() {
       return request("/api/admin/users");
     },

@@ -221,6 +221,64 @@ describe("Vercel function budget", () => {
     }
   });
 
+  it("routes the Classroom namespace through the profile function", async () => {
+    const config = JSON.parse(
+      await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+    );
+    expect(config.rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: "/api/classrooms",
+          destination: "/api/profile?_classroomRoute=root"
+        },
+        {
+          source: "/api/classrooms/:classroomPath*",
+          destination: "/api/profile?_classroomRoute=:classroomPath*"
+        }
+      ])
+    );
+
+    for (const [incoming, expectedUrl, expectedStatus] of [
+      [
+        "/api/profile?_classroomRoute=root",
+        "/api/classrooms",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/progress",
+        "/api/classrooms/org_class_1/progress",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=../secret",
+        "/api/profile?_classroomRoute=../secret",
+        404
+      ]
+    ]) {
+      const request = /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ ({ method: "GET", url: incoming, headers: {} })
+      );
+      /** @type {(status: number) => void} */
+      let settle = () => {};
+      const finished = new Promise((resolve) => {
+        settle = resolve;
+      });
+      const response = /** @type {import("node:http").ServerResponse} */ (
+        /** @type {unknown} */ ({
+          statusCode: 0,
+          setHeader() {},
+          on() {},
+          end() {
+            settle(response.statusCode);
+          }
+        })
+      );
+      await profile(request, response);
+      expect(request.url).toBe(expectedUrl);
+      await expect(finished).resolves.toBe(expectedStatus);
+    }
+  });
+
   it("restores the public nested Access path before server routing", async () => {
     const request = /** @type {import("node:http").IncomingMessage} */ (
       /** @type {unknown} */ ({

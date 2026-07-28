@@ -4,7 +4,11 @@ import { loadEnv } from "vite";
 export default defineConfig(({ mode }) => {
   const base = {
     test: {
-      include: ["tests/*.test.js"]
+      include: ["tests/*.test.js"],
+      // This Windows workstation has 32 logical cores, but one full Vitest
+      // fan-out competes with the browser/MCP processes used by the local
+      // workflow. Eight forks keeps the gate deterministic without retries.
+      maxWorkers: 8
     },
     build: {
       outDir: "dist",
