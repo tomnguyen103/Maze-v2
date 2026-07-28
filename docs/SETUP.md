@@ -52,9 +52,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 13. `db/migrations/0013_audit_privilege_boundary_finalize.sql`
 14. `db/migrations/0014_classroom_rls_foundation.sql`
 15. `db/migrations/0015_classroom_authority_and_writes.sql`
+16. `db/migrations/0016_classroom_teacher_progress.sql`
 
-Migrations 0012 through 0015 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all four.
+Migrations 0012 through 0016 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all five.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -74,6 +75,10 @@ Deploy the privilege boundary in this order during a maintenance window:
    migration 0015, and immediately deploy the matching application code. The
    migration moves Score Entries behind forced RLS, so the old code cannot
    submit Personal Play scores during that short gap.
+7. Apply migration 0016 immediately before deploying the Teacher-read and
+   `/class` release. It backfills and trigger-maintains count-only Classroom
+   progress, then exposes one bounded Teacher function. It does not grant the
+   runtime direct reads of Student journals or the count projection.
 
 Configure the Clerk webhook endpoint to deliver `user.deleted`,
 `organization.created`, `organization.updated`, `organization.deleted`,
@@ -81,7 +86,9 @@ Configure the Clerk webhook endpoint to deliver `user.deleted`,
 `organizationMembership.deleted`. Classroom authority events are minimized,
 stored in the durable inbox, and retried idempotently. Do not enable Classroom
 creation in Clerk until migration 0015 and the matching application release are
-both deployed.
+both deployed. Keep Clerk's default `org:admin` and `org:member` roles; Echo
+Maze maps them to Teacher and Student. See `docs/classroom-operations.md` for
+the full setup, delayed-webhook behavior, and rollback order.
 
 Create a separate unprivileged login for `DATABASE_URL` and set its name as
 `AUDIT_RUNTIME_LOGIN` before the final command:
@@ -115,6 +122,24 @@ npx vitest run tests/classroom-rls.integration.test.js
 The proof rejects a superuser, `BYPASSRLS`, or tenant-table owner runtime. It
 also verifies cross-Class reads return no rows and pooled context clears after
 both commit and rollback. Never point the fixture-producing proof at production.
+
+### Classroom expand-contract rollback
+
+Rollback moves in reverse and never drops a boundary while code still uses it:
+
+1. Disable access to `/class` and deploy code that no longer calls the
+   Classroom creation, invitation, or Teacher-progress endpoints.
+2. Quiesce writes. Drop the migration 0016 progress trigger and functions, then
+   its count table and `classrooms_member_list` policy.
+3. Deploy code that no longer sends Class Play writes before reversing migration
+   0015. Existing Class Play data must be exported or deliberately retired
+   before columns or authority tables are removed.
+4. Reverse migration 0014 last. Never remove forced RLS while an application
+   version can still issue tenant queries.
+
+There is intentionally no automatic down migration: Classroom membership
+deletion cascades Class Play data, and that destructive decision needs an
+operator-reviewed export and maintenance plan.
 
 Then set:
 

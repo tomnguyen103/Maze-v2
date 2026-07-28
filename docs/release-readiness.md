@@ -1,6 +1,6 @@
 # Echo Maze release readiness
 
-**Evidence date:** 2026-07-26
+**Evidence date:** 2026-07-28
 
 **Release decision:** test-mode engineering candidate only. Production Run
 Access enforcement remains off. No live charge, live Product, live Price, or
@@ -29,6 +29,9 @@ remote `main`.
 | Daily Shared Labyrinth | Daily contract/storage tests and `tests/e2e/daily.spec.js` | Desktop, mobile, UTC rollover, expired link, Quest isolation | Pass - integrated closure candidate |
 | Account deletion | Signed Clerk webhook, deletion-store, and migration tests | Retry-safe transactional cascade | Pass - integrated closure candidate |
 | Billing disable and rollback | Access-config tests and `docs/lifetime-membership-operations.md` | Desktop/mobile starts, entitlement preserved, webhook retained | Pass - integrated closure candidate |
+| Explorer Access Settings profile sync | Settings adapter/controller/route/store and export/deletion tests | Guest local-only, signed-in optimistic sync, conflict, device change | Pass - export schema `echo-maze-export/2` approved |
+| Audit ownership and immutable checkpoints | Migration, append-function, checkpoint adapter, chain verifier, and operations-contract tests | Non-owner runtime, create-only checkpoints, retained-anchor verification | Pass - adapter configured for `<immutable sink/bucket>`; live sink provisioning remains external |
+| Classroom authority and Class Play isolation | Authority, tenant-context, RLS, route/store/controller tests plus `tests/e2e/classroom.spec.js` | Signed-out, empty, Student, Teacher, loading, stale, error; desktop/mobile/200%/keyboard/reduced motion | Pass - live PostgreSQL cross-Class denial and count-only Teacher read |
 
 Semantic assertions cover dialog names, heading focus, focus return, visible
 keyboard focus, non-color state labels, live status regions, native button
@@ -51,12 +54,15 @@ npx playwright test --workers=4
 
 Final integrated closure-candidate evidence:
 
-- Vitest: 375 passed; 4 intentional environment skips
-- Playwright desktop/mobile: 105 passed; 5 intentional Clerk-network skips
-- Live PostgreSQL integration: 4 passed across Run Access and Journal stores
-- Landing JavaScript: 6.70 KB gzip / 8 KB
-- Game JavaScript: 26.26 KB gzip / 30 KB
+- Vitest: 867 passed; 15 intentional environment skips
+- Playwright desktop/mobile: three consecutive green full runs at 4 workers;
+  two were 117 passed / 5 intentional Clerk-network skips and one was
+  115 passed / 7 skips while Clerk throttled two optional network passages
+- Live PostgreSQL Classroom integration: 1 passed after migrations 0001-0016
+- Landing JavaScript: 7.39 KB gzip / 8 KB
+- Game JavaScript: 27.00 KB gzip / 30 KB
 - Shared styles: 10.21 KB gzip / 12 KB
+- Admin JavaScript: 5.78 KB gzip / 20 KB
 - Optional Clerk boundary: 544.21 KB gzip / 600 KB
 
 ## Operational drills
@@ -85,6 +91,13 @@ result above is fixed-adapter contract proof and does not claim an external
 Stripe test transaction.
 
 ## Mandatory review follow-ups
+
+PRs #81 and #82 were merged under the approved dependency-blocking fallback
+after CodeRabbit confirmed its review limit. Their mandatory post-merge reviews
+remain open until the refill trigger posts a completed review and its one-time
+findings read is resolved. PR #83 must also complete the normal
+CodeRabbit protocol, or carry the same explicit post-merge obligation only if
+the confirmed limit blocks the sole remaining deliverable.
 
 PRs #52, #53, and #55 reached final `Review completed` status after refill.
 Their one-time findings reads are complete. PR #55 has ten review threads, ten

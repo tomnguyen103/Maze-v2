@@ -583,10 +583,12 @@ Fix, two parts, both cause-level:
 2. The remaining intermittent failures were a second class: genuine load
    starvation (app boot and Clerk initialisation stretching past their
    bounds) from 16 workers × Chromium against one shared preview process on
-   32 logical cores. `workers: 8` in `playwright.config.mjs` bounds the
-   oversubscription, and the readiness barrier carries a 15s bound — the same
-   explicit-bound pattern `entry.spec.js` already used for Clerk
-   initialisation. Suite wall-clock stayed in the same range.
+   32 logical cores. `workers: 8` originally bounded the oversubscription;
+   after the Phase 8 suite grew to 122 cases and reproduced two distinct
+   desktop boot/hydration flakes in consecutive full runs, the current
+   `playwright.config.mjs` cap is 4. The readiness barrier carries a 15s
+   bound — the same explicit-bound pattern `entry.spec.js` already used for
+   Clerk initialisation.
 
 A third, smaller class surfaced during validation: the two tests that drive
 Clerk's real development instance (SignIn modal, demo-gate handoff) fail when
@@ -652,9 +654,10 @@ and asserts exit code 2, and asserts the timeout bounds are present.
   causes and both were fixed at the cause: (1) tests injecting input before
   the app's async Run swap (`data-game-ready`), which parallelism only
   amplified, and (2) genuine oversubscription starving app boot and Clerk's
-  remotely loaded UI past their bounds, addressed with `workers: 8` and
-  explicit 15s bounds on the readiness barrier and the two Clerk modal
-  expectations. No retries anywhere; no existing assertion changed meaning.
+  remotely loaded UI past their bounds, addressed first with `workers: 8`,
+  then tightened to 4 after the Phase 8 suite grew. Explicit 15s bounds remain
+  on the readiness barrier and the two Clerk modal expectations. No retries
+  anywhere; no existing assertion changed meaning.
 - The vitest fault was never reproduced (8 full + 30 targeted attempts), so
   the fix removes the suspected mechanism (config-load side effects) and pins
   it with tests rather than claiming a verified repro.
@@ -796,6 +799,64 @@ Two findings plus one nitpick, all fixed:
    export always has its audit attempt behind it — but the recorder keeps
    phase 1's never-throw contract, so a failed audit write is logged and
    counted, not converted into a 503.
+
+---
+
+## Phase 8 — Classroom multi-tenancy and PostgreSQL RLS
+
+- **PRs**: #81, #82, and #83
+- **Branches**: `feat/settings-audit-rls`, `feat/classroom-authority-play`,
+  `feat/classroom-workspace-release`
+- **ADRs**: `docs/adr/0020-signed-in-access-settings-sync.md`,
+  `docs/adr/0021-privilege-separated-audit-checkpoints.md`,
+  `docs/adr/0022-classroom-tenancy-with-forced-rls.md`
+- **Migrations**: 0011-0016, explicitly approved.
+
+### Delivered
+
+- Explorer Access Settings optimistic profile sync, account deletion, and the
+  approved `echo-maze-export/2` GDPR schema.
+- A separately owned audit append boundary plus HMAC-signed, create-only
+  checkpoint objects. The deployment target remains the approved
+  `<immutable sink/bucket>` placeholder; the repo proves the adapter and
+  verifier without claiming live infrastructure was provisioned.
+- Clerk Classroom creation/invitations and signed-webhook authority
+  synchronization, Class Play tenant writes, forced RLS on tenant-scoped
+  records, and a count-only Teacher progress projection.
+- The accessible `/class` workspace with Personal/Class Play selection,
+  multi-Classroom Teacher tools, stale-membership fallback, and desktop/mobile
+  browser coverage for the complete state matrix.
+
+### Gate
+
+- `npm run check`: green (867 unit tests / 15 intentional skips; lint,
+  typecheck, production build, and all bundle budgets pass).
+- `npm run test:e2e`: three consecutive green full runs at 4 workers; two
+  passed 117 / skipped 5 and one passed 115 / skipped 7 while Clerk throttled
+  two optional network passages.
+- Live PostgreSQL: migration 0016 reapplied from the checked-in file; Classroom
+  tenant integration passes, including a crafted call that requests progress
+  for a different selected Classroom.
+- GitHub Actions remain disabled; CodeRabbit status is tracked separately from
+  the local gate.
+
+### Deviations
+
+1. **Three PRs instead of the plan's migration-first sequence.** The user
+   explicitly approved the Phase 8 three-PR exception: settings/audit/RLS
+   foundation, Classroom authority/Class Play, then Teacher APIs/workspace and
+   integrated proof.
+2. **No new Vercel function.** Classroom routes share the existing `profile`
+   function and validated rewrites, preserving the 12-function Hobby ceiling.
+3. **No raw Journal or Student provider identifier reaches Teachers.** The
+   Teacher projection exposes display name plus objective outcome counts only;
+   direct runtime reads of raw Journals and the projection table are denied.
+4. **Progress responses are bounded.** The first 500 projection rows are
+   returned with an explicit `truncated` flag instead of silently presenting a
+   partial roster as complete.
+5. **Classroom-aware `question.fetch` budgets remain backlog item 13.** Phase 8
+   establishes the tenant authority needed for that separate policy change but
+   does not alter the anonymous question budget.
 
 ---
 

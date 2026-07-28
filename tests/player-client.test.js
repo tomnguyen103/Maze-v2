@@ -9,6 +9,44 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 describe("player client", () => {
+  it("maps Classroom workspace actions to the shared guarded namespace", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({ fetchImpl });
+
+    await client.listClassrooms();
+    await client.createClassroom("Aurora Lab");
+    await client.getClassroomProgress("org_class_1");
+    await client.inviteClassroomStudent(
+      "org_class_1",
+      "student@example.com"
+    );
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(calls.map(([path]) => path)).toEqual([
+      "/api/classrooms",
+      "/api/classrooms",
+      "/api/classrooms/org_class_1/progress",
+      "/api/classrooms/org_class_1/invitations"
+    ]);
+    expect(calls[1][1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "Aurora Lab" })
+      })
+    );
+    expect(calls[3][1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "student@example.com" })
+      })
+    );
+  });
+
   it("maps admin workbench actions to their guarded routes", async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ ok: true }), {

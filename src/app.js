@@ -50,6 +50,22 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
         </main>
       `;
     });
+} else if (url.pathname === "/class") {
+  // Classroom code is isolated from guest play and the public landing page.
+  void import("./classroom/classroom-controller.js")
+    .then((classroom) => classroom.renderClassroom(gameRoot))
+    .catch(() => {
+      gameRoot.dataset.classroomState = "unavailable";
+      gameRoot.innerHTML = `
+        <main class="landing-page" id="classroom-main">
+          <p class="section-label">Classroom</p>
+          <h1>Classroom could not load.</h1>
+          <p>Reload to try again. Personal Play is still available.</p>
+          <a class="primary-button" href="/class">Try again</a>
+          <a class="control-link" href="/play">Personal Play</a>
+        </main>
+      `;
+    });
 } else {
   renderLanding(gameRoot);
 }

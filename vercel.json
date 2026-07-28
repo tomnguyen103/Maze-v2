@@ -25,6 +25,14 @@
       "destination": "/api/profile?_meRoute=settings"
     },
     {
+      "source": "/api/classrooms",
+      "destination": "/api/profile?_classroomRoute=root"
+    },
+    {
+      "source": "/api/classrooms/:classroomPath*",
+      "destination": "/api/profile?_classroomRoute=:classroomPath*"
+    },
+    {
       "source": "/api/access/config",
       "destination": "/api/access?_accessRoute=config"
     },
@@ -42,6 +50,10 @@
     },
     {
       "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/class",
       "destination": "/index.html"
     }
   ],

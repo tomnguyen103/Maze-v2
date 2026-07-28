@@ -256,10 +256,20 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
         message.text().includes(".clerk.accounts.dev/npm/@clerk/ui@")) &&
       (message.text().includes("blocked by CORS policy") ||
         message.text() === "Failed to load resource: net::ERR_FAILED");
+    const isOptionalClerkRateLimit =
+      (
+        message.location().url.includes(".clerk.accounts.dev/") &&
+        message.text().includes("429")
+      ) ||
+      (
+        message.location().url.includes("/assets/clerk-") &&
+        message.text().includes("Y._baseFetch")
+      );
     if (
       (message.type() === "error" || message.type() === "warning") &&
       !isClerkDevelopmentKeyNotice &&
-      !isOptionalClerkUiUnavailable
+      !isOptionalClerkUiUnavailable &&
+      !isOptionalClerkRateLimit
     ) {
       consoleProblems.push(message.text());
     }
@@ -1097,6 +1107,7 @@ test("hydrates a shared seed at its Labyrinth Number", async ({ page }) => {
   await page.goto(
     "/?seed=SHARED-LABYRINTH&level=trail-scout&labyrinth=13"
   );
+  await expectGameReady(page);
 
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 13 of 20 · Advanced"

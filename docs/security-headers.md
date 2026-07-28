@@ -93,14 +93,17 @@ so the limits hold across serverless invocations.
 | `profile.write` | 10 / min | `PUT /api/profile` |
 | `lifetime.checkout` | 5 / min | `POST /api/lifetime-checkout` |
 | `export.self` | 2 / hour | `GET /api/me/export` (phase 6) |
+| `classroom.create` | 3 / hour | `POST /api/classrooms` |
+| `classroom.invite` | 20 / hour | `POST /api/classrooms/:id/invitations` |
 
 Keys are `budget:user:<clerk id>` when signed in and `budget:ip:<address hash>`
 for guests — a daily-rotating hash, never a raw address.
 
 `GET /api/question` is unauthenticated by design, so no user id exists there and
 it is address-keyed for everyone. A classroom behind one NAT therefore shares one
-30/min budget. Phase 8 introduces classrooms and is where that budget should be
-reconsidered.
+30/min budget. Classroom-aware Question budgeting remains a separately scoped
+follow-up; the approved Phase 8 release explicitly excludes it. Classroom
+creation and invitation mutations are signed-in-user-keyed by the budgets above.
 
 Windows are fixed. A full budget is spendable instantly — that is the intended
 burst, since normal play is bursty — and up to two budgets can cross one

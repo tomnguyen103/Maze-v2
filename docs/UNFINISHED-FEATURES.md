@@ -4,7 +4,7 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
 
 ## Summary
 
-17 items were catalogued here; items 1-8 and 10 are delivered (PRs #64-#70), leaving 8 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The remaining work is the enterprise-hardening tail: settings sync, tamper-proof audit anchoring, multi-tenancy/RLS, SSO, content review, and scoreboard verification. Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
+17 items were catalogued here; items 1-12 are delivered through the Phase 8 three-PR sequence, leaving 5 open. They come out of a doc corpus in which the four product plans (master plan, roadmap, entry, membership) and all 23 `.scratch` specs/tickets are fully delivered through PRs #34–#63 — their unchecked checkboxes are stale, not open work. The remaining work is the enterprise-hardening tail: Classroom-aware question budgets, SSO, content review, and scoreboard verification. Two large product-decision items — verified Daily ranking and cheat-resistant scoreboard replay — are deferred by explicit ADR language, not oversight. A hard cross-cutting constraint repeats across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so every new endpoint must route through an existing function (enforced by `tests/vercel-functions.test.js`).
 
 ## Backlog
 
@@ -112,18 +112,18 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] Each declared permission in shared/permissions.js has at least one enforced consuming route + UI surface
   - [x] Audit viewer pages through audit_events; role changes and refund lookups audited
 
-### 9. Explorer Access Settings profile sync — [NOT_STARTED]
+### 9. Explorer Access Settings profile sync — [DELIVERED] — DONE, PR #81
 
 - What: Access settings shipped device-local by ADR 0011; the roadmap lists "persistent local settings with optional profile sync later." Settings currently never reach the server.
 - Why it matters: Accessibility preferences vanish on device change — worst for the users who need them most.
 - Source: docs/plans/echo-maze-prioritized-feature-roadmap.md — §11 Recommended MVP; docs/plans/enterprise-hardening-log.md — phase 1 deviation 3, phase 6 deviation 2
-- Evidence checked: grep `access.settings|accessSettings` in server/ — only `server/data-export.js`, which documents they're device-local. Client files exist: `src/player/access-settings.js`, `access-settings-view.js`.
+- Evidence checked: `server/access-settings-route.js` and `server/access-settings-store.js` provide authenticated optimistic synchronization; `shared/export-schema.json` requires `access_settings` in `echo-maze-export/2`; account deletion removes and verifies the row.
 - Touches: server/player-store.js or new store, src/player/access-settings.js, migration (STOP-and-ask), privacy review of export schema
 - Depends on: none
 - Effort: M
 - Acceptance criteria:
-  - [ ] Signed-in Explorer's settings persist across devices; guests stay device-local
-  - [ ] Synced settings appear in the GDPR export and deletion path
+  - [x] Signed-in Explorer's settings persist across devices; guests stay device-local
+  - [x] Synced settings appear in the GDPR export and deletion path
 
 ### 10. Guest demo server-side entitlement enforcement — [DELIVERED] — DONE, PR #70
 
@@ -138,31 +138,31 @@ Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 do
   - [x] A repeat guest from the same hashed address cannot mint unlimited free Runs by clearing storage
   - [x] Privacy posture (daily-rotating hash, no raw address storage) preserved per ADR 0014
 
-### 11. Audit-chain tamper-proofing (separate owner + external anchoring) — [NOT_STARTED]
+### 11. Audit-chain tamper-proofing (separate owner + external anchoring) — [DELIVERED] — DONE, PR #81
 
 - What: The audit log is tamper-evident, not tamper-proof: the app role can drop the append-only triggers and rechain history. Fix needs (a) a separate non-login table owner or SECURITY DEFINER append function, and (b) periodic chain checkpoints (HMAC/signature over `(max(id), row_hash)`) anchored outside the database.
 - Why it matters: Defeats the purpose of the audit chain against exactly the attacker it exists for (compromised app credentials).
 - Source: docs/adr/0013-tamper-evident-audit-log.md — "What this does not defend against"; docs/plans/enterprise-hardening-log.md — Phase 1 CodeRabbit dismissed items 1–2 ("Deferred rather than declined")
-- Evidence checked: grep `definer|checkpoint|hmac` in db/, server/, scripts/ — not found. `db/migrations/0006_audit_events.sql` has triggers only. No role-provisioning script in repo.
+- Evidence checked: migrations 0012-0013 transfer audit ownership to `echo_maze_audit_owner`; runtime appends only through `append_audit_event(text)`; `server/audit-checkpoint.js` writes HMAC-signed create-only Object Lock checkpoints; `scripts/verify-audit-chain.mjs` verifies the database chain and every retained external anchor.
 - Touches: new db migration (STOP-and-ask), server/audit-store.js, scripts/verify-audit-chain.mjs, external sink; the Neon role change itself is infra outside the repo
 - Depends on: none (external sink availability helps)
 - Effort: M
 - Acceptance criteria:
-  - [ ] Append path works without the app role owning audit tables (or via SECURITY DEFINER)
-  - [ ] Checkpoint artifact lands outside the DB and `verify-audit-chain` validates against it
+  - [x] Append path works without the app role owning audit tables (or via SECURITY DEFINER)
+  - [x] Checkpoint adapter and opt-in immutable-sink proof land outside the DB; `verify-audit-chain` validates retained anchors
 
-### 12. Phase 8 — Multi-tenancy: classrooms/orgs + Postgres RLS — [NOT_STARTED]
+### 12. Phase 8 — Multi-tenancy: classrooms/orgs + Postgres RLS — [DELIVERED] — DONE, PRs #81-#83
 
 - What: Clerk Organizations for a teacher/classroom model; `organizations`/`org_memberships` tables; nullable `org_id` on tenant-scoped tables; Postgres RLS via `SET LOCAL app.org_id` per request; teacher dashboard at `/class`. Plan mandates a three-PR migration-first sequence.
 - Why it matters: Unlocks the education market the hardening plan targets; plan calls it the riskiest phase.
 - Source: docs/plans/enterprise-hardening-plan.md — Phase 8; docs/adr/0015-database-authoritative-roles.md — Consequences (org_role deliberately kept out of user_roles)
-- Evidence checked: grep `org_membership|classroom|org_role|ROW LEVEL` across db/, server/, api/, src/ — zero app-code matches (only vendored Clerk bundle). No `/class` frontend area.
+- Evidence checked: migrations 0014-0016 establish Classroom authority, nullable Classroom ownership, forced RLS, and the count-only Teacher projection. Signed Clerk organization webhooks synchronize Membership authority; Class Play writes through tenant transactions; `/class` covers signed-out, Student, Teacher, loading, empty, stale, and error states. Live PostgreSQL tests prove crafted cross-Class reads/writes return no rows or fail with `42501`.
 - Touches: db/migrations/ (STOP-and-ask), server/database.js (SET LOCAL transaction wrapper), every store, new teacher UI, webhook inbox for Clerk org events
 - Depends on: 8 (admin surface helps operate it); hard prerequisite for 13, 14
 - Effort: L
 - Acceptance criteria:
-  - [ ] RLS denies cross-org reads even with application-layer bugs (tested)
-  - [ ] Teacher can create a classroom, students join, teacher sees only own org's data
+  - [x] RLS denies cross-org reads even with application-layer bugs (tested)
+  - [x] Teacher can create a Classroom, invite Students, and see only count-minimized progress for owned Classrooms
 
 ### 13. Classroom-aware `question.fetch` rate budget — [NOT_STARTED]
 

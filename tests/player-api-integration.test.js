@@ -215,6 +215,23 @@ describe("composed player API", () => {
     });
   });
 
+  it("keeps Classroom routes closed without storage", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      for (const path of [
+        "/api/classrooms",
+        "/api/classrooms/org_class_1/progress"
+      ]) {
+        const response = await fetch(`${origin}${path}`);
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toMatchObject({
+          error: expect.stringMatching(/Guest play still works/i)
+        });
+      }
+    });
+  });
+
   it("fails Clerk account-deletion webhooks closed without storage", async () => {
     const handler = createPlayerApi({});
 

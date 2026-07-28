@@ -11,6 +11,7 @@ import { createQuestProgressStore } from "../server/quest-progress-store.js";
 import { createQuestProgress } from "../src/game/quest-progress.js";
 import { createLearningJournalStore } from "../server/learning-journal-store.js";
 import { createPlayerStore } from "../server/player-store.js";
+import { createClassroomStore } from "../server/classroom-store.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const adminDatabaseUrl = process.env.DATABASE_ADMIN_URL ?? "";
@@ -116,6 +117,17 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         });
         timestamp += 1000;
       }
+      await processClassroomAuthorityEvent(authorityStore, {
+        eventType: "organizationMembership.updated",
+        payload: {
+          id: `orgmem_a_${suffix}`,
+          classroomId: classroomA,
+          userId: explorerId,
+          role: "org:admin",
+          occurredAt: timestamp
+        }
+      });
+      timestamp += 1000;
 
       await processClassroomAuthorityEvent(authorityStore, {
         eventType: "organization.created",
@@ -264,11 +276,17 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         await adminClient.query(
           `INSERT INTO learning_journals (
              clerk_user_id,
-             classroom_id
+             classroom_id,
+             journal
            )
            VALUES
-             ($1, $2)`,
-          [explorerId, classroomB]
+             ($1, $2, '{"version":1,"events":[]}'::jsonb),
+             (
+               $3,
+               $4,
+               '{"version":1,"events":[{"eventId":"01JCLASSROOMCOUNT0000000001","questionId":"scout-developing-0","topicId":"number-sense","learningObjectiveId":"addition-within-20","difficultyBand":"developing","outcome":"correct"},{"eventId":"01JCLASSROOMCOUNT0000000002","questionId":"scout-developing-1","topicId":"number-sense","learningObjectiveId":"addition-within-20","difficultyBand":"developing","outcome":"wrong"}]}'::jsonb
+             )`,
+          [explorerId, classroomB, otherExplorerId, classroomA]
         );
         await adminClient.query("COMMIT");
       } catch (error) {
@@ -277,6 +295,62 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       } finally {
         adminClient.release();
       }
+
+      const classroomStore = createClassroomStore(runtimePool);
+      await expect(
+        classroomStore.listForUser(explorerId)
+      ).resolves.toEqual([
+        { id: classroomA, name: "Class A", role: "teacher" },
+        { id: classroomB, name: "Class B", role: "student" }
+      ]);
+      await expect(
+        classroomStore.progressForTeacher(explorerId, classroomA)
+      ).resolves.toEqual({
+        progress: [{
+          studentName: `Other ${suffix.slice(0, 8)}`,
+          objectiveId: "addition-within-20",
+          correct: 1,
+          wrong: 1,
+          hints: 0,
+          skips: 0,
+          total: 2
+        }],
+        truncated: false
+      });
+      await expect(
+        classroomStore.progressForTeacher(otherExplorerId, classroomA)
+      ).rejects.toMatchObject({ name: "ClassroomAccessDeniedError" });
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          (client) =>
+            client.query(
+              "SELECT * FROM read_classroom_progress($1)",
+              [classroomB]
+            )
+        )
+      ).resolves.toMatchObject({ rows: [] });
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          (client) =>
+            client.query(
+              `SELECT journal
+               FROM learning_journals
+               WHERE clerk_user_id = $1`,
+              [otherExplorerId]
+            )
+        )
+      ).resolves.toMatchObject({ rows: [] });
+      await expect(
+        withTenantContext(
+          runtimePool,
+          { explorerId, classroomId: classroomA },
+          (client) => client.query("SELECT * FROM classroom_progress_counts")
+        )
+      ).rejects.toMatchObject({ code: "42501" });
 
       const questStore = createQuestProgressStore(runtimePool);
       await questStore.save(
