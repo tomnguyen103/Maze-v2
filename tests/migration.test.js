@@ -296,7 +296,7 @@ describe("Audit privilege boundary migration", () => {
     expect(finalize).toContain(
       "GRANT EXECUTE ON FUNCTION append_audit_event(TEXT) TO echo_maze_runtime"
     );
-    expect(finalize).not.toContain(
+    expect(finalize).toContain(
       "REVOKE EXECUTE ON FUNCTION append_audit_event(TEXT) FROM PUBLIC"
     );
     expect(finalize).not.toContain("GRANT INSERT ON TABLE audit_events");

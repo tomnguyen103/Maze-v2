@@ -107,14 +107,21 @@ describe("audit checkpoint S3 adapter", () => {
     ).rejects.toBeInstanceOf(AuditCheckpointExistsError);
   });
 
-  it("reads every retained checkpoint in key order without exposing credentials", async () => {
+  it("reads every retained checkpoint version in key order", async () => {
     const send = vi
       .fn()
       .mockResolvedValueOnce({
-        Contents: [
-          { Key: "audit-checkpoints/v1/2026-07-29/0002-b.json" },
-          { Key: "audit-checkpoints/v1/2026-07-28/0001-a.json" }
+        Versions: [
+          {
+            Key: "audit-checkpoints/v1/2026-07-29/0002-b.json",
+            VersionId: "version-b"
+          },
+          {
+            Key: "audit-checkpoints/v1/2026-07-28/0001-a.json",
+            VersionId: "version-a"
+          }
         ],
+        DeleteMarkers: [],
         IsTruncated: false
       })
       .mockResolvedValueOnce({
@@ -138,6 +145,39 @@ describe("audit checkpoint S3 adapter", () => {
         body: "{\"max_id\":2}"
       }
     ]);
+    const reads = send.mock.calls.slice(1).map(([command]) =>
+      /** @type {{ input: Record<string, unknown> }} */ (command).input
+    );
+    expect(reads).toEqual([
+      {
+        Bucket: "echo-maze-audit",
+        Key: "audit-checkpoints/v1/2026-07-28/0001-a.json",
+        VersionId: "version-a"
+      },
+      {
+        Bucket: "echo-maze-audit",
+        Key: "audit-checkpoints/v1/2026-07-29/0002-b.json",
+        VersionId: "version-b"
+      }
+    ]);
+  });
+
+  it("fails closed when a delete marker can hide a retained checkpoint", async () => {
+    const sink = createS3AuditCheckpointSink({
+      client: {
+        send: vi.fn(async () => ({
+          Versions: [],
+          DeleteMarkers: [{
+            Key: "audit-checkpoints/v1/2026-07-28/0001-a.json",
+            VersionId: "deleted-version"
+          }],
+          IsTruncated: false
+        }))
+      },
+      bucket: "echo-maze-audit"
+    });
+
+    await expect(sink.all()).rejects.toThrow("delete marker");
   });
 
   it("fails closed before reading an oversized checkpoint body", async () => {
@@ -160,8 +200,9 @@ describe("audit checkpoint S3 adapter", () => {
     const sink = createS3AuditCheckpointSink({
       client: {
         send: vi.fn(async () => ({
-          Contents: Array.from({ length: 4097 }, (_, index) => ({
-            Key: `audit-checkpoints/v1/2026-07-28/${String(index).padStart(20, "0")}-a.json`
+          Versions: Array.from({ length: 4097 }, (_, index) => ({
+            Key: `audit-checkpoints/v1/2026-07-28/${String(index).padStart(20, "0")}-a.json`,
+            VersionId: `version-${index}`
           })),
           IsTruncated: false
         }))

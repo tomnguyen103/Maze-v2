@@ -54,13 +54,16 @@ For Vercel, connect the Neon project and apply the migrations in order:
 
 Migrations 0012 through 0014 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all three.
-Deploy the privilege boundary in this order so audit writes remain available:
+Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
 2. Deploy the application code that uses `append_audit_event(text)`.
-3. Apply migration 0013 to transfer audit-object ownership.
+3. Quiesce mutating traffic, then apply migration 0013 to transfer audit-object
+   ownership and revoke PUBLIC execute. Audit recording is deliberately
+   unavailable until the next step; player-visible mutations remain fail-open.
 4. Immediately run `npm run audit:provision` to strip the named login's legacy
-   direct grants, grant the constrained runtime role, and remove PUBLIC execute.
+   direct grants, grant the constrained runtime role, and prove PUBLIC execute
+   remains revoked.
 5. Apply migration 0014 with the Phase 8 foundation release. It transfers the
    Classroom tenant tables to a non-login owner and forces row-level security.
    The application login must already inherit `echo_maze_runtime`, and every
@@ -75,8 +78,8 @@ npm run audit:provision
 ```
 
 The command removes the named login's legacy direct audit-object grants, grants
-the runtime group, and revokes the transitional PUBLIC function permission in
-one transaction. It refuses superuser, `CREATEROLE`, `CREATEDB`, replication,
+the runtime group, and repeatably enforces the migration's PUBLIC function
+revoke in one transaction. It refuses superuser, `CREATEROLE`, `CREATEDB`, replication,
 `BYPASSRLS`, and audit-owner membership. It proves the runtime can execute
 `append_audit_event(text)` and read the chain while PUBLIC execute and direct
 insert, update, delete, truncate, and chain-head update privileges remain
@@ -153,11 +156,14 @@ variables:
 2. Configure COMPLIANCE retention and approve its duration; it cannot be
    shortened after an object is written.
 3. Issue a dedicated credential limited to `PutObject`,
-   `PutObjectRetention`, `GetObject`, and prefix-scoped `ListBucket`. Do not
-   grant `DeleteObject` or retention-bypass permissions.
-4. Configure bucket lifecycle expiry no earlier than the retention duration,
-   including noncurrent versions and expired delete markers. Object Lock
-   expiry permits deletion; it does not perform deletion itself.
+   `PutObjectRetention`, `GetObject`, `GetObjectVersion`, and prefix-scoped
+   `ListBucketVersions`. Explicitly deny `DeleteObject` and
+   `DeleteObjectVersion`; do not grant retention-bypass permissions.
+4. Do not configure lifecycle expiry or any other rule that creates delete
+   markers under `audit-checkpoints/v1/`. The verifier treats every delete
+   marker as a failed tamper check, including one created after Object Lock
+   retention ends. Retained checkpoints therefore remain in the bucket after
+   their compliance date until a future reviewed archival procedure exists.
 5. Call `/api/internal/audit-checkpoint` once with `CRON_SECRET`, inspect the
    resulting object's lock mode and retain-until date, then run
    `npm run verify:audit`.
@@ -179,8 +185,10 @@ It deliberately creates one compliance-retained object, so never point it at
 the production checkpoint bucket and use only an approved test retention.
 
 The verifier fails closed above 4,096 retained objects or 4 KiB per checkpoint.
-Keep the daily lifecycle below that count; the bounds prevent a malformed or
-unmanaged bucket from exhausting operator memory.
+At one checkpoint per day, the object-count bound covers more than eleven
+years. Monitor the count and adopt a reviewed archival procedure before
+reaching the bound; lifecycle deletion is not currently compatible with the
+fail-closed delete-marker check.
 
 The chain verifier, pruning, bootstrap-admin, and webhook scripts need
 `DATABASE_URL`. `audit:provision` needs `DATABASE_ADMIN_URL` and

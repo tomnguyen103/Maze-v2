@@ -15,7 +15,7 @@ const ROW_HASH = "a".repeat(64);
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 
 describe("audit checkpoints", () => {
-  it("signs only the anchored chain position with HMAC-SHA256", () => {
+  it("signs the timestamp and anchored chain position with HMAC-SHA256", () => {
     const checkpoint = buildAuditCheckpoint({
       maxId: 42,
       rowHash: ROW_HASH,
@@ -36,6 +36,12 @@ describe("audit checkpoints", () => {
     });
     expect(
       verifyAuditCheckpoint({ ...checkpoint, max_id: 43 }, SIGNING_KEY)
+    ).toEqual({ valid: false, reason: "signature" });
+    expect(
+      verifyAuditCheckpoint({
+        ...checkpoint,
+        created_at: "2026-07-28T13:00:00.000Z"
+      }, SIGNING_KEY)
     ).toEqual({ valid: false, reason: "signature" });
   });
 
@@ -91,6 +97,20 @@ describe("audit checkpoints", () => {
       max_id: 42,
       row_hash: ROW_HASH
     });
+  });
+
+  it("refuses to checkpoint a missing audit chain head", async () => {
+    const service = createAuditCheckpointService({
+      query: vi.fn(async () => ({ rows: [] })),
+      sink: { put: vi.fn(), get: vi.fn() },
+      signingKey: SIGNING_KEY,
+      retentionDays: 30,
+      now: () => NOW
+    });
+
+    await expect(service.create()).rejects.toThrow(
+      "Audit chain head is missing."
+    );
   });
 
   it("treats an existing verified checkpoint as an idempotent retry", async () => {

@@ -63,8 +63,8 @@ and Lantern Journal for that Classroom; Personal Play remains.
   `npm run prune:rate-limits` clears them.
 - Audit rows are append-only by design (tamper-evident chain, ADR 0013) and
   store a daily-rotating address hash, never a raw address.
-- A daily HMAC over the audit chain position is stored in a separately
-  credentialed S3-compatible Object Lock bucket. The checkpoint contains only
+- A daily HMAC over the checkpoint time and audit chain position is stored in a
+  separately credentialed S3-compatible Object Lock bucket. The checkpoint contains only
   schema/version metadata, time, maximum audit id, row hash, and signature; its
   compliance retention period is deployment-configured.
 - The Lantern Journal is clearable by the Explorer in-game at any time.

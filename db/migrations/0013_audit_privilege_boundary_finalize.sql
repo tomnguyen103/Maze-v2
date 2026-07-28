@@ -1,9 +1,8 @@
 -- Finalize the audit privilege boundary after code uses append_audit_event.
 --
--- The definer function remains executable by PUBLIC only for the short
--- deployment transition. Immediately run `npm run audit:provision`; that
--- grants the named runtime login, revokes PUBLIC execute, and proves the final
--- negative privileges transactionally.
+-- PUBLIC execute closes in this migration. Immediately run
+-- `npm run audit:provision` to grant the named runtime login membership in
+-- echo_maze_runtime and prove the final negative privileges transactionally.
 
 ALTER TABLE audit_events OWNER TO echo_maze_audit_owner;
 ALTER SEQUENCE audit_events_id_seq OWNER TO echo_maze_audit_owner;
@@ -18,6 +17,7 @@ REVOKE ALL ON TABLE audit_chain_head FROM PUBLIC;
 REVOKE ALL ON SEQUENCE audit_events_id_seq FROM PUBLIC;
 REVOKE ALL ON FUNCTION audit_events_append_only() FROM PUBLIC;
 REVOKE ALL ON FUNCTION canonical_audit_json(JSONB) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION append_audit_event(TEXT) FROM PUBLIC;
 
 REVOKE ALL ON TABLE audit_events FROM echo_maze_runtime;
 REVOKE ALL ON TABLE audit_chain_head FROM echo_maze_runtime;

@@ -127,6 +127,22 @@ describe("Cloud Quest store", () => {
     );
   });
 
+  it("reports a deleted account instead of an update conflict", async () => {
+    const progress = createQuestProgress(
+      "trail-scout",
+      4,
+      "quest_cloud_123"
+    );
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ exists: 1 }] });
+    const pool = tenantPool(query);
+
+    await expect(
+      createQuestProgressStore(pool).save("user_123", 2, progress)
+    ).rejects.toMatchObject({ name: "DeletedUserError" });
+  });
+
   it("updates only the expected revision and surfaces a stale conflict", async () => {
     const progress = createQuestProgress(
       "trail-scout",
@@ -134,6 +150,7 @@ describe("Cloud Quest store", () => {
       "quest_cloud_123"
     );
     const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [ROW] });
     const pool = tenantPool(query);
@@ -161,6 +178,7 @@ describe("Cloud Quest store", () => {
       nextQuestionOrdinal: 1
     };
     const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [ROW] });
     const pool = tenantPool(query);

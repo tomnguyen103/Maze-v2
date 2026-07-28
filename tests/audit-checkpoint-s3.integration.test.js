@@ -8,7 +8,7 @@ import {
 const runIntegration = process.env.RUN_AUDIT_SINK_INTEGRATION === "1";
 
 describe.runIf(runIntegration)("Audit checkpoint immutable sink", () => {
-  it("round-trips one compliance-retained object in a dedicated test bucket", async () => {
+  it("lists and reads one compliance-retained production-prefix version", async () => {
     const config = loadAuditCheckpointConfig(process.env);
     const testBucket = process.env.AUDIT_CHECKPOINT_TEST_BUCKET;
     if (!config || !testBucket) {
@@ -25,13 +25,15 @@ describe.runIf(runIntegration)("Audit checkpoint immutable sink", () => {
       nonce: randomUUID()
     });
     const key =
-      `echo-maze-integration/${new Date().toISOString().slice(0, 10)}/` +
-      `${randomUUID()}.json`;
-    const retainUntil = new Date(
-      Date.now() + config.retentionDays * 24 * 60 * 60 * 1000
-    );
+      `audit-checkpoints/v1/integration-` +
+      `${new Date().toISOString().slice(0, 10)}-${randomUUID()}.json`;
+    // COMPLIANCE retention is irrevocable, so test objects use the shortest
+    // window that still proves the Object Lock write path.
+    const retainUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await sink.put({ key, body, retainUntil });
-    await expect(sink.get(key)).resolves.toBe(body);
+    await expect(sink.all()).resolves.toEqual(
+      expect.arrayContaining([{ key, body }])
+    );
   });
 });

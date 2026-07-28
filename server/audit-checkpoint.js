@@ -13,11 +13,12 @@ export class AuditCheckpointExistsError extends Error {
 }
 
 /**
+ * @param {string} createdAt
  * @param {number} maxId
  * @param {string} rowHash
  */
-function signatureInput(maxId, rowHash) {
-  return `${maxId}:${rowHash}`;
+function signatureInput(createdAt, maxId, rowHash) {
+  return `${createdAt}:${maxId}:${rowHash}`;
 }
 
 /** @param {string} signingKey */
@@ -53,14 +54,15 @@ export function buildAuditCheckpoint({
     throw new Error("Audit checkpoint time is invalid.");
   }
   requireSigningKey(signingKey);
+  const createdAtText = createdAt.toISOString();
   return {
     schema: AUDIT_CHECKPOINT_SCHEMA,
     algorithm: "hmac-sha256",
-    created_at: createdAt.toISOString(),
+    created_at: createdAtText,
     max_id: maxId,
     row_hash: rowHash,
     signature: createHmac("sha256", signingKey)
-      .update(signatureInput(maxId, rowHash))
+      .update(signatureInput(createdAtText, maxId, rowHash))
       .digest("hex")
   };
 }
@@ -87,7 +89,11 @@ export function verifyAuditCheckpoint(value, signingKey) {
     return { valid: false, reason: "schema" };
   }
   const expected = createHmac("sha256", signingKey)
-    .update(signatureInput(Number(checkpoint.max_id), checkpoint.row_hash))
+    .update(signatureInput(
+      checkpoint.created_at,
+      Number(checkpoint.max_id),
+      checkpoint.row_hash
+    ))
     .digest();
   const supplied = Buffer.from(checkpoint.signature, "hex");
   return supplied.length === expected.length && timingSafeEqual(supplied, expected)
@@ -229,10 +235,15 @@ export function createAuditCheckpointService({
          FROM audit_chain_head
          WHERE id = 1`
       );
-      const maxId = Number(result.rows[0]?.max_id ?? 0);
-      const rowHash = String(
-        result.rows[0]?.row_hash ?? AUDIT_GENESIS_HASH
-      );
+      const head = result.rows[0];
+      if (!head) {
+        throw new Error("Audit chain head is missing.");
+      }
+      const maxId = Number(head.max_id);
+      const rowHash = String(head.row_hash);
+      if (maxId === 0 && rowHash !== AUDIT_GENESIS_HASH) {
+        throw new Error("Empty audit chain head is invalid.");
+      }
       const createdAt = now();
       const checkpoint = buildAuditCheckpoint({
         maxId,

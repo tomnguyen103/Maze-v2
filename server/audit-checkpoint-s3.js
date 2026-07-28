@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   GetObjectCommand,
-  ListObjectsV2Command,
+  ListObjectVersionsCommand,
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
@@ -36,10 +36,14 @@ export function createConfiguredAuditCheckpointSink(config) {
  * }} dependencies
  */
 export function createS3AuditCheckpointSink({ client, bucket }) {
-  /** @param {string} key */
-  async function get(key) {
+  /** @param {string} key @param {string | undefined} [versionId] */
+  async function get(key, versionId = undefined) {
     const result = await client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: key })
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ...(versionId ? { VersionId: versionId } : {})
+      })
     );
     if (
       typeof result.ContentLength === "number" &&
@@ -86,40 +90,71 @@ export function createS3AuditCheckpointSink({ client, bucket }) {
     },
     get,
     async all() {
-      /** @type {string[]} */
-      const keys = [];
+      /** @type {{ key: string, versionId: string }[]} */
+      const versions = [];
       /** @type {string | undefined} */
-      let continuationToken;
-      do {
+      let keyMarker;
+      /** @type {string | undefined} */
+      let versionIdMarker;
+      while (true) {
         const page = await client.send(
-          new ListObjectsV2Command({
+          new ListObjectVersionsCommand({
             Bucket: bucket,
             Prefix: CHECKPOINT_PREFIX,
-            ContinuationToken: continuationToken
+            KeyMarker: keyMarker,
+            VersionIdMarker: versionIdMarker
           })
         );
-        for (const object of page.Contents ?? []) {
-          if (typeof object.Key === "string") {
-            keys.push(object.Key);
-            if (keys.length > MAX_RETAINED_CHECKPOINTS) {
+        const deleteMarkers =
+          /** @type {{ Key?: unknown }[]} */ (page.DeleteMarkers ?? []);
+        if (deleteMarkers.some(
+          (marker) => typeof marker.Key === "string"
+        )) {
+          throw new Error(
+            "Audit checkpoint delete marker hides retained history."
+          );
+        }
+        for (const object of page.Versions ?? []) {
+          if (
+            typeof object.Key === "string" &&
+            typeof object.VersionId === "string"
+          ) {
+            versions.push({
+              key: object.Key,
+              versionId: object.VersionId
+            });
+            if (versions.length > MAX_RETAINED_CHECKPOINTS) {
               throw new Error(
                 "Retained audit checkpoint count exceeds the verifier bound."
               );
             }
           }
         }
-        continuationToken = page.IsTruncated
-          ? page.NextContinuationToken
-          : undefined;
-      } while (continuationToken);
-      keys.sort();
-      if (keys.length === 0) {
+        if (page.IsTruncated !== true) {
+          break;
+        }
+        keyMarker = page.NextKeyMarker;
+        versionIdMarker = page.NextVersionIdMarker;
+        if (!keyMarker) {
+          throw new Error(
+            "Audit checkpoint version listing pagination is invalid."
+          );
+        }
+      }
+      versions.sort((left, right) =>
+        left.key.localeCompare(right.key) ||
+        left.versionId.localeCompare(right.versionId)
+      );
+      if (versions.length === 0) {
         throw new Error("No immutable audit checkpoint exists.");
       }
       /** @type {{ key: string, body: string }[]} */
       const objects = [];
-      for (const key of keys) {
-        objects.push({ key, body: await get(key) });
+      for (const version of versions) {
+        objects.push({
+          key: version.key,
+          body: await get(version.key, version.versionId)
+        });
       }
       return objects;
     }

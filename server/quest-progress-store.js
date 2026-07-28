@@ -161,16 +161,14 @@ export function createQuestProgressStore(pool) {
               duplicate: false
             };
           }
-          if (expectedRevision === 0) {
-            const deleted = await database.query(
-              `SELECT 1
-               FROM deleted_user_tombstones
-               WHERE clerk_user_id_hash = $1`,
-              [deletedUserHash(userId)]
-            );
-            if (deleted.rows.length) {
-              throw new DeletedUserError();
-            }
+          const deleted = await database.query(
+            `SELECT 1
+             FROM deleted_user_tombstones
+             WHERE clerk_user_id_hash = $1`,
+            [deletedUserHash(userId)]
+          );
+          if (deleted.rows.length) {
+            throw new DeletedUserError();
           }
           const record = await get(database, userId);
           const duplicate =

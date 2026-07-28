@@ -618,14 +618,18 @@ export function createPlayerApi(env = process.env) {
  *   ) => Promise<{ rows: Record<string, unknown>[] }>
  * }} database
  */
-function checkpointRunner(config, database) {
+export function checkpointRunner(
+  config,
+  database,
+  { loadSink = () => import("./audit-checkpoint-s3.js") } = {}
+) {
   if (!config) {
     return null;
   }
   /** @type {Promise<ReturnType<typeof createAuditCheckpointService>> | null} */
   let service = null;
   return async () => {
-    service ??= import("./audit-checkpoint-s3.js").then(
+    service ??= loadSink().then(
       ({ createConfiguredAuditCheckpointSink }) =>
         createAuditCheckpointService({
           query: database.query,
@@ -634,7 +638,14 @@ function checkpointRunner(config, database) {
           retentionDays: config.retentionDays
         })
     );
-    return (await service).create();
+    let loaded;
+    try {
+      loaded = await service;
+    } catch (error) {
+      service = null;
+      throw error;
+    }
+    return loaded.create();
   };
 }
 
