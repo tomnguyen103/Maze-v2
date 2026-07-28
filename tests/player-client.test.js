@@ -9,6 +9,51 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 describe("player client", () => {
+  it("maps admin workbench actions to their guarded routes", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({ fetchImpl });
+
+    await client.listAdminUsers();
+    await client.exportAdminUser("user_1");
+    await client.updateAdminRole("user_1", "moderator");
+    await client.listAdminQuestions();
+    await client.saveAdminQuestion("math-1", { prompt: "draft" });
+    await client.publishAdminQuestion("math-1", 2);
+    await client.deleteAdminQuestion("math-1");
+    await client.getAdminMembership("user_1");
+    await client.issueAdminRefund("user_1");
+    await client.listAdminAudit(10);
+    await client.getAdminMetrics();
+    await client.listDeadWebhooks();
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(calls.map(([path]) => path)).toEqual([
+      "/api/admin/users",
+      "/api/admin/users/user_1/export",
+      "/api/admin/users/user_1/role",
+      "/api/admin/questions",
+      "/api/admin/questions/math-1",
+      "/api/admin/questions/math-1/publish",
+      "/api/admin/questions/math-1",
+      "/api/admin/memberships/user_1",
+      "/api/admin/memberships/user_1/refund",
+      "/api/admin/audit?before=10",
+      "/api/admin/metrics",
+      "/api/admin/webhooks/dead"
+    ]);
+    expect(calls[2][1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ role: "moderator" })
+      })
+    );
+  });
+
   it("adds the Clerk session token to authenticated requests", async () => {
     const fetchImpl = vi.fn(
       /** @param {string | URL | Request} _path @param {RequestInit} [_options] */
@@ -188,6 +233,38 @@ describe("player client", () => {
         })
       })
     );
+  });
+
+  it("posts guest Run admission without waiting for a Clerk token", async () => {
+    const getToken = vi.fn(() => new Promise(() => {}));
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          allowed: true,
+          duplicate: false,
+          guestDemoEnforcementEnabled: true
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    const client = createPlayerApiClient({ fetchImpl, getToken });
+    const run = {
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+    await expect(client.authorizeGuestRun(run)).resolves.toMatchObject({
+      allowed: true
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/access/guest-runs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(run)
+      })
+    );
+    expect(getToken).not.toHaveBeenCalled();
   });
 
   it("reads and revision-saves Cloud Quest Progress", async () => {

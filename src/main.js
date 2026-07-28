@@ -1439,9 +1439,6 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
     showEvent("Run access could not be checked. Your Run was not consumed.");
     return false;
   }
-  if (!config.enforcementEnabled) {
-    return canOpenStartChoice();
-  }
   const signedIn =
     playerController.hasAuthenticatedUser() ||
     await playerController.isAuthenticated();
@@ -1450,8 +1447,27 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
     return false;
   }
   if (!signedIn) {
-    demoAccessPending = false;
-    return true;
+    if (!config.guestDemoEnforcementEnabled) {
+      return canOpenStartChoice();
+    }
+    try {
+      const access = await playerController.authorizeGuestRun(locator);
+      if (access.allowed) {
+        demoAccessPending = false;
+        return true;
+      }
+      markGuestDemoComplete();
+      demoAccessPending = true;
+      showDemoAccountGate();
+      return false;
+    } catch {
+      // A temporary server failure must not strand a child at the entrance.
+      // The local gate remains the fail-open floor until the server recovers.
+      return canOpenStartChoice();
+    }
+  }
+  if (!config.enforcementEnabled) {
+    return canOpenStartChoice();
   }
   if (demoAccessPending) {
     clearPendingGuestDemo();

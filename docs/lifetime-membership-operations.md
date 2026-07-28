@@ -91,6 +91,15 @@ Classify the case before taking action:
 
 ## Refund and dispute handling
 
+The staff workbench may initiate a full refund for the latest paid Lifetime
+Membership purchase. That request is audited before Stripe is contacted and
+uses a stable purchase-scoped idempotency key. Initiating the refund does not
+edit `player_access` and never removes completed Quest Progress, Run Records,
+Score Entries, Journal history, or an already-issued Run Grant. Entitlement
+changes only after the existing signed Stripe webhook path confirms the
+provider state; a refund then blocks the next new Run while an active Run may
+finish.
+
 1. Confirm the provider event is signed and belongs to the fixed one-time test
    Price. Never infer a refund or dispute from browser state or a screenshot.
 2. Let `refund.created`, `refund.updated`, or
@@ -219,6 +228,8 @@ The structured recorder accepts only these bounded event families:
 
 - `run_access_decision`: access state, duplicate flag, enforcement flag, and
   admitted/blocked/unmetered outcome;
+- `guest_demo_access_decision`: duplicate, enforcement, metered, and degraded
+  flags plus admitted/blocked/degraded/unmetered outcome;
 - `run_access_error`: the fixed `temporary` category;
 - `lifetime_checkout`: created or reused;
 - `lifetime_confirmation`: bounded fulfillment outcome; and

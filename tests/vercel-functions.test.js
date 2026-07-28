@@ -34,6 +34,10 @@ describe("Vercel function budget", () => {
           destination: "/api/access?_accessRoute=runs"
         },
         {
+          source: "/api/access/guest-runs",
+          destination: "/api/access?_accessRoute=guest-runs"
+        },
+        {
           source: "/api/admin/:adminPath*",
           destination: "/api/admin?_adminPath=:adminPath*"
         }
@@ -233,6 +237,29 @@ describe("Vercel function budget", () => {
 
     expect(request.url).toBe("/api/access/config");
     expect(response.statusCode).toBe(200);
+  });
+
+  it("restores the public guest Access path before server routing", async () => {
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "POST",
+        url: "/api/access?_accessRoute=guest-runs",
+        headers: {},
+        socket: {}
+      })
+    );
+    const response = /** @type {import("node:http").ServerResponse} */ (
+      /** @type {unknown} */ ({
+        end() {},
+        setHeader() {},
+        on() {},
+        statusCode: 0
+      })
+    );
+
+    await access(request, response);
+
+    expect(request.url).toBe("/api/access/guest-runs");
   });
 });
 

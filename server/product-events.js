@@ -34,6 +34,13 @@ const EVENT_SCHEMA = {
     enforcementEnabled: [false, true],
     outcome: ["admitted", "blocked", "unmetered"]
   },
+  guest_demo_access_decision: {
+    degraded: [false, true],
+    duplicate: [false, true],
+    enforcementEnabled: [false, true],
+    metered: [false, true],
+    outcome: ["admitted", "blocked", "degraded", "unmetered"]
+  },
   run_access_error: {
     category: ["temporary"]
   },
@@ -53,6 +60,7 @@ const EVENT_SCHEMA = {
  */
 const SERVER_TRUSTED_EVENTS = new Set([
   "lifetime_confirmation",
+  "guest_demo_access_decision",
   "run_access_decision"
 ]);
 

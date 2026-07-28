@@ -114,4 +114,243 @@ describe("renderAdmin", () => {
     });
     expect(root.querySelector("img")).toBeNull();
   });
+
+  it("renders only the tools a moderator may use", async () => {
+    const client = staffClient();
+    await renderAdmin(root, {
+      clerk: stubClerk("moderator"),
+      loadProfile: async () => ({
+        access: {
+          role: "moderator",
+          permissions: [
+            "audit:read",
+            "questions:read",
+            "questions:write",
+            "users:read"
+          ]
+        }
+      }),
+      client
+    });
+    expect(root.textContent).toContain("Explorer directory");
+    expect(root.textContent).toContain("Warden Question bank");
+    expect(root.textContent).toContain("Audit trail");
+    expect(root.textContent).not.toContain("Operations pulse");
+    expect(root.textContent).not.toContain("Membership support");
+    expect(root.textContent).not.toContain("Dead deliveries");
+    expect(client.listAdminUsers).toHaveBeenCalledTimes(1);
+    expect(client.listAdminQuestions).toHaveBeenCalledTimes(1);
+    expect(client.listAdminAudit).toHaveBeenCalledTimes(1);
+    expect(client.getAdminMetrics).not.toHaveBeenCalled();
+  });
+
+  it("renders the complete workbench for an admin", async () => {
+    const client = staffClient();
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: {
+          role: "admin",
+          permissions: [
+            "audit:read",
+            "export:any",
+            "questions:publish",
+            "questions:read",
+            "questions:write",
+            "refunds:issue",
+            "users:read",
+            "users:roles:write",
+            "webhooks:read"
+          ]
+        }
+      }),
+      client
+    });
+    expect(root.textContent).toContain("Operations pulse");
+    expect(root.textContent).toContain("Membership support");
+    expect(root.textContent).toContain("Dead deliveries");
+    expect(root.querySelector("[data-action='publish-question']")).not.toBeNull();
+    expect(root.querySelector("[data-action='export-user']")).not.toBeNull();
+    expect(client.getAdminMetrics).toHaveBeenCalledTimes(1);
+    expect(client.listDeadWebhooks).toHaveBeenCalledTimes(1);
+  });
+
+  it("changes a role through a labelled row control", async () => {
+    const client = staffClient();
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: {
+          role: "admin",
+          permissions: [
+            "audit:read",
+            "users:read",
+            "users:roles:write"
+          ]
+        }
+      }),
+      client
+    });
+    const select = root.querySelector("[data-role-user='user_1']");
+    const button = root.querySelector("[data-save-role='user_1']");
+    expect(select).toBeInstanceOf(HTMLSelectElement);
+    expect(button).toBeInstanceOf(HTMLButtonElement);
+    if (!(select instanceof HTMLSelectElement) || !(button instanceof HTMLButtonElement)) {
+      throw new Error("Expected role controls.");
+    }
+    select.value = "moderator";
+    button.click();
+    await vi.waitFor(() => {
+      expect(client.updateAdminRole).toHaveBeenCalledWith(
+        "user_1",
+        "moderator"
+      );
+    });
+  });
+
+  it("exports an Explorer through the permission-gated directory action", async () => {
+    const client = staffClient();
+    const createObjectUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:admin-export");
+    const revokeObjectUrl = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: {
+          role: "admin",
+          permissions: ["audit:read", "export:any", "users:read"]
+        }
+      }),
+      client
+    });
+    const control = root.querySelector("[data-action='export-user']");
+    expect(control).toBeInstanceOf(HTMLButtonElement);
+    control?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(client.exportAdminUser).toHaveBeenCalledWith("user_1");
+      expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    });
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:admin-export");
+    click.mockRestore();
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
+  });
+
+  it("keeps a question card visible when deletion fails", async () => {
+    const client = staffClient();
+    client.deleteAdminQuestion.mockRejectedValue(new Error("Delete failed."));
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      value: vi.fn(() => true)
+    });
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: {
+          role: "admin",
+          permissions: [
+            "audit:read",
+            "questions:publish",
+            "questions:read"
+          ]
+        }
+      }),
+      client
+    });
+    const control = root.querySelector("[data-action='delete-question']");
+    const card = control?.closest(".admin-record");
+    control?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(client.deleteAdminQuestion).toHaveBeenCalledWith("math-1");
+    });
+    expect(card?.isConnected).toBe(true);
+    expect(root.textContent).toContain("Delete failed.");
+    Reflect.deleteProperty(window, "confirm");
+  });
 });
+
+function staffClient() {
+  return {
+    listAdminUsers: vi.fn(async () => ({
+      users: [
+        {
+          userId: "user_1",
+          username: "Nova",
+          role: "player",
+          membershipState: "none"
+        }
+      ]
+    })),
+    exportAdminUser: vi.fn(async () => ({ version: 1, data: {} })),
+    listAdminQuestions: vi.fn(async () => ({
+      questions: [
+        {
+          id: "math-1",
+          levelId: "bright-start",
+          difficultyBand: "foundation",
+          questionOrdinal: 0,
+          versions: [
+            {
+              version: 1,
+              status: "draft",
+              content: {
+                id: "math-1",
+                prompt: "What is 2 + 2?",
+                choices: [
+                  { id: "a", label: "3" },
+                  { id: "b", label: "4" },
+                  { id: "c", label: "5" }
+                ],
+                answerId: "b",
+                hint: "Count on.",
+                explanation: "Two and two make four.",
+                difficultyBand: "foundation",
+                difficultyRank: 11,
+                topicId: "arithmetic",
+                learningObjectiveId: "bright-combine-groups"
+              }
+            }
+          ]
+        }
+      ]
+    })),
+    listAdminAudit: vi.fn(async () => ({
+      events: [
+        {
+          id: 1,
+          actorId: "admin_1",
+          actorRole: "admin",
+          action: "role.grant",
+          resourceType: "user_role",
+          resourceId: "user_1",
+          createdAt: "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      nextBefore: null
+    })),
+    getAdminMetrics: vi.fn(async () => ({
+      metrics: {
+        explorers: 1,
+        dailyActiveExplorers: 1,
+        runsStartedToday: 2,
+        lifetimeConversions: 0,
+        activeMemberships: 0,
+        publishedQuestions: 0,
+        deadDeliveries: 0
+      }
+    })),
+    listDeadWebhooks: vi.fn(async () => ({ deliveries: [] })),
+    updateAdminRole: vi.fn(async (userId, role) => ({ userId, role })),
+    getAdminMembership: vi.fn(async () => ({ membership: null })),
+    issueAdminRefund: vi.fn(),
+    saveAdminQuestion: vi.fn(),
+    publishAdminQuestion: vi.fn(),
+    deleteAdminQuestion: vi.fn()
+  };
+}

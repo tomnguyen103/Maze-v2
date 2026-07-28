@@ -43,6 +43,7 @@ CREATE TABLE question_versions (
   -- prompt, three choices, answer, hint, explanation, band, rank, topic,
   -- objective.
   content JSONB NOT NULL,
+  edited_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   published_at TIMESTAMPTZ,
   UNIQUE (question_id, version),

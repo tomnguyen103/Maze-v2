@@ -27,6 +27,30 @@ describe("privacy-minimized product events", () => {
     });
   });
 
+  it("records only bounded guest demo decision fields", () => {
+    const write = vi.fn();
+    const record = createProductEventRecorder({ write });
+
+    record("guest_demo_access_decision", {
+      degraded: true,
+      duplicate: false,
+      enforcementEnabled: true,
+      metered: false,
+      outcome: "degraded",
+      addressHash: "must-not-leak",
+      runId: "must-not-leak"
+    });
+
+    expect(write).toHaveBeenCalledWith({
+      degraded: true,
+      duplicate: false,
+      enforcementEnabled: true,
+      event: "guest_demo_access_decision",
+      metered: false,
+      outcome: "degraded"
+    });
+  });
+
   it("drops unknown event names instead of logging arbitrary data", () => {
     const write = vi.fn();
     const record = createProductEventRecorder({ write });

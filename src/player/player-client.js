@@ -71,6 +71,68 @@ export function createPlayerApiClient({
   }
 
   return {
+    async listAdminUsers() {
+      return request("/api/admin/users");
+    },
+    /** @param {string} userId */
+    async exportAdminUser(userId) {
+      return request(`/api/admin/users/${encodeURIComponent(userId)}/export`);
+    },
+    /** @param {string} userId @param {string} role */
+    async updateAdminRole(userId, role) {
+      return request(`/api/admin/users/${encodeURIComponent(userId)}/role`, {
+        method: "POST",
+        body: JSON.stringify({ role })
+      });
+    },
+    async listAdminQuestions() {
+      return request("/api/admin/questions");
+    },
+    /** @param {string} questionId @param {unknown} draft */
+    async saveAdminQuestion(questionId, draft) {
+      return request(
+        `/api/admin/questions/${encodeURIComponent(questionId)}`,
+        { method: "PUT", body: JSON.stringify(draft) }
+      );
+    },
+    /** @param {string} questionId @param {number} version */
+    async publishAdminQuestion(questionId, version) {
+      return request(
+        `/api/admin/questions/${encodeURIComponent(questionId)}/publish`,
+        { method: "POST", body: JSON.stringify({ version }) }
+      );
+    },
+    /** @param {string} questionId */
+    async deleteAdminQuestion(questionId) {
+      return request(
+        `/api/admin/questions/${encodeURIComponent(questionId)}`,
+        { method: "DELETE" }
+      );
+    },
+    /** @param {string} userId */
+    async getAdminMembership(userId) {
+      return request(
+        `/api/admin/memberships/${encodeURIComponent(userId)}`
+      );
+    },
+    /** @param {string} userId */
+    async issueAdminRefund(userId) {
+      return request(
+        `/api/admin/memberships/${encodeURIComponent(userId)}/refund`,
+        { method: "POST" }
+      );
+    },
+    /** @param {number | null} [before] */
+    async listAdminAudit(before = null) {
+      const query = before === null ? "" : `?before=${before}`;
+      return request(`/api/admin/audit${query}`);
+    },
+    async getAdminMetrics() {
+      return request("/api/admin/metrics");
+    },
+    async listDeadWebhooks() {
+      return request("/api/admin/webhooks/dead");
+    },
     async getRunAccessConfig() {
       return request("/api/access/config", {}, false);
     },
@@ -116,6 +178,17 @@ export function createPlayerApiClient({
         method: "POST",
         body: JSON.stringify(run)
       });
+    },
+    /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
+    async authorizeGuestRun(run) {
+      return request(
+        "/api/access/guest-runs",
+        {
+          method: "POST",
+          body: JSON.stringify(run)
+        },
+        false
+      );
     },
     /** @param {Record<string, unknown>} progress @param {number} expectedRevision */
     async saveQuestProgress(progress, expectedRevision) {

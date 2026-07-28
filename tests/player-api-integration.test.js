@@ -38,7 +38,10 @@ describe("composed player API", () => {
     await withServer(handler, async (origin) => {
       const response = await fetch(`${origin}/api/access/config`);
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ enforcementEnabled: false });
+      expect(await response.json()).toEqual({
+        enforcementEnabled: false,
+        guestDemoEnforcementEnabled: true
+      });
     });
   });
 
@@ -48,7 +51,31 @@ describe("composed player API", () => {
     await withServer(handler, async (origin) => {
       const response = await fetch(`${origin}/api/access/config`);
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ enforcementEnabled: false });
+      expect(await response.json()).toEqual({
+        enforcementEnabled: false,
+        guestDemoEnforcementEnabled: false
+      });
+    });
+  });
+
+  it("keeps guest play fail-open when the database is absent", async () => {
+    const handler = createPlayerApi({});
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/access/guest-runs`, {
+        method: "POST",
+        body: JSON.stringify({
+          runId: "access_01J1MOSSWATCH",
+          seed: "MOSS-WATCH-11",
+          levelId: "trail-scout",
+          labyrinthNumber: 4
+        })
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        allowed: true,
+        guestDemoEnforcementEnabled: false,
+        metered: false
+      });
     });
   });
 

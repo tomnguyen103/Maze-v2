@@ -5,6 +5,7 @@ const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 export const ACCESS_PATHS = new Set([
   "/api/access",
   "/api/access/config",
+  "/api/access/guest-runs",
   "/api/access/runs"
 ]);
 
@@ -96,10 +97,30 @@ async function readRunRequest(request) {
  *       state: string
  *     }>
  *   },
+ *   guestStore?: {
+ *     authorizeGuestRun: (
+ *       addressHash: string,
+ *       run: {
+ *         runId: string,
+ *         seed: string,
+ *         levelId: string,
+ *         labyrinthNumber: number
+ *       }
+ *     ) => Promise<{
+ *       allowed: boolean,
+ *       duplicate: boolean,
+ *       freeRunsRemaining: number,
+ *       state: string
+ *     }>
+ *   },
+ *   addressHashFor?: (
+ *     request: import("node:http").IncomingMessage
+ *   ) => string | null,
  *   getUserId: (
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
  *   enforcementEnabled?: boolean,
+ *   guestDemoEnforcementEnabled?: boolean,
  *   recordEvent?: (
  *     eventName: string,
  *     fields: Record<string, unknown>
@@ -109,8 +130,11 @@ async function readRunRequest(request) {
  */
 export function createRunAccessHandler({
   store,
+  guestStore = undefined,
+  addressHashFor = () => null,
   getUserId,
   enforcementEnabled = false,
+  guestDemoEnforcementEnabled = false,
   recordEvent = () => {},
   recordAudit = async () => {}
 }) {
@@ -135,7 +159,78 @@ export function createRunAccessHandler({
           });
           return;
         }
-        sendJson(response, 200, { enforcementEnabled });
+        sendJson(response, 200, {
+          enforcementEnabled,
+          guestDemoEnforcementEnabled
+        });
+        return;
+      }
+      if (pathname === "/api/access/guest-runs") {
+        if (request.method !== "POST") {
+          response.setHeader("allow", "POST");
+          sendJson(response, 405, {
+            error: "Use POST to start a guest Run."
+          });
+          return;
+        }
+        const runRequest = await readRunRequest(request);
+        const addressHash = addressHashFor(request);
+        let metered = false;
+        let degraded = false;
+        let result;
+        if (guestDemoEnforcementEnabled && guestStore && addressHash) {
+          try {
+            result = await guestStore.authorizeGuestRun(
+              addressHash,
+              runRequest
+            );
+            metered = true;
+          } catch {
+            // The demo boundary must never make the game unavailable. If either
+            // durable auditing or the counter store is down, admit the Run
+            // without claiming it was metered.
+            degraded = true;
+            result = guestDemoFallback();
+          }
+          if (metered && result.allowed && !result.duplicate) {
+            try {
+              await recordAudit(request, {
+                action: "guest_run_access.decision",
+                resource: { type: "guest_run_access" },
+                after: {
+                  allowed: true,
+                  labyrinthNumber: runRequest.labyrinthNumber,
+                  levelId: runRequest.levelId
+                }
+              });
+            } catch {
+              // Production auditing already reports and swallows append
+              // failures. Keep the public fallback true for injected auditors
+              // that do throw.
+            }
+          }
+        } else {
+          result = guestDemoFallback();
+        }
+        recordEvent("guest_demo_access_decision", {
+          degraded,
+          duplicate: result.duplicate,
+          enforcementEnabled: guestDemoEnforcementEnabled,
+          metered,
+          outcome: degraded
+            ? "degraded"
+            : metered
+              ? result.allowed
+                ? "admitted"
+                : "blocked"
+              : "unmetered"
+        });
+        sendJson(response, 200, {
+          ...result,
+          degraded,
+          guestDemoEnforcementEnabled,
+          metered
+        });
         return;
       }
       const userId = await getUserId(request);
@@ -218,5 +313,14 @@ export function createRunAccessHandler({
         error: "Run access could not be checked. Try again."
       });
     }
+  };
+}
+
+function guestDemoFallback() {
+  return {
+    allowed: true,
+    duplicate: false,
+    freeRunsRemaining: 0,
+    state: "guest-demo"
   };
 }

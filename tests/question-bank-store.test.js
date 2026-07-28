@@ -46,26 +46,23 @@ describe("question bank store", () => {
     const [{ sql, values }] = pool.queries;
     expect(sql).toContain("status = 'published'");
     expect(sql).toContain("question_versions");
-    expect(values).toEqual(["bright-start", "foundation", 200]);
+    expect(sql).toContain("q.question_ordinal = $3");
+    expect(values).toEqual(["bright-start", "foundation", 0]);
   });
 
-  it("cycles through the deck by ordinal, like the bundled bank", async () => {
-    const pool = createPool([
-      { content: card("db-1") },
-      { content: card("db-2") },
-      { content: card("db-3") }
-    ]);
+  it("uses only the published overlay for the requested ordinal", async () => {
+    const pool = createPool([{ content: card("db-7") }]);
     const store = createQuestionBankStore(pool);
-    /** @param {number} ordinal */
-    const at = (ordinal) =>
-      store.publishedQuestion({
-        levelId: "bright-start",
-        difficultyBand: "foundation",
-        questionOrdinal: ordinal
-      });
-    expect((await at(0))?.id).toBe("db-1");
-    expect((await at(2))?.id).toBe("db-3");
-    expect((await at(4))?.id).toBe("db-2");
+    expect(
+      (
+        await store.publishedQuestion({
+          levelId: "bright-start",
+          difficultyBand: "foundation",
+          questionOrdinal: 7
+        })
+      )?.id
+    ).toBe("db-7");
+    expect(pool.queries[0].values[2]).toBe(7);
   });
 
   it("returns null when the band has no published card", async () => {

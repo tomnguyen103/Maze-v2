@@ -17,7 +17,7 @@ holds everything else, organised by how authoritative it is.
 
 ## Decisions — `adr/`
 
-Architecture Decision Records 0001–0018, append-only. Read the relevant ADR
+Architecture Decision Records 0001–0019, append-only. Read the relevant ADR
 before changing game rules or server contracts; supersede with a new ADR
 rather than editing an accepted one. 0001–0012 cover game and product
 decisions; 0013–0018 record enterprise-hardening phases 1–6.
