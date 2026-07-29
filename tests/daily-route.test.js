@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { createDailyHandler } from "../server/daily-route.js";
+import {
+  createDailyHandler,
+  readJsonBody
+} from "../server/daily-route.js";
 import {
   DAILY_REPLAY_FIXTURE,
   DAILY_REPLAY_RESULT,
@@ -97,6 +101,28 @@ function handler(store = createStore()) {
 }
 
 describe("Verified Daily API", () => {
+  it("decodes UTF-8 only after all request chunks are assembled", async () => {
+    const payload = Buffer.from(JSON.stringify({ note: "split 🧭 marker" }));
+    const markerIndex = payload.indexOf(Buffer.from("🧭"));
+    expect(markerIndex).toBeGreaterThan(0);
+    const request =
+      /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ (
+          Object.assign(
+            Readable.from([
+              payload.subarray(0, markerIndex + 1),
+              payload.subarray(markerIndex + 1)
+            ]),
+            { headers: {} }
+          )
+        )
+      );
+
+    await expect(readJsonBody(request)).resolves.toEqual({
+      note: "split 🧭 marker"
+    });
+  });
+
   it("returns the current public Top-10 without private identity data", async () => {
     await withServer(handler(), async (origin) => {
       const response = await fetch(`${origin}/api/daily/leaderboard`);
@@ -155,6 +181,7 @@ describe("Verified Daily API", () => {
       idempotencyKey: IDEMPOTENCY_KEY,
       date: "2026-07-26",
       dailyVersion: 1,
+      username: "Moss Runner",
       score: 900,
       wardensDefeated: 2,
       echoesCollected: 4,

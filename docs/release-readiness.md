@@ -68,7 +68,7 @@ Final integrated closure-candidate evidence:
 
 PR #94 adds a later verified-Daily candidate. Its pre-review evidence is:
 
-- Node 22.23.1 `npm run check:full`: 105 test files passed, 7 skipped; 936
+- Node 22.23.1 `npm run check:full`: 105 test files passed, 7 skipped; 937
   tests passed, 16 intentional environment skips; full Playwright desktop and
   mobile matrix passed 127 tests with 13 intentional skips
 - Daily browser coverage: signed-in created/improved/unchanged,

@@ -54,6 +54,7 @@ class DailyInputError extends Error {
  *         idempotencyKey: string,
  *         date: string,
  *         dailyVersion: number,
+ *         username: string,
  *         score: number,
  *         wardensDefeated: number,
  *         echoesCollected: number,
@@ -129,7 +130,8 @@ export function createDailyHandler({
         });
         return;
       }
-      if (!(await getProfile(userId))) {
+      const profile = await getProfile(userId);
+      if (!profile) {
         sendJson(response, 409, {
           error: "Create a username before joining the Verified Daily Board."
         });
@@ -161,6 +163,7 @@ export function createDailyHandler({
         idempotencyKey: input.idempotencyKey,
         date: daily.date,
         dailyVersion: daily.version,
+        username: String(profile.username),
         score: result.score,
         wardensDefeated: result.wardensDefeated,
         echoesCollected: result.echoesCollected,
@@ -184,12 +187,12 @@ export function createDailyHandler({
         response,
         !stored.duplicate && stored.bestResult === "created" ? 201 : 200,
         {
-        date: daily.date,
-        verification: "verified-replay-v1",
-        duplicate: stored.duplicate,
-        improved: stored.improved,
-        bestResult: stored.bestResult,
-        entry: publicEntry(stored.entry)
+          date: daily.date,
+          verification: "verified-replay-v1",
+          duplicate: stored.duplicate,
+          improved: stored.improved,
+          bestResult: stored.bestResult,
+          entry: publicEntry(stored.entry)
         }
       );
     } catch (error) {
@@ -212,18 +215,23 @@ export function createDailyHandler({
 }
 
 /** @param {import("node:http").IncomingMessage} request */
-async function readJsonBody(request) {
+export async function readJsonBody(request) {
   const contentLength = Number(request.headers["content-length"] ?? 0);
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     throw new DailyInputError("Daily result is too large.", 413);
   }
-  let body = "";
+  /** @type {Buffer[]} */
+  const chunks = [];
+  let size = 0;
   for await (const chunk of request) {
-    body += chunk;
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BODY_BYTES) {
       throw new DailyInputError("Daily result is too large.", 413);
     }
+    chunks.push(buffer);
   }
+  const body = Buffer.concat(chunks).toString("utf8");
   try {
     return JSON.parse(body);
   } catch {

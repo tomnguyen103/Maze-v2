@@ -61,6 +61,7 @@ export function createDailyStore(pool) {
      *   idempotencyKey: string,
      *   date: string,
      *   dailyVersion: number,
+     *   username: string,
      *   score: number,
      *   wardensDefeated: number,
      *   echoesCollected: number,
@@ -99,12 +100,10 @@ export function createDailyStore(pool) {
           );
           const existing = await database.query(
             `SELECT
-               players.username,
                submissions.response_score AS score,
                submissions.response_moves AS moves,
                submissions.best_result
              FROM verified_daily_submissions AS submissions
-             JOIN players ON players.clerk_user_id = submissions.player_id
              WHERE submissions.player_id = $1
                AND submissions.daily_date = $2::date
                AND submissions.idempotency_key = $3
@@ -117,22 +116,23 @@ export function createDailyStore(pool) {
               improved: false,
               bestResult:
                 /** @type {"created" | "improved" | "unchanged"} */ (
-                  existing.rows[0].best_result
+                 existing.rows[0].best_result
                 ),
-              entry: mapEntry(existing.rows[0])
+              entry: mapEntry({
+                ...existing.rows[0],
+                username: entry.username
+              })
             };
           }
 
           const previous = await database.query(
             `SELECT
-               players.username,
                entries.score,
                entries.moves
              FROM verified_daily_entries AS entries
-             JOIN players ON players.clerk_user_id = entries.player_id
              WHERE entries.player_id = $1
                AND entries.daily_date = $2::date
-             FOR UPDATE`,
+             FOR UPDATE OF entries`,
             [userId, entry.date]
           );
           const previousBest = previous.rows[0] ?? null;
@@ -178,7 +178,9 @@ export function createDailyStore(pool) {
             [...values, bestResult, responseScore, responseMoves]
           );
           /** @type {Record<string, unknown> | null} */
-          let stored = previousBest;
+          let stored = previousBest
+            ? { ...previousBest, username: entry.username }
+            : null;
           if (candidateImproves) {
             const promoted = await database.query(
               `WITH upserted AS (
@@ -209,17 +211,15 @@ export function createDailyStore(pool) {
                      EXCLUDED.score = verified_daily_entries.score
                      AND EXCLUDED.moves < verified_daily_entries.moves
                    )
-                 RETURNING player_id, score, moves
-               )
-               SELECT
-                 players.username,
-                 upserted.score,
-                 upserted.moves
-               FROM upserted
-               JOIN players ON players.clerk_user_id = upserted.player_id`,
-              values
-            );
-            stored = promoted.rows[0] ?? null;
+                  RETURNING score, moves
+                )
+                SELECT score, moves
+                FROM upserted`,
+               values
+             );
+            stored = promoted.rows[0]
+              ? { ...promoted.rows[0], username: entry.username }
+              : null;
           }
           if (!stored) {
             throw new Error("Verified Daily entry could not be saved.");

@@ -10,6 +10,8 @@ const runIntegration =
   process.env.RUN_DATABASE_INTEGRATION === "1" && Boolean(databaseUrl);
 /** @type {Pool | null} */
 let pool = null;
+/** @type {string[]} */
+const createdUsers = [];
 
 describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
   beforeAll(async () => {
@@ -28,7 +30,16 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
   });
 
   afterAll(async () => {
-    await pool?.end();
+    try {
+      if (pool && createdUsers.length > 0) {
+        await pool.query(
+          "DELETE FROM players WHERE clerk_user_id = ANY($1::text[])",
+          [createdUsers]
+        );
+      }
+    } finally {
+      await pool?.end();
+    }
   });
 
   it("keeps one idempotent best result and ranks public facts deterministically", async () => {
@@ -36,6 +47,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
     const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
     const firstUser = `daily_first_${suffix}`;
     const secondUser = `daily_second_${suffix}`;
+    createdUsers.push(firstUser, secondUser);
     const date = "2099-07-26";
     const players = createPlayerStore(pool);
     const daily = createDailyStore(pool);
@@ -57,6 +69,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
       idempotencyKey: `daily_${suffix}_first`,
       date,
       dailyVersion: 1,
+      username: `Moss ${suffix}`,
       score: 900,
       wardensDefeated: 2,
       echoesCollected: 4,
@@ -87,6 +100,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
     await daily.submitVerifiedEntry(secondUser, {
       ...first,
       idempotencyKey: `daily_${suffix}_second`,
+      username: `River ${suffix}`,
       score: 900,
       moves: 70
     });
@@ -110,6 +124,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
     expect(JSON.stringify(board)).not.toContain(secondUser);
 
     const concurrentUser = `daily_concurrent_${suffix}`;
+    createdUsers.push(concurrentUser);
     const concurrentDate = "2099-07-27";
     await players.saveProfile(concurrentUser, {
       username: `Cedar ${suffix}`,
@@ -122,6 +137,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
         ...first,
         date: concurrentDate,
         idempotencyKey: `daily_${suffix}_concurrent_low`,
+        username: `Cedar ${suffix}`,
         score: 800,
         moves: 80
       },
@@ -129,6 +145,7 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
         ...first,
         date: concurrentDate,
         idempotencyKey: `daily_${suffix}_concurrent_high`,
+        username: `Cedar ${suffix}`,
         score: 900,
         moves: 70
       }

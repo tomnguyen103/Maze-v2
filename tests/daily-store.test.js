@@ -44,6 +44,7 @@ const VERIFIED = {
   idempotencyKey: "daily_01J1MOSSWATCH",
   date: "2026-07-26",
   dailyVersion: 1,
+  username: "Moss Runner",
   score: 900,
   wardensDefeated: 2,
   echoesCollected: 4,
@@ -102,7 +103,8 @@ describe("Verified Daily store", () => {
     expect(query.mock.calls[2][0]).toContain(
       "FROM verified_daily_entries"
     );
-    expect(query.mock.calls[2][0]).toContain("FOR UPDATE");
+    expect(query.mock.calls[2][0]).toContain("FOR UPDATE OF entries");
+    expect(query.mock.calls[2][0]).not.toContain("JOIN players");
     expect(query.mock.calls[3][0]).toContain(
       "INSERT INTO verified_daily_submissions"
     );
@@ -179,7 +181,7 @@ describe("Verified Daily store", () => {
     const worseQuery = vi.fn()
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [STORED_ENTRY] })
+      .mockResolvedValueOnce({ rows: [{ score: 900, moves: 76 }] })
       .mockResolvedValueOnce({ rows: [] });
     await expect(
       createDailyStore(tenantPool(worseQuery)).submitVerifiedEntry(
@@ -189,7 +191,12 @@ describe("Verified Daily store", () => {
     ).resolves.toMatchObject({
       duplicate: false,
       improved: false,
-      bestResult: "unchanged"
+      bestResult: "unchanged",
+      entry: {
+        username: "Moss Runner",
+        score: 900,
+        moves: 76
+      }
     });
     expect(worseQuery).toHaveBeenCalledTimes(4);
     expect(worseQuery.mock.calls[3][0]).toContain(
