@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:first-light:v1", "seen");
+  });
+});
+
 /** @param {string} policy */
 function directives(policy) {
   return new Map(

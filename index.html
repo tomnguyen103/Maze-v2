@@ -326,10 +326,42 @@
       </form>
     </dialog>
 
+    <dialog
+      class="first-light-dialog"
+      id="first-light-dialog"
+      aria-labelledby="first-light-title"
+      aria-describedby="first-light-intro first-light-boundary"
+    >
+      <span class="section-label">A one-maze lesson</span>
+      <h2 id="first-light-title" tabindex="-1">Your First Light</h2>
+      <p class="dialog-intro" id="first-light-intro">
+        The first Echo is waiting at the edge of a waking Labyrinth.
+        Recover it, answer one Warden, and reach the Gate with the same
+        rules every Quest uses.
+      </p>
+      <ol class="first-light-route" aria-label="First Light route">
+        <li><strong>Move</strong><span>Find one Echo.</span></li>
+        <li><strong>Think</strong><span>Use a Hint, then answer.</span></li>
+        <li><strong>Escape</strong><span>Reach the open Gate.</span></li>
+      </ol>
+      <p class="first-light-boundary" id="first-light-boundary">
+        Practice only. First Light never saves Quest progress, Journal
+        notes, Atlas marks, scores, Run Records, or access.
+      </p>
+      <div class="first-light-dialog__actions">
+        <button class="primary-button" id="first-light-start" type="button">
+          Start First Light
+        </button>
+        <button class="control-button" id="first-light-skip" type="button">
+          Skip to Quest
+        </button>
+      </div>
+    </dialog>
+
     <dialog class="level-dialog" id="level-dialog" aria-labelledby="level-title">
       <div class="level-dialog__intro">
         <span class="section-label">Start an adventure</span>
-        <h2 id="level-title">Choose your Quest Level</h2>
+        <h2 id="level-title" tabindex="-1">Choose your Quest Level</h2>
         <p>Every path has a different maze and learning challenge. You can change levels whenever you start a new quest.</p>
       </div>
       <div class="level-cards" id="level-cards">
@@ -353,6 +385,15 @@
           <span>Advanced mastery across 20 formidable Labyrinths.</span>
           <span class="level-card__topics">Questions: fractions · logic · earth and space</span>
           <small>15–23 tiles · 4–8 Echoes · 3–6 Wardens</small>
+        </button>
+      </div>
+      <div class="level-dialog__first-light">
+        <p>
+          Want the short lesson again? First Light always stays available
+          and never changes Quest progress.
+        </p>
+        <button class="control-button" id="first-light-replay" type="button">
+          Replay First Light
         </button>
       </div>
       <p class="level-dialog__note">No timer during questions. Take your time and think.</p>
@@ -706,7 +747,7 @@
       aria-describedby="result-summary"
     >
       <span class="section-label" id="result-kicker">Run complete</span>
-      <h2 id="result-title">Gate reached.</h2>
+      <h2 id="result-title" tabindex="-1">Gate reached.</h2>
       <p id="result-summary"></p>
       <p class="result-access-note" id="result-access-note" hidden></p>
       <div

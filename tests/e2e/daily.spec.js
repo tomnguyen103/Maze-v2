@@ -8,6 +8,12 @@ import {
 } from "../../src/game/daily-labyrinth.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:first-light:v1", "seen");
+  });
+});
+
 const QUEST_FIXTURE = {
   version: 1,
   levelId: "maze-master",

@@ -5,6 +5,12 @@ import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:first-light:v1", "seen");
+  });
+});
+
 const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
 const DEFEAT_SEED = "DEFEAT-RECORD";
