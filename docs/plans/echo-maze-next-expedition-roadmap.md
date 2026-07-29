@@ -1,16 +1,20 @@
 # Echo Maze Next Expedition Roadmap
 
-**Status:** Feature contract frozen — Milestone 1 implementation authorized
+**Status:** Feature contract frozen — autonomous roadmap implementation authorized
 
 **Review date:** 2026-07-29
 
-**Reviewed code baseline:** `1313fc8` on `main`, synchronized with `origin/main`
+**Reviewed code baseline:** `a2c262b` on `main`, synchronized with `origin/main`
 
 **External inspiration reviewed:** [WebGemma](https://web-gemma.vercel.app/)
 
-**Execution state:** The frozen contract is confirmed and Milestone 1 is in
-implementation through GitHub issue #95. Later milestones remain paused behind
-the Milestone 1 human checkpoint and their own implementation tickets.
+**Execution state:** The frozen contract is confirmed and Milestone 1 is merged.
+The product owner explicitly authorized autonomous end-to-end implementation on
+2026-07-29. Milestone progression is gated by agent-run local, browser,
+accessibility, privacy, review, and deployment evidence rather than mandatory
+manual testing by the product owner. Moderated research remains useful
+post-release learning, but it is non-blocking and must never be represented as
+completed unless real sessions occur.
 
 **Primary product outcome — resolved during feature grilling:** Personal Play
 Quest continuation. A new Explorer should understand the first Run, recover it
@@ -401,7 +405,7 @@ decision card:
 
 | Field | Required answer |
 |---|---|
-| Baseline source | Existing trusted product fact, moderated playtest, or “not available” |
+| Baseline source | Existing trusted product fact, agent-run release evidence, moderated research, or “not available” |
 | Primary outcome | One player/Teacher behavior the feature should improve |
 | Counter-metric | One harm or displacement the feature must not increase |
 | Target | A reasoned hypothesis, marked `[PLACEHOLDER]` until baseline exists |
@@ -423,16 +427,16 @@ play slower or less reliable.
 1. close or reconcile stale issue #89 using merged PR #94 evidence;
 2. correct `docs/README.md` status drift;
 3. record current bundle and Vercel function ceilings as acceptance gates;
-4. define a small moderated first-run playtest script before changing
-   onboarding;
+4. define a repeatable first-run evidence script before changing onboarding,
+   with an optional privacy-safe moderated-research extension;
 5. complete the baseline/outcome/counter-metric/target/review-window/decision
    card for each feature before publishing its issue;
 6. define only privacy-safe measurement needed for committed feature outcomes.
 
-**Measurement rule:** Prefer supervised playtests and existing server-trusted
-facts. Do not add child identity, free text, answer content, raw route history,
-or third-party session replay. Any new aggregate telemetry requires a separate
-privacy review.
+**Measurement rule:** Prefer reproducible agent-run release evidence, optional
+supervised playtests, and existing server-trusted facts. Do not add child
+identity, free text, answer content, raw route history, or third-party session
+replay. Any new aggregate telemetry requires a separate privacy review.
 
 **Acceptance gates:**
 
@@ -452,9 +456,11 @@ fixtures. No gameplay rule change.
 **Purpose:** Replace explanation overload with a short playable tutorial while
 keeping the real Labyrinth as the hero.
 
-**Grill decision — resolved:** First Light is committed to ship. A moderated
-first-player test tunes its scope and establishes a baseline; it no longer
-decides whether the feature exists.
+**Grill decision — resolved:** First Light is committed to ship. Agent-run
+fresh-state, keyboard, touch, responsive, reduced-motion, zoom, and semantic
+browser evidence is the release baseline. Optional moderated first-player
+research may tune later presentation and pacing; it neither blocks milestone
+progression nor decides whether the feature exists.
 
 **Defeat decision — resolved:** First Light preserves the normal
 Warden/Vitality rule. Repeated wrong answers may end the tutorial attempt at
@@ -1458,14 +1464,17 @@ Verified Daily + live migration 0018 + privacy validation
 
 - Truth and delivery headroom
 
-**Checkpoint:**
+**Autonomous evidence checkpoint:**
 
 - local gate green;
-- first-run moderated playtest complete;
-- First Light is tuned against the moderated playtest baseline;
+- fresh-state First Light journeys pass on desktop and mobile;
+- keyboard, touch, semantic, Reduced Motion, and 200-percent-text evidence pass;
+- First Light and Active Run Recovery isolation, exactness, and cleanup pass;
 - refresh recovery exact;
 - no new bundle or function-budget debt;
-- human review before Milestone 2.
+- local review and CodeRabbit review complete before merge;
+- optional moderated research remains documented without blocking Milestone 2
+  or implying human evidence that does not exist.
 
 ### Milestone 2 — World Map and Run Memories
 
@@ -1534,10 +1543,12 @@ Verified Daily + live migration 0018 + privacy validation
 
 ### Cross-milestone validation tracks
 
-Moderated playtests, privacy threat models, content audits, paper prototypes,
-cost models, and technical spikes are preproduction evidence for committed
-features. They may tune mechanics, sequence, and release slices. They do not
-create an R&D-only escape hatch or cancel a named production promise.
+Agent-run browser evidence, privacy threat models, content audits, paper
+prototypes, cost models, and technical spikes are preproduction evidence for
+committed features. Optional moderated playtests may tune mechanics,
+presentation, sequence, and later release slices. They are not a mandatory
+handoff to the product owner, do not create an R&D-only escape hatch, and do
+not cancel a named production promise.
 
 ## 11. Verification contract for every approved feature
 
@@ -1612,21 +1623,21 @@ This roadmap does not propose:
 
 ## 14. Approval gate
 
-No implementation, issue creation, branch creation, migration, deployment,
-production setting, billing action, or external service mutation is authorized
-by this document.
+On 2026-07-29, the product owner explicitly authorized autonomous end-to-end
+implementation of every production feature promised by this frozen roadmap.
+That authorization includes repository-controlled documentation, issues,
+branches, code, tests, local browser validation, pull requests, required
+reviews, merges, and normal deployments.
 
-Recommended first implementation authorization is **Milestone 1 only**,
-followed by its human checkpoint.
+The agent owns those delivery gates. The product owner is not required to
+manually test a milestone before work may continue. When a human-only claim
+cannot be verified autonomously, the agent must use an honest automated proxy,
+state its limitation, and keep optional real-world research separate from the
+release gate.
 
-Player-facing features:
-
-- First Light Tutorial
-- Active Run Recovery
-
-Development prerequisite:
-
-- Truth and delivery headroom
+This authorization still excludes live charges, billing activation, production
+payment enforcement, destructive production migrations, and other irreversible
+external actions unless the product owner grants separate explicit authority.
 
 **Echo Atlas Preproduction** can run in parallel after Milestone 1 begins. This
 means design, prototyping, accessibility planning, and technical validation
