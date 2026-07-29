@@ -54,7 +54,7 @@ export function createRunReplayView({
     onClose();
     const target = returnFocus;
     returnFocus = null;
-    target?.focus();
+    target?.focus({ preventScroll: true });
   });
   elements.dialog.addEventListener("keydown", (event) => {
     if (isNativeControl(event.target)) {

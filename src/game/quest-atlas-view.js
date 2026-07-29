@@ -9,7 +9,10 @@ export { renderQuestAtlasSummary } from "./quest-atlas-summary.js";
  * @param {{
  *   onClose?: () => void,
  *   onContinue?: () => void,
- *   onWatchTrail?: (landmarkId: string) => void
+ *   onWatchTrail?: (
+ *     landmarkId: string,
+ *     returnTarget: HTMLElement
+ *   ) => void
  * }} [options]
  */
 export function createQuestAtlasView({
@@ -70,7 +73,10 @@ export function createQuestAtlasView({
  * @param {QuestAtlas} atlas
  * @param {{
  *   onContinue: () => void,
- *   onWatchTrail: (landmarkId: string) => void
+ *   onWatchTrail: (
+ *     landmarkId: string,
+ *     returnTarget: HTMLElement
+ *   ) => void
  * }} options
  */
 function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
@@ -250,7 +256,7 @@ function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
     }
     renderDetail(detail, node, {
       onContinue,
-      onWatchTrail,
+      onWatchTrail: (landmarkId) => onWatchTrail(landmarkId, button),
       close: elements.dialog.close.bind(elements.dialog)
     });
     if (updateUrl) {
@@ -449,7 +455,6 @@ function renderDetail(detail, node, { onContinue, onWatchTrail, close }) {
     action.dataset.atlasWatchTrail = "";
     action.addEventListener("click", () => {
       onWatchTrail(node.id);
-      close();
     });
     detail.append(action);
   } else {

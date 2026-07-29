@@ -407,6 +407,8 @@ let runReplayViewPromise = null;
 let runReplayOpening = false;
 let runReplayViewRetry = false;
 let resumeAfterRunReplay = false;
+/** @type {typeof import("./game/run-replay.js").buildRunReplayTimeline | null} */
+let buildRunReplayTimelineForAtlas = null;
 /** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
 let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
@@ -622,7 +624,7 @@ async function showQuestAtlas(trigger) {
       atlasViewRetry = true;
       atlasViewPromise = viewModule.then(
         ({ createQuestAtlasView }) => createQuestAtlasView({
-        onWatchTrail: (landmarkId) => {
+        onWatchTrail: (landmarkId, returnTarget) => {
           const record = replayRecordForLandmark(landmarkId);
           if (!record) {
             announce(
@@ -630,9 +632,8 @@ async function showQuestAtlas(trigger) {
             );
             return;
           }
-          resumeAfterRunReplay = resumeAfterAtlas;
-          resumeAfterAtlas = false;
-          void openRunReplay(record, elements.atlasButton);
+          resumeAfterRunReplay = false;
+          void openRunReplay(record, returnTarget);
         },
         onClose: () => {
           if (resumeAfterAtlas && run.status === "paused") {
@@ -644,22 +645,9 @@ async function showQuestAtlas(trigger) {
       );
     }
     const atlasView = await atlasViewPromise;
+    const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
     atlasView.show(projectQuestAtlas(questProgress, {
-      watchTrailLandmarkIds: new Set(
-        runRecords
-          .filter(
-            (record) =>
-              record.replay &&
-              record.questId === questProgress.questId &&
-              record.questLevelId === questProgress.levelId &&
-              record.labyrinthNumber !== undefined
-          )
-          .map(
-            (record) =>
-              `${getDifficultyBand(record.labyrinthNumber ?? 1).id}-` +
-              `${record.labyrinthNumber}`
-          )
-      )
+      watchTrailLandmarkIds
     }), trigger);
   } catch {
     atlasViewPromise = null;
@@ -679,13 +667,52 @@ async function showQuestAtlas(trigger) {
 function replayRecordForLandmark(landmarkId) {
   return runRecords.find(
     (record) =>
-      record.replay &&
+      isCompatibleRunReplay(record) &&
       record.questId === questProgress.questId &&
       record.questLevelId === questProgress.levelId &&
       record.labyrinthNumber !== undefined &&
       `${getDifficultyBand(record.labyrinthNumber).id}-` +
         `${record.labyrinthNumber}` === landmarkId
   ) ?? null;
+}
+
+async function compatibleReplayLandmarkIds() {
+  try {
+    if (!buildRunReplayTimelineForAtlas) {
+      ({ buildRunReplayTimeline: buildRunReplayTimelineForAtlas } =
+        await import("./game/run-replay.js"));
+    }
+  } catch {
+    return new Set();
+  }
+  return new Set(
+    runRecords
+      .filter(
+        (record) =>
+          isCompatibleRunReplay(record) &&
+          record.questId === questProgress.questId &&
+          record.questLevelId === questProgress.levelId &&
+          record.labyrinthNumber !== undefined
+      )
+      .map(
+        (record) =>
+          `${getDifficultyBand(record.labyrinthNumber ?? 1).id}-` +
+          `${record.labyrinthNumber}`
+      )
+  );
+}
+
+/** @param {typeof runRecords[number]} record */
+function isCompatibleRunReplay(record) {
+  if (!record.replay || !buildRunReplayTimelineForAtlas) {
+    return false;
+  }
+  try {
+    buildRunReplayTimelineForAtlas(record);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

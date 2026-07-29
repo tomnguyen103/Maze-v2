@@ -666,13 +666,25 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
         outcome: "escaped",
         echoesCollected: corruptReplay.terminal.echoesCollected,
         echoTotal: corruptReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
         questLevelId: "trail-scout",
-        labyrinthNumber: 4,
+        labyrinthNumber: 3,
         atlasRegionId: "foundation",
         rulesetRevision: "classic-v1",
         replay: corruptReplay
       }
     ]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_replay_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
   }, { retainedReplay: replay });
 
   const viewports = testInfo.project.name === "mobile"
@@ -688,7 +700,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await page.emulateMedia({
       reducedMotion: viewportIndex === 0 ? "reduce" : "no-preference"
     });
-    await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=4");
+    await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=5");
     await expectGameReady(page);
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "32px";
@@ -791,6 +803,89 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
       records.getByRole("button", { name: "Play seed CORRUPT-TRAIL" })
     ).toBeVisible();
     await records.getByRole("button", { name: "Close" }).click();
+
+    const questProgressBeforeAtlas = await page.evaluate(() =>
+      localStorage.getItem("echo-maze:quest-progress:v1")
+    );
+    expect(await page.evaluate(() => {
+      const progress = JSON.parse(
+        localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+      );
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return {
+        progressQuestId: progress?.questId,
+        progressLevelId: progress?.levelId,
+        completedLabyrinths: progress?.completedLabyrinths,
+        recordQuestId: records[0]?.questId,
+        sameQuest: records[0]?.questId === progress?.questId,
+        recordLevelId: records[0]?.questLevelId,
+        recordLabyrinthNumber: records[0]?.labyrinthNumber,
+        hasReplay: Boolean(records[0]?.replay)
+      };
+    })).toEqual({
+      progressQuestId: expect.any(String),
+      progressLevelId: "trail-scout",
+      completedLabyrinths: 4,
+      recordQuestId: expect.any(String),
+      sameQuest: true,
+      recordLevelId: "trail-scout",
+      recordLabyrinthNumber: 4,
+      hasReplay: true
+    });
+
+    await page.getByRole("button", { name: "Atlas", exact: true }).click();
+    const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+    await expect(atlas).toBeVisible();
+    await atlas.getByRole("button", { name: "List view" }).click();
+    const retainedLandmark = atlas.locator(
+      "[data-atlas-landmark='foundation-4']"
+    );
+    if (testInfo.project.name === "mobile") {
+      await retainedLandmark.tap();
+    } else {
+      await retainedLandmark.click();
+    }
+    await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+      .toBeVisible();
+    await atlas.evaluate((element) => {
+      element.scrollTop = 73;
+    });
+    if (testInfo.project.name === "mobile") {
+      await atlas.getByRole("button", { name: "Watch Trail" }).tap();
+    } else {
+      await atlas.getByRole("button", { name: "Watch Trail" }).click();
+    }
+
+    await expect(viewer).toBeVisible();
+    await expect(atlas).toBeVisible();
+    const atlasScrollTop = await atlas.evaluate((element) => element.scrollTop);
+    await viewer.getByRole("button", { name: "Close" }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(atlas).toBeVisible();
+    await expect(retainedLandmark).toBeFocused();
+    await expect(atlas.locator("[data-atlas-landmarks]"))
+      .toHaveAttribute("data-view", "list");
+    expect(new URL(page.url()).searchParams.get("atlas"))
+      .toBe("foundation-4");
+    expect(await atlas.evaluate((element) => element.scrollTop))
+      .toBe(atlasScrollTop);
+
+    const corruptLandmark = atlas.locator(
+      "[data-atlas-landmark='foundation-3']"
+    );
+    if (testInfo.project.name === "mobile") {
+      await corruptLandmark.tap();
+    } else {
+      await corruptLandmark.click();
+    }
+    await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+      .toHaveCount(0);
+    expect(await page.evaluate(() =>
+      localStorage.getItem("echo-maze:quest-progress:v1")
+    )).toBe(questProgressBeforeAtlas);
+    await atlas.getByRole("button", { name: "Close" }).click();
   }
 });
 
@@ -2253,10 +2348,15 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
     .toBeVisible();
   await atlas.getByRole("button", { name: "Watch Trail" }).click();
   const trail = page.getByRole("dialog", { name: "Watch Trail" });
-  await expect(atlas).not.toBeVisible();
+  await expect(atlas).toBeVisible();
   await expect(trail).toBeVisible();
   await trail.getByRole("button", { name: "Close" }).click();
   await expect(trail).not.toBeVisible();
+  await expect(atlas).toBeVisible();
+  await expect(atlas.locator("[data-atlas-landmark='foundation-1']"))
+    .toBeFocused();
+  expect(new URL(page.url()).searchParams.get("atlas")).toBe("foundation-1");
+  await atlas.getByRole("button", { name: "Close" }).click();
   await expect(page.locator("#run-state")).toHaveText("Exploring");
 
   await page.getByRole("button", { name: "Records", exact: true }).click();

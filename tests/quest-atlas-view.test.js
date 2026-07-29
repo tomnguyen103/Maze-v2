@@ -162,7 +162,7 @@ describe("Echo Atlas view", () => {
     expect(onContinue).toHaveBeenCalledOnce();
   });
 
-  it("exposes Watch Trail only for a completed landmark with retained memory", () => {
+  it("keeps retained Trail inspection inside the selected Atlas landmark", () => {
     const onWatchTrail = vi.fn();
     const view = createQuestAtlasView({ onWatchTrail });
     const trigger = /** @type {HTMLButtonElement} */ (
@@ -170,19 +170,47 @@ describe("Echo Atlas view", () => {
     );
     view.show(
       projectQuestAtlas(createQuestProgress("trail-scout", 4), {
-        watchTrailLandmarkIds: new Set(["foundation-2"])
+        watchTrailLandmarkIds: new Set([
+          "foundation-2",
+          "foundation-4",
+          "developing-5"
+        ])
       }),
       trigger
     );
 
-    document.querySelector("[data-atlas-landmark='foundation-2']")
-      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const landmark = /** @type {HTMLButtonElement} */ (
+      document.querySelector("[data-atlas-landmark='foundation-2']")
+    );
+    landmark.click();
+    document.querySelector("[data-atlas-view='list']")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
     const action = /** @type {HTMLButtonElement | null} */ (
       document.querySelector("[data-atlas-watch-trail]")
     );
     expect(action?.textContent).toBe("Watch Trail");
     action?.click();
-    expect(onWatchTrail).toHaveBeenCalledWith("foundation-2");
+    expect(onWatchTrail).toHaveBeenCalledWith("foundation-2", landmark);
+    expect(document.getElementById("atlas-dialog")).toHaveProperty(
+      "open",
+      true
+    );
+    expect(document.querySelector("[data-atlas-landmarks]")
+      ?.getAttribute("data-view")).toBe("list");
+    expect(new URL(window.location.href).searchParams.get("atlas"))
+      .toBe("foundation-2");
+
+    const returnTarget = onWatchTrail.mock.calls[0]?.[1];
+    returnTarget?.focus();
+    expect(document.activeElement).toBe(landmark);
+
+    document.querySelector("[data-atlas-landmark='foundation-4']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector("[data-atlas-watch-trail]")).toBeNull();
+    document.querySelector("[data-atlas-landmark='developing-5']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector("[data-atlas-watch-trail]")).toBeNull();
 
     view.show(
       projectQuestAtlas(createQuestProgress("trail-scout", 4)),

@@ -417,6 +417,7 @@
   .atlas-viewport {
     min-height: 24rem;
     padding: var(--space-3);
+    scroll-padding-block-end: 44dvh;
   }
 
   .atlas-regions,
@@ -442,7 +443,7 @@
     inset-inline: max(var(--space-2), calc((100vw - 42rem) / 2));
     bottom: var(--space-4);
     z-index: 1;
-    max-height: min(24rem, 52dvh);
+    max-height: min(24rem, 40dvh);
     flex-direction: column;
     overflow: auto;
   }
