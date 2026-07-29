@@ -17,11 +17,12 @@ holds everything else, organised by how authoritative it is.
 
 ## Decisions — `adr/`
 
-Architecture Decision Records 0001–0022, append-only. Read the relevant ADR
+Architecture Decision Records 0001–0037, append-only. Read the relevant ADR
 before changing game rules or server contracts; supersede with a new ADR
-rather than editing an accepted one. 0001–0012 cover game and product
-decisions; 0013–0022 record enterprise hardening, guest admission, signed-in
-settings continuity, audit checkpointing, and Classroom tenancy.
+rather than editing an accepted one. 0001–0012 cover the delivered game and
+product foundation; 0013–0024 record enterprise hardening, guest admission,
+signed-in settings continuity, audit checkpointing, Classroom tenancy, and
+Verified Daily replay; 0025–0037 freeze the Next Expedition feature contracts.
 
 ## Plans and evidence — `plans/`
 
@@ -32,13 +33,19 @@ detail.
 
 | Document | Status |
 |---|---|
-| [`enterprise-hardening-plan.md`](plans/enterprise-hardening-plan.md) | Phases 1–7 delivered; phases 8–9 planned |
-| [`enterprise-hardening-log.md`](plans/enterprise-hardening-log.md) | Execution log: one entry per delivered hardening phase |
+| [`enterprise-hardening-plan.md`](plans/enterprise-hardening-plan.md) | All nine phases delivered through PRs #57–#88 |
+| [`enterprise-hardening-log.md`](plans/enterprise-hardening-log.md) | Selected phase execution evidence and delivery deviations |
 | [`echo-maze-lifetime-membership-and-echo-atlas-master-plan.md`](plans/echo-maze-lifetime-membership-and-echo-atlas-master-plan.md) | Master plan for the four-plan program; implemented through PRs #49–#56 |
 | [`implementation-coverage.md`](plans/implementation-coverage.md) | Requirement-by-requirement evidence ledger for that program (all delivered; C27 deferred on external approval) |
 | [`echo-maze-prioritized-feature-roadmap.md`](plans/echo-maze-prioritized-feature-roadmap.md) | Superseded by the master plan; retained as review evidence |
+| [`echo-maze-next-expedition-roadmap.md`](plans/echo-maze-next-expedition-roadmap.md) | Frozen five-milestone product contract; implementation starts with issue #95 |
 | [`membership-access-implementation-plan.md`](plans/membership-access-implementation-plan.md) | Superseded by the master plan; retained as technical source detail |
 | [`entry-experience-implementation-plan.md`](plans/entry-experience-implementation-plan.md) | Implemented through PRs #34, #37, #38, #56 |
+
+[`UNFINISHED-FEATURES.md`](UNFINISHED-FEATURES.md) is the consolidated closure
+ledger for the prior backlog. All 17 repository-scoped items are delivered;
+live migration, billing, and provider-dashboard work remain explicitly external
+where the ledger says so.
 
 [`release-readiness.md`](release-readiness.md) is the frozen release-evidence
 index for the four-plan program (evidence date 2026-07-26, test-mode

@@ -1,9 +1,12 @@
 # Enterprise hardening — execution log
 
-One entry per phase of `enterprise-hardening-plan.md`. Each entry records the
-PR, the local gate results, and any deviation from the plan with its reason.
-Entries are ordered by phase number; the test-infrastructure entry (PR #61,
-not a plan phase) sits between phases 4 and 5, where it landed chronologically.
+Selected execution entries for `enterprise-hardening-plan.md`. Each entry
+records its PRs, local gates, and important deviations. Later phase evidence
+also lives in the delivery notes inside the plan, the phase ADRs, and
+`../UNFINISHED-FEATURES.md`; this file does not claim one-entry-per-phase
+coverage. Entries are ordered by phase number; the test-infrastructure entry
+(PR #61, not a plan phase) sits between phases 4 and 5, where it landed
+chronologically.
 
 ---
 
