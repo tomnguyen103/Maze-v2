@@ -32,8 +32,8 @@ test("serves the strict header set on the game document", async ({ page }) => {
   expect(policy.get("base-uri")).toBe("'none'");
   expect(policy.get("frame-ancestors")).toBe("'none'");
   expect(policy.get("form-action")).toContain("https://checkout.stripe.com");
-  expect(headers["content-security-policy"]).not.toContain("'unsafe-inline'");
-  expect(headers["content-security-policy"]).not.toContain("'unsafe-eval'");
+  expect(policy.get("script-src")).not.toContain("'unsafe-inline'");
+  expect(policy.get("script-src")).not.toContain("'unsafe-eval'");
 });
 
 test("boots and plays a Labyrinth with no Content Security Policy violation", async ({

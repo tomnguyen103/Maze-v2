@@ -2727,6 +2727,7 @@ async function submitVerifiedDailyRun(daily) {
     }
     return;
   }
+  elements.resultRank.textContent = localRank;
   if (result.state === "signed-out") {
     elements.resultKicker.textContent = `${localKicker} · sign in needed`;
     elements.resultSummary.textContent =

@@ -185,6 +185,63 @@ async function preserveQuestState(page) {
   );
 }
 
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {"created" | "improved" | "unchanged" | "rejected"} outcome
+ */
+async function installSignedInDailyPlayer(page, outcome) {
+  await page.addInitScript((bestResult) => {
+    const profile = {
+      username: "Moss Runner",
+      explorerPalette: "teal",
+      playgroundPalette: "daylight"
+    };
+    const submissions =
+      /** @type {Record<string, unknown>[]} */ ([]);
+    Reflect.set(window, "__echoMazeDailySubmissions", submissions);
+    Reflect.set(window, "__echoMazePlayerDependencies", {
+      clerkBrowser: {
+        user: { id: "user_daily_e2e" },
+        getToken: async () => "e2e-session-token",
+        initialize: async () => true,
+        openSignIn: async () => true,
+        openSignUp: async () => true,
+        openUserProfile: async () => true,
+        signOut: async () => {}
+      },
+      client: {
+        getLeaderboard: async () => ({ entries: [], globalMaxScore: 0 }),
+        getVerifiedDailyLeaderboard: async () => ({
+          date: "2026-07-26",
+          contractVersion: 1,
+          verification: "verified-replay-v1",
+          entries: []
+        }),
+        getProfile: async () => ({ profile }),
+        getLearningJournal: async () => ({
+          journal: { version: 1, events: [] },
+          clearGeneration: 0
+        }),
+        /** @param {Record<string, unknown>} submission */
+        submitVerifiedDaily: async (submission) => {
+          submissions.push(submission);
+          if (bestResult === "rejected") {
+            throw Object.assign(
+              new Error("Replay result does not match the claim."),
+              { status: 409 }
+            );
+          }
+          return {
+            verification: "verified-replay-v1",
+            bestResult,
+            improved: bestResult !== "unchanged"
+          };
+        }
+      }
+    });
+  }, outcome);
+}
+
 /** @param {import("@playwright/test").Page} page */
 async function expectPreservedQuestState(page) {
   await expect
@@ -468,6 +525,89 @@ test("shows a public verified board and keeps Guest participation casual", async
   await expect(dialog).toContainText("900");
   await expect(dialog).toContainText("76 moves");
   await expect(dialog).not.toContainText(/user_|@/);
+});
+
+for (const outcome of /** @type {const} */ ([
+  "created",
+  "improved",
+  "unchanged"
+])) {
+  test(`reports a signed-in verified Daily ${outcome} result`, async ({
+    page
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "desktop",
+      "Signed-in outcome copy needs one browser profile."
+    );
+    await page.clock.install({ time: FIXED_DAILY_NOW });
+    await installSignedInDailyPlayer(page, outcome);
+    await preserveQuestState(page);
+    const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
+
+    await page.goto(`/play?daily=${daily.date}`);
+    await expectGameReady(page);
+    await completeDaily(page, daily);
+
+    const result = page.getByRole("dialog", {
+      name: "Daily Labyrinth complete."
+    });
+    await expect(result).toContainText("verified replay");
+    await expect(result).toContainText("Personal Best · Verified");
+    await expect(result).toContainText({
+      created: "first checked score joined",
+      improved: "improved today’s Verified Daily best",
+      unchanged: "existing Verified Daily best stays"
+    }[outcome]);
+    const submissions =
+      /** @type {{ contract: ReturnType<typeof createDailyContract>, actionLog: { version: number, actions: { type: string }[] }, claimed: { status: string } }[]} */ (
+        await page.evaluate(() =>
+          Reflect.get(window, "__echoMazeDailySubmissions")
+        )
+      );
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]).toMatchObject({
+      contract: daily,
+      actionLog: { version: 1 },
+      claimed: { status: "won" }
+    });
+    expect(submissions[0].actionLog.actions.length).toBeGreaterThan(0);
+    expect(
+      submissions[0].actionLog.actions.every((action) =>
+        [
+          "move",
+          "pulse",
+          "answer-question",
+          "skip-question"
+        ].includes(action.type)
+      )
+    ).toBe(true);
+  });
+}
+
+test("keeps a rejected signed-in Daily replay local and truthful", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One rejected-submission browser check is sufficient."
+  );
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  await installSignedInDailyPlayer(page, "rejected");
+  const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));
+
+  await page.goto(`/play?daily=${daily.date}`);
+  await expectGameReady(page);
+  await completeDaily(page, daily);
+
+  const result = page.getByRole("dialog", {
+    name: "Daily Labyrinth complete."
+  });
+  await expect(result).toContainText("replay not verified");
+  await expect(result).toContainText(
+    "This result did not pass the replay check. Local Daily play still works."
+  );
+  await expect(result).toContainText("Personal Best");
+  await expect(result).not.toContainText("Personal Best · Verified");
 });
 
 test("explains an empty verified board and keeps the Daily action available", async ({
