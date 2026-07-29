@@ -376,7 +376,8 @@ test("explains an expired UTC link and shares only today's public date", async (
   expect([...copied.searchParams.entries()]).toEqual([
     ["daily", current.date]
   ]);
-  await expect(dialog).not.toContainText(/leaderboard|rank|reward|streak/i);
+  await expect(dialog).toContainText("Verified Daily Board");
+  await expect(dialog).not.toContainText(/reward|streak/i);
 
   await dialog.getByRole("button", { name: "Start today’s Daily" }).click();
   await expect(page).toHaveURL(new RegExp(`daily=${current.date}`));
@@ -417,6 +418,193 @@ test("keeps the Daily choice operable at 390px and 200 percent text", async ({
   });
   expect(layout.pageOverflow).toBeLessThanOrEqual(1);
   expect(layout.dialogOverflow).toBeLessThanOrEqual(1);
+});
+
+test("shows a public verified board and keeps Guest participation casual", async ({
+  page
+}) => {
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  await preserveQuestState(page);
+  /** @type {() => void} */
+  let releaseBoard = () => {};
+  const boardReady = new Promise((resolve) => {
+    releaseBoard = () => resolve(undefined);
+  });
+  await page.route("**/api/daily/leaderboard", async (route) => {
+    await boardReady;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: "2026-07-26",
+        contractVersion: 1,
+        verification: "verified-replay-v1",
+        entries: [
+          { rank: 1, username: "Moss Runner", score: 900, moves: 76 },
+          { rank: 2, username: "River Scout", score: 850, moves: 71 }
+        ]
+      })
+    });
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+  await expect(dialog.getByRole("status", {
+    name: "Verified Daily Board status"
+  })).toHaveText("Loading verified escapes…");
+  await expect(dialog).toContainText(
+    "Guest Daily stays casual. Sign in and create a username to join the verified board."
+  );
+
+  releaseBoard();
+  await expect(dialog.getByRole("list", {
+    name: "Verified Daily Board"
+  })).toContainText("Moss Runner");
+  await expect(dialog).toContainText("#1");
+  await expect(dialog).toContainText("900");
+  await expect(dialog).toContainText("76 moves");
+  await expect(dialog).not.toContainText(/user_|@/);
+});
+
+test("explains an empty verified board and keeps the Daily action available", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One empty-board browser check is sufficient."
+  );
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  await preserveQuestState(page);
+  await page.route("**/api/daily/leaderboard", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: "2026-07-26",
+        contractVersion: 1,
+        verification: "verified-replay-v1",
+        entries: []
+      })
+    })
+  );
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+
+  await expect(dialog.getByRole("status", {
+    name: "Verified Daily Board status"
+  })).toHaveText(
+    "No verified escapes yet. The first checked Gate is waiting."
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Start today’s Daily" })
+  ).toBeEnabled();
+});
+
+test("retries a network-failed verified board without blocking local play", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One network retry browser check is sufficient."
+  );
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  await preserveQuestState(page);
+  let attempts = 0;
+  await page.route("**/api/daily/leaderboard", (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      return route.abort();
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: "2026-07-26",
+        contractVersion: 1,
+        verification: "verified-replay-v1",
+        entries: [
+          { rank: 1, username: "Moss Runner", score: 900, moves: 76 }
+        ]
+      })
+    });
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+  await expect(dialog).toContainText(
+    "Network could not reach the Verified Daily Board. Local Daily play still works."
+  );
+  await dialog.getByRole("button", { name: "Retry verified board" }).click();
+  await expect(dialog).toContainText("Moss Runner");
+  expect(attempts).toBe(2);
+  await expect(
+    dialog.getByRole("button", { name: "Start today’s Daily" })
+  ).toBeEnabled();
+});
+
+test("separates server unavailability and rejects a different UTC board", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One server-state browser check is sufficient."
+  );
+  await page.clock.install({ time: FIXED_DAILY_NOW });
+  await preserveQuestState(page);
+  let attempts = 0;
+  await page.route("**/api/daily/leaderboard", (route) => {
+    attempts += 1;
+    return route.fulfill(
+      attempts === 1
+        ? {
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({
+              error: "Verified Daily services are unavailable."
+            })
+          }
+        : {
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              date: "2026-07-27",
+              contractVersion: 1,
+              verification: "verified-replay-v1",
+              entries: [
+                { rank: 1, username: "Wrong Day", score: 900, moves: 76 }
+              ]
+            })
+          }
+    );
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+  await expect(dialog).toContainText(
+    "Verified Daily services are unavailable. Local Daily play still works."
+  );
+  await dialog.getByRole("button", { name: "Retry verified board" }).click();
+  await expect(dialog).toContainText(
+    "Verified Daily Board date changed. Reopen Daily to see the current board."
+  );
+  await expect(dialog).not.toContainText("Wrong Day");
 });
 
 test("switches an open tab to the new UTC Daily at midnight", async ({
@@ -469,6 +657,8 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
   const accessRequests = [];
   /** @type {string[]} */
   const scoreRequests = [];
+  /** @type {string[]} */
+  const verifiedScoreRequests = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname === "/api/access/runs") {
@@ -476,6 +666,9 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
     }
     if (pathname === "/api/scores" && request.method() === "POST") {
       scoreRequests.push(request.url());
+    }
+    if (pathname === "/api/daily/scores" && request.method() === "POST") {
+      verifiedScoreRequests.push(request.url());
     }
   });
   await preserveQuestState(page);
@@ -525,6 +718,7 @@ test("saves a Daily Personal Best without changing Quest, Records, or demo state
   ]);
   expect(accessRequests).toEqual([]);
   expect(scoreRequests).toEqual([]);
+  expect(verifiedScoreRequests).toEqual([]);
 });
 
 test("does not claim an unsaved Daily result is a Personal Best", async ({

@@ -232,6 +232,9 @@ export function createPlayerApiClient({
     async getLeaderboard() {
       return request("/api/leaderboard");
     },
+    async getVerifiedDailyLeaderboard() {
+      return request("/api/daily/leaderboard", {}, false);
+    },
     async getLearningJournal() {
       return request("/api/learning-journal", {}, true, true);
     },
@@ -308,6 +311,13 @@ export function createPlayerApiClient({
         true,
         true
       );
+    },
+    /** @param {Record<string, unknown>} submission */
+    async submitVerifiedDaily(submission) {
+      return request("/api/daily/scores", {
+        method: "POST",
+        body: JSON.stringify(submission)
+      });
     }
   };
 }

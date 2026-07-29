@@ -8,6 +8,7 @@ const profile = {
   playgroundPalette: "daylight"
 };
 const clerkBrowser = {
+  /** @type {{ id: string } | null} */
   user: { id: "user_123" },
   getToken: vi.fn(async () => "token"),
   initialize: vi.fn(async () => true),
@@ -18,13 +19,25 @@ const clerkBrowser = {
 };
 const client = {
   getLeaderboard: vi.fn(async () => ({ entries: [], globalMaxScore: 0 })),
-  getProfile: vi.fn(async () => ({ profile: null })),
+  getVerifiedDailyLeaderboard: vi.fn(async () => ({
+    date: "2026-07-26",
+    entries: []
+  })),
+  getProfile: vi.fn(
+    /** @returns {Promise<{ profile: typeof profile | null }>} */
+    async () => ({ profile: null })
+  ),
   getQuestProgress: vi.fn(async () => ({ record: null })),
   saveProfile: vi.fn(async () => ({ profile })),
   saveQuestProgress: vi.fn(async () => ({
     record: { progress: { questId: "quest_cloud_123" }, revision: 1 }
   })),
   submitScore: vi.fn(async () => ({})),
+  submitVerifiedDaily: vi.fn(async () => ({
+    verification: "verified-replay-v1",
+    bestResult: "created",
+    improved: true
+  })),
   authorizeRun: vi.fn(async () => ({
     allowed: true,
     duplicate: false,
@@ -82,6 +95,7 @@ const { createPlayerController } = await import(
 describe("Player Profile dialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clerkBrowser.user = { id: "user_123" };
     localStorage.clear();
     document.body.innerHTML = `
       <button id="player-auth-button"></button>
@@ -191,6 +205,105 @@ describe("Player Profile dialog", () => {
       state: "free"
     });
     expect(client.getRunAccess).toHaveBeenCalledOnce();
+  });
+
+  it("loads the public Daily board and verifies an authenticated Profile result", async () => {
+    client.getProfile.mockResolvedValueOnce({ profile });
+    const controller = createPlayerController();
+    await vi.waitFor(() =>
+      expect(document.getElementById("player-name")?.textContent).toBe(
+        "Moss Runner"
+      )
+    );
+    const submission = { idempotencyKey: "daily_01J1MOSSWATCH" };
+
+    await expect(controller.getVerifiedDailyLeaderboard()).resolves.toEqual({
+      date: "2026-07-26",
+      entries: []
+    });
+    await expect(
+      controller.submitVerifiedDaily(submission)
+    ).resolves.toMatchObject({
+      state: "verified",
+      verification: "verified-replay-v1",
+      bestResult: "created",
+      improved: true
+    });
+    expect(client.submitVerifiedDaily).toHaveBeenCalledWith(submission);
+  });
+
+  it("keeps Guest Daily submissions casual without calling the verified route", async () => {
+    clerkBrowser.user = null;
+    const controller = createPlayerController();
+
+    await expect(
+      controller.submitVerifiedDaily({
+        idempotencyKey: "daily_01J1MOSSWATCH"
+      })
+    ).resolves.toEqual({ state: "signed-out" });
+    expect(client.submitVerifiedDaily).not.toHaveBeenCalled();
+  });
+
+  it("requires a Player Profile before submitting a verified Daily result", async () => {
+    const controller = createPlayerController();
+    await vi.waitFor(() => expect(client.getProfile).toHaveBeenCalledOnce());
+    client.getProfile.mockResolvedValueOnce({ profile: null });
+
+    await expect(
+      controller.submitVerifiedDaily({
+        idempotencyKey: "daily_01J1MOSSWATCH"
+      })
+    ).resolves.toEqual({ state: "profile-required" });
+    expect(client.submitVerifiedDaily).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes rejected replays from unavailable verification", async () => {
+    client.getProfile.mockResolvedValueOnce({ profile });
+    const controller = createPlayerController();
+    await vi.waitFor(() =>
+      expect(document.getElementById("player-name")?.textContent).toBe(
+        "Moss Runner"
+      )
+    );
+    client.submitVerifiedDaily
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Replay result does not match the claim."), {
+          status: 409
+        })
+      )
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Sign in again."), { status: 401 })
+      )
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Service unavailable."), { status: 503 })
+      );
+    const submission = { idempotencyKey: "daily_01J1MOSSWATCH" };
+
+    await expect(
+      controller.submitVerifiedDaily(submission)
+    ).resolves.toEqual({
+      state: "rejected",
+      message: "Replay result does not match the claim."
+    });
+    await expect(
+      controller.submitVerifiedDaily(submission)
+    ).resolves.toEqual({
+      state: "network-failure",
+      message: "offline"
+    });
+    await expect(
+      controller.submitVerifiedDaily(submission)
+    ).resolves.toEqual({
+      state: "signed-out",
+      message: "Sign in again."
+    });
+    await expect(
+      controller.submitVerifiedDaily(submission)
+    ).resolves.toEqual({
+      state: "unavailable",
+      message: "Service unavailable."
+    });
   });
 
   it("retries a pending authenticated Journal clear after reconnect", async () => {

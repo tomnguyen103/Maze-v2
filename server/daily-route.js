@@ -63,6 +63,7 @@ class DailyInputError extends Error {
  *     ) => Promise<{
  *       duplicate: boolean,
  *       improved: boolean,
+ *       bestResult: "created" | "improved" | "unchanged",
  *       entry: Record<string, unknown>
  *     }>
  *   },
@@ -173,16 +174,18 @@ export function createDailyHandler({
         after: {
           duplicate: stored.duplicate,
           improved: stored.improved,
+          bestResult: stored.bestResult,
           date: daily.date,
           score: result.score,
           moves: result.moves
         }
       });
-      sendJson(response, stored.duplicate ? 200 : 201, {
+      sendJson(response, stored.bestResult === "created" ? 201 : 200, {
         date: daily.date,
         verification: "verified-replay-v1",
         duplicate: stored.duplicate,
         improved: stored.improved,
+        bestResult: stored.bestResult,
         entry: publicEntry(stored.entry)
       });
     } catch (error) {

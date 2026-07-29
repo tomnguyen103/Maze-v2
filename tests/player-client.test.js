@@ -449,6 +449,47 @@ describe("player client", () => {
     }
   });
 
+  it("keeps the public Daily board unauthenticated and verified submissions global", async () => {
+    const getToken = vi.fn(async () => "session-token");
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ entries: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken,
+      getClassroomId: () => "org_morning_123"
+    });
+    const submission = { idempotencyKey: "daily_01J1MOSSWATCH" };
+
+    await client.getVerifiedDailyLeaderboard();
+    await client.submitVerifiedDaily(submission);
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(calls.map(([path]) => path)).toEqual([
+      "/api/daily/leaderboard",
+      "/api/daily/scores"
+    ]);
+    expect(getToken).toHaveBeenCalledOnce();
+    expect(
+      new Headers(calls[0][1].headers).has("authorization")
+    ).toBe(false);
+    expect(
+      new Headers(calls[1][1].headers).get("authorization")
+    ).toBe("Bearer session-token");
+    expect(
+      new Headers(calls[1][1].headers).has("x-echo-maze-classroom-id")
+    ).toBe(false);
+    expect(calls[1][1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(submission)
+      })
+    );
+  });
+
   it("reads and revision-saves Explorer Access Settings", async () => {
     const settings = {
       version: 1,

@@ -29,6 +29,7 @@ const DAILY_SCRIPT = [
   )
 ];
 
+/** @returns {import("../../src/game/run-action-log.js").RunActionLog} */
 export function dailyWinningLog() {
   let elapsedMs = 0;
   return {
@@ -44,7 +45,7 @@ export function dailyWinningLog() {
       elapsedMs += 100;
       return {
         type: "move",
-        direction: step,
+        direction: /** @type {"up" | "right" | "down" | "left"} */ (step),
         elapsedMs
       };
     })

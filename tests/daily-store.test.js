@@ -76,6 +76,7 @@ describe("Verified Daily store", () => {
   it("records an idempotency key and promotes a new best entry atomically", async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{ inserted: true }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
     const pool = tenantPool(query);
 
@@ -84,6 +85,7 @@ describe("Verified Daily store", () => {
     ).resolves.toEqual({
       duplicate: false,
       improved: true,
+      bestResult: "created",
       entry: {
         username: "Moss Runner",
         score: 900,
@@ -107,11 +109,33 @@ describe("Verified Daily store", () => {
       7600
     ]);
     expect(query.mock.calls[1][0]).toContain(
+      "FROM verified_daily_entries"
+    );
+    expect(query.mock.calls[1][0]).toContain("FOR UPDATE");
+    expect(query.mock.calls[2][0]).toContain(
       "INSERT INTO verified_daily_entries"
     );
-    expect(query.mock.calls[1][0]).toContain(
+    expect(query.mock.calls[2][0]).toContain(
       "EXCLUDED.score > verified_daily_entries.score"
     );
+  });
+
+  it("distinguishes an improved best from a newly created entry", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ inserted: true }] })
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
+      .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
+
+    await expect(
+      createDailyStore(tenantPool(query)).submitVerifiedEntry(
+        "user_123",
+        VERIFIED
+      )
+    ).resolves.toMatchObject({
+      duplicate: false,
+      improved: true,
+      bestResult: "improved"
+    });
   });
 
   it("returns the current best without rewriting on duplicate or worse submissions", async () => {
@@ -123,11 +147,16 @@ describe("Verified Daily store", () => {
         "user_123",
         VERIFIED
       )
-    ).resolves.toMatchObject({ duplicate: true, improved: false });
+    ).resolves.toMatchObject({
+      duplicate: true,
+      improved: false,
+      bestResult: "unchanged"
+    });
     expect(duplicateQuery).toHaveBeenCalledTimes(2);
 
     const worseQuery = vi.fn()
       .mockResolvedValueOnce({ rows: [{ inserted: true }] })
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
     await expect(
@@ -135,7 +164,11 @@ describe("Verified Daily store", () => {
         "user_123",
         { ...VERIFIED, idempotencyKey: "daily_01J1WORSEPATH", moves: 90 }
       )
-    ).resolves.toMatchObject({ duplicate: false, improved: false });
-    expect(worseQuery).toHaveBeenCalledTimes(3);
+    ).resolves.toMatchObject({
+      duplicate: false,
+      improved: false,
+      bestResult: "unchanged"
+    });
+    expect(worseQuery).toHaveBeenCalledTimes(4);
   });
 });

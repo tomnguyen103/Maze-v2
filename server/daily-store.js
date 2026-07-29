@@ -110,10 +110,20 @@ export function createDailyStore(pool) {
           );
           const duplicate = submission.rows.length === 0;
           let improved = false;
+          let hadBest = false;
           /** @type {Record<string, unknown> | null} */
           let stored = null;
 
           if (!duplicate) {
+            const previous = await database.query(
+              `SELECT TRUE AS present
+               FROM verified_daily_entries
+               WHERE player_id = $1
+                 AND daily_date = $2::date
+               FOR UPDATE`,
+              [userId, entry.date]
+            );
+            hadBest = previous.rows.length > 0;
             const promoted = await database.query(
               `WITH upserted AS (
                  INSERT INTO verified_daily_entries (
@@ -175,9 +185,16 @@ export function createDailyStore(pool) {
           if (!stored) {
             throw new Error("Verified Daily entry could not be saved.");
           }
+          /** @type {"created" | "improved" | "unchanged"} */
+          const bestResult = improved
+            ? hadBest
+              ? "improved"
+              : "created"
+            : "unchanged";
           return {
             duplicate,
             improved,
+            bestResult,
             entry: mapEntry(stored)
           };
         }

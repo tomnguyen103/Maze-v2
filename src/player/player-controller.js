@@ -91,6 +91,9 @@ export function createPlayerController({
     async getRunAccess() {
       return client.getRunAccess();
     },
+    async getVerifiedDailyLeaderboard() {
+      return client.getVerifiedDailyLeaderboard();
+    },
     async getCloudQuestProgress() {
       await clerkBrowser.initialize();
       return client.getQuestProgress();
@@ -198,6 +201,50 @@ export function createPlayerController({
         await refreshLeaderboard();
       } catch (error) {
         setFormStatus(errorMessage(error), "error");
+      }
+    },
+    /** @param {Record<string, unknown>} submission */
+    async submitVerifiedDaily(submission) {
+      await clerkBrowser.initialize();
+      if (!clerkBrowser.user) {
+        return { state: "signed-out" };
+      }
+      try {
+        if (!playerState.profile) {
+          const result = await client.getProfile();
+          if (!result.profile) {
+            return { state: "profile-required" };
+          }
+          playerState = reducePlayerState(playerState, {
+            type: "profile-loaded",
+            profile: result.profile
+          });
+          setPalettes(result.profile);
+          fillProfileForm(result.profile);
+          renderAuth();
+        }
+        return {
+          state: "verified",
+          ...(await client.submitVerifiedDaily(submission))
+        };
+      } catch (error) {
+        const status =
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          typeof error.status === "number"
+            ? error.status
+            : 0;
+        return {
+          state: status === 401
+            ? "signed-out"
+            : status === 400 || status === 409
+              ? "rejected"
+              : status === 0
+                ? "network-failure"
+                : "unavailable",
+          message: errorMessage(error)
+        };
       }
     }
   };

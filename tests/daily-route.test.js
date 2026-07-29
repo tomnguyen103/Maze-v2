@@ -49,6 +49,7 @@ function createStore() {
       return {
         duplicate: false,
         improved: true,
+        bestResult: /** @type {const} */ ("created"),
         entry: {
           username: "Moss Runner",
           score: 900,
@@ -140,6 +141,7 @@ describe("Verified Daily API", () => {
         verification: "verified-replay-v1",
         duplicate: false,
         improved: true,
+        bestResult: "created",
         entry: {
           username: "Moss Runner",
           score: 900,
