@@ -459,12 +459,24 @@ test("defeats and freely retries First Light through touch controls", async ({
       )
     )
     .toBeNull();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
   expect(productWriteRequests).toEqual([]);
 
   await page.getByRole("button", { name: "Retry First Light" }).click();
   await expect(page.locator("#vitality-count")).toHaveText("3 / 3");
   await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#maze-canvas")).toBeFocused();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toBeNull();
 });
 
 test("defers incoming Cloud Quest progress until First Light is over", async ({

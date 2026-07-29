@@ -488,6 +488,7 @@ elements.levelCards.addEventListener("click", async (event) => {
   if (await startNewQuest(button.dataset.level)) {
     mustChooseLevel = false;
     elements.levelDialog.close();
+    canvas.focus({ preventScroll: true });
   }
 });
 elements.levelDialog.addEventListener("cancel", (event) => {
