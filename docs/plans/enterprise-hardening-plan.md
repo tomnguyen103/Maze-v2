@@ -1,8 +1,10 @@
 # Echo Maze — Enterprise Hardening Plan
 
-Status: phases 1–7 DELIVERED (PRs #57–#60, #62, #63, #67–#70; ADRs 0013–0019;
-see `enterprise-hardening-log.md` and the phase 7 delivery note below for
-evidence and deviations). Phases 8–9 remain PLANNED and not started.
+Status: all nine phases DELIVERED through PR #88 (PRs #57–#63, #67–#70,
+#81–#83, and #88; ADRs 0013–0024). See `enterprise-hardening-log.md`,
+`../UNFINISHED-FEATURES.md`, and the phase delivery notes below for evidence
+and deviations. Live provider configuration and immutable-sink provisioning
+remain deployment operations and are not claimed by this repository.
 Created: 2026-07-26
 Source: senior-architect review of the codebase (Clerk auth, Postgres + migrations, Stripe lifetime checkout, Clerk/Stripe webhooks, ~50 test files, bundle budget gate, Vercel serverless).
 
@@ -317,16 +319,26 @@ CREATE TABLE org_memberships (
 
 ## Cross-cutting definition of done (whole plan)
 
-- [ ] All nine phases merged to `main` via squash PRs, branches deleted, no parked PRs left open.
-- [ ] `npm run check:full` green on final `main`.
-- [ ] No GitHub Actions workflows added; Actions disabled on repo.
-- [ ] Every mutating endpoint: RBAC-checked (or explicitly public), rate-limited or exempt-by-decision, audit-logged, structured-logged with `request_id`.
-- [ ] `docs/` updated: `security-headers.md`, `observability.md`, `data-privacy.md`, `sso.md`, admin operations additions to `lifetime-membership-operations.md`, ADR per phase in `docs/adr/`.
-- [ ] Chain verification script, admin bootstrap script, dead-webhook script documented in README or docs.
-- [ ] Existing gameplay invariants regression-free (full existing suite untouched in semantics and green).
+- [x] All nine phases merged to `main` via squash PRs, branches deleted, no parked PRs left open.
+- [x] `npm run check:full` green on the delivered hardening mainline; later
+  releases continue to run the repository's local gate before push.
+- [x] No GitHub Actions workflows added; Actions disabled on repo.
+- [x] Every mutating endpoint is RBAC-checked (or explicitly public),
+  rate-limited or exempt-by-decision, audit-logged, and structured-logged with
+  `request_id`, with the boundary decisions recorded in the phase ADRs.
+- [x] `docs/` updated: `security-headers.md`, `observability.md`,
+  `data-privacy.md`, `sso.md`, admin operations additions to
+  `lifetime-membership-operations.md`, and ADRs in `docs/adr/`.
+- [x] Chain verification, admin bootstrap, and dead-webhook scripts documented
+  in the repository operations guides.
+- [x] Existing gameplay invariants regression-free under the delivered local
+  unit and browser gates.
 
 ---
 
 ## Execution
 
-This document is the authoritative spec. Execution happens in a dedicated Claude Code session using the kickoff prompt provided alongside this plan. Progress is logged per phase in `docs/plans/enterprise-hardening-log.md` (created during phase 1).
+This document remains the historical authoritative spec. Delivery evidence is
+split between `enterprise-hardening-log.md`, the delivery notes in this plan,
+the ADRs, and `../UNFINISHED-FEATURES.md`; no single file is treated as a
+complete deployment-operations record.

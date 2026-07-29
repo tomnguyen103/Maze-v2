@@ -110,7 +110,7 @@ existing leaderboard function, preserving the enforced Vercel function ceiling.
 
 - What: The `/admin` SPA area from phase 7: user listing and role management, question CRUD, membership/refund lookup, audit-log viewer, dead-letter viewer, metrics tiles. Only the role-change endpoint (`POST /api/admin/users/:id/role`) and RBAC plumbing exist.
 - Why it matters: ADR 0015 admits "the moderator role currently grants nothing enforceable" — the permission matrix is dead weight until this ships.
-- Source: docs/plans/enterprise-hardening-plan.md — Phase 7 (plan header: "Phases 7–9 remain PLANNED and not started"); docs/adr/0015-database-authoritative-roles.md — Decision
+- Source: docs/plans/enterprise-hardening-plan.md — Phase 7; docs/adr/0015-database-authoritative-roles.md — Decision
 - Evidence checked: `src/admin/admin-view.js` renders permission-aware users, questions, membership/refund, audit, dead-delivery, metrics, and export surfaces. `server/admin-route.js` has method-specific guards for every declared permission, and `server/admin-store.js` supplies the operator read models.
 - Touches: src/admin/, server/admin-route.js, server/admin-store.js, server/question-bank-store.js, server/stripe-lifetime.js, api/admin.js, tests
 - Depends on: 4, 5, 6, 7

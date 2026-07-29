@@ -64,8 +64,15 @@ const client = {
   clearLearningJournal: vi.fn(async () => {})
 };
 
+/** @type {() => void} */
+let clerkOnChange = () => {};
 vi.mock("../src/player/clerk-browser.js", () => ({
-  createClerkBrowser: () => clerkBrowser
+  createClerkBrowser: (
+    /** @type {{ onChange: () => void }} */ options
+  ) => {
+    clerkOnChange = options.onChange;
+    return clerkBrowser;
+  }
 }));
 const createPlayerApiClient = vi.fn(
   /** @param {{ getClassroomId?: () => string | null }} [_options] */
@@ -96,6 +103,7 @@ describe("Player Profile dialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clerkBrowser.user = { id: "user_123" };
+    clerkOnChange = () => {};
     localStorage.clear();
     document.body.innerHTML = `
       <button id="player-auth-button"></button>
@@ -139,6 +147,40 @@ describe("Player Profile dialog", () => {
           document.getElementById("classroom-link")
         ).hidden
       ).toBe(false);
+    });
+  });
+
+  it("reports the initial identity and its explicit sign-out", async () => {
+    const onAuthenticationChange = vi.fn();
+    clerkBrowser.signOut.mockImplementationOnce(async () => {
+      clerkBrowser.user = null;
+    });
+    createPlayerController({ onAuthenticationChange });
+
+    await vi.waitFor(() => {
+      expect(onAuthenticationChange).toHaveBeenCalledWith(true);
+    });
+    /** @type {HTMLButtonElement} */ (
+      document.getElementById("player-sign-out")
+    ).click();
+
+    await vi.waitFor(() => {
+      expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
+    });
+  });
+
+  it("reports when Clerk removes the active account identity", async () => {
+    const onAuthenticationChange = vi.fn();
+    createPlayerController({ onAuthenticationChange });
+    await vi.waitFor(() => {
+      expect(onAuthenticationChange).toHaveBeenCalledWith(true);
+    });
+
+    clerkBrowser.user = null;
+    clerkOnChange();
+
+    await vi.waitFor(() => {
+      expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
     });
   });
 

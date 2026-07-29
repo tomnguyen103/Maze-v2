@@ -27,6 +27,12 @@ import {
   normalizeSeed
 } from "./game/game-session.js";
 import {
+  createFirstLightRun,
+  getFirstLightQuestion,
+  markFirstLightSeen,
+  shouldOfferFirstLight
+} from "./game/first-light.js";
+import {
   createRunActionLog,
   tryAppendRunAction
 } from "./game/run-action-log.js";
@@ -52,8 +58,9 @@ import {
   renderQuestAtlasSummary
 } from "./game/quest-atlas-view.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
+import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
-import { isLearningMetadata } from "./questions/learning-objectives.js";
+import { normalizeQuestion } from "./questions/question-contract.js";
 import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
@@ -84,6 +91,8 @@ let lanternJournalUiFailedTwice = false;
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
+/** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
+/** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
@@ -121,6 +130,11 @@ const elements = {
   echoMeter: requiredElement("echo-meter", HTMLElement),
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
   fieldNote: requiredElement("field-note", HTMLElement),
+  firstLightDialog: requiredElement("first-light-dialog", HTMLDialogElement),
+  firstLightReplay: requiredElement("first-light-replay", HTMLButtonElement),
+  firstLightSkip: requiredElement("first-light-skip", HTMLButtonElement),
+  firstLightStart: requiredElement("first-light-start", HTMLButtonElement),
+  firstLightTitle: requiredElement("first-light-title", HTMLElement),
   freshRun: requiredElement("fresh-run", HTMLButtonElement),
   hintButton: requiredElement("hint-button", HTMLButtonElement),
   journalBands: requiredElement("journal-bands", HTMLElement),
@@ -247,6 +261,8 @@ let runActionLogOverflowed = false;
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
+let authenticationObserved = false;
+let authenticatedUserId = "";
 /** @type {QuestContinuityController | null} */
 let questContinuityController = null;
 /** @type {Promise<QuestContinuityController | null> | null} */
@@ -314,7 +330,17 @@ let activeDaily = null;
 let dailyQuestionIndex = 0;
 let dailyBoardRequestId = 0;
 let demoAccessPending = hasCompletedGuestDemo();
+let activeFirstLight = false;
+let firstLightEntryPending = false;
+let firstLightHandoff = false;
 let completedQuestIdle = false;
+/** @type {Promise<typeof import("./game/active-run-recovery.js") | null> | null} */
+let activeRunRecoveryModulePromise = null;
+/** @type {ActiveRunRecoveryController | null} */
+let activeRunRecoveryController = null;
+/** @type {CampfireResumeView | null} */
+let campfireResumeView = null;
+let activeRunRecoveryUnavailableReported = false;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
@@ -324,6 +350,10 @@ let mustChooseLevel =
   locationSeed === null &&
   activeRunLocator === null &&
   storedQuestProgress === null;
+firstLightEntryPending =
+  mustChooseLevel &&
+  !demoAccessPending &&
+  shouldOfferFirstLight();
 if (
   dailyRequest.status === "none" &&
   !mustChooseLevel &&
@@ -402,6 +432,10 @@ elements.newRun.addEventListener("click", () => {
     returnToQuest();
     return;
   }
+  if (activeFirstLight) {
+    void openLevelPicker(true);
+    return;
+  }
   void openLevelPicker();
 });
 elements.dailyButton.addEventListener("click", openDailyDialog);
@@ -422,6 +456,26 @@ elements.dailyBoardRetry.addEventListener("click", () => {
   );
 });
 elements.dailyReturn.addEventListener("click", returnToQuest);
+elements.firstLightDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+});
+elements.firstLightStart.addEventListener("click", () => {
+  firstLightEntryPending = false;
+  elements.firstLightDialog.close();
+  startFirstLight();
+});
+elements.firstLightSkip.addEventListener("click", () => {
+  markFirstLightSeen();
+  firstLightEntryPending = false;
+  firstLightHandoff = true;
+  deferredCloudQuest = null;
+  elements.firstLightDialog.close();
+  void openLevelPicker(true);
+});
+elements.firstLightReplay.addEventListener("click", () => {
+  elements.levelDialog.close();
+  startFirstLight();
+});
 elements.levelCards.addEventListener("click", async (event) => {
   const button =
     event.target instanceof Element
@@ -434,6 +488,7 @@ elements.levelCards.addEventListener("click", async (event) => {
   if (await startNewQuest(button.dataset.level)) {
     mustChooseLevel = false;
     elements.levelDialog.close();
+    canvas.focus({ preventScroll: true });
   }
 });
 elements.levelDialog.addEventListener("cancel", (event) => {
@@ -452,9 +507,12 @@ elements.challengeChoices.addEventListener("click", (event) => {
   if (!(button instanceof HTMLButtonElement) || !button.dataset.answer) {
     return;
   }
+  if (activeFirstLight && !run.challenge?.hintRevealed) {
+    return;
+  }
 
   const question = run.challenge?.question;
-  if (question) {
+  if (question && !activeFirstLight) {
     playerController.recordLearningOutcome(
       question,
       button.dataset.answer === question.answerId ? "correct" : "wrong"
@@ -472,12 +530,15 @@ elements.hintButton.addEventListener("click", () => {
     return;
   }
   hintVisible = true;
-  if (run.challenge?.question) {
+  if (run.challenge?.question && !activeFirstLight) {
     playerController.recordLearningOutcome(run.challenge.question, "hint");
   }
   transition({ type: "reveal-hint" });
 });
 elements.skipQuestion.addEventListener("click", () => {
+  if (activeFirstLight) {
+    return;
+  }
   if (run.freeQuestionSkipAvailable) {
     recordCurrentSkip();
     transition({ type: "skip-question" });
@@ -490,6 +551,9 @@ elements.skipCancel.addEventListener("click", () => {
   elements.skipQuestion.focus();
 });
 elements.skipConfirm.addEventListener("click", () => {
+  if (activeFirstLight) {
+    return;
+  }
   hideSkipWarning();
   recordCurrentSkip();
   transition({ type: "skip-question" });
@@ -893,7 +957,7 @@ function reportLanternJournalUnavailable() {
 }
 
 function recordCurrentSkip() {
-  if (run.challenge?.question) {
+  if (run.challenge?.question && !activeFirstLight) {
     playerController.recordLearningOutcome(run.challenge.question, "skip");
   }
 }
@@ -944,10 +1008,26 @@ elements.freshRun.addEventListener("click", () => {
     startDailyRun();
     return;
   }
+  if (activeFirstLight) {
+    if (run.status === "won") {
+      startFirstLight();
+      return;
+    }
+    void openLevelPicker(true);
+    return;
+  }
   void openLevelPicker();
 });
 elements.replay.addEventListener("click", async () => {
   const action = elements.replay.dataset.resultAction;
+  if (action === "first-light-retry") {
+    startFirstLight();
+    return;
+  }
+  if (action === "first-light-levels") {
+    await openLevelPicker(true);
+    return;
+  }
   if (action === "create-account") {
     await requestDemoAccount();
     return;
@@ -972,6 +1052,10 @@ elements.sound.addEventListener("click", async () => {
   elements.sound.setAttribute("aria-pressed", String(enabled));
 });
 elements.seedCopy.addEventListener("click", async () => {
+  if (activeFirstLight) {
+    announce("First Light uses one fixed practice seed and has no share link.");
+    return;
+  }
   try {
     if (activeDaily) {
       await navigator.clipboard.writeText(
@@ -1031,6 +1115,118 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+async function loadActiveRunRecoveryModule() {
+  if (!activeRunRecoveryModulePromise) {
+    activeRunRecoveryModulePromise = import(
+      "./game/active-run-recovery.js"
+    ).catch(() => null);
+  }
+  const module = await activeRunRecoveryModulePromise;
+  if (module && !activeRunRecoveryController) {
+    activeRunRecoveryController =
+      module.createActiveRunRecoveryController();
+  }
+  return module;
+}
+
+/** @param {boolean} [force] */
+function reportActiveRunRecoveryUnavailable(force = false) {
+  if (activeRunRecoveryUnavailableReported && !force) {
+    return;
+  }
+  activeRunRecoveryUnavailableReported = true;
+  const message =
+    "Campfire Resume is unavailable for this Run. Current-tab play continues.";
+  announce(message);
+  showEvent(message);
+}
+
+function reportActiveRunRecoveryScrubFailed() {
+  const message =
+    "This device could not erase the old Quest checkpoint. Clear this site's data before another player uses this device.";
+  announce(message);
+  showEvent(message);
+}
+
+/** @param {Parameters<typeof startRun>[0]} locator */
+async function beginActiveRunRecovery(locator) {
+  const module = await loadActiveRunRecoveryModule();
+  activeRunRecoveryUnavailableReported = false;
+  if (!module || !activeRunRecoveryController) {
+    reportActiveRunRecoveryUnavailable();
+    return;
+  }
+  const recovery = activeRunRecoveryController.begin(locator, {
+    clearStored: true
+  });
+  if (recovery.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
+}
+
+/** @param {Parameters<typeof startRun>[0]} locator */
+async function loadRecoveredRun(locator) {
+  const module = await loadActiveRunRecoveryModule();
+  if (!module || !activeRunRecoveryController) {
+    reportActiveRunRecoveryUnavailable();
+    return null;
+  }
+  const recovery = activeRunRecoveryController.load(locator);
+  if (recovery.status === "recovered" && recovery.run) {
+    activeRunRecoveryUnavailableReported = false;
+    return recovery.run;
+  }
+  if (
+    recovery.status === "invalid" ||
+    recovery.status === "unavailable"
+  ) {
+    reportActiveRunRecoveryUnavailable();
+  }
+  const nextRecovery = activeRunRecoveryController.begin(locator, {
+    clearStored: true
+  });
+  if (nextRecovery.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
+  return null;
+}
+
+async function openCampfireResume() {
+  const module = await loadActiveRunRecoveryModule();
+  if (!module) {
+    reportActiveRunRecoveryUnavailable();
+    return;
+  }
+  campfireResumeView ??= module.createCampfireResumeView({
+    onContinue: () => {
+      lastTick = performance.now();
+      if (run.status === "paused") {
+        transition({ type: "pause" });
+        canvas.focus({ preventScroll: true });
+      } else {
+        hintVisible = Boolean(run.challenge?.hintRevealed);
+        syncChallengeDialog();
+      }
+      announce("Campfire checkpoint continued.");
+      showEvent("Campfire checkpoint continued.");
+    },
+    onRestart: async () => {
+      const cleared = activeRunRecoveryController?.clear();
+      if (cleared?.status === "unavailable") {
+        reportActiveRunRecoveryUnavailable();
+      }
+      await startFreshRun(true);
+      if (activeRunRecoveryUnavailableReported) {
+        reportActiveRunRecoveryUnavailable(true);
+      }
+    }
+  });
+  campfireResumeView.show(run, {
+    levelName: currentLevel.name,
+    labyrinthNumber: currentLabyrinthNumber
+  });
+}
+
 /**
  * @param {{
  *   version: 2,
@@ -1041,21 +1237,25 @@ document.addEventListener("visibilitychange", () => {
  *   labyrinthNumber: number
  * }} locator
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
+ * @param {ReturnType<typeof createRun> | null} [recoveredRun]
  */
-function startRun(locator, daily = null) {
+function startRun(locator, daily = null, recoveredRun = null) {
+  activeFirstLight = false;
   activeDaily = daily;
   dailyQuestionIndex = 0;
   document.body.dataset.runMode = daily ? "daily" : "quest";
   completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
-  run = createRun(
-    locator.seed,
-    getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
-  );
+  run =
+    recoveredRun ??
+    createRun(
+      locator.seed,
+      getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+    );
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
-  if (!daily) {
+  if (!daily && !recoveredRun) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
       questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
@@ -1071,7 +1271,9 @@ function startRun(locator, daily = null) {
   storyEntries = [];
   hideSkipWarning();
   addStory(
-    daily
+    recoveredRun
+      ? `Campfire checkpoint found in Labyrinth ${currentLabyrinthNumber}. The Run is paused until you choose.`
+      : daily
       ? `${daily.date} UTC Daily begins. Recover every Echo; your Quest stays unchanged.`
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
@@ -1090,6 +1292,11 @@ function startRun(locator, daily = null) {
   }
   resumeAfterDaily = false;
   updateInterface();
+  if (recoveredRun) {
+    announce("Campfire checkpoint found. Choose Continue Run or Restart Run.");
+    showEvent("Campfire checkpoint found. The Run remains paused.");
+    return;
+  }
   canvas.focus({ preventScroll: true });
   announce(
     daily
@@ -1106,6 +1313,63 @@ function startRun(locator, daily = null) {
     announce("Lifetime access unlocked. Your saved Run is ready.");
     showEvent("Lifetime access unlocked. Your saved Run is ready.");
   }
+  if (!daily && activeRunRecoveryUnavailableReported) {
+    reportActiveRunRecoveryUnavailable(true);
+  }
+}
+
+function startFirstLight() {
+  firstLightEntryPending = false;
+  firstLightHandoff = false;
+  deferredCloudQuest = null;
+  activeFirstLight = true;
+  activeDaily = null;
+  mustChooseLevel = false;
+  completedQuestIdle = false;
+  document.body.dataset.runMode = "first-light";
+  currentLevel = getQuestLevel("bright-start");
+  currentLabyrinthNumber = 1;
+  run = createFirstLightRun();
+  runActionLog = createRunActionLog();
+  runActionLogOverflowed = false;
+  lastTick = performance.now();
+  questionRequestKey = "";
+  runFinished = false;
+  hintVisible = false;
+  storyEntries = [];
+  hideSkipWarning();
+  addStory(
+    "First Light begins. Recover one Echo, outsmart one Warden, then reach the Gate.",
+    "start"
+  );
+  for (const dialog of [
+    elements.firstLightDialog,
+    elements.levelDialog,
+    elements.resultDialog,
+    elements.recordsDialog,
+    elements.challengeDialog,
+    elements.dailyDialog
+  ]) {
+    if (dialog.open) {
+      dialog.close();
+    }
+  }
+  resumeAfterDaily = false;
+  updateInterface();
+  canvas.focus({ preventScroll: true });
+  announce(
+    "First Light. One Echo and one Warden stand between you and the Gate."
+  );
+  showEvent("First Light is ready. Follow the passage to the Echo.");
+}
+
+function openFirstLightOffer() {
+  if (!elements.firstLightDialog.open) {
+    elements.firstLightDialog.showModal();
+  }
+  requestAnimationFrame(() => {
+    elements.firstLightTitle.focus({ preventScroll: true });
+  });
 }
 
 async function initializeRunEntry() {
@@ -1120,6 +1384,7 @@ async function initializeRunEntry() {
     return;
   }
   if (!(await resolveLifetimeReturn())) {
+    firstLightEntryPending = false;
     return;
   }
   if (lifetimeReturnConfirmed && activeRunLocator !== null) {
@@ -1149,7 +1414,11 @@ async function initializeRunEntry() {
     return;
   }
   if (mustChooseLevel) {
-    await openLevelPicker();
+    if (firstLightEntryPending) {
+      openFirstLightOffer();
+      return;
+    }
+    await openLevelPicker(true);
   }
 }
 
@@ -1332,7 +1601,8 @@ function returnToQuest() {
   window.location.assign("/play");
 }
 
-async function startFreshRun() {
+/** @param {boolean} [replaceRunIdentity] */
+async function startFreshRun(replaceRunIdentity = false) {
   const levelId = questProgress.levelId;
   const labyrinthNumber = questProgress.labyrinthNumber;
   let locator;
@@ -1340,13 +1610,23 @@ async function startFreshRun() {
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
-    locator = withRunAccessId(activeRunLocator);
+    locator = withRunAccessId(
+      replaceRunIdentity
+        ? {
+            ...activeRunLocator,
+            version: 2,
+            runId: createRunAccessId(),
+            pending: false
+          }
+        : activeRunLocator
+    );
   } else {
     locator = createFreshLocator(levelId, labyrinthNumber);
   }
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
@@ -1365,6 +1645,11 @@ async function startSharedRun(
   showAdjustedNotice = false,
   runId
 ) {
+  const canRecover =
+    typeof runId === "string" &&
+    activeRunLocator?.version === 2 &&
+    activeRunLocator.pending === false &&
+    activeRunLocator.runId === runId;
   const locator = withRunAccessId({
     version: runId ? 2 : 1,
     ...(runId ? { runId } : {}),
@@ -1375,10 +1660,22 @@ async function startSharedRun(
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
-  startRun(locator);
+  const recoveredRun = canRecover
+    ? await loadRecoveredRun(locator)
+    : null;
+  if (!canRecover) {
+    await beginActiveRunRecovery(locator);
+  }
+  startRun(locator, null, recoveredRun);
+  if (recoveredRun) {
+    await openCampfireResume();
+  }
   if (showAdjustedNotice) {
     announce("This share link was adjusted to a safe Labyrinth.");
     showEvent("This share link was adjusted to a safe Labyrinth.");
+  }
+  if (activeRunRecoveryUnavailableReported) {
+    reportActiveRunRecoveryUnavailable(true);
   }
   return true;
 }
@@ -1446,12 +1743,17 @@ async function startNewQuest(levelId, seed) {
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
+  if (firstLightHandoff) {
+    deferredCloudQuest = null;
+    firstLightHandoff = false;
+  }
   questProgress = saveQuestProgress(nextProgress);
   void loadQuestContinuityController("new-quest").then((controller) =>
     controller?.queueBoundary(questProgress) ?? false
   );
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
@@ -1480,21 +1782,43 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
     controller?.queueBoundary(questProgress) ?? false
   );
   window.history.replaceState({}, "", "/play");
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
 
-async function openLevelPicker() {
+/** @param {boolean} [requireChoice] */
+async function openLevelPicker(requireChoice = false) {
   if (!(await canOpenStartChoice())) {
     return false;
   }
-  mustChooseLevel = false;
+  if (activeFirstLight) {
+    firstLightHandoff = true;
+    deferredCloudQuest = null;
+    activeFirstLight = false;
+    document.body.dataset.runMode = "quest";
+    if (run.status === "active") {
+      run = applyAction(run, { type: "pause" });
+    }
+  }
+  mustChooseLevel = requireChoice;
+  if (elements.firstLightDialog.open) {
+    elements.firstLightDialog.close();
+  }
   if (elements.recordsDialog.open) {
     elements.recordsDialog.close();
+  }
+  if (elements.resultDialog.open) {
+    elements.resultDialog.close();
   }
   if (!elements.levelDialog.open) {
     elements.levelDialog.showModal();
   }
+  requestAnimationFrame(() => {
+    elements.levelDialog
+      .querySelector("h2")
+      ?.focus?.({ preventScroll: true });
+  });
   return true;
 }
 
@@ -1837,6 +2161,15 @@ function handleAuthenticationChange(signedIn) {
     renderDailyBoardParticipation();
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
+  if (
+    authenticationObserved &&
+    authenticatedUserId &&
+    authenticatedUserId !== (userId ?? "")
+  ) {
+    clearActiveRunRecoveryForIdentityChange();
+  }
+  authenticationObserved = true;
+  authenticatedUserId = userId ?? "";
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
       ?.then((view) => view.replaceSavedSettings(record.settings))
@@ -1849,6 +2182,20 @@ function handleAuthenticationChange(signedIn) {
     controller.setAuthenticated(userId);
     return userId ? controller.retry(loadQuestProgress()) : false;
   });
+}
+
+function clearActiveRunRecoveryForIdentityChange() {
+  if (!activeRunRecoveryController) {
+    if (scrubActiveRunRecovery()) {
+      return;
+    }
+    reportActiveRunRecoveryScrubFailed();
+    return;
+  }
+  const result = activeRunRecoveryController.clear();
+  if (result.status === "unavailable") {
+    reportActiveRunRecoveryScrubFailed();
+  }
 }
 
 /**
@@ -1911,6 +2258,13 @@ function loadQuestContinuityController(loadKind = "initial") {
  * @param {{ local: typeof questProgress, cloud: { progress: typeof questProgress, revision: number, updatedAt?: string } }} conflict
  */
 function showQuestConflict(conflict) {
+  if (
+    firstLightEntryPending ||
+    activeFirstLight ||
+    firstLightHandoff
+  ) {
+    return;
+  }
   const trigger =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -1979,6 +2333,9 @@ function receiveCloudQuestProgress(progress, source) {
   if (
     dailyRequest.status !== "none" ||
     activeDaily !== null ||
+    firstLightEntryPending ||
+    activeFirstLight ||
+    firstLightHandoff ||
     (activeRunLocator !== null &&
       !runFinished &&
       ["active", "paused", "challenge"].includes(run.status))
@@ -2052,6 +2409,11 @@ function saveNextBoundaryLocator() {
  * @param {"local" | "syncing" | "saved" | "offline" | "conflict"} status
  */
 function renderQuestSyncStatus(status) {
+  if (activeFirstLight) {
+    elements.questSyncStatus.dataset.state = "local";
+    elements.questSyncStatus.textContent = "Practice only";
+    return;
+  }
   const copy = {
     local: "Device save",
     syncing: "Saving to account…",
@@ -2077,7 +2439,12 @@ function move(direction) {
 }
 
 function usePulse() {
-  if (isDemoBlocked() || completedQuestIdle || run.status !== "active") {
+  if (
+    activeFirstLight ||
+    isDemoBlocked() ||
+    completedQuestIdle ||
+    run.status !== "active"
+  ) {
     return;
   }
   transition({ type: "pulse" });
@@ -2087,7 +2454,7 @@ function togglePause() {
   if (
     isDemoBlocked() ||
     completedQuestIdle ||
-    activeDaily === null && activeRunLocator?.pending ||
+    !activeFirstLight && activeDaily === null && activeRunLocator?.pending ||
     (run.status !== "active" && run.status !== "paused")
   ) {
     return;
@@ -2096,7 +2463,7 @@ function togglePause() {
 }
 
 function isDemoBlocked() {
-  return demoAccessPending && activeDaily === null;
+  return demoAccessPending && activeDaily === null && !activeFirstLight;
 }
 
 /** @param {Parameters<typeof applyAction>[1]} action */
@@ -2104,6 +2471,10 @@ function transition(action) {
   const previous = run;
   const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
+  const recoveryResult =
+    !activeFirstLight && activeDaily === null
+      ? activeRunRecoveryController?.record(previous, action, run)
+      : null;
   if (activeDaily && !runActionLogOverflowed) {
     const nextLog = tryAppendRunAction(runActionLog, previous, action, run);
     if (nextLog) {
@@ -2113,12 +2484,15 @@ function transition(action) {
     }
   }
   const eventType = run.event.type;
+  const eventMessage = activeFirstLight
+    ? run.event.message.replace(/\s+You earned [^.]+\.$/, "")
+    : run.event.message;
   const wardenMode = summarizeWardenMode(run);
   const eventChanged =
     eventType !== previous.event.type || run.moves !== previous.moves;
 
   if (eventChanged) {
-    showEvent(run.event.message);
+    showEvent(eventMessage);
     if (
       [
         "echo-collected",
@@ -2134,7 +2508,7 @@ function transition(action) {
         "defeated"
       ].includes(eventType)
     ) {
-      addStory(run.event.message, eventType);
+      addStory(eventMessage, eventType);
     }
   }
   if (eventChanged || wardenMode !== previousWardenMode) {
@@ -2142,7 +2516,7 @@ function transition(action) {
       wardenMode !== previousWardenMode
         ? ` Warden mode: ${wardenModeLabel(wardenMode)}.`
         : "";
-    announce(`${eventChanged ? run.event.message : ""}${modeAnnouncement}`.trim());
+    announce(`${eventChanged ? eventMessage : ""}${modeAnnouncement}`.trim());
   }
   playEventSound(eventType);
   if (
@@ -2157,6 +2531,9 @@ function transition(action) {
 
   updateInterface();
   syncChallengeDialog();
+  if (recoveryResult?.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
   if (!runFinished && (run.status === "won" || run.status === "lost")) {
     finishRun();
   }
@@ -2216,6 +2593,7 @@ function syncChallengeDialog() {
     elements.questionHint.hidden = true;
     elements.questionHint.textContent = "";
     elements.skipQuestion.disabled = true;
+    elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
     void loadChallengeQuestion();
     return;
@@ -2234,12 +2612,15 @@ function syncChallengeDialog() {
     run.challenge.hintRevealed && hintVisible
     ? question.hint
     : "";
-  elements.skipQuestion.disabled = false;
+  const firstLightNeedsHint =
+    activeFirstLight && !run.challenge.hintRevealed;
+  elements.skipQuestion.hidden = activeFirstLight;
+  elements.skipQuestion.disabled = activeFirstLight;
   elements.skipQuestion.textContent = run.freeQuestionSkipAvailable
     ? "Skip free"
     : "Skip · 1 Vitality";
   elements.challengeChoices.replaceChildren(
-    ...question.choices.map((choice) => {
+    ...(firstLightNeedsHint ? [] : question.choices).map((choice) => {
       const button = document.createElement("button");
       const marker = document.createElement("span");
       const label = document.createElement("strong");
@@ -2254,7 +2635,10 @@ function syncChallengeDialog() {
     })
   );
   requestAnimationFrame(() => {
-    elements.challengeQuestion.focus({ preventScroll: true });
+    (firstLightNeedsHint
+      ? elements.hintButton
+      : elements.challengeQuestion
+    ).focus({ preventScroll: true });
   });
 }
 
@@ -2276,6 +2660,23 @@ function hideSkipWarning() {
 
 async function loadChallengeQuestion() {
   if (run.status !== "challenge" || !run.challenge) {
+    return;
+  }
+  if (activeFirstLight) {
+    const key = [
+      "first-light",
+      run.seed,
+      run.challenge.wardenId,
+      run.challenge.attempt
+    ].join(":");
+    if (questionRequestKey === key) {
+      return;
+    }
+    questionRequestKey = key;
+    const question = getFirstLightQuestion(run.challenge);
+    elements.challengeSource.textContent =
+      "First Light uses one reviewed question card from the game.";
+    transition({ type: "provide-question", question });
     return;
   }
   const challengeSnapshot = {
@@ -2336,10 +2737,7 @@ async function loadChallengeQuestion() {
         throw new Error("Question service unavailable.");
       }
       const payload = await response.json();
-      if (!isClientQuestion(payload.question)) {
-        throw new Error("Question service returned an invalid card.");
-      }
-      question = payload.question;
+      question = normalizeQuestion(payload.question);
       source = payload.source;
     } catch {
       question = getBundledQuestion(request);
@@ -2406,63 +2804,60 @@ function questionRequestIdentifier(request) {
   ].join(":");
 }
 
-/** @param {unknown} value */
-function isClientQuestion(value) {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const question = /** @type {Record<string, unknown>} */ (value);
-  return (
-    typeof question.id === "string" &&
-    typeof question.prompt === "string" &&
-    typeof question.answerId === "string" &&
-    typeof question.hint === "string" &&
-    typeof question.explanation === "string" &&
-    typeof question.difficultyBand === "string" &&
-    typeof question.difficultyRank === "number" &&
-    typeof question.topicId === "string" &&
-    typeof question.learningObjectiveId === "string" &&
-    isLearningMetadata(
-      question.topicId,
-      question.learningObjectiveId
-    ) &&
-    Array.isArray(question.choices) &&
-    question.choices.length === 3
-  );
-}
-
 function updateInterface() {
   renderer.render(run);
+  canvas.setAttribute(
+    "aria-label",
+    activeFirstLight
+      ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
+      : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+  );
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
   elements.questLevelName.textContent = activeDaily
     ? `Daily · ${activeDaily.date} UTC`
-    : `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
+    : activeFirstLight
+      ? "First Light"
+      : `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
   elements.questStage.textContent = activeDaily
     ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
-    : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
+    : activeFirstLight
+      ? "One Echo · One Warden · One Gate"
+      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
   elements.questHeadline.textContent = activeDaily
     ? `Today’s shared Labyrinth: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`
-    : `Labyrinth ${currentLabyrinthNumber}: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
+    : activeFirstLight
+      ? "First Light: recover one Echo, outsmart one Warden, and reach the Gate."
+      : `Labyrinth ${currentLabyrinthNumber}: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`;
   elements.seedValue.textContent = run.seed;
   elements.seedCopyHint.textContent = activeDaily
     ? "Copy Daily Link"
-    : "Copy Share Link";
+    : activeFirstLight
+      ? "Practice seed"
+      : "Copy Share Link";
+  elements.seedCopy.disabled = activeFirstLight;
   elements.time.textContent = formatTime(run.elapsedMs);
   elements.moves.textContent = String(run.moves).padStart(3, "0");
   elements.echoCount.textContent = `${collected} / ${run.echoes.length}`;
   elements.vitalityCount.textContent =
     `${run.explorer.vitality} / ${run.explorer.maxVitality}`;
   elements.pulseCount.textContent = String(run.pulses);
-  playerController.updateScore(run.score);
+  playerController.updateScore(activeFirstLight ? 0 : run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
-  elements.dailyButton.disabled = run.status === "challenge";
+  elements.dailyButton.disabled =
+    run.status === "challenge" || activeFirstLight;
   elements.atlasButton.disabled =
-    run.status === "challenge" || activeDaily !== null;
+    run.status === "challenge" || activeDaily !== null || activeFirstLight;
+  elements.journalButton.disabled =
+    run.status === "challenge" || activeFirstLight;
   elements.recordsButton.disabled =
-    run.status === "challenge" || activeDaily !== null;
+    run.status === "challenge" || activeDaily !== null || activeFirstLight;
   elements.settingsButton.disabled = run.status === "challenge";
-  elements.newRun.textContent = activeDaily ? "Return to Quest" : "New Quest";
+  elements.newRun.textContent = activeDaily
+    ? "Return to Quest"
+    : activeFirstLight
+      ? "Choose Quest"
+      : "New Quest";
   elements.pause.textContent = completedQuestIdle
     ? "Quest complete"
     : run.status === "paused"
@@ -2494,7 +2889,11 @@ function updateInterface() {
     run.explorer.vitality,
     "vitality-pip"
   );
-  if (activeDaily) {
+  if (activeFirstLight) {
+    elements.best.textContent =
+      "First Light saves no scores, records, Atlas marks, Journal notes, or Quest progress.";
+    renderQuestSyncStatus("local");
+  } else if (activeDaily) {
     const dailyRecord = loadDailyRecord(activeDaily.date);
     elements.best.textContent = dailyRecord?.completed
       ? `Daily Personal Best ${formatTime(dailyRecord.bestElapsedMs ?? 0)} / ${dailyRecord.bestMoves} moves / stored on this device`
@@ -2511,9 +2910,13 @@ function updateInterface() {
 
 function finishRun() {
   runFinished = true;
+  const won = run.status === "won";
+  if (activeFirstLight) {
+    finishFirstLight(won);
+    return;
+  }
   elements.resultAtlas.hidden = false;
   elements.freshRun.textContent = "New Quest";
-  const won = run.status === "won";
   if (activeDaily) {
     finishDailyRun(activeDaily, won);
     return;
@@ -2619,6 +3022,52 @@ function finishRun() {
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
+}
+
+/** @param {boolean} won */
+function finishFirstLight(won) {
+  if (won) {
+    markFirstLightSeen();
+  }
+  elements.resultAtlas.hidden = true;
+  elements.resultAccessNote.hidden = true;
+  elements.resultAccessNote.textContent = "";
+  elements.resultPractice.hidden = true;
+  elements.resultKicker.textContent = won
+    ? "Lesson complete"
+    : "Free practice retry";
+  elements.resultTitle.textContent = won
+    ? "First Light complete."
+    : "Your First Light can begin again.";
+  elements.resultSummary.textContent = won
+    ? "You recovered an Echo, used knowledge to defeat a Warden, and reached the Gate with normal Quest rules. Choose a Quest Level when you are ready."
+    : "Wrong answers used your Vitality exactly as they do in a Quest. Retry with full Vitality, or choose a Quest Level.";
+  elements.replay.dataset.resultAction = won
+    ? "first-light-levels"
+    : "first-light-retry";
+  elements.replay.textContent = won
+    ? "Choose Quest Level"
+    : "Retry First Light";
+  elements.freshRun.hidden = false;
+  elements.freshRun.textContent = won
+    ? "Replay First Light"
+    : "Choose Quest Level";
+  elements.resultTime.textContent = formatTime(run.elapsedMs);
+  elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+  elements.resultSeed.textContent = "Practice";
+  elements.resultRank.textContent = "Not saved";
+  updateInterface();
+  if (!elements.resultDialog.open) {
+    elements.resultDialog.showModal();
+  }
+  requestAnimationFrame(() => {
+    elements.resultTitle.focus({ preventScroll: true });
+  });
+  announce(
+    won
+      ? "First Light complete. Choose a Quest Level when you are ready."
+      : "First Light ended. Retry for free with full Vitality."
+  );
 }
 
 /**

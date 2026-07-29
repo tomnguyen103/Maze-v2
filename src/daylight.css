@@ -804,6 +804,7 @@ kbd {
 
 .atlas-dialog,
 .access-settings-dialog,
+.first-light-dialog,
 .level-dialog,
 .daily-dialog,
 .challenge-dialog,
@@ -829,6 +830,7 @@ kbd {
 
 .atlas-dialog::backdrop,
 .access-settings-dialog::backdrop,
+.first-light-dialog::backdrop,
 .level-dialog::backdrop,
 .daily-dialog::backdrop,
 .challenge-dialog::backdrop,
@@ -1080,6 +1082,27 @@ kbd {
 
 body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   display: none;
+}
+
+body[data-run-mode="first-light"] :is(
+  #classroom-link,
+  #daily-button,
+  #atlas-button,
+  #journal-button,
+  #records-button,
+  #pulse-action,
+  .player-console,
+  .record-strip
+) {
+  display: none;
+}
+
+body[data-run-mode="first-light"] .seed-copy {
+  cursor: default;
+}
+
+body[data-run-mode="first-light"] .play-workbench {
+  min-height: calc(100dvh - 4rem);
 }
 
 .atlas-dialog {
@@ -1995,6 +2018,118 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   padding: var(--space-8);
 }
 
+.first-light-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  padding: var(--space-8);
+  border-width: 3px;
+  box-shadow:
+    0.65rem 0.7rem 0 var(--color-shadow),
+    0 0 0 0.45rem var(--color-signal-glow);
+}
+
+.first-light-dialog h2 {
+  min-width: 0;
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 7vw, 4rem);
+  letter-spacing: -0.06em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+#first-light-title:focus-visible,
+#level-title:focus-visible,
+#result-title:focus-visible {
+  outline: none;
+}
+
+.first-light-dialog .dialog-intro {
+  max-width: 62ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.first-light-route {
+  display: flex;
+  margin: var(--space-6) 0;
+  padding: 0;
+  align-items: stretch;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.first-light-route li {
+  display: grid;
+  min-width: 0;
+  min-height: 6rem;
+  padding: var(--space-3);
+  flex: 1 1 0;
+  align-content: center;
+  gap: var(--space-1);
+  border-block: 2px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.first-light-route strong {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.first-light-route span {
+  min-width: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.first-light-boundary {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-ink);
+  border: 2px solid var(--color-line);
+  background: var(--color-signal-glow);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.first-light-dialog__actions {
+  display: flex;
+  margin-top: var(--space-5);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.level-dialog__first-light {
+  display: flex;
+  min-width: 0;
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border: 2px solid var(--color-line);
+  background: var(--color-signal-glow);
+}
+
+.level-dialog__first-light p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.level-dialog__first-light button,
+.first-light-dialog__actions button {
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
 .level-dialog__intro {
   max-width: 38rem;
 }
@@ -2559,6 +2694,7 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
 
   .atlas-dialog,
   .access-settings-dialog,
+  .first-light-dialog,
   .level-dialog,
   .daily-dialog,
   .challenge-dialog,
@@ -2574,9 +2710,31 @@ body[data-run-mode="daily"] :is(.player-score, .scoreboard-button) {
   }
 
   .daily-dialog__actions,
+  .first-light-dialog__actions,
   .lifetime-dialog__actions,
   .quest-conflict-dialog__actions {
     flex-direction: column;
+  }
+
+  .level-dialog__first-light {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .first-light-route {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .first-light-route li {
+    min-height: 6rem;
+    padding: var(--space-2);
+    flex: 1 1 5.5rem;
+  }
+
+  .first-light-dialog__actions button,
+  .level-dialog__first-light button {
+    width: 100%;
   }
 
   .daily-board__heading {

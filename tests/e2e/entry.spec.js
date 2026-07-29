@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { installSignedInQuestPlayer } from "./signed-player.js";
 import { loadEnv } from "vite";
+import { getFirstLightQuestion } from "../../src/game/first-light.js";
 
 const hasClerkPublishableKey = Boolean(
   loadEnv("production", process.cwd(), "VITE_CLERK_").VITE_CLERK_PUBLISHABLE_KEY
@@ -135,6 +137,534 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/play");
   expect(new URL(page.url()).search).toBe("");
+});
+
+test("completes First Light without writing product progress", async ({
+  page
+}) => {
+  /** @type {string[]} */
+  const questionRequests = [];
+  /** @type {string[]} */
+  const productWriteRequests = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/question") {
+      questionRequests.push(request.url());
+    }
+    if (
+      url.pathname.startsWith("/api/") &&
+      !["GET", "HEAD", "OPTIONS"].includes(request.method())
+    ) {
+      productWriteRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  const offer = page.getByRole("dialog", { name: "Your First Light" });
+  await expect(offer).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start First Light" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Skip to Quest" })
+  ).toBeVisible();
+  await expect(page.locator("#first-light-title")).toBeFocused();
+
+  await page.getByRole("button", { name: "Start First Light" }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+  await expect(page.locator("#maze-canvas")).toBeFocused();
+  await expect(page.locator("#pulse-action")).toBeHidden();
+
+  for (let step = 0; step < 4; step += 1) {
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(page.locator("#echo-count")).toHaveText("1 / 1");
+  await expect(page.locator("#live-region")).toContainText(
+    "Final Echo recovered"
+  );
+  await expect(page.locator("#live-region")).not.toContainText("score");
+
+  await page.keyboard.press("ArrowDown");
+  const challenge = page.getByRole("dialog", {
+    name: "A Warden blocks the path."
+  });
+  await expect(challenge).toBeVisible();
+  await expect(page.locator("#challenge-question")).toContainText(
+    "Ari carries 4 acorns"
+  );
+  await expect(page.getByRole("button", { name: "Show Hint" })).toBeFocused();
+  await expect(page.locator(".challenge-choice")).toHaveCount(0);
+  await expect(page.locator("#skip-question")).toBeHidden();
+  const challengeTime = await page.locator("#time-value").textContent();
+  await page.waitForTimeout(1100);
+  await expect(page.locator("#time-value")).toHaveText(challengeTime ?? "");
+  await page.getByRole("button", { name: "Show Hint" }).click();
+  await expect(page.locator("#question-hint")).toHaveText(
+    "Start with the whole group, then count back."
+  );
+  await expect(page.locator(".challenge-choice")).toHaveCount(3);
+  await page.locator('[data-answer="c"]').click();
+  await expect(challenge).not.toBeVisible();
+
+  await page.keyboard.press("ArrowDown");
+  for (let step = 0; step < 6; step += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+
+  const result = page.getByRole("dialog", {
+    name: "First Light complete."
+  });
+  await expect(result).toBeVisible();
+  await expect(page.locator("#result-title")).toBeFocused();
+  await expect(page.locator("#live-region")).toContainText(
+    "First Light complete"
+  );
+  await expect(
+    page.getByRole("button", { name: "Choose Quest Level" })
+  ).toBeVisible();
+  expect(questionRequests).toEqual([]);
+  expect(productWriteRequests).toEqual([]);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("echo-maze:"))
+          .sort()
+      )
+    )
+    .toEqual(["echo-maze:first-light:v1"]);
+
+  await page.getByRole("button", { name: "Choose Quest Level" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Choose your Quest Level" })
+  ).toBeVisible();
+  await expect(page.locator("#seed-value")).toHaveText("FIRST-LIGHT-56");
+  await page.getByRole("button", { name: "Replay First Light" }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+  await expect(page.locator("#maze-canvas")).toBeFocused();
+});
+
+test("offers First Light again after an unfinished attempt is abandoned", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(
+    page.getByRole("dialog", { name: "Your First Light" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Choose which Quest to keep" })
+  ).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:quest-progress:v1")
+      )
+    )
+    .toBeNull();
+
+  await page.getByRole("button", { name: "Start First Light" }).click();
+  await page.keyboard.press("ArrowDown");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:first-light:v1")
+      )
+    )
+    .toBeNull();
+
+  await page.reload();
+  await expectGameReady(page);
+  await expect(
+    page.getByRole("dialog", { name: "Your First Light" })
+  ).toBeVisible();
+});
+
+test("scrubs prior Challenge history on sign out without loading Campfire Resume", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run-recovery:v1",
+      JSON.stringify({
+        acceptedQuestion: "private reviewed Question",
+        selectedOptionId: "b"
+      })
+    );
+  });
+  let recoveryChunkRequests = 0;
+  await page.route(
+    "**/assets/active-run-recovery-*.js",
+    async (route) => {
+      recoveryChunkRequests += 1;
+      await route.abort();
+    }
+  );
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await page.getByRole("button", { name: "Start First Light" }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+  expect(recoveryChunkRequests).toBe(0);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toContain("private reviewed Question");
+
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
+  expect(recoveryChunkRequests).toBe(0);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+});
+
+test("warns when sign out cannot scrub the prior Quest checkpoint", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run-recovery:v1",
+      JSON.stringify({
+        acceptedQuestion: "private reviewed Question",
+        selectedOptionId: "b"
+      })
+    );
+    Storage.prototype.removeItem = () => {
+      throw new DOMException("Deletion denied.", "SecurityError");
+    };
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Overwrite denied.", "SecurityError");
+    };
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+
+  await expect(page.locator("#live-region")).toContainText(
+    "could not erase the old Quest checkpoint"
+  );
+  await expect(page.locator("#live-region")).toContainText(
+    "Clear this site's data before another player uses this device"
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toContain("private reviewed Question");
+});
+
+test("defeats and freely retries First Light through touch controls", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "mobile",
+    "The dedicated touch journey runs in the mobile browser."
+  );
+  /** @type {string[]} */
+  const productWriteRequests = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname.startsWith("/api/") &&
+      !["GET", "HEAD", "OPTIONS"].includes(request.method())
+    ) {
+      productWriteRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Start First Light" }).click();
+
+  const moveDown = page.getByRole("button", { name: "Move down" });
+  for (let step = 0; step < 5; step += 1) {
+    await moveDown.click();
+  }
+
+  const challenge = page.getByRole("dialog", {
+    name: "A Warden blocks the path."
+  });
+  await expect(challenge).toBeVisible();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getFirstLightQuestion({ wardenId: 0, attempt });
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) {
+      throw new Error("First Light needs one reviewed wrong answer.");
+    }
+    await expect(page.getByRole("button", { name: "Show Hint" })).toBeFocused();
+    await page.getByRole("button", { name: "Show Hint" }).click();
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+    if (attempt < 2) {
+      await expect(page.locator("#challenge-question")).not.toHaveText(
+        question.prompt
+      );
+    }
+  }
+
+  const result = page.getByRole("dialog", {
+    name: "Your First Light can begin again."
+  });
+  await expect(result).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry First Light" })
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:first-light:v1")
+      )
+    )
+    .toBeNull();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
+  expect(productWriteRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Retry First Light" }).click();
+  await expect(page.locator("#vitality-count")).toHaveText("3 / 3");
+  await expect(page.locator("#moves-value")).toHaveText("000");
+  await expect(page.locator("#maze-canvas")).toBeFocused();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toBeNull();
+});
+
+test("defers incoming Cloud Quest progress until First Light is over", async ({
+  page
+}) => {
+  const cloudProgress = {
+    version: 1,
+    questId: "quest_cloud_first_light_123",
+    levelId: "maze-master",
+    labyrinthNumber: 7,
+    completedLabyrinths: 6,
+    usedMapFingerprints: [],
+    usedQuestionIds: [],
+    nextQuestionOrdinal: 0,
+    complete: false
+  };
+  await page.route(
+    "**/assets/quest-continuity-controller-*.js",
+    async (route) => {
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `
+          export function createQuestContinuityController({
+            onConflict,
+            onProgress
+          }) {
+            return {
+              setAuthenticated() {},
+              queueBoundary() { return Promise.resolve(false); },
+              retry() {
+                onProgress(${JSON.stringify(cloudProgress)}, "cloud");
+                onConflict({
+                  local: {
+                    ...${JSON.stringify(cloudProgress)},
+                    questId: "quest_local_first_light_456"
+                  },
+                  cloud: {
+                    progress: ${JSON.stringify(cloudProgress)},
+                    revision: 2
+                  }
+                });
+                return Promise.resolve(true);
+              },
+              resolveConflict() { return Promise.resolve(true); }
+            };
+          }
+        `
+      });
+    }
+  );
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Start First Light" }).click();
+  await page.keyboard.press("ArrowDown");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+  await expect(page.locator("#seed-value")).toHaveText("FIRST-LIGHT-56");
+  await expect(page.locator("#moves-value")).toHaveText("001");
+  await expect(
+    page.getByRole("dialog", { name: "Choose which Quest to keep" })
+  ).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:quest-progress:v1")
+      )
+    )
+    .toBeNull();
+
+  await page.getByRole("button", { name: "Choose Quest" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Choose your Quest Level" })
+  ).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(
+    page.getByRole("dialog", { name: "Choose which Quest to keep" })
+  ).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:quest-progress:v1")
+      )
+    )
+    .toBeNull();
+
+  await page.getByRole("button", { name: /Trail Scout/ }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "quest"
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const progress = localStorage.getItem(
+          "echo-maze:quest-progress:v1"
+        );
+        const locator = localStorage.getItem("echo-maze:active-run:v1");
+        return {
+          progress: progress ? JSON.parse(progress) : null,
+          locator: locator ? JSON.parse(locator) : null
+        };
+      })
+    )
+    .toMatchObject({
+      progress: {
+        levelId: "trail-scout",
+        labyrinthNumber: 1
+      },
+      locator: {
+        levelId: "trail-scout",
+        labyrinthNumber: 1,
+        pending: false
+      }
+    });
+  expect(
+    await page.evaluate(() => {
+      const locator = localStorage.getItem("echo-maze:active-run:v1");
+      return locator ? JSON.parse(locator).seed : null;
+    })
+  ).not.toBe("FIRST-LIGHT-56");
+});
+
+test("lets a new Explorer skip First Light without starting a Quest", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Skip to Quest" }).click();
+
+  await expect(
+    page.getByRole("dialog", { name: "Choose your Quest Level" })
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("echo-maze:"))
+          .sort()
+      )
+    )
+    .toEqual(["echo-maze:first-light:v1"]);
+});
+
+test("keeps the First Light offer operable with reduced motion and 200 percent text", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+
+  const dialog = page.getByRole("dialog", { name: "Your First Light" });
+  await expect(dialog).toBeVisible();
+  await page.getByRole("button", { name: "Start First Light" }).focus();
+  await expect(
+    page.getByRole("button", { name: "Start First Light" })
+  ).toBeFocused();
+
+  const measurements = await dialog.evaluate((element) => {
+    const buttons = [...element.querySelectorAll("button")];
+    return {
+      horizontalOverflow: element.scrollWidth - element.clientWidth,
+      buttons: buttons.map((button) => {
+        const bounds = button.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }),
+      animationDuration: getComputedStyle(element).animationDuration,
+      transitionDuration: getComputedStyle(element).transitionDuration
+    };
+  });
+  expect(measurements.horizontalOverflow).toBeLessThanOrEqual(1);
+  for (const bounds of measurements.buttons) {
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(Number.parseFloat(measurements.animationDuration) || 0)
+    .toBeLessThanOrEqual(0.001);
+  expect(Number.parseFloat(measurements.transitionDuration) || 0)
+    .toBeLessThanOrEqual(0.001);
 });
 
 test("blocks a completed guest demo on return, reload, and direct links", async ({
@@ -329,6 +859,7 @@ test("copies an explicit share link without changing normal gameplay URL", async
   page
 }) => {
   await page.goto("/play");
+  await page.getByRole("button", { name: "Skip to Quest" }).click();
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();
@@ -381,6 +912,7 @@ test("restarts the same active Labyrinth after a clean play-route refresh", asyn
   page
 }) => {
   await page.goto("/play");
+  await page.getByRole("button", { name: "Skip to Quest" }).click();
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();
