@@ -1660,6 +1660,45 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
     }
   });
 
+  await page.reload();
+  await expectGameReady(page);
+  await expect(
+    page.getByRole("dialog", { name: "Continue from the Campfire?" })
+  ).not.toBeVisible();
+  expect(
+    await page.evaluate((seed) => {
+      const records =
+        /** @type {Array<{
+         *   seed?: string,
+         *   outcome?: string,
+         *   labyrinthNumber?: number
+         * }>} */ (JSON.parse(
+          localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+        ));
+      const progress = JSON.parse(
+        localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+      );
+      return {
+        recovery: localStorage.getItem(
+          "echo-maze:active-run-recovery:v1"
+        ),
+        matchingRecords: records.filter(
+          (record) =>
+            record.seed === seed &&
+            record.outcome === "escaped" &&
+            record.labyrinthNumber === 1
+        ).length,
+        labyrinthNumber: progress?.labyrinthNumber,
+        completedLabyrinths: progress?.completedLabyrinths
+      };
+    }, WINNING_SEED)
+  ).toEqual({
+    recovery: null,
+    matchingRecords: 1,
+    labyrinthNumber: 2,
+    completedLabyrinths: 1
+  });
+
   if (await page.getByRole("button", { name: "Continue Quest" }).isVisible()) {
   await page.getByRole("button", { name: "Continue Quest" }).click();
   await expect(dialog).not.toBeVisible();
