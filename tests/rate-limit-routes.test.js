@@ -92,7 +92,9 @@ const scoreBody = {
   echoesCollected: 3,
   moves: 81,
   elapsedMs: 92000,
-  escaped: true
+  escaped: true,
+  atlasRegionId: "foundation",
+  rulesetRevision: "echo-hush-v1"
 };
 
 const questionUrl =

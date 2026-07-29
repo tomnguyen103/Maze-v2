@@ -1,6 +1,7 @@
 import {
   InputError,
   validateProfileInput,
+  validateScorePartition,
   validateScoreInput
 } from "./player-validation.js";
 import { safeErrorName } from "./safe-error-log.js";
@@ -96,7 +97,10 @@ function isUniqueViolation(error) {
  *         playgroundPalette: string
  *       }
  *     ) => Promise<Record<string, unknown>>,
- *     getLeaderboard: () => Promise<{
+ *     getLeaderboard: (partition: {
+ *       atlasRegionId: string,
+ *       rulesetRevision: string
+ *     }) => Promise<{
  *       entries: Record<string, unknown>[],
  *       globalMaxScore: number
  *     }>,
@@ -150,10 +154,15 @@ export function createPlayerApiHandler({
           sendJson(response, 405, { error: "Use GET for the Global Scoreboard." });
           return;
         }
-        const leaderboard = await store.getLeaderboard();
+        const partition = validateScorePartition({
+          atlasRegionId: url.searchParams.get("region"),
+          rulesetRevision: url.searchParams.get("rules")
+        });
+        const leaderboard = await store.getLeaderboard(partition);
         sendJson(response, 200, {
           entries: leaderboard.entries.map(publicScoreEntry),
           globalMaxScore: leaderboard.globalMaxScore,
+          partition,
           verification: "casual-v1"
         });
         return;

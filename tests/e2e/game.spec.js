@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expectGameReady } from "./game-ready.js";
 import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
@@ -6,6 +8,8 @@ import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
+import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
+import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -77,12 +81,17 @@ function pathTo(run, goal) {
       break;
     }
     for (const move of moves) {
-      const next = {
+      const directTarget = {
         row: current.row + move.row,
         col: current.col + move.col
       };
+      const windway = run.windways.find(
+        ({ source }) => key(source) === key(directTarget)
+      );
+      const next = windway?.destination ?? directTarget;
       const nextKey = key(next);
       if (
+        run.labyrinth[directTarget.row]?.[directTarget.col] !== 1 ||
         run.labyrinth[next.row]?.[next.col] !== 1 ||
         previous.has(nextKey)
       ) {
@@ -111,10 +120,14 @@ function pathTo(run, goal) {
 
 /**
  * @param {string} seed
+ * @param {number} [labyrinthNumber]
  * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[], finalRun: ReturnType<typeof createRun> }}
  */
-function milestoneWinningPlan(seed) {
-  let run = createRun(seed, getLabyrinthConfig("trail-scout", 4));
+function milestoneWinningPlan(seed, labyrinthNumber = 4) {
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", labyrinthNumber),
+    ruleset: getQuestRunRuleset(labyrinthNumber)
+  });
   /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[]} */
   const actions = [];
   for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
@@ -147,6 +160,351 @@ function milestoneWinningPlan(seed) {
     throw new Error("Milestone plan did not reach the Gate.");
   }
   return { actions, finalRun: run };
+}
+
+/**
+ * @param {string} seed
+ * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[], finalRun: ReturnType<typeof createRun> }}
+ */
+function echoBridgeTravelPlan(seed) {
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 9),
+    ruleset: getQuestRunRuleset(9)
+  });
+  const bridge = run.echoBridges[0];
+  if (!bridge) {
+    throw new Error("Expected an Echo Bridge fixture.");
+  }
+  /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[]} */
+  const actions = [];
+  for (const target of [run.echoes[bridge.echoIndex], bridge.from]) {
+    for (let step = 0; step < 400; step += 1) {
+      if (run.status === "challenge") {
+        const kind = run.challenge?.kind;
+        actions.push({
+          type: "answer",
+          ...(kind ? { kind } : {}),
+          wardenId: run.challenge?.wardenId ?? 0
+        });
+        run = applyAction(run, {
+          type: "provide-question",
+          question: TEST_QUESTION
+        });
+        run = applyAction(run, {
+          type: "answer-question",
+          answerId: TEST_QUESTION.answerId
+        });
+        continue;
+      }
+      if (
+        run.explorer.row === target.row &&
+        run.explorer.col === target.col
+      ) {
+        break;
+      }
+      const direction = pathTo(run, target)[0];
+      if (!direction) {
+        throw new Error("Expected a move toward the Echo Bridge fixture.");
+      }
+      actions.push({ type: "move", direction });
+      run = applyAction(run, {
+        type: "move",
+        direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+      });
+    }
+  }
+  const rowDelta = bridge.to.row - bridge.from.row;
+  const colDelta = bridge.to.col - bridge.from.col;
+  const direction = rowDelta < 0
+    ? "up"
+    : rowDelta > 0
+      ? "down"
+      : colDelta < 0
+        ? "left"
+        : "right";
+  actions.push({ type: "move", direction });
+  run = applyAction(run, {
+    type: "move",
+    direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+  });
+  if (
+    run.explorer.row !== bridge.to.row ||
+    run.explorer.col !== bridge.to.col
+  ) {
+    throw new Error("Echo Bridge fixture did not cross its opened Bridge.");
+  }
+  return { actions, finalRun: run };
+}
+
+/**
+ * @param {string} seed
+ * @returns {{
+ *   actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[],
+ *   adjacentRun: ReturnType<typeof createRun>,
+ *   rungRun: ReturnType<typeof createRun>
+ * }}
+ */
+function signalBellRingPlan(seed) {
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 17),
+    ruleset: getQuestRunRuleset(17)
+  });
+  const bell = run.signalBells[0];
+  const adjacent = [
+    { row: bell.row - 1, col: bell.col },
+    { row: bell.row, col: bell.col + 1 },
+    { row: bell.row + 1, col: bell.col },
+    { row: bell.row, col: bell.col - 1 }
+  ].filter((position) => run.labyrinth[position.row]?.[position.col] === 1)
+    .sort((left, right) =>
+      pathTo(run, left).length - pathTo(run, right).length
+    )[0];
+  /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[]} */
+  const actions = [];
+  for (
+    let step = 0;
+    step < 800 &&
+      (run.explorer.row !== adjacent.row ||
+        run.explorer.col !== adjacent.col);
+    step += 1
+  ) {
+    if (run.status === "challenge") {
+      const kind = run.challenge?.kind;
+      actions.push({
+        type: "answer",
+        ...(kind ? { kind } : {}),
+        wardenId: run.challenge?.wardenId ?? 0
+      });
+      run = applyAction(run, {
+        type: "provide-question",
+        question: TEST_QUESTION
+      });
+      run = applyAction(run, {
+        type: "answer-question",
+        answerId: TEST_QUESTION.answerId
+      });
+      continue;
+    }
+    const direction = pathTo(run, adjacent)[0];
+    if (!direction) {
+      throw new Error("Expected a move toward the Signal Bell fixture.");
+    }
+    actions.push({ type: "move", direction });
+    run = applyAction(run, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+  }
+  const adjacentRun = run;
+  const rungRun = applyAction(run, { type: "ring-bell" });
+  if (rungRun.moves !== run.moves + 1) {
+    throw new Error("Signal Bell fixture did not ring.");
+  }
+  return { actions, adjacentRun, rungRun };
+}
+
+/**
+ * @param {string} seed
+ */
+function wardenBellWinningPlan(seed) {
+  const ringPlan = signalBellRingPlan(seed);
+  let run = ringPlan.rungRun;
+  /** @type {({ type: "move", direction: string } | { type: "ring-bell" } | { type: "answer", kind?: "gate-warden" })[]} */
+  const actions = [...ringPlan.actions, { type: "ring-bell" }];
+  for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
+    if (run.status === "challenge") {
+      const kind = run.challenge?.kind;
+      actions.push({ type: "answer", ...(kind ? { kind } : {}) });
+      run = applyAction(run, {
+        type: "provide-question",
+        question: TEST_QUESTION
+      });
+      run = applyAction(run, {
+        type: "answer-question",
+        answerId: TEST_QUESTION.answerId
+      });
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a move toward the Region 5 objective.");
+    }
+    actions.push({ type: "move", direction });
+    run = applyAction(run, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+  }
+  if (run.status !== "won") {
+    throw new Error("Warden Bell plan did not reach the Gate.");
+  }
+  return { actions, finalRun: run };
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"shell" | "opened-bridge"} state
+ */
+async function recordRegion3Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-3-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-3-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"open-phase" | "sealed-phase"} state
+ */
+async function recordRegion4Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-4-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-4-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"bell-ready" | "bell-rung"} state
+ */
+async function recordRegion5Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-5-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-5-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {string} slug
+ */
+async function recordMilestone2EvidenceScreenshot(page, testInfo, slug) {
+  const body = await page.screenshot();
+  await testInfo.attach(`${slug}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-${slug}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {string} seed
+ * @param {ReturnType<typeof milestoneWinningPlan>} plan
+ * @param {{ checkGateStaging?: boolean }} [options]
+ */
+async function completeMilestonePlan(
+  page,
+  seed,
+  plan,
+  { checkGateStaging = false } = {}
+) {
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+
+  let gateChallenges = 0;
+  let questionOrdinal = 0;
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      continue;
+    }
+
+    const challenge = page.locator("#challenge-dialog");
+    await expect(challenge).toBeVisible();
+    if (action.kind === "gate-warden") {
+      gateChallenges += 1;
+      if (checkGateStaging) {
+        await expect(page.locator("#gate-staging-skip")).toBeFocused();
+        await expect(page.locator("#challenge-question")).toContainText(
+          "universal diamond crest"
+        );
+      }
+      await page.locator("#gate-staging-skip").click();
+      if (checkGateStaging) {
+        await expect(page.locator("#challenge-title")).toHaveText(
+          "The Gate Warden seals the way."
+        );
+        await expect(page.locator("#challenge-promise")).toContainText(
+          "break the seal"
+        );
+        await expect(page.locator("#run-state")).toHaveText("Brain battle");
+      }
+    }
+    await expect(page.locator("#challenge-question")).toBeFocused();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      questionOrdinal,
+      seed,
+      wardenId: questionOrdinal,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await expect(page.locator("#challenge-source")).toContainText(
+      "trusty question card"
+    );
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+    if (checkGateStaging && action.kind === "gate-warden") {
+      await expect(page.locator("#run-state")).toHaveText("Gate open");
+    }
+  }
+  return { gateChallenges, questionOrdinal };
 }
 
 /** @param {import("@playwright/test").Page} page */
@@ -249,8 +607,19 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
-test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
-  await page.route("**/api/leaderboard", (route) =>
+test("starts a playable maze and responds to keyboard actions", async ({
+  page
+}, testInfo) => {
+  const getCurrentQuestion = await mockQuestionApi(page);
+  /** @type {string[]} */
+  const presentationRequests = [];
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (/\/assets\/(?:region-theme|audio)-/.test(pathname)) {
+      presentationRequests.push(pathname);
+    }
+  });
+  await page.route("**/api/leaderboard**", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -298,7 +667,18 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await expect(page.locator('[data-level="trail-scout"]')).toContainText(
     "times tables"
   );
+  expect(presentationRequests).toEqual([]);
   await chooseTrailScout(page);
+  await expect.poll(() =>
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/region-theme-")
+    )
+  ).toBe(true);
+  expect(
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/audio-")
+    )
+  ).toBe(false);
   await expect(
     page.getByRole("heading", {
       name: /Labyrinth 1: find 3 Echoes and outsmart 2 Wardens/i
@@ -308,23 +688,124 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
     "Quest Level 2 · Trail Scout"
   );
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 1 of 20 · Foundation"
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
 
-  for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {
-    await page.keyboard.press(key);
-    if ((await page.locator("#moves-value").textContent()) !== "000") {
+  const seed = (await page.locator("#seed-value").textContent())?.trim();
+  if (!seed) {
+    throw new Error("Expected the active Region 1 seed.");
+  }
+  const plan = milestoneWinningPlan(seed, 1);
+  for (const action of plan.actions) {
+    if (action.type === "answer") {
+      await answerCorrectlyIfChallenged(page, getCurrentQuestion);
+      continue;
+    }
+    await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    await answerCorrectlyIfChallenged(page, getCurrentQuestion);
+    if ((await page.locator("#echo-count").textContent()) === "1 / 3") {
       break;
     }
   }
   await expect(page.locator("#moves-value")).not.toHaveText("000");
-
+  await expect(page.locator("#echo-count")).toHaveText("1 / 3");
+  await expect(page.locator("#field-note")).toContainText(
+    "Echo Hush keeps ordinary Wardens still for this action"
+  );
+  await recordMilestone2EvidenceScreenshot(
+    page,
+    testInfo,
+    "region-1-echo-hush"
+  );
+  await page.getByRole("button", { name: "Sound off" }).click();
+  await expect(page.getByRole("button", { name: "Sound on" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await expect.poll(() =>
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/audio-")
+    )
+  ).toBe(true);
+  const pulsesBefore = Number(
+    await page.locator("#pulse-count").textContent()
+  );
+  await page.locator("#maze-canvas").focus();
   await page.keyboard.press("q");
-  await expect(page.locator("#pulse-count")).toHaveText("1");
+  await expect(page.locator("#pulse-count")).toHaveText(
+    String(pulsesBefore - 1)
+  );
   expect(pageErrors).toEqual([]);
   expect(consoleProblems).toEqual([]);
+});
+
+test("keeps Classic Daily presentation universal after a themed Quest", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One history-dependent Classic presentation proof is sufficient."
+  );
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-region-theme",
+    "mosslight-grove"
+  );
+
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dailyDialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+  await dailyDialog.getByRole("button", {
+    name: "Start today’s Daily"
+  }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
+  await expect(page.locator("#warden-guild")).toHaveText(
+    "Universal Warden marks"
+  );
+});
+
+test("retries Region presentation after a failed optional chunk", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One optional presentation retry is sufficient."
+  );
+  let regionThemeRequests = 0;
+  await page.route("**/assets/region-theme-*.js", async (route) => {
+    regionThemeRequests += 1;
+    if (regionThemeRequests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  await expect.poll(() => regionThemeRequests).toBe(1);
+  await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
+  await expect(page.locator("#warden-guild")).toHaveText(
+    "Universal Warden marks"
+  );
+
+  await page.getByRole("button", { name: "New Quest" }).click();
+  await chooseTrailScout(page);
+
+  await expect.poll(() => regionThemeRequests).toBe(2);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-region-theme",
+    "mosslight-grove"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Bramblewatch Guild"
+  );
 });
 
 test("opens the full Echo Atlas, pauses time, and restores trigger focus", async ({
@@ -354,6 +835,18 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   await expect(page.locator("[data-atlas-node='4']")).toContainText(
     "Current Gate Warden milestone"
   );
+  const zoomOutButton = atlas.getByRole("button", { name: "Zoom out" });
+  const zoomOutBounds = await zoomOutButton.boundingBox();
+  if (!zoomOutBounds) {
+    throw new Error("Expected the Atlas Zoom out button.");
+  }
+  await page.mouse.move(
+    zoomOutBounds.x + zoomOutBounds.width / 2,
+    zoomOutBounds.y + zoomOutBounds.height / 2
+  );
+  await page.mouse.down();
+  await expect(zoomOutButton).toHaveCSS("transform", "none");
+  await page.mouse.up();
   await expect(page.locator("#pause-run")).toHaveAttribute(
     "aria-pressed",
     "true"
@@ -385,6 +878,524 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
     "aria-pressed",
     "false"
   );
+});
+
+test("lazy Atlas keeps semantic map and list parity across a URL reload", async ({
+  page
+}) => {
+  await page.goto("/?seed=ATLAS-DEEP-LINK&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => entry.name.includes("quest-atlas-view"))
+      )
+    )
+    .toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+      )
+    )
+    .toBe(false);
+  const runStateBeforeAtlasSelection = await page.evaluate(() => ({
+    quest: localStorage.getItem("echo-maze:quest-progress:v1"),
+    locator: localStorage.getItem("echo-maze:active-run:v1"),
+    recovery: localStorage.getItem("echo-maze:active-run-recovery:v1")
+  }));
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => entry.name.includes("quest-atlas-view"))
+      )
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+      )
+    )
+    .toBe(true);
+  await expect(atlas.locator("[data-atlas-landmark]")).toHaveCount(20);
+
+  await atlas.locator("[data-atlas-landmark='developing-7']").click();
+  await expect(page).toHaveURL(/atlas=developing-7/);
+  await expect(atlas.locator("[data-atlas-detail-title]"))
+    .toHaveText("Labyrinth 7");
+  await expect(atlas.locator("[data-atlas-detail]")).toContainText(
+    "Preview only"
+  );
+  await expect(atlas.locator("[data-atlas-detail-action]")).toHaveCount(0);
+
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await expect(atlas.locator("[data-atlas-landmarks]")).toHaveAttribute(
+    "data-view",
+    "list"
+  );
+  await expect(atlas.locator("[data-atlas-landmark]")).toHaveCount(20);
+
+  await page.reload();
+  await expectGameReady(page);
+  await expect(atlas).toBeVisible();
+  await expect(atlas.locator("[data-atlas-detail-title]"))
+    .toHaveText("Labyrinth 7");
+  expect(await page.evaluate(() => ({
+    quest: localStorage.getItem("echo-maze:quest-progress:v1"),
+    locator: localStorage.getItem("echo-maze:active-run:v1"),
+    recovery: localStorage.getItem("echo-maze:active-run-recovery:v1")
+  }))).toEqual(runStateBeforeAtlasSelection);
+
+  await atlas.locator("[data-atlas-landmark='foundation-4']").click();
+  await expect(atlas.locator("[data-atlas-detail]")).toContainText(
+    "Continue Quest"
+  );
+  await atlas.getByRole("button", { name: "Continue Quest" }).click();
+  await expect(atlas).not.toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
+test("keeps a Run paused when Atlas is activated twice while loading", async ({
+  page
+}) => {
+  await page.route("**/assets/quest-atlas-view-*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-DOUBLE&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).dblclick({
+    delay: 20
+  });
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("retries the Atlas view after its first chunk request fails", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/quest-atlas-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-RETRY&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+
+  await atlasButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Echo Atlas could not open"
+  );
+  await atlasButton.click();
+
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
+  expect(requests).toBe(2);
+});
+
+test("pans from the labeled viewport and centers the current landmark", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/?seed=ATLAS-CENTER&level=trail-scout&labyrinth=12");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const viewport = atlas.getByRole("group", { name: /Shift plus arrow keys/ });
+  const canvas = atlas.locator("[data-atlas-canvas]");
+
+  await viewport.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(canvas).toHaveCSS("transform", /matrix\([^,]+, 0, 0, [^,]+, -48,/);
+  await atlas.getByRole("button", { name: "Zoom in" }).click();
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 120;
+    element.scrollTop = 80;
+  });
+  await atlas.getByRole("button", { name: "Center Current" }).click();
+
+  const centers = await atlas.evaluate(() => {
+    const viewportElement = document.querySelector(".atlas-viewport");
+    const current = document.querySelector("[aria-current='step']");
+    if (!viewportElement || !current) {
+      throw new Error("Expected Atlas viewport and current landmark.");
+    }
+    const viewportBounds = viewportElement.getBoundingClientRect();
+    const currentBounds = current.getBoundingClientRect();
+    return {
+      viewportX: viewportBounds.left + viewportBounds.width / 2,
+      viewportY: viewportBounds.top + viewportBounds.height / 2,
+      currentX: currentBounds.left + currentBounds.width / 2,
+      currentY: currentBounds.top + currentBounds.height / 2
+    };
+  });
+  expect(Math.abs(centers.viewportX - centers.currentX)).toBeLessThanOrEqual(2);
+  expect(Math.abs(centers.viewportY - centers.currentY)).toBeLessThanOrEqual(2);
+});
+
+test("Atlas map and inspector fit every contracted viewport at 200-percent text", async ({
+  page
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const viewport of [
+    { width: 320, height: 720 },
+    { width: 390, height: 844 },
+    { width: 768, height: 900 },
+    { width: 1440, height: 1000 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/?seed=ATLAS-FIT&level=trail-scout&labyrinth=4");
+    await expectGameReady(page);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "32px";
+    });
+    await page.getByRole("button", { name: "Atlas", exact: true }).click();
+    const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+    await expect(atlas).toBeVisible();
+    await expect(atlas.locator("[data-atlas-detail]")).toBeVisible();
+    await expect(atlas.getByRole("button", { name: "Center Current" }))
+      .toBeVisible();
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )).toBeLessThanOrEqual(1);
+    const bounds = await atlas.boundingBox();
+    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0))
+      .toBeLessThanOrEqual(viewport.width);
+    const detailBounds = await atlas.locator("[data-atlas-detail]")
+      .boundingBox();
+    expect(detailBounds?.y ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan((bounds?.y ?? 0) + (bounds?.height ?? 0));
+    if (viewport.width <= 768) {
+      expect((detailBounds?.y ?? 0) + (detailBounds?.height ?? 0))
+        .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0));
+    }
+    const isEvidenceViewport =
+      testInfo.project.name === "mobile"
+        ? viewport.width === 390
+        : viewport.width === 1440;
+    if (isEvidenceViewport) {
+      await recordMilestone2EvidenceScreenshot(
+        page,
+        testInfo,
+        "atlas-200pct-reduced"
+      );
+    }
+  }
+});
+
+test("lazy Watch Trail stays usable across contracted Replay viewports", async ({
+  page
+}, testInfo) => {
+  const plan = milestoneWinningPlan("TRAIL-VIEW-4");
+  const replay = createTerminalRunReplay(
+    plan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    plan.finalRun
+  );
+  if (!replay) {
+    throw new Error("Expected a retained Replay fixture.");
+  }
+  await page.addInitScript(({ retainedReplay }) => {
+    const corruptReplay = JSON.parse(JSON.stringify(retainedReplay));
+    corruptReplay.terminal.moves += 1;
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([
+      {
+        elapsedMs: retainedReplay.terminal.elapsedMs,
+        moves: retainedReplay.terminal.moves,
+        seed: "TRAIL-VIEW-4",
+        outcome: "escaped",
+        echoesCollected: retainedReplay.terminal.echoesCollected,
+        echoTotal: retainedReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: retainedReplay
+      },
+      {
+        elapsedMs: 900,
+        moves: 5,
+        seed: "OLD-RECORD",
+        outcome: "defeated",
+        echoesCollected: 1,
+        echoTotal: 3,
+        questLevelId: "trail-scout",
+        labyrinthNumber: 2,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1"
+      },
+      {
+        elapsedMs: corruptReplay.terminal.elapsedMs + 1,
+        moves: corruptReplay.terminal.moves,
+        seed: "CORRUPT-TRAIL",
+        outcome: "escaped",
+        echoesCollected: corruptReplay.terminal.echoesCollected,
+        echoTotal: corruptReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 3,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: corruptReplay
+      }
+    ]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_replay_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { retainedReplay: replay });
+
+  const viewports = testInfo.project.name === "mobile"
+    ? [{ width: 390, height: 844 }]
+    : [
+        { width: 320, height: 720 },
+        { width: 390, height: 844 },
+        { width: 768, height: 900 },
+        { width: 1440, height: 1000 }
+      ];
+  for (const [viewportIndex, viewport] of viewports.entries()) {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({
+      reducedMotion: viewportIndex === 0 ? "reduce" : "no-preference"
+    });
+    await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=5");
+    await expectGameReady(page);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "32px";
+    });
+    if (viewportIndex === 0) {
+      await expect.poll(() =>
+        page.evaluate(() =>
+          performance.getEntriesByType("resource").some(
+            (entry) => entry.name.includes("run-replay-view")
+          )
+        )
+      ).toBe(false);
+    }
+
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    const records = page.getByRole("dialog", { name: "Run Records" });
+    await expect(records).toBeVisible();
+    await expect(
+      records.getByRole("button", {
+        name: "Watch retained Trail for seed TRAIL-VIEW-4"
+      })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", { name: "Play seed TRAIL-VIEW-4" })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", { name: "Play seed OLD-RECORD" })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", {
+        name: "Watch retained Trail for seed OLD-RECORD"
+      })
+    ).toHaveCount(0);
+    await records.getByRole("button", {
+      name: "Watch retained Trail for seed TRAIL-VIEW-4"
+    }).click();
+
+    const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.locator("[data-run-replay-event]"))
+      .toHaveCount(replay.actions.length + 1);
+    await expect(viewer.getByRole("toolbar", {
+      name: "Run Replay controls"
+    })).toBeVisible();
+    await expect(viewer.getByLabel(
+      "Reconstructed maze state for the selected Trail step."
+    )).toBeVisible();
+    const nextStep = viewer.getByRole("button", { name: "Next step" });
+    if (testInfo.project.name === "mobile") {
+      await nextStep.tap();
+    } else {
+      await nextStep.click();
+    }
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText("Step 1 of");
+    await viewer.getByRole("button", { name: "Play", exact: true }).click();
+    if (viewportIndex === 0) {
+      await expect(viewer.locator("[data-run-replay-status]"))
+        .toContainText("Step 2 of");
+      await expect(viewer.getByRole("button", { name: "Play", exact: true }))
+        .toBeVisible();
+    } else {
+      await expect(viewer.getByRole("button", { name: "Pause", exact: true }))
+        .toBeVisible();
+      await viewer.getByRole("button", { name: "Pause", exact: true }).click();
+    }
+    await viewer.getByRole("heading", { name: "Watch Trail" }).focus();
+    await page.keyboard.press("End");
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText(`Step ${replay.actions.length} of`);
+    await viewer.getByRole("button", { name: "Restart" }).click();
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText(`Step 0 of ${replay.actions.length}`);
+    const isEvidenceViewport =
+      testInfo.project.name === "mobile"
+        ? viewport.width === 390
+        : viewport.width === 1440;
+    if (isEvidenceViewport) {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await viewer.evaluate((dialog) => {
+        dialog.scrollTop = 0;
+      });
+      await expect.poll(() => viewer.evaluate((dialog) => dialog.scrollTop))
+        .toBe(0);
+      await recordMilestone2EvidenceScreenshot(
+        page,
+        testInfo,
+        "watch-trail-200pct-reduced"
+      );
+    }
+
+    const bounds = await viewer.boundingBox();
+    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0))
+      .toBeLessThanOrEqual(viewport.width);
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )).toBeLessThanOrEqual(1);
+
+    await viewer.getByRole("button", { name: "Close" }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Records", exact: true })
+    ).toBeFocused();
+
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    await records.getByRole("button", {
+      name: "Watch retained Trail for seed CORRUPT-TRAIL"
+    }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(page.locator("#live-region")).toHaveText(
+      "This Trail is corrupt, so it cannot be watched. Play This Seed is still available."
+    );
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    await expect(
+      records.getByRole("button", { name: "Play seed CORRUPT-TRAIL" })
+    ).toBeVisible();
+    await records.getByRole("button", { name: "Close" }).click();
+
+    const questProgressBeforeAtlas = await page.evaluate(() =>
+      localStorage.getItem("echo-maze:quest-progress:v1")
+    );
+    expect(await page.evaluate(() => {
+      const progress = JSON.parse(
+        localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+      );
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return {
+        progressQuestId: progress?.questId,
+        progressLevelId: progress?.levelId,
+        completedLabyrinths: progress?.completedLabyrinths,
+        recordQuestId: records[0]?.questId,
+        sameQuest: records[0]?.questId === progress?.questId,
+        recordLevelId: records[0]?.questLevelId,
+        recordLabyrinthNumber: records[0]?.labyrinthNumber,
+        hasReplay: Boolean(records[0]?.replay)
+      };
+    })).toEqual({
+      progressQuestId: expect.any(String),
+      progressLevelId: "trail-scout",
+      completedLabyrinths: 4,
+      recordQuestId: expect.any(String),
+      sameQuest: true,
+      recordLevelId: "trail-scout",
+      recordLabyrinthNumber: 4,
+      hasReplay: true
+    });
+
+    await page.getByRole("button", { name: "Atlas", exact: true }).click();
+    const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+    await expect(atlas).toBeVisible();
+    await atlas.getByRole("button", { name: "List view" }).click();
+    const retainedLandmark = atlas.locator(
+      "[data-atlas-landmark='foundation-4']"
+    );
+    if (testInfo.project.name === "mobile") {
+      await retainedLandmark.tap();
+    } else {
+      await retainedLandmark.click();
+    }
+    await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+      .toBeVisible();
+    await atlas.evaluate((element) => {
+      element.scrollTop = 73;
+    });
+    if (testInfo.project.name === "mobile") {
+      await atlas.getByRole("button", { name: "Watch Trail" }).tap();
+    } else {
+      await atlas.getByRole("button", { name: "Watch Trail" }).click();
+    }
+
+    await expect(viewer).toBeVisible();
+    await expect(atlas).toBeVisible();
+    const atlasScrollTop = await atlas.evaluate((element) => element.scrollTop);
+    await viewer.getByRole("button", { name: "Close" }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(atlas).toBeVisible();
+    await expect(retainedLandmark).toBeFocused();
+    await expect(atlas.locator("[data-atlas-landmarks]"))
+      .toHaveAttribute("data-view", "list");
+    expect(new URL(page.url()).searchParams.get("atlas"))
+      .toBe("foundation-4");
+    expect(await atlas.evaluate((element) => element.scrollTop))
+      .toBe(atlasScrollTop);
+
+    const corruptLandmark = atlas.locator(
+      "[data-atlas-landmark='foundation-3']"
+    );
+    if (testInfo.project.name === "mobile") {
+      await corruptLandmark.tap();
+    } else {
+      await corruptLandmark.click();
+    }
+    await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+      .toHaveCount(0);
+    expect(await page.evaluate(() =>
+      localStorage.getItem("echo-maze:quest-progress:v1")
+    )).toBe(questProgressBeforeAtlas);
+    await atlas.getByRole("button", { name: "Close" }).click();
+  }
 });
 
 test("previews, saves, and resets presentation-only Explorer Access Settings", async ({
@@ -1034,7 +2045,10 @@ test("never starts audio before the player opts in", async ({ page }) => {
 test("shows guest score state and the global top ten without changing Records", async ({
   page
 }) => {
-  await page.route("**/api/leaderboard", async (route) => {
+  /** @type {string[]} */
+  const leaderboardRequests = [];
+  await page.route("**/api/leaderboard**", async (route) => {
+    leaderboardRequests.push(route.request().url());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1053,7 +2067,9 @@ test("shows guest score state and the global top ten without changing Records", 
       })
     });
   });
-  await page.goto("/?seed=GLOBAL-BOARD&level=trail-scout");
+  await page.goto(
+    "/?seed=GLOBAL-BOARD&level=trail-scout&region=foundation&rules=echo-hush-v1"
+  );
   await expectGameReady(page);
 
   await expect(page.locator("#player-name")).toHaveText("Guest");
@@ -1065,6 +2081,21 @@ test("shows guest score state and the global top ten without changing Records", 
   ).toBeVisible();
   await expect(page.locator("#scoreboard-list")).toContainText("Moss Runner");
   await expect(page.locator("#scoreboard-list")).toContainText("900");
+  await expect(page.locator("#scoreboard-partition-label")).toHaveText(
+    "Showing Foundation · Echo Hush."
+  );
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("region"))
+    .toBe("foundation");
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("rules"))
+    .toBe("echo-hush-v1");
+
+  await page.locator("#scoreboard-partition").selectOption("classic-v1");
+  await expect(page.locator("#scoreboard-partition-label")).toHaveText(
+    "Showing Foundation · Classic Rules."
+  );
+  await expect.poll(() => leaderboardRequests.length).toBeGreaterThan(1);
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("rules"))
+    .toBe("classic-v1");
   await expect(page.getByRole("button", { name: "Records", exact: true })).toBeVisible();
 });
 
@@ -1103,7 +2134,7 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
     page.getByRole("button", { name: "Copy share link for seed NARROW-RECORD" })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Replay seed NARROW-RECORD" })
+    page.getByRole("button", { name: "Play seed NARROW-RECORD" })
   ).toBeVisible();
   const dialog = await page.locator("#records-dialog").boundingBox();
   if (!dialog) {
@@ -1111,9 +2142,9 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
   }
   expect(dialog.x).toBeGreaterThanOrEqual(0);
   expect(dialog.x + dialog.width).toBeLessThanOrEqual(320);
-  await page.getByRole("button", { name: "Replay seed NARROW-RECORD" }).click();
+  await page.getByRole("button", { name: "Play seed NARROW-RECORD" }).click();
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 13 of 20 · Advanced"
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
   );
   await expect(page.locator("#echo-count")).toHaveText("0 / 5");
 });
@@ -1125,9 +2156,819 @@ test("hydrates a shared seed at its Labyrinth Number", async ({ page }) => {
   await expectGameReady(page);
 
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 13 of 20 · Advanced"
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
   );
   await expect(page.locator("#echo-count")).toHaveText("0 / 5");
+});
+
+test("round-trips an exact Region ruleset through share and active recovery identity", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+  });
+  await page.goto(
+    "/?seed=RULESET-SHARE&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Trail Twist: Tide Doors"
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({
+      version: 3,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1"
+    });
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("advanced");
+  expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
+});
+
+test("carries Region 2 identity from Atlas through Windway play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  const retainedPlan = milestoneWinningPlan("WIND-TRAIL-5", 5);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 2 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "WIND-TRAIL-5",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_windways_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 5,
+      atlasRegionId: "developing",
+      rulesetRevision: "windways-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_windways_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 6,
+      completedLabyrinths: 5,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=WIND-VIEW-34&level=trail-scout&labyrinth=5&region=developing&rules=windways-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Developing"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Windways"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Kitewatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Windcall reed chorus is optional"
+  );
+  await expect(page.locator("#windway-legend")).toBeVisible();
+  await expect(page.getByLabel(/Interactive maze/)).toHaveAttribute(
+    "aria-label",
+    /directional Windway source and destination/
+  );
+  for (const action of await page.locator(".command-bar__actions > *").all()) {
+    expect(await action.evaluate((element) =>
+      element.scrollWidth <= element.clientWidth &&
+      element.scrollHeight <= element.clientHeight
+    )).toBe(true);
+  }
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const developingRegion = atlas.locator(
+    "[data-atlas-region='developing']"
+  );
+  await expect(developingRegion).toContainText("Windcall Ridge");
+  await expect(developingRegion).toContainText(
+    "Rising wind and bright trail ribbons"
+  );
+  await expect(developingRegion).toContainText("Rising Wind Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(atlas).not.toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+
+  for (let move = 0; move < 3; move += 1) {
+    await page.locator("[data-move='down']").dispatchEvent("click");
+    await expect(page.locator("#moves-value")).toHaveText(
+      String(move + 1).padStart(3, "0")
+    );
+  }
+  await expect(page.locator("#field-note")).toHaveText(
+    "Windway carried you down."
+  );
+  await recordMilestone2EvidenceScreenshot(
+    page,
+    testInfo,
+    "region-2-windway"
+  );
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("developing");
+  expect(copied.searchParams.get("rules")).toBe("windways-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Developing");
+  await expect(records).toContainText("Trail Twist: Windways");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed WIND-TRAIL-5"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByLabel(
+    "Reconstructed maze state for the selected Trail step."
+  )).toBeVisible();
+  await viewer.getByRole("heading", { name: "Watch Trail" }).focus();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(records).not.toBeVisible();
+
+  await page.goto(
+    "/?seed=WIND-SHELL-6&level=trail-scout&labyrinth=6&region=developing&rules=windways-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='developing-5']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 3 identity through Echo Bridge play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const retainedPlan = milestoneWinningPlan("BRIDGE-TRAIL-9", 9);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  const travelPlan = echoBridgeTravelPlan("BRIDGE-VIEW-9");
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 3 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "BRIDGE-TRAIL-9",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_bridges_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 9,
+      atlasRegionId: "capable",
+      rulesetRevision: "echo-bridges-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_bridges_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 10,
+      completedLabyrinths: 9,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=BRIDGE-VIEW-9&level=trail-scout&labyrinth=9&region=capable&rules=echo-bridges-v1"
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Capable"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Echo Bridges"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Spanwatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Sunspan string chorus is optional"
+  );
+  await expect(page.locator("#echo-bridge-legend")).toBeVisible();
+  await expect(page.getByLabel(/Interactive maze/)).toHaveAttribute(
+    "aria-label",
+    /Pair 1 sealed/
+  );
+  for (const action of await page
+    .locator(".command-bar__actions > :visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth,
+        id: element.id,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth,
+        text: element.textContent?.trim() ?? ""
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `${fit.id || fit.text} must not clip: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+  await atlasButton.click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const capableRegion = atlas.locator("[data-atlas-region='capable']");
+  await expect(capableRegion).toContainText("Sunspan Crossing");
+  await expect(capableRegion).toContainText(
+    "Joined arches and clear blue spans"
+  );
+  await expect(capableRegion).toContainText("Joined Path Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+
+  await expect(atlasButton).toBeFocused();
+  const maze = page.getByLabel(/Interactive maze/);
+  await recordRegion3Screenshot(page, testInfo, "shell");
+  const challenge = page.locator("#challenge-dialog");
+  let expectedMoves = 0;
+  let questionOrdinal = 0;
+  for (const [actionIndex, action] of travelPlan.actions.entries()) {
+    if (action.type === "move") {
+      await maze.press(KEY_BY_DIRECTION[action.direction]);
+      expectedMoves += 1;
+      await expect.poll(async () => {
+        const state = await page.evaluate(() => ({
+          activeElement: document.activeElement?.id ?? "",
+          challengeVisible: document
+            .querySelector("#challenge-dialog")
+            ?.matches(":modal") ?? false,
+          moves: Number(document.querySelector("#moves-value")?.textContent ?? -1),
+          openDialogs: [...document.querySelectorAll("dialog[open]")]
+            .map((dialog) => dialog.id)
+        }));
+        return state.moves === expectedMoves || state.challengeVisible
+          ? "acknowledged"
+          : JSON.stringify(state);
+      }, {
+        message:
+          `Region 3 action ${actionIndex} (${action.direction}) was not acknowledged`
+      }).toBe("acknowledged");
+      continue;
+    }
+    await expect(challenge, {
+      message: `Region 3 action ${actionIndex} expected a Warden Challenge`
+    }).toBeVisible();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 9,
+      questionOrdinal,
+      seed: "BRIDGE-VIEW-9",
+      wardenId: action.wardenId,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+  }
+  await expect(page.locator("#field-note")).toHaveText(
+    "Echo Bridge carried you across the sealed wall."
+  );
+  await expect(page.locator("#moves-value")).toHaveText(
+    String(travelPlan.finalRun.moves).padStart(3, "0")
+  );
+  await maze.scrollIntoViewIfNeeded();
+  await recordRegion3Screenshot(page, testInfo, "opened-bridge");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("capable");
+  expect(copied.searchParams.get("rules")).toBe("echo-bridges-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Capable");
+  await expect(records).toContainText("Trail Twist: Echo Bridges");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed BRIDGE-TRAIL-9"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=BRIDGE-SHELL-10&level=trail-scout&labyrinth=10&region=capable&rules=echo-bridges-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='capable-9']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 4 identity and shared Tide phase through play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const retainedPlan = milestoneWinningPlan("TIDE-TRAIL-13", 13);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 4 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "TIDE-TRAIL-13",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_tide_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 13,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_tide_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 14,
+      completedLabyrinths: 13,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=TIDE-VIEW-13&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Advanced"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Tide Doors"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Currentwatch Guild"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Tideglass shell chorus is optional"
+  );
+  await expect(page.locator("#tide-door-legend")).toBeVisible();
+  const maze = page.getByLabel(/Interactive maze/);
+  await expect(maze).toHaveAttribute("aria-label", /currently open/);
+  await expect(maze).toHaveAttribute("aria-label", /Explorer and Wardens share/);
+  for (const action of await page
+    .locator(".command-bar__actions > :visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `Region 4 command must remain readable: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const advancedRegion = atlas.locator("[data-atlas-region='advanced']");
+  await expect(advancedRegion).toContainText("Tideglass Reach");
+  await expect(advancedRegion).toContainText(
+    "Sea-glass channels and alternating tide marks"
+  );
+  await expect(advancedRegion).toContainText("Turning Tide Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "Atlas", exact: true }))
+    .toBeFocused();
+
+  await recordRegion4Screenshot(page, testInfo, "open-phase");
+  await page.getByRole("button", { name: /Pulse/ }).click();
+  await expect(maze).toHaveAttribute("aria-label", /currently sealed/);
+  await expect(page.locator("#field-note")).toContainText(
+    "Tide Doors are now sealed"
+  );
+  await recordRegion4Screenshot(page, testInfo, "sealed-phase");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("advanced");
+  expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Advanced");
+  await expect(records).toContainText("Trail Twist: Tide Doors");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed TIDE-TRAIL-13"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=TIDE-SHELL-14&level=trail-scout&labyrinth=14&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='advanced-13']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 5 identity and one-use Signal Bell through play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const seed = "BELL-LURE-REPLAY-1";
+  const ringPlan = signalBellRingPlan(seed);
+  const retainedPlan = wardenBellWinningPlan(seed);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : action.type === "ring-bell"
+          ? { type: "ring-bell", elapsedMs: 0 }
+          : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 5 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "BELL-LURE-REPLAY-1",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_bells_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 17,
+      atlasRegionId: "mastery",
+      rulesetRevision: "warden-bells-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_bells_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 18,
+      completedLabyrinths: 17,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=17&region=mastery&rules=warden-bells-v1`
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Mastery"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Warden Bells"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Chimewatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Bellroot dusk chorus is optional"
+  );
+  await expect(page.locator("#signal-bell-legend")).toBeVisible();
+  await expect(page.locator("#windway-legend")).toBeHidden();
+  await expect(page.locator("#echo-bridge-legend")).toBeHidden();
+  await expect(page.locator("#tide-door-legend")).toBeHidden();
+  const maze = page.getByLabel(/Interactive maze/);
+  await expect(maze).toHaveAttribute("aria-label", /2 unspent visible Signal Bells/);
+  await expect(page.getByRole("button", { name: /Ring Bell/ })).toBeHidden();
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const masteryRegion = atlas.locator("[data-atlas-region='mastery']");
+  await expect(masteryRegion).toContainText("Bellroot Summit");
+  await expect(masteryRegion).toContainText(
+    "Beacon bells and resonant stone"
+  );
+  await expect(masteryRegion).toContainText("Last Light Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(
+    page.getByRole("button", { name: "Atlas", exact: true })
+  ).toBeFocused();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+
+  const challenge = page.locator("#challenge-dialog");
+  let expectedMoves = 0;
+  let questionOrdinal = 0;
+  for (const [actionIndex, action] of ringPlan.actions.entries()) {
+    if (action.type === "move") {
+      await page.evaluate((key) => {
+        document.dispatchEvent(new KeyboardEvent("keydown", {
+          key,
+          bubbles: true,
+          cancelable: true
+        }));
+      }, KEY_BY_DIRECTION[action.direction]);
+      expectedMoves += 1;
+      await expect.poll(async () => {
+        const state = await page.evaluate(() => ({
+          challengeVisible: document
+            .querySelector("#challenge-dialog")
+            ?.matches(":modal") ?? false,
+          moves: Number(document.querySelector("#moves-value")?.textContent ?? -1)
+        }));
+        return state.moves === expectedMoves || state.challengeVisible;
+      }, {
+        message:
+          `Region 5 action ${actionIndex} (${action.direction}) was not acknowledged`
+      }).toBe(true);
+      continue;
+    }
+    await expect(challenge).toBeVisible();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 17,
+      questionOrdinal,
+      seed,
+      wardenId: action.wardenId,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+  }
+
+  const ringButton = page.getByRole("button", { name: /Ring Bell/ });
+  await expect(ringButton).toBeVisible();
+  await expect(ringButton).toBeEnabled();
+  for (const action of await page
+    .locator(".arena-actions button:visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `Region 5 action must remain readable: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+  await recordRegion5Screenshot(page, testInfo, "bell-ready");
+
+  await ringButton.focus();
+  await expect(ringButton).toBeFocused();
+  await ringButton.press("Enter");
+  expectedMoves += 1;
+  await expect(page.locator("#moves-value")).toHaveText(
+    String(expectedMoves).padStart(3, "0")
+  );
+  await expect(ringButton).toBeHidden();
+  await expect(maze).toBeFocused();
+  await expect(page.locator("#warden-state")).toHaveText("Lured to Bell");
+  await expect(page.locator("#field-note")).toContainText("Signal Bell rung");
+  await expect(maze).toHaveAttribute("aria-label", /1 unspent visible Signal Bells/);
+  await recordRegion5Screenshot(page, testInfo, "bell-rung");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("mastery");
+  expect(copied.searchParams.get("rules")).toBe("warden-bells-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Mastery");
+  await expect(records).toContainText("Trail Twist: Warden Bells");
+  await records.getByRole("button", {
+    name: `Watch retained Trail for seed ${seed}`
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=BELL-SHELL-18&level=trail-scout&labyrinth=18&region=mastery&rules=warden-bells-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  const retainedLandmark = atlas.locator(
+    "[data-atlas-landmark='mastery-17']"
+  );
+  await retainedLandmark.focus();
+  await retainedLandmark.press("Enter");
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("normalizes an impossible shared ruleset to safe Classic Rules", async ({
+  page
+}) => {
+  await page.goto(
+    "/?seed=RULESET-MISMATCH&level=trail-scout&labyrinth=13&region=foundation&rules=echo-hush-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
+  );
+  await expect(page.locator("#event-ribbon")).toContainText(
+    "adjusted to a safe Labyrinth"
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({
+      version: 3,
+      atlasRegionId: "advanced",
+      rulesetRevision: "classic-v1"
+    });
 });
 
 test("preserves native button keyboard behavior and pause timing", async ({
@@ -1631,12 +3472,19 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
       /** @type {Array<{
        *   seed?: string,
        *   outcome?: string,
-       *   labyrinthNumber?: number
+       *   labyrinthNumber?: number,
+       *   replay?: unknown
        * }>} */ (JSON.parse(
         localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
       ));
     const progress = JSON.parse(
       localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+    );
+    const matching = records.find(
+      (record) =>
+        record.seed === seed &&
+        record.outcome === "escaped" &&
+        record.labyrinthNumber === 1
     );
     return {
       recovery: localStorage.getItem(
@@ -1648,17 +3496,29 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
           record.outcome === "escaped" &&
           record.labyrinthNumber === 1
       ).length,
+      replay: matching?.replay ?? null,
       progress
     };
   }, WINNING_SEED);
   expect(escapedBoundary).toMatchObject({
     recovery: null,
     matchingRecords: 1,
+    replay: {
+      version: 1,
+      terminal: {
+        outcome: "escaped",
+        echoesCollected: 3,
+        echoTotal: 3
+      }
+    },
     progress: {
       labyrinthNumber: 2,
       completedLabyrinths: 1
     }
   });
+  expect(JSON.stringify(escapedBoundary.replay)).not.toMatch(
+    /answerId|choices|question|provider|account|email|runId/i
+  );
 
   await page.reload();
   await expectGameReady(page);
@@ -1704,14 +3564,14 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   await expect(dialog).not.toBeVisible();
   await expect(page.locator("#seed-value")).not.toHaveText(WINNING_SEED);
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 2 of 20 · Foundation"
+    "Labyrinth 2 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
 
   await page.reload();
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 2 of 20 · Foundation"
+    "Labyrinth 2 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(
     page.getByRole("dialog", { name: "Continue from the Campfire?" })
@@ -1750,15 +3610,34 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
     completedLabyrinths: 1
   });
 
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await atlas.locator("[data-atlas-landmark='foundation-1']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  const trail = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(atlas).toBeVisible();
+  await expect(trail).toBeVisible();
+  await trail.getByRole("button", { name: "Close" }).click();
+  await expect(trail).not.toBeVisible();
+  await expect(atlas).toBeVisible();
+  await expect(atlas.locator("[data-atlas-landmark='foundation-1']"))
+    .toBeFocused();
+  expect(new URL(page.url()).searchParams.get("atlas")).toBe("foundation-1");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
   await expect(records).toBeVisible();
   await expect(records).toContainText(WINNING_SEED);
-  await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
+  await page.getByRole("button", { name: `Play seed ${WINNING_SEED}` }).click();
   await expect(records).not.toBeVisible();
   await expect(page.locator("#seed-value")).toHaveText(WINNING_SEED);
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 1 of 20 · Foundation"
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Classic Rules"
   );
 
   for (const direction of WINNING_PATH) {
@@ -1791,7 +3670,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   expect(
     await page.evaluate(() => Reflect.get(window, "__copiedSeed"))
   ).toContain(`/play?seed=${WINNING_SEED}&level=trail-scout&labyrinth=1`);
-  await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
+  await page.getByRole("button", { name: `Play seed ${WINNING_SEED}` }).click();
   await expect(records).not.toBeVisible();
 
   await page.reload();
@@ -1809,6 +3688,24 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   );
   /** @type {Array<string | null>} */
   const requestedChallengeKinds = [];
+  /** @type {string[]} */
+  const ceremonyRequests = [];
+  let atlasChunkRequested = false;
+  let releaseAtlasChunk = () => {};
+  const atlasChunkGate = new Promise((resolve) => {
+    releaseAtlasChunk = () => resolve(undefined);
+  });
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (pathname.includes("/assets/region-ceremony-")) {
+      ceremonyRequests.push(pathname);
+    }
+  });
+  await page.route("**/assets/quest-atlas-*.js", async (route) => {
+    atlasChunkRequested = true;
+    await atlasChunkGate;
+    await route.continue();
+  });
   await page.route("**/api/question?**", async (route) => {
     requestedChallengeKinds.push(
       new URL(route.request().url()).searchParams.get("challenge")
@@ -1819,51 +3716,23 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
       body: JSON.stringify({ error: "forced fallback" })
     });
   });
-  await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
-  await expectGameReady(page);
-  await page.getByLabel(/Interactive maze/).focus();
-
-  let gateChallenges = 0;
-  let questionOrdinal = 0;
-  for (const action of plan.actions) {
-    if (action.type === "move") {
-      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
-      continue;
-    }
-
-    const challenge = page.locator("#challenge-dialog");
-    await expect(challenge).toBeVisible();
-    await expect(page.locator("#challenge-question")).toBeFocused();
-    if (action.kind === "gate-warden") {
-      gateChallenges += 1;
-      await expect(page.locator("#challenge-title")).toHaveText(
-        "The Gate Warden seals the way."
-      );
-      await expect(page.locator("#challenge-promise")).toContainText(
-        "break the seal"
-      );
-      await expect(page.locator("#run-state")).toHaveText("Brain battle");
-    }
-    const bundled = getBundledQuestion({
-      levelId: "trail-scout",
-      labyrinthNumber: 4,
-      questionOrdinal,
-      seed,
-      wardenId: questionOrdinal,
-      challengeKind: action.kind === "gate-warden"
-        ? "gate-warden"
-        : "warden"
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=4` +
+    "&region=foundation&rules=echo-hush-v1"
+  );
+  expect(ceremonyRequests).toEqual([]);
+  const { gateChallenges, questionOrdinal } =
+    await completeMilestonePlan(page, seed, plan, {
+      checkGateStaging: true
     });
-    questionOrdinal += 1;
-    await expect(page.locator("#challenge-source")).toContainText(
-      "trusty question card"
-    );
-    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
-    await expect(challenge).not.toBeVisible();
-    if (action.kind === "gate-warden") {
-      await expect(page.locator("#run-state")).toHaveText("Gate open");
-    }
-  }
+
+  await expect.poll(() => atlasChunkRequested).toBe(true);
+  await expect(page.locator("#run-state")).toHaveText("Escaped");
+  await expect(page.getByRole("button", { name: "New Quest" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Atlas", exact: true })
+  ).toBeDisabled();
+  releaseAtlasChunk();
 
   expect(gateChallenges).toBe(1);
   expect(requestedChallengeKinds.filter(
@@ -1875,13 +3744,31 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   ).toBeVisible();
   await expect(page.locator("#result-atlas")).toContainText("Atlas 4 / 20");
   await expect(page.locator("#result-atlas")).toContainText(
-    "Foundation Sigil restored"
+    "Foundation First Echo Sigil restored"
   );
   await expect(page.locator("#result-atlas")).toContainText(
     "Gate Warden milestone completed"
   );
   await expect(page.locator("#player-score")).toHaveText(
     String(plan.finalRun.score)
+  );
+  await expect(page.locator("#result-kicker")).toHaveText(
+    "Mosslight Grove Sigil ceremony"
+  );
+  await expect.poll(() => ceremonyRequests.length).toBe(1);
+  await expect(page.locator("#result-title")).toHaveText(
+    "The First Echo Sigil returns."
+  );
+  await expect(page.locator("#result-summary")).toContainText(
+    "No currency, inventory, or gameplay reward"
+  );
+  await expect(page.locator("#replay-run")).toHaveText(
+    "Skip ceremony · Continue Quest"
+  );
+  await page.locator("#replay-run").click();
+  await expect(page.locator("#result-kicker")).toHaveText("Demo complete");
+  await expect(page.locator("#replay-run")).toHaveText(
+    "Create account for three Runs"
   );
   await expect.poll(() =>
     page.evaluate(() => {
@@ -1917,6 +3804,116 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     questLevelId: "trail-scout",
     outcome: "escaped"
   });
+});
+
+test("keeps a saved terminal result usable when Atlas presentation fails", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One terminal presentation fallback is sufficient."
+  );
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.route("**/assets/quest-atlas-*.js", (route) => route.abort());
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) {
+      throw new Error("Reviewed fixture needs a wrong answer.");
+    }
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+    if (attempt < 2) {
+      await expect.poll(() => getCurrentQuestion().id).not.toBe(question.id);
+    }
+  }
+
+  await expect(page.locator("#run-state")).toHaveText("Light lost");
+  await expect(page.locator("#result-atlas")).toHaveText(
+    "Atlas summary unavailable. Quest progress is saved."
+  );
+  await expect(page.locator("#result-seed")).toHaveText(DEFEAT_SEED);
+  await expect.poll(() =>
+    page.evaluate((seed) => {
+      const stored = localStorage.getItem("echo-maze:run-records:v1");
+      const records = /** @type {{ seed: string, outcome: string }[]} */ (
+        stored ? JSON.parse(stored) : []
+      );
+      return records.find((record) => record.seed === seed) ?? null;
+    }, DEFEAT_SEED)
+  ).toMatchObject({
+    seed: DEFEAT_SEED,
+    outcome: "defeated"
+  });
+});
+
+test("uses a compact result after the Region Sigil ceremony was seen", async ({
+  page
+}) => {
+  const seed = "MILESTONE-4-REPEAT";
+  const questId = "quest_region_repeat";
+  const plan = milestoneWinningPlan(seed);
+  await installSignedInQuestPlayer(page);
+  await page.goto("/");
+  await page.evaluate(({ activeQuestId }) => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        questId: activeQuestId,
+        levelId: "trail-scout",
+        labyrinthNumber: 4,
+        completedLabyrinths: 3,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: false
+      })
+    );
+    localStorage.setItem(
+      "echo-maze:region-ceremonies:v1",
+      JSON.stringify({
+        version: 1,
+        questId: activeQuestId,
+        seenRegionIds: ["foundation"]
+      })
+    );
+  }, { activeQuestId: questId });
+  await page.route("**/api/question?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 503,
+      body: JSON.stringify({ error: "forced fallback" })
+    });
+  });
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=4` +
+    "&region=foundation&rules=echo-hush-v1"
+  );
+
+  await completeMilestonePlan(page, seed, plan);
+
+  await expect(page.locator("#result-kicker")).toHaveText(
+    "Mosslight Grove milestone"
+  );
+  await expect(page.locator("#result-title")).toHaveText(
+    "The First Echo Sigil remains restored."
+  );
+  await expect(page.locator("#result-summary")).toContainText(
+    "Compact result"
+  );
+  await expect(page.locator("#replay-run")).toHaveText("Continue Quest");
 });
 
 test("reflows across required widths and keeps the game in the laptop fold", async ({
@@ -2642,6 +4639,35 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
   page
 }) => {
   await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "SIGNED-TRAIL",
+      outcome: "defeated",
+      echoesCollected: 0,
+      echoTotal: 3,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 1,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1",
+      replayOwnerId: "user_recovery_privacy",
+      replay: {
+        version: 1,
+        actions: [{ type: "move", direction: "right", elapsedMs: 100 }],
+        terminal: {
+          outcome: "defeated",
+          moves: 1,
+          elapsedMs: 100,
+          echoesCollected: 0,
+          echoTotal: 3,
+          wardensDefeated: 0,
+          score: 0,
+          vitality: 0
+        }
+      }
+    }]));
+  });
   const question = reviewedQuestionForRequest(0);
   await page.route("**/api/question?**", (route) =>
     route.fulfill({
@@ -2654,6 +4680,15 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
   );
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return records[0]?.replayOwnerId ?? null;
+    })
+  ).toBe("user_recovery_privacy");
   await page.getByLabel(/Interactive maze/).focus();
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -2693,8 +4728,115 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
       )
     )
     .toBeNull();
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return {
+        seed: records[0]?.seed,
+        replay: records[0]?.replay ?? null
+      };
+    })
+  ).toEqual({ seed: "SIGNED-TRAIL", replay: null });
   await expect(page.locator("#challenge-dialog")).toBeVisible();
   await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+});
+
+test("keeps a previous owner's Trail hidden when identity scrub writes fail", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "The storage-denial identity boundary is viewport-independent."
+  );
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "ALICE-PRIVATE-TRAIL",
+      outcome: "defeated",
+      echoesCollected: 0,
+      echoTotal: 3,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 1,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1",
+      replayOwnerId: "user_alice",
+      replay: {
+        version: 1,
+        actions: [{ type: "move", direction: "right", elapsedMs: 100 }],
+        terminal: {
+          outcome: "defeated",
+          moves: 1,
+          elapsedMs: 100,
+          echoesCollected: 0,
+          echoTotal: 3,
+          wardensDefeated: 0,
+          score: 0,
+          vitality: 0
+        }
+      }
+    }]));
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function denyRunRecordWrites(key, value) {
+      if (key === "echo-maze:run-records:v1") {
+        throw new DOMException("Run Record storage is denied.", "SecurityError");
+      }
+      return setItem.call(this, key, value);
+    };
+  });
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+  await expect(page.locator("#live-region")).toContainText(
+    "could not erase account-context Run Replay details"
+  );
+
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongChoice = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongChoice) {
+      throw new Error("Expected a reviewed wrong answer.");
+    }
+    await page.locator(`[data-answer="${wrongChoice.id}"]`).click();
+    if (attempt < 2) {
+      await expect.poll(() => getCurrentQuestion().id).not.toBe(question.id);
+    }
+  }
+  await expect(page.locator("#run-state")).toHaveText("Light lost");
+  const demoGate = page.getByRole("dialog", {
+    name: "Create an account for three free Runs."
+  });
+  await expect(demoGate).toBeVisible();
+  await demoGate.getByRole("button", {
+    name: "Create account for three Runs"
+  }).click();
+  await expect(demoGate).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records.getByRole("button", {
+    name: "Play seed ALICE-PRIVATE-TRAIL"
+  })).toBeVisible();
+  await expect(records.getByRole("button", {
+    name: "Watch retained Trail for seed ALICE-PRIVATE-TRAIL"
+  })).toHaveCount(0);
 });
 
 test("keeps Challenge history erased after terminal defeat and reload", async ({
@@ -2736,6 +4878,17 @@ test("keeps Challenge history erased after terminal defeat and reload", async ({
     .toBeNull();
   const recordsBeforeReload = await page.evaluate(() =>
     localStorage.getItem("echo-maze:run-records:v1")
+  );
+  const defeatedReplay = JSON.parse(recordsBeforeReload ?? "[]")[0]?.replay;
+  expect(defeatedReplay).toMatchObject({
+    version: 1,
+    terminal: {
+      outcome: "defeated",
+      vitality: 0
+    }
+  });
+  expect(JSON.stringify(defeatedReplay)).not.toMatch(
+    /answerId|choices|question|provider|account|email|runId/i
   );
 
   await page.reload();
@@ -2797,10 +4950,60 @@ test("upgrades a locator-only device without changing its Labyrinth", async ({
     JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
   );
   expect(locator).toMatchObject({
-    version: 2,
+    version: 3,
     pending: false,
     seed: "LEGACY-CAMPFIRE",
     levelId: "trail-scout",
-    labyrinthNumber: 1
+    labyrinthNumber: 1,
+    atlasRegionId: "foundation",
+    rulesetRevision: "classic-v1"
+  });
+});
+
+test("upgrades a version 2 locator to Classic Rules", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 1,
+        completedLabyrinths: 0,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: false
+      })
+    );
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 2,
+        runId: "legacy_locator_v2",
+        pending: false,
+        seed: "LEGACY-CAMPFIRE",
+        levelId: "trail-scout",
+        labyrinthNumber: 1
+      })
+    );
+    localStorage.removeItem("echo-maze:active-run-recovery:v1");
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#seed-value")).toHaveText("LEGACY-CAMPFIRE");
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Classic Rules"
+  );
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+    )
+  ).toMatchObject({
+    version: 3,
+    runId: "legacy_locator_v2",
+    pending: false,
+    atlasRegionId: "foundation",
+    rulesetRevision: "classic-v1"
   });
 });

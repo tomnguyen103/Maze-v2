@@ -1,3 +1,6 @@
+import { normalizeRunRuleset } from "./run-ruleset.js";
+import { normalizeRunReplay } from "./run-replay-contract.js";
+
 const BEST_RUN_KEY = "echo-maze:best-run:v1";
 const RUN_RECORDS_KEY = "echo-maze:run-records:v1";
 const RUN_RECORD_LIMIT = 5;
@@ -10,14 +13,24 @@ const RUN_RECORD_LIMIT = 5;
  *   echoesCollected: number,
  *   echoTotal?: number,
  *   labyrinthNumber?: number,
- *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
+ *   questId?: string,
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master",
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string,
+ *   replayOwnerId?: string,
+ *   replay?: import("./run-replay-contract.js").RunReplay
  * }} RunRecord
  * @typedef {BestRun & {
  *   outcome?: RunOutcome,
  *   echoesCollected?: number,
  *   echoTotal?: number,
  *   labyrinthNumber?: number,
- *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
+ *   questId?: string,
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master",
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string,
+ *   replayOwnerId?: unknown,
+ *   replay?: unknown
  * }} RunRecordCandidate
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -39,7 +52,11 @@ export function loadBestRun(storage = globalThis.localStorage) {
     if (!isBestRun(parsed)) {
       return null;
     }
-    return parsed;
+    return {
+      elapsedMs: parsed.elapsedMs,
+      moves: parsed.moves,
+      seed: parsed.seed
+    };
   } catch {
     return null;
   }
@@ -52,12 +69,18 @@ export function loadBestRun(storage = globalThis.localStorage) {
  */
 export function saveBestRun(candidate, storage = globalThis.localStorage) {
   const current = loadBestRun(storage);
+  const normalizedCandidate = {
+    elapsedMs: candidate.elapsedMs,
+    moves: candidate.moves,
+    seed: candidate.seed
+  };
   const best =
     current &&
-    (current.elapsedMs < candidate.elapsedMs ||
-      (current.elapsedMs === candidate.elapsedMs && current.moves <= candidate.moves))
+    (current.elapsedMs < normalizedCandidate.elapsedMs ||
+      (current.elapsedMs === normalizedCandidate.elapsedMs &&
+        current.moves <= normalizedCandidate.moves))
       ? current
-      : candidate;
+      : normalizedCandidate;
 
   try {
     storage?.setItem(BEST_RUN_KEY, JSON.stringify(best));
@@ -69,9 +92,57 @@ export function saveBestRun(candidate, storage = globalThis.localStorage) {
 
 /**
  * @param {StorageLike | undefined} [storage]
+ * @param {string | null} [replayOwnerId]
  * @returns {RunRecord[]}
  */
-export function loadRunRecords(storage = globalThis.localStorage) {
+export function loadRunRecords(
+  storage = globalThis.localStorage,
+  replayOwnerId = null
+) {
+  return projectRunRecords(loadStoredRunRecords(storage), replayOwnerId);
+}
+
+/**
+ * @param {RunRecord[]} records
+ * @param {string | null} replayOwnerId
+ */
+function projectRunRecords(records, replayOwnerId) {
+  return records.map((record) => {
+    if (
+      !record.replay ||
+      !record.replayOwnerId ||
+      record.replayOwnerId === replayOwnerId
+    ) {
+      return record;
+    }
+    const retained = { ...record };
+    delete retained.replay;
+    delete retained.replayOwnerId;
+    return retained;
+  });
+}
+
+/**
+ * @param {string | null} replayOwnerId
+ * @param {StorageLike | undefined} [storage]
+ */
+export function hasRunReplayOwnerMismatch(
+  replayOwnerId,
+  storage = globalThis.localStorage
+) {
+  return loadStoredRunRecords(storage).some(
+    (record) =>
+      Boolean(record.replay) &&
+      Boolean(record.replayOwnerId) &&
+      record.replayOwnerId !== replayOwnerId
+  );
+}
+
+/**
+ * @param {StorageLike | undefined} storage
+ * @returns {RunRecord[]}
+ */
+function loadStoredRunRecords(storage) {
   if (!storage) {
     return [];
   }
@@ -100,26 +171,54 @@ export function loadRunRecords(storage = globalThis.localStorage) {
 /**
  * @param {RunRecordCandidate} candidate
  * @param {StorageLike | undefined} [storage]
+ * @param {string | null} [replayOwnerId]
  * @returns {RunRecord[]}
  */
-export function saveRunRecord(candidate, storage = globalThis.localStorage) {
+export function saveRunRecord(
+  candidate,
+  storage = globalThis.localStorage,
+  replayOwnerId = null
+) {
   const normalized = normalizeRunRecord(candidate);
   const records = rankRunRecords([
-    ...loadRunRecords(storage),
+    ...loadStoredRunRecords(storage),
     ...(normalized ? [normalized] : [])
   ]);
 
   try {
     storage?.setItem(RUN_RECORDS_KEY, JSON.stringify(records));
   } catch {
-    return records;
+    return projectRunRecords(records, replayOwnerId);
   }
 
   const bestEscape = records.find((record) => record.outcome === "escaped");
   if (bestEscape) {
     saveBestRun(bestEscape, storage);
   }
-  return records;
+  return projectRunRecords(records, replayOwnerId);
+}
+
+/**
+ * Removes detailed local Replay data while preserving the retained Record list.
+ * @param {StorageLike | undefined} [storage]
+ */
+export function scrubRunReplays(storage = globalThis.localStorage) {
+  const records = loadStoredRunRecords(storage).map((record) => {
+    const retained = { ...record };
+    delete retained.replay;
+    delete retained.replayOwnerId;
+    return retained;
+  });
+  try {
+    storage?.setItem(RUN_RECORDS_KEY, JSON.stringify(records));
+    const bestRun = loadBestRun(storage);
+    if (bestRun) {
+      storage?.setItem(BEST_RUN_KEY, JSON.stringify(bestRun));
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -185,12 +284,41 @@ function normalizeRunRecord(value) {
     candidate.questLevelId === "maze-master"
       ? candidate.questLevelId
       : undefined;
+  const questId =
+    typeof candidate.questId === "string" &&
+    /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/i.test(candidate.questId)
+      ? candidate.questId
+      : undefined;
   const labyrinthNumber =
     Number.isInteger(candidate.labyrinthNumber) &&
     Number(candidate.labyrinthNumber) >= 1 &&
     Number(candidate.labyrinthNumber) <= 20
       ? Number(candidate.labyrinthNumber)
       : undefined;
+  const hasRuleset =
+    candidate.atlasRegionId !== undefined ||
+    candidate.rulesetRevision !== undefined;
+  const ruleset = normalizeRunRuleset(
+    hasRuleset
+      ? {
+          atlasRegionId: candidate.atlasRegionId,
+          revision: candidate.rulesetRevision
+        }
+      : undefined,
+    labyrinthNumber ?? 1
+  );
+  if (!ruleset) {
+    return null;
+  }
+  const replayOwnerId =
+    typeof candidate.replayOwnerId === "string" &&
+    /^[a-z0-9_-]{1,128}$/i.test(candidate.replayOwnerId)
+      ? candidate.replayOwnerId
+      : undefined;
+  const replay =
+    candidate.replayOwnerId !== undefined && !replayOwnerId
+      ? null
+      : normalizeRunReplay(candidate.replay);
   return {
     elapsedMs: value.elapsedMs,
     moves: value.moves,
@@ -199,7 +327,20 @@ function normalizeRunRecord(value) {
     echoesCollected,
     ...(candidate.echoTotal === undefined ? {} : { echoTotal }),
     ...(labyrinthNumber ? { labyrinthNumber } : {}),
-    ...(questLevelId ? { questLevelId } : {})
+    ...(questId ? { questId } : {}),
+    ...(questLevelId ? { questLevelId } : {}),
+    ...(hasRuleset
+      ? {
+          atlasRegionId: ruleset.atlasRegionId,
+          rulesetRevision: ruleset.revision
+        }
+      : {}),
+    ...(replay
+      ? {
+          replay,
+          ...(replayOwnerId ? { replayOwnerId } : {})
+        }
+      : {})
   };
 }
 
@@ -212,8 +353,20 @@ function rankRunRecords(records) {
   const bestByQuest = new Map();
 
   for (const record of records) {
+    const ruleset = normalizeRunRuleset(
+      record.atlasRegionId !== undefined ||
+        record.rulesetRevision !== undefined
+        ? {
+            atlasRegionId: record.atlasRegionId,
+            revision: record.rulesetRevision
+          }
+        : undefined,
+      record.labyrinthNumber ?? 1
+    );
     const questKey =
-      `${record.questLevelId ?? "trail-scout"}:${record.labyrinthNumber ?? 1}:${record.seed}`;
+      `${record.questId ?? "legacy"}:` +
+      `${record.questLevelId ?? "trail-scout"}:${record.labyrinthNumber ?? 1}:` +
+      `${ruleset?.revision ?? "invalid"}:${record.seed}`;
     const current = bestByQuest.get(questKey);
     if (!current || compareRuns(record, current) < 0) {
       bestByQuest.set(questKey, record);

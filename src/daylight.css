@@ -390,6 +390,7 @@ a:active {
   font-family: var(--font-utility);
   font-size: 0.74rem;
   font-weight: 650;
+  line-height: 1.25;
 }
 
 .quest-sync-status {
@@ -503,6 +504,12 @@ a:active {
 
 .warden-readout[data-mode="hunt"] strong::before {
   content: "!! ";
+  font-family: var(--font-utility);
+  font-size: 0.78em;
+}
+
+.warden-readout[data-mode="lured"] strong::before {
+  content: "))) " / "";
   font-family: var(--font-utility);
   font-size: 0.78em;
 }
@@ -623,6 +630,12 @@ a:active {
   justify-content: flex-end;
 }
 
+.trail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .touch-controls {
   display: none;
 }
@@ -637,6 +650,14 @@ a:active {
   background: var(--color-echo-soft);
   text-align: left;
   white-space: normal;
+}
+
+.bell-button {
+  background: var(--color-signal-bright);
+}
+
+.bell-button[hidden] {
+  display: none;
 }
 
 .pulse-button > span:first-child {
@@ -702,6 +723,10 @@ kbd {
   gap: var(--space-2);
   color: var(--color-ink-muted);
   font-size: 0.78rem;
+}
+
+.legend li[hidden] {
+  display: none;
 }
 
 .legend-mark {
@@ -1105,16 +1130,40 @@ body[data-run-mode="first-light"] .play-workbench {
   min-height: calc(100dvh - 4rem);
 }
 
-.atlas-dialog {
-  position: fixed;
-  inset: 0;
-  width: min(54rem, calc(100% - 2rem));
-  height: fit-content;
-  margin: auto;
-}
-
 .journal-dialog {
   width: min(46rem, calc(100% - 2rem));
+}
+
+.legend-mark--windway::before {
+  content: "→" / "";
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--color-ink);
+  font-family: var(--font-utility);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.legend-mark--echo-bridge::before {
+  content: "";
+  display: block;
+  width: 100%;
+  border-block-start: 0.18rem dashed var(--color-gate);
+}
+
+.legend-mark--tide-door::before {
+  content: "≈" / "";
+  color: var(--color-signal);
+  font: 800 1rem/1 var(--font-body);
+}
+
+.legend-mark--signal-bell::before {
+  content: ")))" / "";
+  color: var(--color-signal-deep);
+  font: 800 0.72rem/1 var(--font-utility);
 }
 
 .journal-status {
@@ -1277,25 +1326,6 @@ body[data-run-mode="first-light"] .play-workbench {
 .practice-feedback[data-state="wrong"] {
   border-left-color: var(--color-warden);
   background: var(--color-warden-soft);
-}
-
-.atlas-dialog .dialog-heading {
-  flex-wrap: wrap;
-}
-
-.atlas-dialog .dialog-heading > div {
-  min-width: 0;
-}
-
-.atlas-dialog .control-button {
-  padding-inline: var(--space-2);
-  font-size: 0.7rem;
-}
-
-.atlas-legend {
-  margin: var(--space-2) 0 var(--space-5);
-  color: var(--color-ink-muted);
-  font-size: 0.78rem;
 }
 
 .access-settings-form {
@@ -1492,124 +1522,6 @@ body[data-run-mode="first-light"] .play-workbench {
   to {
     opacity: 0.48;
   }
-}
-
-.atlas-regions {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.atlas-region {
-  display: grid;
-  min-width: 0;
-  padding: var(--space-3);
-  gap: var(--space-3);
-  border: 2px solid var(--color-line);
-  background: var(--color-panel);
-}
-
-.atlas-region__heading {
-  min-width: 0;
-}
-
-.atlas-region__heading h3 {
-  min-width: 0;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.atlas-region__heading span,
-.atlas-sigil {
-  color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-size: 0.68rem;
-}
-
-.atlas-sigil {
-  margin: 0;
-  align-self: center;
-  font-weight: 700;
-}
-
-.atlas-sigil[data-restored="true"] {
-  color: var(--color-signal-deep);
-}
-
-.atlas-nodes {
-  display: grid;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-  list-style: none;
-}
-
-.atlas-nodes li {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 4.5rem;
-  padding: var(--space-2);
-  align-content: space-between;
-  gap: var(--space-1);
-  border: 2px solid var(--color-line-soft);
-  background: var(--color-stone);
-}
-
-.atlas-nodes strong {
-  font-family: var(--font-utility);
-  font-size: 1rem;
-}
-
-.atlas-nodes span {
-  color: var(--color-ink-muted);
-  font-size: 0.62rem;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.atlas-nodes .atlas-node__milestone {
-  position: absolute;
-  top: var(--space-1);
-  right: var(--space-1);
-  color: var(--color-warden);
-  font-size: 0.72rem;
-  line-height: 1;
-}
-
-.atlas-nodes li[data-state="completed"],
-.atlas-nodes li[data-state="completed-milestone"] {
-  border-color: var(--color-gate);
-  background: var(--color-echo-soft);
-}
-
-.atlas-nodes li[data-state="current"] {
-  box-shadow: inset 0 0 0 0.2rem var(--color-signal);
-}
-
-.atlas-nodes li[data-state="milestone"],
-.atlas-nodes li[data-state="completed-milestone"] {
-  border-style: double;
-  border-width: 0.3rem;
-}
-
-.atlas-nodes li[data-state="milestone"] strong,
-.atlas-nodes li[data-state="completed-milestone"] strong {
-  color: var(--color-warden);
-}
-
-.atlas-nodes li[data-state="completed-milestone"] strong,
-.atlas-nodes li[aria-current="step"] strong {
-  color: var(--color-ink);
-}
-
-.atlas-nodes li[aria-current="step"] {
-  background: var(--color-signal-bright);
-  box-shadow: inset 0 0 0 0.18rem var(--color-line);
 }
 
 .result-atlas {
@@ -1840,6 +1752,29 @@ body[data-run-mode="first-light"] .play-workbench {
   margin: 0;
   color: var(--color-ink-muted);
   font-size: 1rem;
+}
+
+.scoreboard-partition {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-weight: 700;
+}
+
+.scoreboard-partition select {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-stone-raised);
+  font: inherit;
+}
+
+.scoreboard-partition__label {
+  margin: 0;
+  color: var(--color-ink-muted);
 }
 
 .player-form__status[data-state="error"] {
@@ -2488,6 +2423,9 @@ body[data-run-mode="first-light"] .play-workbench {
     grid-row: 3;
     grid-column: 1;
     min-width: 0;
+    margin-top: var(--space-1);
+    font-size: 0.68rem;
+    line-height: 1.1;
   }
 
   .run-metrics {
@@ -2580,6 +2518,11 @@ body[data-run-mode="first-light"] .play-workbench {
     width: 100%;
   }
 
+  .trail-actions {
+    min-width: 0;
+    flex-direction: column;
+  }
+
   .intel-deck {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2628,12 +2571,20 @@ body[data-run-mode="first-light"] .play-workbench {
   .command-bar button {
     min-width: 0;
     padding-block: var(--space-1);
-    padding-inline: var(--space-1);
+    padding-inline: 0;
     flex: 1 1 0;
     font-size: var(--text-compact);
     line-height: 1.05;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  #sound-toggle {
+    flex-grow: 1.15;
+  }
+
+  #new-run {
+    flex-grow: 1.3;
   }
 
   .play-grid {
@@ -2712,7 +2663,9 @@ body[data-run-mode="first-light"] .play-workbench {
   .daily-dialog__actions,
   .first-light-dialog__actions,
   .lifetime-dialog__actions,
-  .quest-conflict-dialog__actions {
+  .quest-conflict-dialog__actions,
+  .result-dialog__actions {
+    align-items: stretch;
     flex-direction: column;
   }
 
@@ -2781,29 +2734,11 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 }
 
-@media (min-width: 40rem) {
-  .atlas-region {
-    grid-template-columns: minmax(8rem, 0.7fr) auto minmax(20rem, 1.5fr);
-    align-items: center;
-  }
-
-  .atlas-nodes {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 22rem) {
   #sound-toggle {
     display: none;
   }
 
-  .atlas-dialog {
-    padding: var(--space-2);
-  }
-
-  .atlas-nodes {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -125,7 +125,7 @@
           <div class="warden-readout" id="warden-readout" data-mode="patrol">
             <span class="section-label">Warden mode</span>
             <strong id="warden-state">Patrol</strong>
-            <p>Answer correctly to defeat it.</p>
+            <p id="warden-guild">Universal Warden marks</p>
           </div>
         </aside>
 
@@ -167,14 +167,23 @@
               </button>
             </div>
 
-            <button class="pulse-button" id="pulse-action" type="button">
-              <span>
-                <strong>Pulse</strong>
-                <small>Reveal nearby tiles</small>
-              </span>
-              <kbd>Q</kbd>
-              <span class="pulse-button__count" id="pulse-count">2</span>
-            </button>
+            <div class="trail-actions">
+              <button class="pulse-button bell-button" id="bell-action" type="button" hidden>
+                <span>
+                  <strong>Ring Bell</strong>
+                  <small>Lure revealed Wardens</small>
+                </span>
+                <kbd>B</kbd>
+              </button>
+              <button class="pulse-button" id="pulse-action" type="button">
+                <span>
+                  <strong>Pulse</strong>
+                  <small>Reveal nearby tiles</small>
+                </span>
+                <kbd>Q</kbd>
+                <span class="pulse-button__count" id="pulse-count">2</span>
+              </button>
+            </div>
           </div>
 
           <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
@@ -205,6 +214,10 @@
               <li><span class="legend-mark legend-mark--gate-sealed"></span>Open, sealed Gate</li>
               <li><span class="legend-mark legend-mark--gate-open"></span>Open Gate</li>
               <li><span class="legend-mark legend-mark--warden"></span>Warden</li>
+              <li id="echo-bridge-legend" hidden><span class="legend-mark legend-mark--echo-bridge"></span>Echo Bridge: dashed sealed, solid open</li>
+              <li id="tide-door-legend" hidden><span class="legend-mark legend-mark--tide-door"></span>Tide Doors: OPEN or SEALED together</li>
+              <li id="signal-bell-legend" hidden><span class="legend-mark legend-mark--signal-bell"></span>Signal Bell: RING once while adjacent</li>
+              <li id="windway-legend" hidden><span class="legend-mark legend-mark--windway"></span>Windway source → destination</li>
             </ul>
           </div>
 
@@ -237,9 +250,10 @@
       </div>
       <p class="dialog-intro" id="atlas-progress"></p>
       <p class="atlas-legend" id="atlas-legend">
-        Each numbered mark includes its state in text. Diamond marks are Gate Warden milestones.
+        Select any landmark for its field note. Diamond marks are Gate Warden
+        milestones. Shift plus arrow keys pans the map.
       </p>
-      <div class="atlas-regions" id="atlas-regions"></div>
+      <div class="atlas-mount" id="atlas-regions"></div>
     </dialog>
 
     <dialog
@@ -515,6 +529,14 @@
       <span class="section-label" id="challenge-kicker">Warden challenge</span>
       <h2 id="challenge-title">A Warden blocks the path.</h2>
       <p class="challenge-dialog__promise" id="challenge-promise">Answer correctly and the Warden is defeated.</p>
+      <button
+        class="control-button"
+        id="gate-staging-skip"
+        type="button"
+        hidden
+      >
+        Skip entrance
+      </button>
       <div class="challenge-feedback" id="challenge-feedback" role="status">
         Think carefully. Your timer is paused.
       </div>
@@ -703,6 +725,11 @@
         Best escaped runs from the compatibility score path. These scores are
         casual, not server-replayed. Warden 100 · Echo 50 · Escape 500.
       </p>
+      <label class="scoreboard-partition" for="scoreboard-partition">
+        Scoreboard rules
+        <select id="scoreboard-partition"></select>
+      </label>
+      <p id="scoreboard-partition-label" class="scoreboard-partition__label"></p>
       <p class="scoreboard-status" id="scoreboard-status" role="status" aria-live="polite">
         Loading scores…
       </p>

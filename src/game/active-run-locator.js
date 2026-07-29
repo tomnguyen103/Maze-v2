@@ -1,15 +1,18 @@
 import { QUEST_LABYRINTH_COUNT } from "../questions/quest-levels.js";
+import { normalizeRunRuleset } from "./run-ruleset.js";
 
 const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
 
 /**
  * @typedef {{
- *   version: 1 | 2,
+ *   version: 1 | 2 | 3,
  *   runId?: string,
  *   pending?: boolean,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} ActiveRunLocator
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -41,7 +44,7 @@ export function loadActiveRunLocator(storage = globalThis.localStorage) {
 }
 
 /**
- * @param {{ version: number, runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number }} locator
+ * @param {{ version: number, runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string }} locator
  * @param {StorageLike | undefined} [storage]
  * @returns {ActiveRunLocator}
  */
@@ -76,31 +79,54 @@ function normalizeLocator(value) {
     return null;
   }
   const candidate = /** @type {Partial<ActiveRunLocator>} */ (value);
+  const version = Number(candidate.version);
+  const labyrinthNumber = Number(candidate.labyrinthNumber);
   if (
-    (candidate.version !== 1 && candidate.version !== 2) ||
-    (candidate.version === 2 &&
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  ) {
+    return null;
+  }
+  const ruleset =
+    version === 3
+      ? normalizeRunRuleset(
+          {
+            atlasRegionId: candidate.atlasRegionId,
+            revision: candidate.rulesetRevision
+          },
+          labyrinthNumber
+        )
+      : null;
+  if (
+    ![1, 2, 3].includes(version) ||
+    ((version === 2 || version === 3) &&
       (typeof candidate.runId !== "string" ||
         !/^[a-zA-Z0-9_-]{12,128}$/.test(candidate.runId) ||
         typeof candidate.pending !== "boolean")) ||
+    (version === 3 && !ruleset) ||
     typeof candidate.seed !== "string" ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(candidate.seed) ||
     candidate.seed.length > 24 ||
     (candidate.levelId !== "bright-start" &&
       candidate.levelId !== "trail-scout" &&
-      candidate.levelId !== "maze-master") ||
-    !Number.isInteger(candidate.labyrinthNumber) ||
-    Number(candidate.labyrinthNumber) < 1 ||
-    Number(candidate.labyrinthNumber) > QUEST_LABYRINTH_COUNT
+      candidate.levelId !== "maze-master")
   ) {
     return null;
   }
   return {
-    version: candidate.version,
-    ...(candidate.version === 2
+    version: /** @type {1 | 2 | 3} */ (version),
+    ...(version === 2 || version === 3
       ? { runId: candidate.runId, pending: candidate.pending }
       : {}),
     seed: candidate.seed,
     levelId: candidate.levelId,
-    labyrinthNumber: Number(candidate.labyrinthNumber)
+    labyrinthNumber,
+    ...(version === 3 && ruleset
+      ? {
+          atlasRegionId: ruleset.atlasRegionId,
+          rulesetRevision: ruleset.revision
+        }
+      : {})
   };
 }

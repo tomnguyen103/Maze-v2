@@ -67,12 +67,14 @@ const SECTION_QUERIES = {
       created_at, updated_at
     FROM players WHERE clerk_user_id = $1`,
   personal_scores: `SELECT classroom_id, level_id, labyrinth_number, seed,
+      atlas_region_id, ruleset_revision,
       wardens_defeated, echoes_collected, moves, elapsed_ms, score, escaped,
       created_at
     FROM score_entries
     WHERE player_id = $1 AND classroom_id IS NULL
     ORDER BY created_at, id`,
   class_scores: `SELECT classroom_id, level_id, labyrinth_number, seed,
+      atlas_region_id, ruleset_revision,
       wardens_defeated,
       echoes_collected, moves, elapsed_ms, score, escaped, created_at
     FROM score_entries

@@ -485,6 +485,31 @@ describe("Classroom authority synchronization migration", () => {
   });
 });
 
+describe("Regional shared-score partition migration", () => {
+  it("backfills legacy rows into Classic Rules without touching Verified Daily", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0019_score_entry_ruleset_partitions.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("ADD COLUMN atlas_region_id");
+    expect(sql).toContain("ADD COLUMN ruleset_revision");
+    expect(sql).toContain("ruleset_revision = 'classic-v1'");
+    expect(sql).toContain("labyrinth_number BETWEEN 1 AND 4");
+    expect(sql).toContain("Invalid legacy score_entries.labyrinth_number");
+    expect(sql).toContain("WHEN labyrinth_number BETWEEN 17 AND 20");
+    expect(sql).toContain("score_entries_partition_ranking_idx");
+    expect(sql).toContain("CHECK (");
+    expect(sql).toContain("echo-hush-v1");
+    expect(sql).toContain("warden-bells-v1");
+    expect(sql).not.toContain("verified_daily");
+    expect(sql).not.toMatch(/\bDELETE\b/);
+  });
+});
+
 describe("Classroom Teacher read boundary migration", () => {
   it("projects journals into count-only rows behind one bounded definer read", async () => {
     const sql = await readFile(

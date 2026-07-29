@@ -22,13 +22,55 @@ describe("Echo Atlas projection", () => {
     expect(atlas.nextMilestoneNumber).toBe(4);
     expect(atlas.labyrinthsToNextMilestone).toBe(3);
     expect(atlas.regions[0].sigilLabel).toBe(
-      "Sigil restores at Labyrinth 4"
+      "First Echo Sigil restores at Labyrinth 4"
     );
+    expect(atlas.regions[1]).toMatchObject({
+      id: "developing",
+      themeName: "Windcall Ridge",
+      wardenGuild: "Kitewatch Guild",
+      motif: "Rising wind and bright trail ribbons",
+      sigilLabel: "Rising Wind Sigil restores at Labyrinth 8"
+    });
+    expect(atlas.regions[1].nodes[0].fieldNote).toContain(
+      "Windway source"
+    );
+    expect(atlas.regions[2]).toMatchObject({
+      id: "capable",
+      themeName: "Sunspan Crossing",
+      wardenGuild: "Spanwatch Guild",
+      motif: "Joined arches and clear blue spans",
+      sigilLabel: "Joined Path Sigil restores at Labyrinth 12"
+    });
+    expect(atlas.regions[2].nodes[0].fieldNote).toContain(
+      "sealed Echo Bridge"
+    );
+    expect(atlas.regions[3]).toMatchObject({
+      id: "advanced",
+      themeName: "Tideglass Reach",
+      wardenGuild: "Currentwatch Guild",
+      motif: "Sea-glass channels and alternating tide marks",
+      sigilLabel: "Turning Tide Sigil restores at Labyrinth 16"
+    });
+    expect(atlas.regions[3].nodes[0].fieldNote).toContain(
+      "Visible Tide Doors"
+    );
+    expect(atlas.regions[4]).toMatchObject({
+      id: "mastery",
+      themeName: "Bellroot Summit",
+      wardenGuild: "Chimewatch Guild",
+      motif: "Beacon bells and resonant stone",
+      sigilLabel: "Last Light Sigil restores at Labyrinth 20"
+    });
+    expect(atlas.regions[4].nodes[0].fieldNote).toContain("Signal Bells");
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
+        id: "foundation-1",
         labyrinthNumber: 1,
         state: "current",
-        stateLabel: "Current Labyrinth"
+        stateLabel: "Current Labyrinth",
+        difficultyBand: "Foundation",
+        fieldNote: expect.any(String),
+        learningFocus: expect.stringContaining("multiplication")
       }),
       expect.objectContaining({
         labyrinthNumber: 2,
@@ -47,6 +89,35 @@ describe("Echo Atlas projection", () => {
         stateLabel: "Gate Warden milestone ahead"
       })
     ]);
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .map((node) => node.id)
+    ).toEqual([
+      "foundation-1",
+      "foundation-2",
+      "foundation-3",
+      "foundation-4",
+      "developing-5",
+      "developing-6",
+      "developing-7",
+      "developing-8",
+      "capable-9",
+      "capable-10",
+      "capable-11",
+      "capable-12",
+      "advanced-13",
+      "advanced-14",
+      "advanced-15",
+      "advanced-16",
+      "mastery-17",
+      "mastery-18",
+      "mastery-19",
+      "mastery-20"
+    ]);
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .every((node) => node.fieldNote.length > 0)
+    ).toBe(true);
   });
 
   it("derives restored sigils and current milestones without mutating progress", () => {
@@ -85,6 +156,24 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[1].nodes[0]).toMatchObject({
       state: "current",
       labyrinthNumber: 5
+    });
+  });
+
+  it("derives Watch Trail capability only from approved retained memory", () => {
+    const progress = createQuestProgress("maze-master", 5);
+    const atlas = projectQuestAtlas(progress, {
+      watchTrailLandmarkIds: new Set(["foundation-3", "developing-5"])
+    });
+
+    expect(atlas.regions[0].nodes[2]).toMatchObject({
+      id: "foundation-3",
+      completed: true,
+      watchTrailAvailable: true
+    });
+    expect(atlas.regions[1].nodes[0]).toMatchObject({
+      id: "developing-5",
+      current: true,
+      watchTrailAvailable: false
     });
   });
 

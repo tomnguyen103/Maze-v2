@@ -177,6 +177,10 @@ test("completes First Light without writing product progress", async ({
     "data-run-mode",
     "first-light"
   );
+  await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
+  await expect(page.locator("#warden-guild")).toHaveText(
+    "Universal Warden marks"
+  );
   await expect(page.locator("#maze-canvas")).toBeFocused();
   await expect(page.locator("#pulse-action")).toBeHidden();
 

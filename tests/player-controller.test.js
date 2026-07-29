@@ -124,12 +124,133 @@ describe("Player Profile dialog", () => {
       <span id="player-score"></span>
       <button id="scoreboard-close"></button>
       <dialog id="scoreboard-dialog"></dialog>
+      <label for="scoreboard-partition">Rules</label>
+      <select id="scoreboard-partition"></select>
+      <p id="scoreboard-partition-label"></p>
       <ol id="scoreboard-list"></ol>
       <button id="scoreboard-button"></button>
       <p id="scoreboard-status"></p>
       <button id="player-sign-out"></button>
       <a id="classroom-link" href="/class" hidden>Classroom</a>
     `;
+  });
+
+  it("defaults the board to the current Run partition and exposes Classic Rules", async () => {
+    createPlayerController({
+      getScorePartition: () => ({
+        atlasRegionId: "advanced",
+        rulesetRevision: "tide-doors-v1",
+        regionLabel: "Advanced",
+        rulesetLabel: "Tide Doors"
+      })
+    });
+
+    await vi.waitFor(() =>
+      expect(client.getLeaderboard).toHaveBeenCalledWith({
+        atlasRegionId: "advanced",
+        rulesetRevision: "tide-doors-v1"
+      })
+    );
+    const select = /** @type {HTMLSelectElement} */ (
+      document.getElementById("scoreboard-partition")
+    );
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "Advanced · Tide Doors",
+      "Advanced · Classic Rules"
+    ]);
+    expect(document.getElementById("scoreboard-partition-label")?.textContent)
+      .toBe("Showing Advanced · Tide Doors.");
+
+    select.value = "classic-v1";
+    select.dispatchEvent(new Event("change"));
+    await vi.waitFor(() =>
+      expect(client.getLeaderboard).toHaveBeenLastCalledWith({
+        atlasRegionId: "advanced",
+        rulesetRevision: "classic-v1"
+      })
+    );
+  });
+
+  it("submits an escaped Run with its exact Region and ruleset", async () => {
+    client.getProfile.mockResolvedValueOnce({ profile });
+    const controller = createPlayerController();
+    await vi.waitFor(() =>
+      expect(document.getElementById("player-name")?.textContent).toBe(
+        "Moss Runner"
+      )
+    );
+
+    await controller.submitEscapedRun(
+      {
+        seed: "MOSS-WATCH-11",
+        moves: 81,
+        elapsedMs: 92000,
+        score: 850,
+        wardensDefeated: 2,
+        echoesCollected: 3,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1"
+      },
+      "trail-scout",
+      4
+    );
+
+    expect(client.submitScore).toHaveBeenCalledWith(expect.objectContaining({
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1",
+      score: 850
+    }));
+  });
+
+  it("does not render a stale response under a newer partition label", async () => {
+    /** @type {(value: { globalMaxScore: number, entries: Record<string, unknown>[] }) => void} */
+    let resolveCurrent = () => {};
+    const getLeaderboard = /** @type {any} */ (client.getLeaderboard);
+    getLeaderboard
+      .mockReset()
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveCurrent = resolve;
+      }))
+      .mockResolvedValueOnce({
+        globalMaxScore: 700,
+        entries: [{ username: "Classic Fox", score: 700 }]
+      });
+    createPlayerController({
+      getScorePartition: () => ({
+        atlasRegionId: "advanced",
+        rulesetRevision: "tide-doors-v1",
+        regionLabel: "Advanced",
+        rulesetLabel: "Tide Doors"
+      })
+    });
+    await vi.waitFor(() =>
+      expect(client.getLeaderboard).toHaveBeenCalledTimes(1)
+    );
+    const select = /** @type {HTMLSelectElement} */ (
+      document.getElementById("scoreboard-partition")
+    );
+    select.value = "classic-v1";
+    select.dispatchEvent(new Event("change"));
+    await vi.waitFor(() =>
+      expect(document.getElementById("scoreboard-list")?.textContent)
+        .toContain("Classic Fox")
+    );
+    expect(document.getElementById("scoreboard-partition-label")?.textContent)
+      .toBe("Showing Advanced · Classic Rules.");
+
+    resolveCurrent({
+      globalMaxScore: 1200,
+      entries: [{ username: "Tide Fox", score: 1200 }]
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(document.getElementById("scoreboard-partition-label")?.textContent)
+      .toBe("Showing Advanced · Classic Rules.");
+    expect(document.getElementById("scoreboard-list")?.textContent)
+      .not.toContain("Tide Fox");
+    expect(document.getElementById("global-max-score")?.textContent)
+      .toBe("700");
   });
 
   it("binds Class Play storage to scoped calls and shows useful navigation", async () => {
@@ -152,10 +273,11 @@ describe("Player Profile dialog", () => {
 
   it("reports the initial identity and its explicit sign-out", async () => {
     const onAuthenticationChange = vi.fn();
+    const onIdentityEnd = vi.fn();
     clerkBrowser.signOut.mockImplementationOnce(async () => {
       clerkBrowser.user = null;
     });
-    createPlayerController({ onAuthenticationChange });
+    createPlayerController({ onAuthenticationChange, onIdentityEnd });
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
@@ -166,12 +288,14 @@ describe("Player Profile dialog", () => {
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
+      expect(onIdentityEnd).toHaveBeenCalledOnce();
     });
   });
 
   it("reports when Clerk removes the active account identity", async () => {
     const onAuthenticationChange = vi.fn();
-    createPlayerController({ onAuthenticationChange });
+    const onIdentityEnd = vi.fn();
+    createPlayerController({ onAuthenticationChange, onIdentityEnd });
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
     });
@@ -181,6 +305,7 @@ describe("Player Profile dialog", () => {
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
+      expect(onIdentityEnd).toHaveBeenCalledOnce();
     });
   });
 

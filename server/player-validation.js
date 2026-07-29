@@ -2,6 +2,10 @@ import {
   QUEST_LEVELS,
   getLabyrinthConfig
 } from "../src/questions/quest-levels.js";
+import {
+  normalizeKnownRunRuleset,
+  normalizeRunRuleset
+} from "../src/game/run-ruleset.js";
 
 /** @type {Set<string>} */
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
@@ -127,16 +131,17 @@ export function validateScoreInput(value) {
     throw new InputError("Only escaped runs can enter the Global Scoreboard.");
   }
 
+  const labyrinthNumber = boundedInteger(
+    input,
+    "labyrinthNumber",
+    1,
+    20,
+    "Labyrinth"
+  );
   const run = {
     idempotencyKey: input.idempotencyKey,
     levelId: input.levelId,
-    labyrinthNumber: boundedInteger(
-      input,
-      "labyrinthNumber",
-      1,
-      20,
-      "Labyrinth"
-    ),
+    labyrinthNumber,
     seed: input.seed,
     wardensDefeated: boundedInteger(
       input,
@@ -154,8 +159,26 @@ export function validateScoreInput(value) {
     ),
     moves: boundedInteger(input, "moves", 1, 100000, "Moves"),
     elapsedMs: boundedInteger(input, "elapsedMs", 0, 86400000, "Elapsed time"),
-    escaped: true
+    escaped: true,
+    ...validateScorePartition({
+      atlasRegionId: input.atlasRegionId,
+      rulesetRevision: input.rulesetRevision,
+      labyrinthNumber
+    })
   };
+  if (
+    !normalizeRunRuleset(
+      {
+        atlasRegionId: run.atlasRegionId,
+        revision: run.rulesetRevision
+      },
+      run.labyrinthNumber
+    )
+  ) {
+    throw new InputError(
+      "Score Region and ruleset do not match the selected Labyrinth."
+    );
+  }
   const config = getLabyrinthConfig(run.levelId, run.labyrinthNumber);
   if (run.echoesCollected !== config.echoCount) {
     throw new InputError(
@@ -169,4 +192,40 @@ export function validateScoreInput(value) {
   }
 
   return { ...run, score: computeRunScore(run) };
+}
+
+/** @param {{ atlasRegionId?: unknown, rulesetRevision?: unknown, labyrinthNumber?: number }} input */
+export function validateScorePartition(input) {
+  const labyrinthNumber = Number(input.labyrinthNumber);
+  if (
+    input.atlasRegionId === undefined &&
+    input.rulesetRevision === undefined &&
+    Number.isInteger(labyrinthNumber)
+  ) {
+    const ruleset = normalizeRunRuleset(undefined, labyrinthNumber);
+    if (!ruleset) {
+      throw new InputError("Score Labyrinth is not supported.");
+    }
+    return {
+      atlasRegionId: ruleset.atlasRegionId,
+      rulesetRevision: ruleset.revision
+    };
+  }
+  if (
+    typeof input.atlasRegionId !== "string" ||
+    typeof input.rulesetRevision !== "string"
+  ) {
+    throw new InputError("Score Region and ruleset are required.");
+  }
+  const ruleset = normalizeKnownRunRuleset({
+    atlasRegionId: input.atlasRegionId,
+    revision: input.rulesetRevision
+  });
+  if (!ruleset) {
+    throw new InputError("Score Region or ruleset is not supported.");
+  }
+  return {
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
+  };
 }

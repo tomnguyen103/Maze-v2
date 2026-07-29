@@ -9,6 +9,7 @@ import {
 } from "../src/game/active-run-recovery.js";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
+import { buildRunReplayTimeline } from "../src/game/run-replay.js";
 
 /**
  * @typedef {"up" | "right" | "down" | "left"} Direction
@@ -18,12 +19,14 @@ import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
  *   removeItem: (key: string) => unknown
  * }} StorageLike
  * @typedef {{
- *   version: 2,
+ *   version: 2 | 3,
  *   runId: string,
  *   pending: false,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} RecoveryLocator
  * @typedef {ReturnType<typeof createActiveRunRecoveryController>} RecoveryController
  */
@@ -40,6 +43,36 @@ const GATE_LOCATOR = Object.freeze({
   ...LOCATOR,
   runId: "run_recovery_gate_123",
   labyrinthNumber: 4
+});
+const RULESET_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_rules_123",
+  pending: false,
+  seed: "CAMPFIRE-RULES-09",
+  levelId: "trail-scout",
+  labyrinthNumber: 9,
+  atlasRegionId: "capable",
+  rulesetRevision: "echo-bridges-v1"
+});
+const TIDE_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_tide_123",
+  pending: false,
+  seed: "CAMPFIRE-TIDE-13",
+  levelId: "trail-scout",
+  labyrinthNumber: 13,
+  atlasRegionId: "advanced",
+  rulesetRevision: "tide-doors-v1"
+});
+const BELL_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_bell_123",
+  pending: false,
+  seed: "BELL-LURE-REPLAY-1",
+  levelId: "trail-scout",
+  labyrinthNumber: 17,
+  atlasRegionId: "mastery",
+  rulesetRevision: "warden-bells-v1"
 });
 
 /** @returns {StorageLike & { readonly writes: number, readonly removals: number }} */
@@ -75,7 +108,17 @@ function createMemoryStorage() {
 function initialRun(locator = LOCATOR) {
   return createRun(
     locator.seed,
-    getLabyrinthConfig(locator.levelId, locator.labyrinthNumber)
+    {
+      ...getLabyrinthConfig(locator.levelId, locator.labyrinthNumber),
+      ...(locator.atlasRegionId && locator.rulesetRevision
+        ? {
+            ruleset: {
+              atlasRegionId: locator.atlasRegionId,
+              revision: locator.rulesetRevision
+            }
+          }
+        : {})
+    }
   );
 }
 
@@ -118,12 +161,17 @@ function comparableState(run) {
   return {
     seed: run.seed,
     config: run.config,
+    ruleset: run.ruleset,
     labyrinth: run.labyrinth,
     explorer: run.explorer,
     echoes: run.echoes,
     gate: run.gate,
     gateWarden: run.gateWarden,
     wardens: run.wardens,
+    windways: run.windways,
+    echoBridges: run.echoBridges,
+    tideDoors: run.tideDoors,
+    signalBells: run.signalBells,
     challenge: run.challenge,
     revealed: run.revealed,
     pulseVisible: run.pulseVisible,
@@ -195,6 +243,138 @@ function pathTo(run, goal) {
     cursor = step.prior;
   }
   return path;
+}
+
+/**
+ * @param {RecoveryController} controller
+ * @param {{
+ *   revealFirstHint?: boolean,
+ *   ringFirstBell?: boolean,
+ *   locator?: RecoveryLocator
+ * }} [options]
+ */
+function finishWinningRun(
+  controller,
+  {
+    revealFirstHint = false,
+    ringFirstBell = false,
+    locator = LOCATOR
+  } = {}
+) {
+  let run = ringFirstBell
+    ? reachFirstBellAndRing(controller, locator)
+    : initialRun(locator);
+  const pulseTransition = durableTransition(controller, run, { type: "pulse" });
+  run = pulseTransition.run;
+  let terminalResult = pulseTransition.result;
+  let questionOrdinal = 0;
+  for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
+    if (run.status === "challenge") {
+      const question = getBundledQuestion({
+        levelId: locator.levelId,
+        seed: locator.seed,
+        wardenId: run.challenge?.wardenId ?? 0,
+        attempt: run.challenge?.attempt ?? 0,
+        labyrinthNumber: locator.labyrinthNumber,
+        questionOrdinal
+      });
+      questionOrdinal += 1;
+      ({ run } = durableTransition(controller, run, {
+        type: "provide-question",
+        question
+      }));
+      if (revealFirstHint && questionOrdinal === 1) {
+        ({ run } = durableTransition(controller, run, {
+          type: "reveal-hint"
+        }));
+      }
+      const transition = durableTransition(controller, run, {
+        type: "answer-question",
+        answerId: question.answerId
+      });
+      run = transition.run;
+      terminalResult = transition.result;
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a route toward the next Run objective.");
+    }
+    const transition = durableTransition(controller, run, {
+      type: "move",
+      direction
+    });
+    run = transition.run;
+    terminalResult = transition.result;
+  }
+  if (run.status !== "won") {
+    throw new Error("Expected the recovery fixture to escape.");
+  }
+  return { run, terminalResult };
+}
+
+/**
+ * @param {RecoveryController} controller
+ * @param {RecoveryLocator} locator
+ */
+function reachFirstBellAndRing(controller, locator) {
+  let run = initialRun(locator);
+  const bell = run.signalBells[0];
+  const adjacent = [
+    { row: bell.row - 1, col: bell.col },
+    { row: bell.row, col: bell.col + 1 },
+    { row: bell.row + 1, col: bell.col },
+    { row: bell.row, col: bell.col - 1 }
+  ].filter((position) => run.labyrinth[position.row]?.[position.col] === 1)
+    .sort((left, right) =>
+      pathTo(run, left).length - pathTo(run, right).length
+    )[0];
+  let questionOrdinal = 0;
+  for (
+    let step = 0;
+    step < 800 &&
+      (run.explorer.row !== adjacent.row ||
+        run.explorer.col !== adjacent.col);
+    step += 1
+  ) {
+    if (run.status === "challenge") {
+      const question = getBundledQuestion({
+        levelId: locator.levelId,
+        seed: locator.seed,
+        wardenId: run.challenge?.wardenId ?? 0,
+        attempt: run.challenge?.attempt ?? 0,
+        labyrinthNumber: locator.labyrinthNumber,
+        questionOrdinal
+      });
+      questionOrdinal += 1;
+      ({ run } = durableTransition(controller, run, {
+        type: "provide-question",
+        question
+      }));
+      ({ run } = durableTransition(controller, run, {
+        type: "answer-question",
+        answerId: question.answerId
+      }));
+      continue;
+    }
+    const direction = pathTo(run, adjacent)[0];
+    if (!direction) {
+      throw new Error("Expected a route beside the first Signal Bell.");
+    }
+    ({ run } = durableTransition(controller, run, {
+      type: "move",
+      direction
+    }));
+  }
+  const transition = durableTransition(controller, run, {
+    type: "ring-bell"
+  });
+  if (transition.run.moves !== run.moves + 1) {
+    throw new Error("Expected the adjacent Signal Bell to ring.");
+  }
+  return transition.run;
 }
 
 /**
@@ -287,6 +467,117 @@ function reachGateWardenChallenge(controller) {
 }
 
 describe("Active Run Recovery", () => {
+  it("preserves exact Region rules through recovery reconstruction", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(RULESET_LOCATOR);
+    let run = initialRun(RULESET_LOCATOR);
+    let questionOrdinal = 0;
+    for (
+      let step = 0;
+      step < 800 && !run.echoes[0].collected;
+      step += 1
+    ) {
+      if (run.status === "challenge") {
+        const question = getBundledQuestion({
+          levelId: RULESET_LOCATOR.levelId,
+          seed: RULESET_LOCATOR.seed,
+          wardenId: run.challenge?.wardenId ?? 0,
+          attempt: run.challenge?.attempt ?? 0,
+          labyrinthNumber: RULESET_LOCATOR.labyrinthNumber,
+          questionOrdinal
+        });
+        questionOrdinal += 1;
+        ({ run } = durableTransition(controller, run, {
+          type: "provide-question",
+          question
+        }));
+        ({ run } = durableTransition(controller, run, {
+          type: "answer-question",
+          answerId: question.answerId
+        }));
+        continue;
+      }
+      const direction = pathTo(run, run.echoes[0])[0];
+      if (!direction) {
+        throw new Error("Expected a route to the first paired Echo.");
+      }
+      ({ run } = durableTransition(controller, run, {
+        type: "move",
+        direction
+      }));
+    }
+    expect(run.echoes[0].collected).toBe(true);
+    expect(run.echoBridges).toEqual([
+      expect.objectContaining({ echoIndex: 0, open: true }),
+      ...run.echoBridges.slice(1).map((bridge) =>
+        expect.objectContaining({
+          echoIndex: bridge.echoIndex,
+          open: false
+        })
+      )
+    ]);
+
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(RULESET_LOCATOR);
+
+    expect(recovered.status).toBe("recovered");
+    expect(recovered.run?.ruleset).toEqual(run.ruleset);
+    expect(recovered.run?.echoBridges).toEqual(run.echoBridges);
+    expect(
+      JSON.parse(storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "{}").identity
+    ).toMatchObject({
+      atlasRegionId: "capable",
+      rulesetRevision: "echo-bridges-v1"
+    });
+  });
+
+  it("recovers the exact Tide Door phase after a successful action", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(TIDE_LOCATOR);
+    const initial = initialRun(TIDE_LOCATOR);
+    const direction = firstLegalDirection(initial);
+    const { run, result } = durableTransition(controller, initial, {
+      type: "move",
+      direction
+    });
+
+    expect(result.status).toBe("saved");
+    expect(initial.tideDoors.every((door) => door.open)).toBe(true);
+    expect(run.tideDoors.every((door) => !door.open)).toBe(true);
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(TIDE_LOCATOR);
+    expect(recovered.status).toBe("recovered");
+    if (!recovered.run) {
+      throw new Error("Expected a recovered Tide Door Run.");
+    }
+    expect(recovered.run.tideDoors).toEqual(run.tideDoors);
+    expect(comparableState(recovered.run)).toEqual(comparableState(run));
+  });
+
+  it("recovers exact spent Bell and one-action Lured Warden state", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(BELL_LOCATOR);
+    const run = reachFirstBellAndRing(controller, BELL_LOCATOR);
+
+    expect(run.signalBells[0].spent).toBe(true);
+    expect(run.wardens.some((warden) => warden.mode === "lured")).toBe(true);
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(BELL_LOCATOR);
+    expect(recovered.status).toBe("recovered");
+    if (!recovered.run) {
+      throw new Error("Expected a recovered Warden Bell Run.");
+    }
+    expect(recovered.run.signalBells).toEqual(run.signalBells);
+    expect(recovered.run.wardens).toEqual(run.wardens);
+    expect(comparableState(recovered.run)).toEqual(comparableState(run));
+  });
+
   it("restores acknowledged movement, Pulse state, and durable elapsed time exactly", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });
@@ -573,6 +864,174 @@ describe("Active Run Recovery", () => {
     );
   });
 
+  it("returns an outcome-only escape Replay with equal terminal facts", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(LOCATOR);
+
+    const { run, terminalResult } = finishWinningRun(controller, {
+      revealFirstHint: true
+    });
+
+    expect(terminalResult?.status).toBe("terminal");
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: LOCATOR.levelId,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    expect(timeline.terminal).toMatchObject({
+      outcome: "escaped",
+      moves: run.moves,
+      elapsedMs: Math.round(run.elapsedMs),
+      echoesCollected: run.echoes.length,
+      echoTotal: run.echoes.length,
+      wardensDefeated: run.wardensDefeated,
+      score: run.score,
+      vitality: run.explorer.vitality
+    });
+    expect(timeline.states.at(-1)?.status).toBe("won");
+    expect(replay?.actions).toContainEqual(
+      expect.objectContaining({ type: "hint" })
+    );
+    expect(timeline.events).toContainEqual(
+      expect.objectContaining({
+        label: "Hint revealed without retaining Question text."
+      })
+    );
+    expect(JSON.stringify(replay)).not.toMatch(
+      /answerId|choices|question|provider|account|email|runId/i
+    );
+  });
+
+  it("reconstructs the exact opened Echo Bridge pair in a retained Replay", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(RULESET_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: RULESET_LOCATOR
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: RULESET_LOCATOR.levelId,
+      labyrinthNumber: RULESET_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    const firstOpenedPair = timeline.states.find((state) =>
+      state.echoBridges.some((bridge) => bridge.open) &&
+      state.echoBridges.some((bridge) => !bridge.open)
+    );
+
+    expect(firstOpenedPair?.echoBridges).toEqual([
+      expect.objectContaining({ echoIndex: 0, open: true }),
+      ...run.echoBridges.slice(1).map((bridge) =>
+        expect.objectContaining({
+          echoIndex: bridge.echoIndex,
+          open: false
+        })
+      )
+    ]);
+    expect(timeline.states.at(-1)?.echoBridges.every(
+      (bridge) => bridge.open
+    )).toBe(true);
+  });
+
+  it("replays the exact alternating Tide Door phase through terminal state", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(TIDE_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: TIDE_LOCATOR
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: TIDE_LOCATOR.levelId,
+      labyrinthNumber: TIDE_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+
+    expect(timeline.states[0].tideDoors.every((door) => door.open)).toBe(true);
+    for (const [index, state] of timeline.states.entries()) {
+      expect(state.tideDoors).toEqual(
+        state.tideDoors.map((door) => ({
+          ...door,
+          open: state.moves % 2 === 0
+        }))
+      );
+      if (index > 0 && state.moves === timeline.states[index - 1].moves) {
+        expect(state.tideDoors).toEqual(timeline.states[index - 1].tideDoors);
+      }
+    }
+    expect(timeline.states.at(-1)?.tideDoors).toEqual(run.tideDoors);
+  });
+
+  it("retains Ring Bell, spent state, and Lured outcome in Watch Trail", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(BELL_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: BELL_LOCATOR,
+      ringFirstBell: true
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    expect(replay?.actions).toContainEqual(
+      expect.objectContaining({ type: "ring-bell" })
+    );
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: BELL_LOCATOR.levelId,
+      labyrinthNumber: BELL_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    const rungState = timeline.states.find(
+      (state) =>
+        state.signalBells[0]?.spent &&
+        state.event.type === "signal-bell-rung"
+    );
+
+    expect(rungState?.signalBells[0].spent).toBe(true);
+    expect(rungState?.wardens.some(
+      (warden) => warden.mode === "lured"
+    )).toBe(true);
+    if (!rungState) {
+      throw new Error("Expected a retained Ring Bell state.");
+    }
+    const rungIndex = timeline.states.indexOf(rungState);
+    expect(timeline.states[rungIndex + 1].wardens.every(
+      (warden) => warden.mode !== "lured"
+    )).toBe(true);
+    expect(timeline.events).toContainEqual(
+      expect.objectContaining({
+        type: "signal-bell-rung",
+        label: expect.stringContaining("Signal Bell")
+      })
+    );
+    expect(timeline.states.at(-1)?.signalBells).toEqual(run.signalBells);
+  });
+
   it("clears terminal recovery and selected answer identifiers", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });
@@ -591,6 +1050,7 @@ describe("Active Run Recovery", () => {
       question
     }));
     const startingVitality = run.explorer.vitality;
+    let terminalReplay = null;
     for (let attempt = 0; attempt < startingVitality; attempt += 1) {
       const currentQuestion =
         attempt === 0
@@ -621,12 +1081,43 @@ describe("Active Run Recovery", () => {
       });
       run = transition.run;
       if (attempt === startingVitality - 1) {
-        expect(transition.result.status).toBe("cleared");
+        expect(transition.result.status).toBe("terminal");
+        terminalReplay =
+          "replay" in transition.result
+            ? transition.result.replay ?? null
+            : null;
       }
     }
 
     expect(run.status).toBe("lost");
     expect(storage.getItem(ACTIVE_RUN_RECOVERY_KEY)).toBeNull();
+    expect(terminalReplay).toMatchObject({
+      version: 1,
+      terminal: {
+        outcome: "defeated",
+        moves: run.moves,
+        elapsedMs: Math.round(run.elapsedMs),
+        echoesCollected: run.echoes.filter((echo) => echo.collected).length,
+        echoTotal: run.echoes.length,
+        wardensDefeated: run.wardensDefeated,
+        score: run.score,
+        vitality: 0
+      }
+    });
+    const serializedReplay = JSON.stringify(terminalReplay);
+    expect(serializedReplay).not.toContain(question.prompt);
+    expect(serializedReplay).not.toContain(question.answerId);
+    expect(serializedReplay).not.toMatch(
+      /answerId|choices|question|provider|account|email|runId/i
+    );
+    expect(buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: LOCATOR.levelId,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay: terminalReplay
+    }).terminal).toEqual(terminalReplay?.terminal);
   });
 
   it("enforces the 2,048-action and 256-KiB serialized bounds", () => {

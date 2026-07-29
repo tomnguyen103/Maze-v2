@@ -1,4 +1,3 @@
-import { EchoAudio } from "./game/audio.js";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
@@ -36,6 +35,12 @@ import {
   createRunActionLog,
   tryAppendRunAction
 } from "./game/run-action-log.js";
+import {
+  CLASSIC_RULESET_REVISION,
+  getClassicRunRuleset,
+  getQuestRunRuleset,
+  normalizeRunRuleset
+} from "./game/run-ruleset.js";
 import { createVerifiedDailySubmission } from "./player/daily-submission.js";
 import {
   createRunAccessId,
@@ -52,12 +57,12 @@ import {
   saveQuestProgress
 } from "./game/quest-progress.js";
 import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
-import { projectQuestAtlas } from "./game/quest-atlas.js";
 import {
-  createQuestAtlasView,
-  renderQuestAtlasSummary
-} from "./game/quest-atlas-view.js";
-import { loadRunRecords, saveRunRecord } from "./game/storage.js";
+  hasRunReplayOwnerMismatch,
+  loadRunRecords,
+  saveRunRecord,
+  scrubRunReplays
+} from "./game/storage.js";
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
@@ -65,7 +70,8 @@ import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
   getLabyrinthConfig,
-  getQuestLevel
+  getQuestLevel,
+  isGateWardenMilestone
 } from "./questions/quest-levels.js";
 import {
   createLifetimeView
@@ -89,19 +95,97 @@ let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
-/** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
+/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
+/** @typedef {InstanceType<typeof import("./game/audio.js").EchoAudio>} EchoAudio */
+/** @typedef {typeof import("./game/region-theme.js").getRegionTheme} RegionThemeLookup */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
-const audio = new EchoAudio();
+/** @type {EchoAudio | null} */
+let audio = null;
+/** @type {Promise<EchoAudio> | null} */
+let audioPromise = null;
+let ambientRegionId = "";
+let ambientActive = false;
+/** @type {RegionThemeLookup | null} */
+let regionThemeLookup = null;
+/** @type {Promise<RegionThemeLookup | null> | null} */
+let regionThemePromise = null;
+let regionThemeRetry = false;
+
+function loadAudio() {
+  if (!audioPromise) {
+    audioPromise = import("./game/audio.js").then(({ EchoAudio }) => {
+      audio = new EchoAudio();
+      audio.setAmbient(ambientRegionId, ambientActive);
+      return audio;
+    }).catch((error) => {
+      audioPromise = null;
+      throw error;
+    });
+  }
+  return audioPromise;
+}
+
+/**
+ * @param {string} regionId
+ * @param {boolean} active
+ */
+function setAmbientAudio(regionId, active) {
+  ambientRegionId = regionId;
+  ambientActive = active;
+  audio?.setAmbient(regionId, active);
+}
+
+/** @param {AudioCue} cue */
+function playAudio(cue) {
+  audio?.play(cue);
+}
+
+function loadRegionTheme() {
+  if (!regionThemePromise) {
+    const themeModule = regionThemeRetry
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./game/region-theme.js?retry=1")
+      : import("./game/region-theme.js");
+    regionThemeRetry = true;
+    regionThemePromise = themeModule
+      .then(({ getRegionTheme }) => {
+        regionThemeLookup = getRegionTheme;
+        return getRegionTheme;
+      })
+      .catch(() => {
+        regionThemePromise = null;
+        return null;
+      });
+  }
+  return regionThemePromise;
+}
+
+/** @param {string} atlasRegionId */
+function currentRegionTheme(atlasRegionId) {
+  return regionThemeLookup?.(atlasRegionId) ?? null;
+}
+
+function activeRegionTheme() {
+  if (
+    activeFirstLight ||
+    activeDaily !== null ||
+    run.ruleset.revision === CLASSIC_RULESET_REVISION
+  ) {
+    return null;
+  }
+  return currentRegionTheme(run.ruleset.atlasRegionId);
+}
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
+  bell: requiredElement("bell-action", HTMLButtonElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
   challengeDialog: requiredElement("challenge-dialog", HTMLDialogElement),
@@ -111,6 +195,10 @@ const elements = {
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
+  gateStagingSkip: requiredElement(
+    "gate-staging-skip",
+    HTMLButtonElement
+  ),
   dailyButton: requiredElement("daily-button", HTMLButtonElement),
   dailyBoardDate: requiredElement("daily-board-date", HTMLElement),
   dailyBoardList: requiredElement("daily-board-list", HTMLOListElement),
@@ -195,7 +283,12 @@ const elements = {
   vitalityCount: requiredElement("vitality-count", HTMLElement),
   vitalityMeter: requiredElement("vitality-meter", HTMLElement),
   wardenReadout: requiredElement("warden-readout", HTMLElement),
-  wardenState: requiredElement("warden-state", HTMLElement)
+  wardenGuild: requiredElement("warden-guild", HTMLElement),
+  wardenState: requiredElement("warden-state", HTMLElement),
+  echoBridgeLegend: requiredElement("echo-bridge-legend", HTMLLIElement),
+  tideDoorLegend: requiredElement("tide-door-legend", HTMLLIElement),
+  signalBellLegend: requiredElement("signal-bell-legend", HTMLLIElement),
+  windwayLegend: requiredElement("windway-legend", HTMLLIElement)
 };
 
 const dailyRequest = resolveDailyRequest(
@@ -207,11 +300,21 @@ const sharedParametersNeedNotice =
 const storedQuestProgress = loadQuestProgress();
 const normalizedLocationSeed =
   locationSeed === null ? null : normalizeSeed(locationSeed);
+/** @type {{ seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string }} */
 const sharedLocationFacts = {
   seed: normalizedLocationSeed ?? "",
   levelId: getQuestLevel(levelFromLocation()).id,
   labyrinthNumber: labyrinthFromLocation() ?? 1
 };
+const sharedLocationRuleset =
+  locationSeed === null
+    ? null
+    : rulesetFromLocation(sharedLocationFacts.labyrinthNumber) ??
+      getClassicRunRuleset(sharedLocationFacts.labyrinthNumber);
+if (sharedLocationRuleset) {
+  sharedLocationFacts.atlasRegionId = sharedLocationRuleset.atlasRegionId;
+  sharedLocationFacts.rulesetRevision = sharedLocationRuleset.revision;
+}
 let activeRunLocator =
   dailyRequest.status === "none" ? loadActiveRunLocator() : null;
 if (
@@ -252,9 +355,21 @@ let questProgress =
       );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
+const initialRuleset =
+  activeRunLocator
+    ? normalizeRunRuleset(
+        rulesetIdentityFromLocator(activeRunLocator),
+        currentLabyrinthNumber
+      )
+    : sharedLocationRuleset ??
+      getQuestRunRuleset(currentLabyrinthNumber);
 let run = createRun(
   normalizedLocationSeed ?? activeRunLocator?.seed ?? createSeed(),
-  getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+  {
+    ...getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber),
+    ruleset:
+      initialRuleset ?? getClassicRunRuleset(currentLabyrinthNumber)
+  }
 );
 let runActionLog = createRunActionLog();
 let runActionLogOverflowed = false;
@@ -271,8 +386,15 @@ let questContinuityControllerPromise = null;
 let questContinuityLoadKind = null;
 const failedQuestContinuityLoads = new Set();
 const playerController = createPlayerController({
+  getScorePartition: () => ({
+    atlasRegionId: run.ruleset.atlasRegionId,
+    rulesetRevision: run.ruleset.revision,
+    regionLabel: getDifficultyBand(currentLabyrinthNumber).label,
+    rulesetLabel: run.ruleset.label
+  }),
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: handleAuthenticationChange,
+  onIdentityEnd: clearActiveRunRecoveryForIdentityChange,
   onJournalChange: (journal) => {
     lanternJournal = journal;
     void syncPracticeOffer();
@@ -324,7 +446,11 @@ let resumeAfterQuestConflict = false;
 let deferredCloudQuest = null;
 let questionRequestKey = "";
 let runFinished = false;
+let terminalPresentationPending = false;
 let hintVisible = false;
+/** @type {number | null} */
+let stagedGateWardenId = null;
+let gateStagingComplete = false;
 /** @type {ReturnType<typeof createDailyContract> | null} */
 let activeDaily = null;
 let dailyQuestionIndex = 0;
@@ -341,6 +467,8 @@ let activeRunRecoveryController = null;
 /** @type {CampfireResumeView | null} */
 let campfireResumeView = null;
 let activeRunRecoveryUnavailableReported = false;
+/** @type {import("./game/run-replay-contract.js").RunReplay | null} */
+let pendingRunReplay = null;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
@@ -365,20 +493,28 @@ if (
 let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
-const atlasView = createQuestAtlasView({
-  onClose: () => {
-    if (resumeAfterAtlas && run.status === "paused") {
-      togglePause();
-    }
-    resumeAfterAtlas = false;
-  }
-});
+/** @type {Promise<ReturnType<typeof import("./game/quest-atlas-view.js").createQuestAtlasView>> | null} */
+let atlasViewPromise = null;
+let atlasOpening = false;
+let atlasViewRetry = false;
+/** @type {Promise<ReturnType<typeof import("./game/run-replay-view.js").createRunReplayView>> | null} */
+let runReplayViewPromise = null;
+let runReplayOpening = false;
+let runReplayViewRetry = false;
+let resumeAfterRunReplay = false;
+/** @type {typeof import("./game/run-replay.js").buildRunReplayTimeline | null} */
+let buildRunReplayTimelineForAtlas = null;
 /** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
 let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
 let accessSettingsViewRetry = false;
 
 export const gameReady = initializeRunEntry();
+void gameReady.then(() => {
+  if (new URL(window.location.href).searchParams.has("atlas")) {
+    void showQuestAtlas(elements.atlasButton);
+  }
+});
 void playerController.isAuthenticated().then(handleAuthenticationChange);
 requestAnimationFrame(tick);
 
@@ -411,6 +547,9 @@ document.addEventListener("keydown", (event) => {
   } else if (event.key === "q" || event.key === "Q" || event.code === "Space") {
     event.preventDefault();
     usePulse();
+  } else if (event.key === "b" || event.key === "B") {
+    event.preventDefault();
+    ringBell();
   } else if (event.key === "Escape" || event.key === "p" || event.key === "P") {
     event.preventDefault();
     togglePause();
@@ -426,6 +565,7 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 });
 
 elements.pulse.addEventListener("click", usePulse);
+elements.bell.addEventListener("click", ringBell);
 elements.pause.addEventListener("click", togglePause);
 elements.newRun.addEventListener("click", () => {
   if (activeDaily) {
@@ -559,12 +699,190 @@ elements.skipConfirm.addEventListener("click", () => {
   transition({ type: "skip-question" });
 });
 elements.atlasButton.addEventListener("click", () => {
+  void showQuestAtlas(elements.atlasButton);
+});
+elements.gateStagingSkip.addEventListener("click", () => {
+  gateStagingComplete = true;
+  elements.gateStagingSkip.hidden = true;
+  syncChallengeDialog();
+});
+
+/** @param {HTMLElement} trigger */
+async function showQuestAtlas(trigger) {
+  if (atlasOpening) {
+    return;
+  }
+  atlasOpening = true;
   resumeAfterAtlas = run.status === "active";
   if (resumeAfterAtlas) {
     togglePause();
   }
-  atlasView.show(projectQuestAtlas(questProgress), elements.atlasButton);
-});
+  const retrying = atlasViewRetry;
+  try {
+    if (!atlasViewPromise) {
+      /** @type {Promise<typeof import("./game/quest-atlas-view.js")>} */
+      const viewModule = retrying
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("./game/quest-atlas-view.js?retry=1")
+        : import("./game/quest-atlas-view.js");
+      atlasViewRetry = true;
+      atlasViewPromise = viewModule.then(
+        ({ createQuestAtlasView }) => createQuestAtlasView({
+        onWatchTrail: (landmarkId, returnTarget) => {
+          const record = replayRecordForLandmark(landmarkId);
+          if (!record) {
+            announce(
+              "That Trail is no longer retained on this device."
+            );
+            return;
+          }
+          resumeAfterRunReplay = false;
+          void openRunReplay(record, returnTarget);
+        },
+        onClose: () => {
+          if (resumeAfterAtlas && run.status === "paused") {
+            togglePause();
+          }
+          resumeAfterAtlas = false;
+        }
+        })
+      );
+    }
+    const [atlasView, { projectQuestAtlas }] = await Promise.all([
+      atlasViewPromise,
+      import("./game/quest-atlas.js")
+    ]);
+    const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
+    atlasView.show(projectQuestAtlas(questProgress, {
+      watchTrailLandmarkIds
+    }), trigger);
+  } catch {
+    atlasViewPromise = null;
+    if (resumeAfterAtlas && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAtlas = false;
+    announce(
+      "Echo Atlas could not open. Continue the Quest and try again."
+    );
+  } finally {
+    atlasOpening = false;
+  }
+}
+
+/** @param {string} landmarkId */
+function replayRecordForLandmark(landmarkId) {
+  return runRecords.find(
+    (record) =>
+      isCompatibleRunReplay(record) &&
+      record.questId === questProgress.questId &&
+      record.questLevelId === questProgress.levelId &&
+      record.labyrinthNumber !== undefined &&
+      `${getDifficultyBand(record.labyrinthNumber).id}-` +
+        `${record.labyrinthNumber}` === landmarkId
+  ) ?? null;
+}
+
+async function compatibleReplayLandmarkIds() {
+  try {
+    if (!buildRunReplayTimelineForAtlas) {
+      ({ buildRunReplayTimeline: buildRunReplayTimelineForAtlas } =
+        await import("./game/run-replay.js"));
+    }
+  } catch {
+    return new Set();
+  }
+  return new Set(
+    runRecords
+      .filter(
+        (record) =>
+          isCompatibleRunReplay(record) &&
+          record.questId === questProgress.questId &&
+          record.questLevelId === questProgress.levelId &&
+          record.labyrinthNumber !== undefined
+      )
+      .map(
+        (record) =>
+          `${getDifficultyBand(record.labyrinthNumber ?? 1).id}-` +
+          `${record.labyrinthNumber}`
+      )
+  );
+}
+
+/** @param {typeof runRecords[number]} record */
+function isCompatibleRunReplay(record) {
+  if (!record.replay || !buildRunReplayTimelineForAtlas) {
+    return false;
+  }
+  try {
+    buildRunReplayTimelineForAtlas(record);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {typeof runRecords[number]} record
+ * @param {HTMLElement} trigger
+ */
+async function openRunReplay(record, trigger) {
+  if (runReplayOpening || !record.replay) {
+    return;
+  }
+  runReplayOpening = true;
+  const retrying = runReplayViewRetry;
+  try {
+    let view;
+    try {
+      if (!runReplayViewPromise) {
+        /** @type {Promise<typeof import("./game/run-replay-view.js")>} */
+        const viewModule = retrying
+          // @ts-expect-error Vite treats the query as a distinct retry chunk.
+          ? import("./game/run-replay-view.js?retry=1")
+          : import("./game/run-replay-view.js");
+        runReplayViewRetry = true;
+        runReplayViewPromise = viewModule.then(
+          ({ createRunReplayView }) => createRunReplayView({
+            onClose: () => {
+              if (resumeAfterRunReplay && run.status === "paused") {
+                togglePause();
+              }
+              resumeAfterRunReplay = false;
+            }
+          })
+        );
+      }
+      view = await runReplayViewPromise;
+    } catch {
+      runReplayViewPromise = null;
+      if (resumeAfterRunReplay && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterRunReplay = false;
+      announce(
+        retrying
+          ? "This Trail is unavailable. Reload to try again."
+          : "This Trail is unavailable. Try again."
+      );
+      return;
+    }
+    try {
+      view.show(record, trigger);
+    } catch {
+      if (resumeAfterRunReplay && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterRunReplay = false;
+      announce(
+        "This Trail is corrupt, so it cannot be watched. Play This Seed is still available."
+      );
+    }
+  } finally {
+    runReplayOpening = false;
+  }
+}
+
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
   if (resumeAfterRecords) {
@@ -973,11 +1291,30 @@ elements.runRecords.addEventListener("click", async (event) => {
     return;
   }
 
+  if (button.dataset.recordAction === "watch") {
+    const record = runRecords[Number(button.dataset.recordIndex)];
+    if (!record?.replay) {
+      announce(
+        "This Trail is missing or corrupt. Play This Seed is still available."
+      );
+      return;
+    }
+    resumeAfterRunReplay = resumeAfterRecords;
+    resumeAfterRecords = false;
+    elements.recordsDialog.close();
+    await openRunReplay(record, elements.recordsButton);
+    return;
+  }
+
   if (button.dataset.recordAction === "replay") {
     await startRecordedLabyrinth(
       button.dataset.level ?? "trail-scout",
       Number(button.dataset.labyrinth ?? 1),
-      button.dataset.seed
+      button.dataset.seed,
+      {
+        atlasRegionId: button.dataset.region,
+        revision: button.dataset.ruleset
+      }
     );
     return;
   }
@@ -988,7 +1325,11 @@ elements.runRecords.addEventListener("click", async (event) => {
         createShareLink(
           button.dataset.seed,
           button.dataset.level ?? "trail-scout",
-          Number(button.dataset.labyrinth ?? 1)
+          Number(button.dataset.labyrinth ?? 1),
+          {
+            atlasRegionId: button.dataset.region,
+            revision: button.dataset.ruleset
+          }
         )
       );
       button.textContent = "Copied";
@@ -1047,7 +1388,9 @@ elements.replay.addEventListener("click", async () => {
   await openLevelPicker();
 });
 elements.sound.addEventListener("click", async () => {
-  const enabled = await audio.toggle();
+  const enabled = await loadAudio()
+    .then((loadedAudio) => loadedAudio.toggle())
+    .catch(() => false);
   elements.sound.textContent = enabled ? "Sound on" : "Sound off";
   elements.sound.setAttribute("aria-pressed", String(enabled));
 });
@@ -1229,17 +1572,22 @@ async function openCampfireResume() {
 
 /**
  * @param {{
- *   version: 2,
+ *   version: 2 | 3,
  *   runId: string,
  *   pending: boolean,
  *   seed: string,
  *   levelId: string,
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} locator
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
  * @param {ReturnType<typeof createRun> | null} [recoveredRun]
  */
-function startRun(locator, daily = null, recoveredRun = null) {
+async function startRun(locator, daily = null, recoveredRun = null) {
+  if (!daily) {
+    await loadRegionTheme();
+  }
   activeFirstLight = false;
   activeDaily = daily;
   dailyQuestionIndex = 0;
@@ -1247,14 +1595,27 @@ function startRun(locator, daily = null, recoveredRun = null) {
   completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
+  const ruleset = daily
+    ? getClassicRunRuleset(currentLabyrinthNumber)
+    : normalizeRunRuleset(
+        rulesetIdentityFromLocator(locator),
+        currentLabyrinthNumber
+      );
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   run =
     recoveredRun ??
     createRun(
       locator.seed,
-      getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+      {
+        ...getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber),
+        ruleset
+      }
     );
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
+  pendingRunReplay = null;
   if (!daily && !recoveredRun) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
@@ -1332,6 +1693,7 @@ function startFirstLight() {
   run = createFirstLightRun();
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
+  pendingRunReplay = null;
   lastTick = performance.now();
   questionRequestKey = "";
   runFinished = false;
@@ -1398,7 +1760,10 @@ async function initializeRunEntry() {
       currentLevel.id,
       currentLabyrinthNumber,
       sharedParametersNeedNotice,
-      locator?.runId
+      locator?.runId,
+      locator
+        ? rulesetIdentityFromLocator(locator)
+        : sharedLocationRuleset
     );
     return;
   }
@@ -1448,7 +1813,7 @@ function startDailyRun() {
     "",
     `/play?daily=${encodeURIComponent(daily.date)}`
   );
-  startRun(locator, daily);
+  void startRun(locator, daily);
 }
 
 function openDailyDialog() {
@@ -1614,7 +1979,7 @@ async function startFreshRun(replaceRunIdentity = false) {
       replaceRunIdentity
         ? {
             ...activeRunLocator,
-            version: 2,
+            version: 3,
             runId: createRunAccessId(),
             pending: false
           }
@@ -1627,7 +1992,7 @@ async function startFreshRun(replaceRunIdentity = false) {
     return false;
   }
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -1637,25 +2002,34 @@ async function startFreshRun(replaceRunIdentity = false) {
  * @param {number} labyrinthNumber
  * @param {boolean} [showAdjustedNotice]
  * @param {string} [runId]
+ * @param {{ atlasRegionId?: string, revision?: string } | null} [rulesetIdentity]
  */
 async function startSharedRun(
   seed,
   levelId,
   labyrinthNumber,
   showAdjustedNotice = false,
-  runId
+  runId,
+  rulesetIdentity
 ) {
   const canRecover =
     typeof runId === "string" &&
-    activeRunLocator?.version === 2 &&
+    (activeRunLocator?.version === 2 || activeRunLocator?.version === 3) &&
     activeRunLocator.pending === false &&
     activeRunLocator.runId === runId;
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const locator = withRunAccessId({
-    version: runId ? 2 : 1,
+    version: 3,
     ...(runId ? { runId } : {}),
+    pending: false,
     seed,
     levelId,
-    labyrinthNumber
+    labyrinthNumber,
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   });
   if (!(await authorizeRunLocator(locator))) {
     return false;
@@ -1666,7 +2040,7 @@ async function startSharedRun(
   if (!canRecover) {
     await beginActiveRunRecovery(locator);
   }
-  startRun(locator, null, recoveredRun);
+  await startRun(locator, null, recoveredRun);
   if (recoveredRun) {
     await openCampfireResume();
   }
@@ -1683,7 +2057,11 @@ async function startSharedRun(
 /** @param {string} levelId @param {number} labyrinthNumber */
 function createFreshLocator(levelId, labyrinthNumber) {
   const level = getQuestLevel(levelId);
-  const config = getLabyrinthConfig(levelId, labyrinthNumber);
+  const ruleset = getQuestRunRuleset(labyrinthNumber);
+  const config = {
+    ...getLabyrinthConfig(levelId, labyrinthNumber),
+    ruleset
+  };
   const usedFingerprints = new Set([
     ...questProgress.usedMapFingerprints,
     labyrinthFingerprint(run)
@@ -1696,12 +2074,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     const candidate = createRun(seed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
       return withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed: candidate.seed,
         levelId: level.id,
-        labyrinthNumber
+        labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       });
     }
   }
@@ -1711,12 +2091,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     const candidate = createRun(fallbackSeed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
       return withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed: candidate.seed,
         levelId: level.id,
-        labyrinthNumber
+        labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       });
     }
   }
@@ -1727,14 +2109,17 @@ function createFreshLocator(levelId, labyrinthNumber) {
 /** @param {string} levelId @param {string} [seed] */
 async function startNewQuest(levelId, seed) {
   const nextProgress = createQuestProgress(levelId);
+  const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
   const locator = seed
     ? withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed,
         levelId: nextProgress.levelId,
-        labyrinthNumber: nextProgress.labyrinthNumber
+        labyrinthNumber: nextProgress.labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       })
     : createFreshLocator(
         nextProgress.levelId,
@@ -1754,7 +2139,7 @@ async function startNewQuest(levelId, seed) {
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -1762,15 +2147,27 @@ async function startNewQuest(levelId, seed) {
  * @param {string} levelId
  * @param {number} labyrinthNumber
  * @param {string} seed
+ * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
  */
-async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
+async function startRecordedLabyrinth(
+  levelId,
+  labyrinthNumber,
+  seed,
+  rulesetIdentity
+) {
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const locator = withRunAccessId({
-    version: 2,
+    version: 3,
     runId: createRunAccessId(),
     pending: false,
     seed,
     levelId,
-    labyrinthNumber
+    labyrinthNumber,
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   });
   if (!(await authorizeRunLocator(locator))) {
     return false;
@@ -1783,7 +2180,7 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
   );
   window.history.replaceState({}, "", "/play");
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -2087,7 +2484,8 @@ async function resumePendingRun() {
     activeRunLocator.levelId,
     activeRunLocator.labyrinthNumber,
     false,
-    activeRunLocator.runId
+    activeRunLocator.runId,
+    rulesetIdentityFromLocator(activeRunLocator)
   );
   if (!started) {
     lifetimeReturnConfirmed = false;
@@ -2162,14 +2560,22 @@ function handleAuthenticationChange(signedIn) {
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   if (
-    authenticationObserved &&
-    authenticatedUserId &&
-    authenticatedUserId !== (userId ?? "")
+    (
+      authenticationObserved &&
+      authenticatedUserId &&
+      authenticatedUserId !== (userId ?? "")
+    ) ||
+    hasRunReplayOwnerMismatch(userId)
   ) {
     clearActiveRunRecoveryForIdentityChange();
   }
   authenticationObserved = true;
   authenticatedUserId = userId ?? "";
+  runRecords = loadRunRecords(undefined, userId);
+  bestEscapeRecord = bestEscape(runRecords);
+  if (elements.recordsDialog.open) {
+    renderRunRecords();
+  }
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
       ?.then((view) => view.replaceSavedSettings(record.settings))
@@ -2185,6 +2591,18 @@ function handleAuthenticationChange(signedIn) {
 }
 
 function clearActiveRunRecoveryForIdentityChange() {
+  if (scrubRunReplays()) {
+    runRecords = loadRunRecords();
+    bestEscapeRecord = bestEscape(runRecords);
+    if (elements.recordsDialog.open) {
+      renderRunRecords();
+    }
+  } else {
+    const message =
+      "This device could not erase account-context Run Replay details. Clear this site's data before another player uses this device.";
+    announce(message);
+    showEvent(message);
+  }
   if (!activeRunRecoveryController) {
     if (scrubActiveRunRecovery()) {
       return;
@@ -2450,6 +2868,22 @@ function usePulse() {
   transition({ type: "pulse" });
 }
 
+function ringBell() {
+  if (
+    activeFirstLight ||
+    isDemoBlocked() ||
+    completedQuestIdle ||
+    run.status !== "active"
+  ) {
+    return;
+  }
+  const shouldRestoreFocus = document.activeElement === elements.bell;
+  transition({ type: "ring-bell" });
+  if (shouldRestoreFocus && run.status === "active") {
+    canvas.focus();
+  }
+}
+
 function togglePause() {
   if (
     isDemoBlocked() ||
@@ -2496,6 +2930,7 @@ function transition(action) {
     if (
       [
         "echo-collected",
+        "signal-bell-rung",
         "gate-locked",
         "gate-warden-challenge",
         "gate-warden-defeated",
@@ -2534,13 +2969,22 @@ function transition(action) {
   if (recoveryResult?.status === "unavailable") {
     reportActiveRunRecoveryUnavailable();
   }
+  if (
+    recoveryResult?.status === "terminal" &&
+    "replay" in recoveryResult
+  ) {
+    pendingRunReplay = recoveryResult.replay ?? null;
+  }
   if (!runFinished && (run.status === "won" || run.status === "lost")) {
-    finishRun();
+    void finishRun();
   }
 }
 
 function syncChallengeDialog() {
   if (run.status !== "challenge" || !run.challenge) {
+    stagedGateWardenId = null;
+    gateStagingComplete = false;
+    elements.gateStagingSkip.hidden = true;
     hintVisible = false;
     hideSkipWarning();
     if (elements.challengeDialog.open) {
@@ -2555,6 +2999,10 @@ function syncChallengeDialog() {
   }
 
   const isGateWarden = run.challenge.kind === "gate-warden";
+  if (isGateWarden && stagedGateWardenId !== run.challenge.wardenId) {
+    stagedGateWardenId = run.challenge.wardenId;
+    gateStagingComplete = false;
+  }
   elements.challengeDialog.dataset.kind = isGateWarden
     ? "gate-warden"
     : "warden";
@@ -2595,6 +3043,22 @@ function syncChallengeDialog() {
     elements.skipQuestion.disabled = true;
     elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
+    if (isGateWarden && !gateStagingComplete) {
+      const theme = activeRegionTheme();
+      elements.challengeKicker.textContent =
+        `${theme?.wardenGuild ?? "Gate Warden"} entrance`;
+      elements.challengeQuestion.textContent =
+        "The universal diamond crest marks the Gate Warden. The timer is paused.";
+      elements.challengeSource.textContent =
+        "Skip the entrance whenever you are ready. No Run state changes.";
+      elements.gateStagingSkip.hidden = false;
+      elements.gateStagingSkip.textContent = "Skip entrance · Begin challenge";
+      requestAnimationFrame(() =>
+        elements.gateStagingSkip.focus({ preventScroll: true })
+      );
+      return;
+    }
+    elements.gateStagingSkip.hidden = true;
     void loadChallengeQuestion();
     return;
   }
@@ -2805,12 +3269,38 @@ function questionRequestIdentifier(request) {
 }
 
 function updateInterface() {
+  const regionTheme = activeRegionTheme();
+  document.body.dataset.regionTheme = regionTheme?.id ?? "";
+  setAmbientAudio(
+    run.ruleset.atlasRegionId,
+    !activeFirstLight && run.status === "active" && !document.hidden
+  );
   renderer.render(run);
   canvas.setAttribute(
     "aria-label",
     activeFirstLight
       ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
-      : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+      : run.signalBells.length > 0
+        ? `Interactive maze with ${
+          run.signalBells.filter((bell) => !bell.spent).length
+        } unspent visible Signal Bells. Ring Bell appears only while adjacent and Lures revealed ordinary Wardens for one action. Hidden and Gate Wardens are unaffected. Use arrow keys or WASD to move.`
+      : run.tideDoors.length > 0
+        ? `Interactive maze with visible Tide Doors currently ${
+          run.tideDoors[0]?.open ? "open" : "sealed"
+        }. Explorer and Wardens share this phase for the action; each successful Move or Pulse changes the next phase. Tide Doors remain visible through Fog. Use arrow keys or WASD to move. Press Q or Space to use Pulse.`
+      : run.echoBridges.length > 0
+        ? `Interactive maze with matching numbered Echo and Echo Bridge marks. ${
+          run.echoBridges
+            .map((bridge) =>
+              `Pair ${bridge.echoIndex + 1} ${
+                bridge.open ? "open" : "sealed"
+              }`
+            )
+            .join(", ")
+        }. Each Bridge is visible through Fog and works for Explorer and Warden. Use arrow keys or WASD to move. Press Q or Space to use Pulse.`
+      : run.windways.length > 0
+        ? "Interactive maze with directional Windway source and destination marks. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+        : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
   );
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
@@ -2823,7 +3313,7 @@ function updateInterface() {
     ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
     : activeFirstLight
       ? "One Echo · One Warden · One Gate"
-      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
+      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${formatRunRulesetLabel(run.ruleset, currentLabyrinthNumber)}`;
   elements.questHeadline.textContent = activeDaily
     ? `Today’s shared Labyrinth: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`
     : activeFirstLight
@@ -2844,15 +3334,31 @@ function updateInterface() {
   elements.pulseCount.textContent = String(run.pulses);
   playerController.updateScore(activeFirstLight ? 0 : run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
+  const adjacentBell = run.signalBells.find(
+    (bell) =>
+      !bell.spent &&
+      Math.abs(bell.row - run.explorer.row) +
+        Math.abs(bell.col - run.explorer.col) === 1
+  );
+  elements.bell.hidden = !adjacentBell;
+  elements.bell.disabled = run.status !== "active";
   elements.dailyButton.disabled =
-    run.status === "challenge" || activeFirstLight;
+    terminalPresentationPending || run.status === "challenge" || activeFirstLight;
   elements.atlasButton.disabled =
-    run.status === "challenge" || activeDaily !== null || activeFirstLight;
+    terminalPresentationPending ||
+    run.status === "challenge" ||
+    activeDaily !== null ||
+    activeFirstLight;
   elements.journalButton.disabled =
-    run.status === "challenge" || activeFirstLight;
+    terminalPresentationPending || run.status === "challenge" || activeFirstLight;
   elements.recordsButton.disabled =
-    run.status === "challenge" || activeDaily !== null || activeFirstLight;
-  elements.settingsButton.disabled = run.status === "challenge";
+    terminalPresentationPending ||
+    run.status === "challenge" ||
+    activeDaily !== null ||
+    activeFirstLight;
+  elements.settingsButton.disabled =
+    terminalPresentationPending || run.status === "challenge";
+  elements.newRun.disabled = terminalPresentationPending;
   elements.newRun.textContent = activeDaily
     ? "Return to Quest"
     : activeFirstLight
@@ -2881,6 +3387,13 @@ function updateInterface() {
   const wardenMode = summarizeWardenMode();
   elements.wardenState.textContent = wardenModeLabel(wardenMode);
   elements.wardenReadout.dataset.mode = wardenMode;
+  elements.wardenGuild.textContent = regionTheme
+    ? `${regionTheme.wardenGuild} · ${regionTheme.ambientLabel} is optional.`
+    : "Universal Warden marks";
+  elements.echoBridgeLegend.hidden = run.echoBridges.length === 0;
+  elements.tideDoorLegend.hidden = run.tideDoors.length === 0;
+  elements.signalBellLegend.hidden = run.signalBells.length === 0;
+  elements.windwayLegend.hidden = run.windways.length === 0;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");
   renderPips(
@@ -2908,7 +3421,22 @@ function updateInterface() {
   renderStory();
 }
 
-function finishRun() {
+/** @param {boolean} pending */
+function setTerminalPresentationPending(pending) {
+  terminalPresentationPending = pending;
+  for (const button of [
+    elements.atlasButton,
+    elements.dailyButton,
+    elements.journalButton,
+    elements.newRun,
+    elements.recordsButton,
+    elements.settingsButton
+  ]) {
+    button.disabled = pending;
+  }
+}
+
+async function finishRun() {
   runFinished = true;
   const won = run.status === "won";
   if (activeFirstLight) {
@@ -2923,6 +3451,7 @@ function finishRun() {
   }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
+  const runReplayOwnerId = playerController.getAuthenticatedUserId();
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,
@@ -2930,9 +3459,21 @@ function finishRun() {
     outcome: won ? "escaped" : "defeated",
     echoesCollected,
     echoTotal: run.echoes.length,
+    questId: questProgress.questId,
     questLevelId: currentLevel.id,
-    labyrinthNumber: currentLabyrinthNumber
-  });
+    labyrinthNumber: currentLabyrinthNumber,
+    atlasRegionId: run.ruleset.atlasRegionId,
+    rulesetRevision: run.ruleset.revision,
+    ...(pendingRunReplay
+      ? {
+          replay: pendingRunReplay,
+          ...(runReplayOwnerId
+            ? { replayOwnerId: runReplayOwnerId }
+            : {})
+        }
+      : {})
+  }, undefined, runReplayOwnerId);
+  pendingRunReplay = null;
   bestEscapeRecord = bestEscape(runRecords);
   if (won) {
     void playerController.submitEscapedRun(
@@ -2942,7 +3483,9 @@ function finishRun() {
         elapsedMs: run.elapsedMs,
         score: run.score,
         wardensDefeated: run.wardensDefeated,
-        echoesCollected
+        echoesCollected,
+        atlasRegionId: run.ruleset.atlasRegionId,
+        rulesetRevision: run.ruleset.revision
       },
       currentLevel.id,
       finishedLabyrinthNumber
@@ -2961,30 +3504,99 @@ function finishRun() {
   );
   window.history.replaceState({}, "", "/play");
 
-  const questComplete = won && questProgress.complete;
+  const terminal = {
+    run,
+    progress: questProgress,
+    levelName: currentLevel.name,
+    labyrinthNumber: finishedLabyrinthNumber,
+    echoesCollected,
+    standing: resultStanding(),
+    regionTheme: activeRegionTheme(),
+    oneFreeRunRemaining:
+      latestRunAccess?.state === "free" &&
+      latestRunAccess.freeRunsRemaining === 1
+  };
+  const questComplete = won && terminal.progress.complete;
+  const sigilMilestone =
+    won &&
+    isGateWardenMilestone(terminal.labyrinthNumber) &&
+    terminal.regionTheme !== null;
+  setTerminalPresentationPending(true);
+
+  try {
+  let atlasModule = null;
+  let atlasSummaryModule = null;
+  try {
+    [atlasModule, atlasSummaryModule] = await Promise.all([
+      import("./game/quest-atlas.js"),
+      import("./game/quest-atlas-summary.js")
+    ]);
+  } catch {
+    // The terminal record is already saved; presentation falls back below.
+  }
+  if (run !== terminal.run || !runFinished) {
+    return;
+  }
+
+  let ceremonyModule = null;
+  if (sigilMilestone) {
+    try {
+      ceremonyModule = await import("./game/region-ceremony.js");
+    } catch {
+      // A ceremony is presentation only; the compact milestone remains usable.
+    }
+  }
+  if (run !== terminal.run || !runFinished) {
+    return;
+  }
+  let sigilCeremony = false;
+  try {
+    sigilCeremony =
+      ceremonyModule?.claimRegionCeremony(
+        terminal.progress.questId,
+        terminal.run.ruleset.atlasRegionId
+      ) === "full";
+  } catch {
+    // Storage access cannot strand the saved terminal result.
+  }
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
+    : sigilCeremony
+      ? `${terminal.regionTheme?.name ?? "Region"} Sigil ceremony`
+    : sigilMilestone
+      ? `${terminal.regionTheme?.name ?? "Region"} milestone`
     : won
-      ? `Labyrinth ${finishedLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
-      : `Labyrinth ${finishedLabyrinthNumber} ended`;
+      ? `Labyrinth ${terminal.labyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
+      : `Labyrinth ${terminal.labyrinthNumber} ended`;
   elements.resultTitle.textContent = questComplete
     ? "You mastered all twenty Labyrinths."
+    : sigilCeremony
+      ? `The ${terminal.regionTheme?.sigilName ?? "Sigil"} returns.`
+    : sigilMilestone
+      ? `The ${terminal.regionTheme?.sigilName ?? "Sigil"} remains restored.`
     : won
       ? "You brought these Echoes home."
       : "The maze light needs a rest.";
   elements.resultSummary.textContent = questComplete
-    ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
+    ? `${terminal.levelName} is complete. Every Warden Question in this Quest stayed unique.`
+    : sigilCeremony
+      ? "The restored Atlas landmark is the only lasting result. No currency, inventory, or gameplay reward is created."
+    : sigilMilestone
+      ? "Compact result: the Atlas landmark is already restored. No additional gameplay reward is created."
     : won
-      ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
-      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
-  renderQuestAtlasSummary(
-    elements.resultAtlas,
-    projectQuestAtlas(questProgress),
-    { finishedLabyrinthNumber, won }
-  );
-  elements.resultAccessNote.hidden =
-    latestRunAccess?.state !== "free" ||
-    latestRunAccess.freeRunsRemaining !== 1;
+      ? `Next: Labyrinth ${terminal.progress.labyrinthNumber} · ${getDifficultyBand(terminal.progress.labyrinthNumber).label}. Its paths and Questions will be harder.`
+      : `You found ${terminal.echoesCollected} of ${terminal.run.echoes.length} Echoes. Try Labyrinth ${terminal.labyrinthNumber} again with a fresh path and full Vitality.`;
+  if (atlasModule && atlasSummaryModule) {
+    atlasSummaryModule.renderQuestAtlasSummary(
+      elements.resultAtlas,
+      atlasModule.projectQuestAtlas(terminal.progress),
+      { finishedLabyrinthNumber: terminal.labyrinthNumber, won }
+    );
+  } else {
+    elements.resultAtlas.textContent =
+      "Atlas summary unavailable. Quest progress is saved.";
+  }
+  elements.resultAccessNote.hidden = !terminal.oneFreeRunRemaining;
   elements.resultAccessNote.textContent = elements.resultAccessNote.hidden
     ? ""
     : "One free Run remains.";
@@ -2995,6 +3607,8 @@ function finishRun() {
       : "retry";
   elements.replay.textContent = questComplete
     ? "New Quest"
+    : sigilCeremony
+      ? "Skip ceremony · Continue Quest"
     : won
       ? "Continue Quest"
       : "Retry Labyrinth";
@@ -3002,7 +3616,9 @@ function finishRun() {
   if (!playerController.hasAuthenticatedUser()) {
     markGuestDemoPendingAuthentication();
     demoAccessPending = true;
-    showDemoAccountGate();
+    if (!sigilMilestone) {
+      showDemoAccountGate();
+    }
     void playerController.isAuthenticated().then((authenticated) => {
       if (authenticated) {
         clearPendingGuestDemo();
@@ -3013,12 +3629,15 @@ function finishRun() {
       demoAccessPending = true;
     });
   }
-  elements.resultTime.textContent = formatTime(run.elapsedMs);
-  elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
-  elements.resultSeed.textContent = run.seed;
-  elements.resultRank.textContent = resultStanding();
+  elements.resultTime.textContent = formatTime(terminal.run.elapsedMs);
+  elements.resultMoves.textContent = String(terminal.run.moves).padStart(3, "0");
+  elements.resultSeed.textContent = terminal.run.seed;
+  elements.resultRank.textContent = terminal.standing;
   renderRunRecords();
-  updateInterface();
+  } finally {
+    setTerminalPresentationPending(false);
+    updateInterface();
+  }
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
@@ -3253,6 +3872,7 @@ function playEventSound(type) {
     "gate-warden-defeated": "correct",
     "echo-collected": "echo",
     pulse: "pulse",
+    "signal-bell-rung": "bell",
     "challenge-started": "challenge",
     "question-skipped-free": "pulse",
     "question-skipped-paid": "wrong",
@@ -3263,7 +3883,7 @@ function playEventSound(type) {
   });
   const cue = cues[type];
   if (cue) {
-    audio.play(cue);
+    playAudio(cue);
   }
 }
 
@@ -3352,16 +3972,24 @@ function createDailyShareLink(daily) {
  * @param {string} [seed]
  * @param {string} [levelId]
  * @param {number} [labyrinthNumber]
+ * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
  */
 function createShareLink(
   seed = run.seed,
   levelId = currentLevel.id,
-  labyrinthNumber = currentLabyrinthNumber
+  labyrinthNumber = currentLabyrinthNumber,
+  rulesetIdentity = run.ruleset
 ) {
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const url = new URL("/play", window.location.origin);
   url.searchParams.set("seed", seed);
   url.searchParams.set("level", levelId);
   url.searchParams.set("labyrinth", String(labyrinthNumber));
+  url.searchParams.set("region", ruleset.atlasRegionId);
+  url.searchParams.set("rules", ruleset.revision);
   return url.toString();
 }
 
@@ -3374,14 +4002,67 @@ function hasInvalidSharedParameters() {
   const seed = url.searchParams.get("seed");
   const levelId = url.searchParams.get("level");
   const labyrinthNumber = Number(url.searchParams.get("labyrinth"));
+  const ruleset = rulesetFromLocation(labyrinthNumber);
+  const hasRegion = url.searchParams.has("region");
+  const hasRules = url.searchParams.has("rules");
   return (
     !seed ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(seed) ||
     !["bright-start", "trail-scout", "maze-master"].includes(levelId ?? "") ||
     !Number.isInteger(labyrinthNumber) ||
     labyrinthNumber < 1 ||
-    labyrinthNumber > QUEST_LABYRINTH_COUNT
+    labyrinthNumber > QUEST_LABYRINTH_COUNT ||
+    hasRegion !== hasRules ||
+    (hasRegion && ruleset === null)
   );
+}
+
+/** @param {number} labyrinthNumber */
+function rulesetFromLocation(labyrinthNumber) {
+  if (
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  ) {
+    return null;
+  }
+  const url = new URL(window.location.href);
+  const atlasRegionId = url.searchParams.get("region");
+  const revision = url.searchParams.get("rules");
+  if (atlasRegionId === null && revision === null) {
+    return getClassicRunRuleset(labyrinthNumber);
+  }
+  if (!atlasRegionId || !revision) {
+    return null;
+  }
+  return normalizeRunRuleset(
+    { atlasRegionId, revision },
+    labyrinthNumber
+  );
+}
+
+/**
+ * @param {{ atlasRegionId?: string, rulesetRevision?: string }} locator
+ */
+function rulesetIdentityFromLocator(locator) {
+  return locator.atlasRegionId === undefined &&
+    locator.rulesetRevision === undefined
+    ? undefined
+    : {
+        atlasRegionId: locator.atlasRegionId,
+        revision: locator.rulesetRevision
+      };
+}
+
+/**
+ * @param {{ revision: string, label: string }} ruleset
+ * @param {number} labyrinthNumber
+ */
+function formatRunRulesetLabel(ruleset, labyrinthNumber) {
+  const region = getDifficultyBand(labyrinthNumber);
+  return ruleset.revision === CLASSIC_RULESET_REVISION
+    ? `Atlas Region: ${region.label} · Classic Rules`
+    : `Atlas Region: ${region.label} · Trail Twist: ${ruleset.label}`;
 }
 
 function levelFromLocation() {
@@ -3406,6 +4087,9 @@ function summarizeWardenMode(gameRun = run) {
   if (gameRun.wardens.length === 0) {
     return "cleared";
   }
+  if (gameRun.wardens.some((warden) => warden.mode === "lured")) {
+    return "lured";
+  }
   if (gameRun.wardens.some((warden) => warden.mode === "intercept")) {
     return "intercept";
   }
@@ -3415,10 +4099,11 @@ function summarizeWardenMode(gameRun = run) {
   return "patrol";
 }
 
-/** @param {"patrol" | "hunt" | "intercept" | "cleared"} mode */
+/** @param {"patrol" | "hunt" | "intercept" | "lured" | "cleared"} mode */
 function wardenModeLabel(mode) {
   return {
     cleared: "Path clear",
+    lured: "Lured to Bell",
     intercept: "Intercept active",
     hunt: "Hunt active",
     patrol: "Patrol"
@@ -3443,32 +4128,65 @@ function renderRunRecords() {
       const actions = document.createElement("div");
       const replay = document.createElement("button");
       const copy = document.createElement("button");
+      const watch = record.replay
+        ? document.createElement("button")
+        : null;
 
       const outcome = record.outcome === "escaped" ? "Escaped" : "Defeated";
       const level = getQuestLevel(record.questLevelId);
+      const ruleset =
+        normalizeRunRuleset(
+          record.atlasRegionId || record.rulesetRevision
+            ? {
+                atlasRegionId: record.atlasRegionId,
+                revision: record.rulesetRevision
+              }
+            : undefined,
+          record.labyrinthNumber ?? 1
+        ) ?? getClassicRunRuleset(record.labyrinthNumber ?? 1);
       title.textContent =
         `#${index + 1} ${outcome} / ${level.name} / ${formatTime(record.elapsedMs)}`;
       detail.textContent =
-        `Labyrinth ${record.labyrinthNumber ?? 1} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
+        `Labyrinth ${record.labyrinthNumber ?? 1} / ${formatRunRulesetLabel(ruleset, record.labyrinthNumber ?? 1)} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
       replay.type = "button";
       replay.className = "control-button";
       replay.dataset.seed = record.seed;
       replay.dataset.level = record.questLevelId ?? "trail-scout";
       replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
+      replay.dataset.region = ruleset.atlasRegionId;
+      replay.dataset.ruleset = ruleset.revision;
       replay.dataset.recordAction = "replay";
-      replay.textContent = "Replay";
-      replay.setAttribute("aria-label", `Replay seed ${record.seed}`);
+      replay.textContent = "Play This Seed";
+      replay.setAttribute("aria-label", `Play seed ${record.seed}`);
+      if (watch) {
+        watch.type = "button";
+        watch.className = "primary-button";
+        watch.dataset.seed = record.seed;
+        watch.dataset.recordAction = "watch";
+        watch.dataset.recordIndex = String(index);
+        watch.textContent = "Watch Trail";
+        watch.setAttribute(
+          "aria-label",
+          `Watch retained Trail for seed ${record.seed}`
+        );
+      }
       copy.type = "button";
       copy.className = "control-button";
       copy.dataset.seed = record.seed;
       copy.dataset.level = record.questLevelId ?? "trail-scout";
       copy.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
+      copy.dataset.region = ruleset.atlasRegionId;
+      copy.dataset.ruleset = ruleset.revision;
       copy.dataset.recordAction = "copy";
       copy.textContent = "Copy Share Link";
       copy.setAttribute("aria-label", `Copy share link for seed ${record.seed}`);
       summary.append(title, detail);
       actions.className = "run-records__actions";
-      actions.append(copy, replay);
+      actions.append(copy);
+      if (watch) {
+        actions.append(watch);
+      }
+      actions.append(replay);
       item.append(summary, actions);
       return item;
     })
@@ -3480,7 +4198,10 @@ function resultStanding() {
     (record) =>
       record.seed === run.seed &&
       (record.questLevelId ?? "trail-scout") === currentLevel.id &&
-      (record.labyrinthNumber ?? 1) === currentLabyrinthNumber
+      (record.labyrinthNumber ?? 1) === currentLabyrinthNumber &&
+      (record.atlasRegionId ?? run.ruleset.atlasRegionId) ===
+        run.ruleset.atlasRegionId &&
+      (record.rulesetRevision ?? "classic-v1") === run.ruleset.revision
   );
   if (index === -1) {
     return "Outside top 5";

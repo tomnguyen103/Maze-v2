@@ -2,8 +2,10 @@ import {
   DIFFICULTY_BANDS,
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
+  getQuestLevel,
   isGateWardenMilestone
 } from "../questions/quest-levels.js";
+import { getRegionTheme } from "./region-theme.js";
 
 /** @typedef {"completed" | "current" | "ahead" | "milestone" | "completed-milestone"} AtlasNodeState */
 /** @typedef {{
@@ -14,29 +16,96 @@ import {
  *   complete: boolean
  * }} QuestProgressLike */
 
+/** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
+const REGION_METADATA = Object.freeze({
+  foundation: Object.freeze({
+    motif: "Lantern moss and quiet stone",
+    fieldNotes: Object.freeze([
+      "Mosslight wakes along the first quiet stones.",
+      "The Bramblewatch keeps its universal Patrol marks.",
+      "An Echo hushes ordinary footsteps for one action.",
+      "The First Echo Sigil waits beyond the Gate Warden."
+    ])
+  }),
+  developing: Object.freeze({
+    motif: "Rising wind and bright trail ribbons",
+    fieldNotes: Object.freeze([
+      "Windcall ribbons point from each Windway source to its landing.",
+      "The Kitewatch keeps universal Warden marks clear in the rising wind.",
+      "One Windway action carries the Explorer exactly one extra legal tile.",
+      "The Rising Wind Sigil waits beyond the Gate Warden."
+    ])
+  }),
+  capable: Object.freeze({
+    motif: "Joined arches and clear blue spans",
+    fieldNotes: Object.freeze([
+      "Each sealed Echo Bridge marks a shortcut waiting to open.",
+      "A recovered Echo opens its paired Bridge for Explorer and Warden.",
+      "Sunspan crossings add paths without closing the stone route.",
+      "The Joined Path Sigil waits beyond the Gate Warden."
+    ])
+  }),
+  advanced: Object.freeze({
+    motif: "Sea-glass channels and alternating tide marks",
+    fieldNotes: Object.freeze([
+      "Visible Tide Doors begin open, then alternate together after each successful Move or Pulse.",
+      "Explorer and Warden share the same Tide Door phase for the whole action.",
+      "Blocked paths, Questions, Hints, and pauses leave the tide unchanged.",
+      "The Turning Tide Sigil waits beyond the Gate Warden."
+    ])
+  }),
+  mastery: Object.freeze({
+    motif: "Beacon bells and resonant stone",
+    fieldNotes: Object.freeze([
+      "One-use Signal Bells wait on visible passages across Bellroot Summit.",
+      "Ring an adjacent Bell to lure only revealed ordinary Wardens for one action.",
+      "Hidden Wardens and Gate Wardens ignore the signal; normal modes return next action.",
+      "The Last Light Sigil waits beyond the final Gate Warden."
+    ])
+  })
+});
+
 /**
  * Project the complete Echo Atlas without storing or changing Quest Progress.
  *
  * @param {QuestProgressLike} progress
+ * @param {{ watchTrailLandmarkIds?: ReadonlySet<string> }} [options]
  */
-export function projectQuestAtlas(progress) {
+export function projectQuestAtlas(
+  progress,
+  { watchTrailLandmarkIds = new Set() } = {}
+) {
+  const level = getQuestLevel(progress.levelId);
+  const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
   const regions = DIFFICULTY_BANDS.map((_, regionIndex) => {
     const start = regionIndex * 4 + 1;
     const end = start + 3;
     const band = getDifficultyBand(start);
+    const metadata = REGION_METADATA[band.id];
+    const theme = getRegionTheme(band.id);
     const nodes = Array.from({ length: 4 }, (_, offset) =>
-      projectNode(progress, start + offset)
+      projectNode(
+        progress,
+        start + offset,
+        band,
+        metadata.fieldNotes[offset],
+        level.questionGuide,
+        retainedLandmarkIds
+      )
     );
     const sigilRestored = progress.completedLabyrinths >= end;
     return {
       id: band.id,
       index: regionIndex,
       label: band.label,
+      themeName: theme?.name ?? band.label,
+      wardenGuild: theme?.wardenGuild ?? null,
+      motif: metadata.motif,
       rangeLabel: `Labyrinths ${start}-${end}`,
       sigilRestored,
       sigilLabel: sigilRestored
-        ? "Sigil restored"
-        : `Sigil restores at Labyrinth ${end}`,
+        ? `${theme?.sigilName ?? "Sigil"} restored`
+        : `${theme?.sigilName ?? "Sigil"} restores at Labyrinth ${end}`,
       nodes
     };
   });
@@ -65,8 +134,20 @@ export function projectQuestAtlas(progress) {
 /**
  * @param {QuestProgressLike} progress
  * @param {number} labyrinthNumber
+ * @param {{ id: string, label: string }} band
+ * @param {string} fieldNote
+ * @param {string} learningFocus
+ * @param {ReadonlySet<string>} retainedLandmarkIds
  */
-function projectNode(progress, labyrinthNumber) {
+function projectNode(
+  progress,
+  labyrinthNumber,
+  band,
+  fieldNote,
+  learningFocus,
+  retainedLandmarkIds
+) {
+  const id = `${band.id}-${labyrinthNumber}`;
   const milestone = isGateWardenMilestone(labyrinthNumber);
   const completed = labyrinthNumber <= progress.completedLabyrinths;
   const current = !progress.complete &&
@@ -84,9 +165,14 @@ function projectNode(progress, labyrinthNumber) {
   const stateLabel = atlasStateLabel({ completed, current, milestone });
 
   return {
+    id,
     labyrinthNumber,
+    difficultyBand: band.label,
+    fieldNote,
+    learningFocus,
     completed,
     current,
+    watchTrailAvailable: completed && retainedLandmarkIds.has(id),
     milestone,
     state,
     stateLabel,

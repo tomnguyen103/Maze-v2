@@ -239,7 +239,10 @@ describe("player client", () => {
         timeoutMs: 10
       });
 
-      const assertion = expect(client.getLeaderboard()).rejects.toMatchObject({
+      const assertion = expect(client.getLeaderboard({
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1"
+      })).rejects.toMatchObject({
         name: "AbortError"
       });
       await vi.advanceTimersByTimeAsync(10);
@@ -283,7 +286,10 @@ describe("player client", () => {
         timeoutMs: 10
       });
 
-      const assertion = expect(client.getLeaderboard()).rejects.toMatchObject({
+      const assertion = expect(client.getLeaderboard({
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1"
+      })).rejects.toMatchObject({
         name: "AbortError"
       });
       await vi.advanceTimersByTimeAsync(10);
@@ -298,7 +304,9 @@ describe("player client", () => {
       seed: "MOSS-WATCH-11",
       moves: 81,
       elapsedMs: 92000,
-      score: 900
+      score: 900,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     };
 
     expect(createRunIdempotencyKey(run, "trail-scout", 4)).toBe(
@@ -306,6 +314,13 @@ describe("player client", () => {
     );
     expect(createRunIdempotencyKey(run, "trail-scout", 4)).toMatch(
       /^[a-z0-9_-]{12,128}$/
+    );
+    expect(createRunIdempotencyKey(run, "trail-scout", 4)).not.toBe(
+      createRunIdempotencyKey(
+        { ...run, rulesetRevision: "classic-v1" },
+        "trail-scout",
+        4
+      )
     );
   });
 
@@ -447,6 +462,25 @@ describe("player client", () => {
         new Headers(call[1].headers).get("x-echo-maze-classroom-id")
       ).toBe("org_morning_123");
     }
+  });
+
+  it("requests one exact public scoreboard partition", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ entries: [], globalMaxScore: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({ fetchImpl });
+
+    await client.getLeaderboard({
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1"
+    });
+
+    expect(/** @type {any[][]} */ (fetchImpl.mock.calls)[0]?.[0]).toBe(
+      "/api/leaderboard?region=advanced&rules=tide-doors-v1"
+    );
   });
 
   it("keeps the public Daily board unauthenticated and verified submissions global", async () => {

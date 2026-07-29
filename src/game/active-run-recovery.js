@@ -1,6 +1,8 @@
 import { applyAction, createRun } from "./game-session.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
+import { createTerminalRunReplay } from "./run-replay-contract.js";
+import { normalizeRunRuleset } from "./run-ruleset.js";
 import {
   ACTIVE_RUN_RECOVERY_KEY,
   scrubActiveRunRecovery
@@ -17,18 +19,20 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  *   removeItem: (key: string) => unknown
  * }} StorageLike
  * @typedef {{
- *   version: 2,
+ *   version: 3,
  *   runId: string,
  *   pending: false,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId: string,
+ *   rulesetRevision: string
  * }} RecoveryIdentity
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
- *   | { type: "pulse" | "reveal-hint", elapsedMs: number }
+ *   | { type: "pulse" | "ring-bell" | "reveal-hint", elapsedMs: number }
  *   | { type: "provide-question", question: ReturnType<typeof normalizeQuestion>, elapsedMs: number }
- *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, elapsedMs: number }
+ *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, hintUsed: boolean, elapsedMs: number }
  * } RecoveryAction
  * @typedef {{
  *   version: 1,
@@ -38,13 +42,18 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  * }} RecoveryEnvelope
  */
 
-const IDENTITY_KEYS = [
+const LEGACY_IDENTITY_KEYS = [
   "version",
   "runId",
   "pending",
   "seed",
   "levelId",
   "labyrinthNumber"
+];
+const IDENTITY_KEYS = [
+  ...LEGACY_IDENTITY_KEYS,
+  "atlasRegionId",
+  "rulesetRevision"
 ];
 const ENVELOPE_KEYS = [
   "version",
@@ -111,11 +120,25 @@ export function createActiveRunRecoveryController(options = {}) {
         return { status: "inactive" };
       }
       if (next.status === "won" || next.status === "lost") {
+        /** @type {ReturnType<typeof createTerminalRunReplay>} */
+        let replay;
+        try {
+          const terminalEntry = recoveryEntry(previous, action, next);
+          const terminalActions = terminalEntry
+            ? appendRecoveryEntry(envelope.actions, terminalEntry)
+            : envelope.actions;
+          replay = createTerminalRunReplay(terminalActions, next);
+        } catch {
+          replay = null;
+        }
         const cleared = scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = !cleared;
         return cleared
-          ? { status: "cleared" }
+          ? {
+              status: "terminal",
+              ...(replay ? { replay } : {})
+            }
           : { status: "unavailable", reason: "storage" };
       }
       /** @type {RecoveryAction | null} */
@@ -378,6 +401,12 @@ function recoveryEntry(previous, action, next) {
     return { type: "pulse", elapsedMs };
   }
   if (
+    action.type === "ring-bell" &&
+    next.moves === previous.moves + 1
+  ) {
+    return { type: "ring-bell", elapsedMs };
+  }
+  if (
     action.type === "provide-question" &&
     previous.status === "challenge" &&
     previous.challenge?.question === null &&
@@ -415,6 +444,7 @@ function recoveryEntry(previous, action, next) {
       explanation: correct
         ? ""
         : previous.challenge.question.explanation,
+      hintUsed: previous.challenge.hintRevealed,
       elapsedMs
     };
   }
@@ -428,6 +458,7 @@ function recoveryEntry(previous, action, next) {
       type: "challenge-outcome",
       outcome: "skip",
       explanation: "",
+      hintUsed: previous.challenge.hintRevealed,
       elapsedMs
     };
   }
@@ -467,10 +498,16 @@ function appendRecoveryEntry(actions, entry) {
 function replayEnvelope(envelope) {
   let run = createRun(
     envelope.identity.seed,
-    getLabyrinthConfig(
-      envelope.identity.levelId,
-      envelope.identity.labyrinthNumber
-    )
+    {
+      ...getLabyrinthConfig(
+        envelope.identity.levelId,
+        envelope.identity.labyrinthNumber
+      ),
+      ruleset: {
+        atlasRegionId: envelope.identity.atlasRegionId,
+        revision: envelope.identity.rulesetRevision
+      }
+    }
   );
   for (const entry of envelope.actions) {
     if (entry.elapsedMs < run.elapsedMs) {
@@ -543,10 +580,13 @@ function replayChallengeOutcome(run, entry) {
     topicId: "arithmetic",
     learningObjectiveId: "scout-equal-groups"
   });
-  const withQuestion = applyAction(run, {
+  let withQuestion = applyAction(run, {
     type: "provide-question",
     question
   });
+  if (entry.hintUsed) {
+    withQuestion = applyAction(withQuestion, { type: "reveal-hint" });
+  }
   if (entry.outcome === "skip") {
     return applyAction(withQuestion, { type: "skip-question" });
   }
@@ -566,6 +606,9 @@ function actionFromEntry(entry) {
   }
   if (entry.type === "pulse") {
     return { type: "pulse" };
+  }
+  if (entry.type === "ring-bell") {
+    return { type: "ring-bell" };
   }
   if (entry.type === "provide-question") {
     return {
@@ -647,11 +690,11 @@ function normalizeAction(value) {
   }
   if (
     typeof candidate.type === "string" &&
-    ["pulse", "reveal-hint"].includes(candidate.type) &&
+    ["pulse", "ring-bell", "reveal-hint"].includes(candidate.type) &&
     hasOnlyKeys(value, ["type", "elapsedMs"])
   ) {
     return {
-      type: /** @type {"pulse" | "reveal-hint"} */ (
+      type: /** @type {"pulse" | "ring-bell" | "reveal-hint"} */ (
         candidate.type
       ),
       elapsedMs
@@ -659,14 +702,22 @@ function normalizeAction(value) {
   }
   if (
     candidate.type === "challenge-outcome" &&
-    hasOnlyKeys(
-      value,
-      ["type", "outcome", "explanation", "elapsedMs"]
+    (
+      hasOnlyKeys(
+        value,
+        ["type", "outcome", "explanation", "elapsedMs"]
+      ) ||
+      hasOnlyKeys(
+        value,
+        ["type", "outcome", "explanation", "hintUsed", "elapsedMs"]
+      )
     ) &&
     typeof candidate.outcome === "string" &&
     ["correct", "wrong", "skip"].includes(candidate.outcome) &&
     typeof candidate.explanation === "string" &&
-    candidate.explanation.length <= 240
+    candidate.explanation.length <= 240 &&
+    (candidate.hintUsed === undefined ||
+      typeof candidate.hintUsed === "boolean")
   ) {
     return {
       type: "challenge-outcome",
@@ -674,6 +725,7 @@ function normalizeAction(value) {
         candidate.outcome
       ),
       explanation: candidate.explanation.trim(),
+      hintUsed: candidate.hintUsed === true,
       elapsedMs
     };
   }
@@ -701,14 +753,30 @@ function normalizeAction(value) {
 function normalizeIdentity(value) {
   if (
     !value ||
-    typeof value !== "object" ||
-    !hasOnlyKeys(value, IDENTITY_KEYS)
+    typeof value !== "object"
   ) {
     return null;
   }
   const candidate = /** @type {Record<string, unknown>} */ (value);
   if (
-    candidate.version !== 2 ||
+    (candidate.version === 2 &&
+      !hasOnlyKeys(value, LEGACY_IDENTITY_KEYS)) ||
+    (candidate.version === 3 && !hasOnlyKeys(value, IDENTITY_KEYS))
+  ) {
+    return null;
+  }
+  const ruleset = normalizeRunRuleset(
+    candidate.version === 3
+      ? {
+          atlasRegionId: candidate.atlasRegionId,
+          revision: candidate.rulesetRevision
+        }
+      : undefined,
+    Number(candidate.labyrinthNumber)
+  );
+  if (
+    (candidate.version !== 2 && candidate.version !== 3) ||
+    !ruleset ||
     candidate.pending !== false ||
     typeof candidate.runId !== "string" ||
     !/^[a-zA-Z0-9_-]{12,128}$/.test(candidate.runId) ||
@@ -726,14 +794,16 @@ function normalizeIdentity(value) {
     return null;
   }
   return {
-    version: 2,
+    version: 3,
     runId: candidate.runId,
     pending: false,
     seed: candidate.seed,
     levelId: /** @type {RecoveryIdentity["levelId"]} */ (
       candidate.levelId
     ),
-    labyrinthNumber: Number(candidate.labyrinthNumber)
+    labyrinthNumber: Number(candidate.labyrinthNumber),
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   };
 }
 
@@ -782,7 +852,9 @@ function sameIdentity(left, right) {
     left.pending === right.pending &&
     left.seed === right.seed &&
     left.levelId === right.levelId &&
-    left.labyrinthNumber === right.labyrinthNumber
+    left.labyrinthNumber === right.labyrinthNumber &&
+    left.atlasRegionId === right.atlasRegionId &&
+    left.rulesetRevision === right.rulesetRevision
   );
 }
 

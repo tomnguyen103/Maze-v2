@@ -47,6 +47,23 @@ describe("Active Run Locator", () => {
     expect(loadActiveRunLocator(storage)).toEqual(locator);
   });
 
+  it("round-trips the exact Atlas Region and ruleset revision", () => {
+    const storage = createStorage();
+    const locator = {
+      version: 3,
+      runId: "access_01J1MOSSWATCH",
+      pending: false,
+      seed: "STONE-VAULT-00",
+      levelId: "maze-master",
+      labyrinthNumber: 13,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1"
+    };
+
+    expect(saveActiveRunLocator(locator, storage)).toEqual(locator);
+    expect(loadActiveRunLocator(storage)).toEqual(locator);
+  });
+
   it("distinguishes a pending admission from an admitted active Run", () => {
     const storage = createStorage();
     const pending = saveActiveRunLocator(
@@ -76,10 +93,20 @@ describe("Active Run Locator", () => {
   it.each([
     "{broken",
     JSON.stringify({
-      version: 3,
+      version: 4,
       seed: "STONE-VAULT-00",
       levelId: "trail-scout",
       labyrinthNumber: 1
+    }),
+    JSON.stringify({
+      version: 3,
+      runId: "access_01J1MOSSWATCH",
+      pending: false,
+      seed: "STONE-VAULT-00",
+      levelId: "trail-scout",
+      labyrinthNumber: 1,
+      atlasRegionId: "foundation",
+      rulesetRevision: "windways-v1"
     }),
     JSON.stringify({
       version: 1,
@@ -93,6 +120,24 @@ describe("Active Run Locator", () => {
 
     expect(loadActiveRunLocator(storage)).toBeNull();
     expect(storage.getItem("echo-maze:active-run:v1")).toBeNull();
+  });
+
+  it("rejects an invalid version 3 Labyrinth before ruleset normalization", () => {
+    expect(() =>
+      saveActiveRunLocator(
+        {
+          version: 3,
+          runId: "access_01J1MOSSWATCH",
+          pending: false,
+          seed: "STONE-VAULT-00",
+          levelId: "trail-scout",
+          labyrinthNumber: /** @type {any} */ ("x"),
+          atlasRegionId: "foundation",
+          rulesetRevision: "echo-hush-v1"
+        },
+        createStorage()
+      )
+    ).toThrow("Cannot save an invalid Active Run Locator.");
   });
 
   it("clears the saved locator without affecting other device state", () => {
