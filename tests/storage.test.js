@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasRunReplayOwnerMismatch,
   loadBestRun,
   loadRunRecords,
   saveBestRun,
-  saveRunRecord
+  saveRunRecord,
+  scrubRunReplays
 } from "../src/game/storage.js";
 
 function createStorage() {
@@ -41,6 +43,185 @@ describe("best run storage", () => {
 });
 
 describe("run record storage", () => {
+  it("retains a bounded Replay atomically with its Run Record", () => {
+    const storage = createStorage();
+    const replay = {
+      version: 1,
+      actions: [
+        { type: "move", direction: "right", elapsedMs: 120 },
+        { type: "challenge-outcome", outcome: "correct", elapsedMs: 300 }
+      ],
+      terminal: {
+        outcome: "escaped",
+        moves: 2,
+        elapsedMs: 300,
+        echoesCollected: 3,
+        echoTotal: 3,
+        wardensDefeated: 1,
+        score: 750,
+        vitality: 3
+      }
+    };
+
+    const records = saveRunRecord(
+      {
+        elapsedMs: 300,
+        moves: 2,
+        seed: "WITH-TRAIL",
+        outcome: "escaped",
+        echoesCollected: 3,
+        questId: "quest_replay_123",
+        replayOwnerId: "user_alice",
+        replay
+      },
+      storage,
+      "user_alice"
+    );
+
+    expect(records[0]?.replay).toEqual(replay);
+    expect(records[0]?.replayOwnerId).toBe("user_alice");
+    expect(records[0]?.questId).toBe("quest_replay_123");
+    expect(loadRunRecords(storage)[0]).not.toHaveProperty("replay");
+    expect(loadRunRecords(storage, "user_alice")[0]?.replay).toEqual(replay);
+    expect(loadRunRecords(storage, "user_bob")[0]).not.toHaveProperty(
+      "replay"
+    );
+    expect(hasRunReplayOwnerMismatch("user_alice", storage)).toBe(false);
+    expect(hasRunReplayOwnerMismatch("user_bob", storage)).toBe(true);
+  });
+
+  it("omits an unsafe Replay without blocking terminal Record storage", () => {
+    const storage = createStorage();
+    const records = saveRunRecord(
+      {
+        elapsedMs: 500,
+        moves: 4,
+        seed: "SAFE-RECORD",
+        outcome: "defeated",
+        echoesCollected: 1,
+        replay: {
+          version: 1,
+          actions: [{
+            type: "answer-question",
+            answerId: "selected-option",
+            elapsedMs: 500
+          }],
+          terminal: {
+            outcome: "defeated"
+          }
+        }
+      },
+      storage
+    );
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).not.toHaveProperty("replay");
+    expect(JSON.stringify(records)).not.toContain("selected-option");
+  });
+
+  it("scrubs account-context Replay details without deleting old Records", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 300,
+        moves: 2,
+        seed: "SCOPED-TRAIL",
+        outcome: "escaped",
+        echoesCollected: 3,
+        replayOwnerId: "user_alice",
+        replay: {
+          version: 1,
+          actions: [{ type: "move", direction: "right", elapsedMs: 300 }],
+          terminal: {
+            outcome: "escaped",
+            moves: 2,
+            elapsedMs: 300,
+            echoesCollected: 3,
+            echoTotal: 3,
+            wardensDefeated: 0,
+            score: 650,
+            vitality: 3
+          }
+        }
+      },
+      storage
+    );
+
+    expect(JSON.parse(
+      storage.getItem("echo-maze:best-run:v1") ?? "{}"
+    )).toEqual({
+      elapsedMs: 300,
+      moves: 2,
+      seed: "SCOPED-TRAIL"
+    });
+    expect(scrubRunReplays(storage)).toBe(true);
+    expect(loadRunRecords(storage)).toEqual([
+      expect.not.objectContaining({ replay: expect.anything() })
+    ]);
+    expect(loadRunRecords(storage)[0]?.seed).toBe("SCOPED-TRAIL");
+    expect(storage.getItem("echo-maze:run-records:v1")).not.toContain(
+      "user_alice"
+    );
+    expect(storage.getItem("echo-maze:best-run:v1")).not.toContain("replay");
+  });
+
+  it("keeps a previous owner's Replay hidden when scrub and save writes fail", () => {
+    const values = new Map();
+    let denyWrites = false;
+    const storage = {
+      /** @param {string} key */
+      getItem: (key) => values.get(key) ?? null,
+      /** @param {string} key @param {string} value */
+      setItem: (key, value) => {
+        if (denyWrites) {
+          throw new Error("Storage unavailable");
+        }
+        values.set(key, value);
+      }
+    };
+    const replay = {
+      version: 1,
+      actions: [{ type: "move", direction: "right", elapsedMs: 100 }],
+      terminal: {
+        outcome: "escaped",
+        moves: 1,
+        elapsedMs: 100,
+        echoesCollected: 3,
+        echoTotal: 3,
+        wardensDefeated: 0,
+        score: 650,
+        vitality: 3
+      }
+    };
+    saveRunRecord({
+      elapsedMs: 100,
+      moves: 1,
+      seed: "ALICE-TRAIL",
+      outcome: "escaped",
+      echoesCollected: 3,
+      replayOwnerId: "user_alice",
+      replay
+    }, storage, "user_alice");
+
+    denyWrites = true;
+    expect(scrubRunReplays(storage)).toBe(false);
+    const visible = saveRunRecord({
+      elapsedMs: 90,
+      moves: 1,
+      seed: "BOB-TRAIL",
+      outcome: "escaped",
+      echoesCollected: 3,
+      replayOwnerId: "user_bob",
+      replay
+    }, storage, "user_bob");
+
+    expect(visible.find((record) => record.seed === "ALICE-TRAIL"))
+      .not.toHaveProperty("replay");
+    expect(visible.find((record) => record.seed === "BOB-TRAIL")?.replay)
+      .toEqual(replay);
+    expect(JSON.stringify(visible)).not.toContain("user_alice");
+  });
+
   it("ranks an escape ahead of a faster defeat", () => {
     const storage = createStorage();
     saveRunRecord(

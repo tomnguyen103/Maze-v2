@@ -6,6 +6,7 @@ import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
+import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -610,6 +611,186 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
       expect((detailBounds?.y ?? 0) + (detailBounds?.height ?? 0))
         .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0));
     }
+  }
+});
+
+test("lazy Watch Trail stays usable across contracted Replay viewports", async ({
+  page
+}, testInfo) => {
+  const plan = milestoneWinningPlan("TRAIL-VIEW-4");
+  const replay = createTerminalRunReplay(
+    plan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    plan.finalRun
+  );
+  if (!replay) {
+    throw new Error("Expected a retained Replay fixture.");
+  }
+  await page.addInitScript(({ retainedReplay }) => {
+    const corruptReplay = JSON.parse(JSON.stringify(retainedReplay));
+    corruptReplay.terminal.moves += 1;
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([
+      {
+        elapsedMs: retainedReplay.terminal.elapsedMs,
+        moves: retainedReplay.terminal.moves,
+        seed: "TRAIL-VIEW-4",
+        outcome: "escaped",
+        echoesCollected: retainedReplay.terminal.echoesCollected,
+        echoTotal: retainedReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: retainedReplay
+      },
+      {
+        elapsedMs: 900,
+        moves: 5,
+        seed: "OLD-RECORD",
+        outcome: "defeated",
+        echoesCollected: 1,
+        echoTotal: 3,
+        questLevelId: "trail-scout",
+        labyrinthNumber: 2,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1"
+      },
+      {
+        elapsedMs: corruptReplay.terminal.elapsedMs + 1,
+        moves: corruptReplay.terminal.moves,
+        seed: "CORRUPT-TRAIL",
+        outcome: "escaped",
+        echoesCollected: corruptReplay.terminal.echoesCollected,
+        echoTotal: corruptReplay.terminal.echoTotal,
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: corruptReplay
+      }
+    ]));
+  }, { retainedReplay: replay });
+
+  const viewports = testInfo.project.name === "mobile"
+    ? [{ width: 390, height: 844 }]
+    : [
+        { width: 320, height: 720 },
+        { width: 390, height: 844 },
+        { width: 768, height: 900 },
+        { width: 1440, height: 1000 }
+      ];
+  for (const [viewportIndex, viewport] of viewports.entries()) {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({
+      reducedMotion: viewportIndex === 0 ? "reduce" : "no-preference"
+    });
+    await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=4");
+    await expectGameReady(page);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "32px";
+    });
+    if (viewportIndex === 0) {
+      await expect.poll(() =>
+        page.evaluate(() =>
+          performance.getEntriesByType("resource").some(
+            (entry) => entry.name.includes("run-replay-view")
+          )
+        )
+      ).toBe(false);
+    }
+
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    const records = page.getByRole("dialog", { name: "Run Records" });
+    await expect(records).toBeVisible();
+    await expect(
+      records.getByRole("button", {
+        name: "Watch retained Trail for seed TRAIL-VIEW-4"
+      })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", { name: "Play seed TRAIL-VIEW-4" })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", { name: "Play seed OLD-RECORD" })
+    ).toBeVisible();
+    await expect(
+      records.getByRole("button", {
+        name: "Watch retained Trail for seed OLD-RECORD"
+      })
+    ).toHaveCount(0);
+    await records.getByRole("button", {
+      name: "Watch retained Trail for seed TRAIL-VIEW-4"
+    }).click();
+
+    const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.locator("[data-run-replay-event]"))
+      .toHaveCount(replay.actions.length + 1);
+    await expect(viewer.getByRole("toolbar", {
+      name: "Run Replay controls"
+    })).toBeVisible();
+    await expect(viewer.getByLabel(
+      "Reconstructed maze state for the selected Trail step."
+    )).toBeVisible();
+    const nextStep = viewer.getByRole("button", { name: "Next step" });
+    if (testInfo.project.name === "mobile") {
+      await nextStep.tap();
+    } else {
+      await nextStep.click();
+    }
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText("Step 1 of");
+    await viewer.getByRole("button", { name: "Play", exact: true }).click();
+    if (viewportIndex === 0) {
+      await expect(viewer.locator("[data-run-replay-status]"))
+        .toContainText("Step 2 of");
+      await expect(viewer.getByRole("button", { name: "Play", exact: true }))
+        .toBeVisible();
+    } else {
+      await expect(viewer.getByRole("button", { name: "Pause", exact: true }))
+        .toBeVisible();
+      await viewer.getByRole("button", { name: "Pause", exact: true }).click();
+    }
+    await viewer.getByRole("heading", { name: "Watch Trail" }).focus();
+    await page.keyboard.press("End");
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText(`Step ${replay.actions.length} of`);
+    await viewer.getByRole("button", { name: "Restart" }).click();
+    await expect(viewer.locator("[data-run-replay-status]"))
+      .toContainText(`Step 0 of ${replay.actions.length}`);
+
+    const bounds = await viewer.boundingBox();
+    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0))
+      .toBeLessThanOrEqual(viewport.width);
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )).toBeLessThanOrEqual(1);
+
+    await viewer.getByRole("button", { name: "Close" }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Records", exact: true })
+    ).toBeFocused();
+
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    await records.getByRole("button", {
+      name: "Watch retained Trail for seed CORRUPT-TRAIL"
+    }).click();
+    await expect(viewer).not.toBeVisible();
+    await expect(page.locator("#live-region")).toHaveText(
+      "This Trail is corrupt, so it cannot be watched. Play This Seed is still available."
+    );
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    await expect(
+      records.getByRole("button", { name: "Play seed CORRUPT-TRAIL" })
+    ).toBeVisible();
+    await records.getByRole("button", { name: "Close" }).click();
   }
 });
 
@@ -1926,12 +2107,19 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
       /** @type {Array<{
        *   seed?: string,
        *   outcome?: string,
-       *   labyrinthNumber?: number
+       *   labyrinthNumber?: number,
+       *   replay?: unknown
        * }>} */ (JSON.parse(
         localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
       ));
     const progress = JSON.parse(
       localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+    );
+    const matching = records.find(
+      (record) =>
+        record.seed === seed &&
+        record.outcome === "escaped" &&
+        record.labyrinthNumber === 1
     );
     return {
       recovery: localStorage.getItem(
@@ -1943,17 +2131,29 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
           record.outcome === "escaped" &&
           record.labyrinthNumber === 1
       ).length,
+      replay: matching?.replay ?? null,
       progress
     };
   }, WINNING_SEED);
   expect(escapedBoundary).toMatchObject({
     recovery: null,
     matchingRecords: 1,
+    replay: {
+      version: 1,
+      terminal: {
+        outcome: "escaped",
+        echoesCollected: 3,
+        echoTotal: 3
+      }
+    },
     progress: {
       labyrinthNumber: 2,
       completedLabyrinths: 1
     }
   });
+  expect(JSON.stringify(escapedBoundary.replay)).not.toMatch(
+    /answerId|choices|question|provider|account|email|runId/i
+  );
 
   await page.reload();
   await expectGameReady(page);
@@ -2044,6 +2244,20 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
     labyrinthNumber: 2,
     completedLabyrinths: 1
   });
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await atlas.locator("[data-atlas-landmark='foundation-1']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  const trail = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(atlas).not.toBeVisible();
+  await expect(trail).toBeVisible();
+  await trail.getByRole("button", { name: "Close" }).click();
+  await expect(trail).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
@@ -2937,6 +3151,35 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
   page
 }) => {
   await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "SIGNED-TRAIL",
+      outcome: "defeated",
+      echoesCollected: 0,
+      echoTotal: 3,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 1,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1",
+      replayOwnerId: "user_recovery_privacy",
+      replay: {
+        version: 1,
+        actions: [{ type: "move", direction: "right", elapsedMs: 100 }],
+        terminal: {
+          outcome: "defeated",
+          moves: 1,
+          elapsedMs: 100,
+          echoesCollected: 0,
+          echoTotal: 3,
+          wardensDefeated: 0,
+          score: 0,
+          vitality: 0
+        }
+      }
+    }]));
+  });
   const question = reviewedQuestionForRequest(0);
   await page.route("**/api/question?**", (route) =>
     route.fulfill({
@@ -2949,6 +3192,15 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
   );
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return records[0]?.replayOwnerId ?? null;
+    })
+  ).toBe("user_recovery_privacy");
   await page.getByLabel(/Interactive maze/).focus();
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
@@ -2988,8 +3240,115 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
       )
     )
     .toBeNull();
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const records = JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      );
+      return {
+        seed: records[0]?.seed,
+        replay: records[0]?.replay ?? null
+      };
+    })
+  ).toEqual({ seed: "SIGNED-TRAIL", replay: null });
   await expect(page.locator("#challenge-dialog")).toBeVisible();
   await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+});
+
+test("keeps a previous owner's Trail hidden when identity scrub writes fail", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "The storage-denial identity boundary is viewport-independent."
+  );
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "ALICE-PRIVATE-TRAIL",
+      outcome: "defeated",
+      echoesCollected: 0,
+      echoTotal: 3,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 1,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1",
+      replayOwnerId: "user_alice",
+      replay: {
+        version: 1,
+        actions: [{ type: "move", direction: "right", elapsedMs: 100 }],
+        terminal: {
+          outcome: "defeated",
+          moves: 1,
+          elapsedMs: 100,
+          echoesCollected: 0,
+          echoTotal: 3,
+          wardensDefeated: 0,
+          score: 0,
+          vitality: 0
+        }
+      }
+    }]));
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function denyRunRecordWrites(key, value) {
+      if (key === "echo-maze:run-records:v1") {
+        throw new DOMException("Run Record storage is denied.", "SecurityError");
+      }
+      return setItem.call(this, key, value);
+    };
+  });
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+  await expect(page.locator("#live-region")).toContainText(
+    "could not erase account-context Run Replay details"
+  );
+
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongChoice = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongChoice) {
+      throw new Error("Expected a reviewed wrong answer.");
+    }
+    await page.locator(`[data-answer="${wrongChoice.id}"]`).click();
+    if (attempt < 2) {
+      await expect.poll(() => getCurrentQuestion().id).not.toBe(question.id);
+    }
+  }
+  await expect(page.locator("#run-state")).toHaveText("Light lost");
+  const demoGate = page.getByRole("dialog", {
+    name: "Create an account for three free Runs."
+  });
+  if (await demoGate.isVisible()) {
+    await demoGate.getByRole("button", {
+      name: "Create account for three Runs"
+    }).click();
+  }
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records.getByRole("button", {
+    name: "Play seed ALICE-PRIVATE-TRAIL"
+  })).toBeVisible();
+  await expect(records.getByRole("button", {
+    name: "Watch retained Trail for seed ALICE-PRIVATE-TRAIL"
+  })).toHaveCount(0);
 });
 
 test("keeps Challenge history erased after terminal defeat and reload", async ({
@@ -3031,6 +3390,17 @@ test("keeps Challenge history erased after terminal defeat and reload", async ({
     .toBeNull();
   const recordsBeforeReload = await page.evaluate(() =>
     localStorage.getItem("echo-maze:run-records:v1")
+  );
+  const defeatedReplay = JSON.parse(recordsBeforeReload ?? "[]")[0]?.replay;
+  expect(defeatedReplay).toMatchObject({
+    version: 1,
+    terminal: {
+      outcome: "defeated",
+      vitality: 0
+    }
+  });
+  expect(JSON.stringify(defeatedReplay)).not.toMatch(
+    /answerId|choices|question|provider|account|email|runId/i
   );
 
   await page.reload();

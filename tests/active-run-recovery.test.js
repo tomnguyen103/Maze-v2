@@ -9,6 +9,7 @@ import {
 } from "../src/game/active-run-recovery.js";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
+import { buildRunReplayTimeline } from "../src/game/run-replay.js";
 
 /**
  * @typedef {"up" | "right" | "down" | "left"} Direction
@@ -217,6 +218,63 @@ function pathTo(run, goal) {
     cursor = step.prior;
   }
   return path;
+}
+
+/**
+ * @param {RecoveryController} controller
+ * @param {{ revealFirstHint?: boolean }} [options]
+ */
+function finishWinningRun(controller, { revealFirstHint = false } = {}) {
+  let run = initialRun();
+  const pulseTransition = durableTransition(controller, run, { type: "pulse" });
+  run = pulseTransition.run;
+  let terminalResult = pulseTransition.result;
+  let questionOrdinal = 0;
+  for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
+    if (run.status === "challenge") {
+      const question = getBundledQuestion({
+        levelId: LOCATOR.levelId,
+        seed: LOCATOR.seed,
+        wardenId: run.challenge?.wardenId ?? 0,
+        attempt: run.challenge?.attempt ?? 0,
+        labyrinthNumber: LOCATOR.labyrinthNumber,
+        questionOrdinal
+      });
+      questionOrdinal += 1;
+      ({ run } = durableTransition(controller, run, {
+        type: "provide-question",
+        question
+      }));
+      if (revealFirstHint && questionOrdinal === 1) {
+        ({ run } = durableTransition(controller, run, {
+          type: "reveal-hint"
+        }));
+      }
+      const transition = durableTransition(controller, run, {
+        type: "answer-question",
+        answerId: question.answerId
+      });
+      run = transition.run;
+      terminalResult = transition.result;
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a route toward the next Run objective.");
+    }
+    const transition = durableTransition(controller, run, {
+      type: "move",
+      direction
+    });
+    run = transition.run;
+    terminalResult = transition.result;
+  }
+  if (run.status !== "won") {
+    throw new Error("Expected the recovery fixture to escape.");
+  }
+  return { run, terminalResult };
 }
 
 /**
@@ -620,6 +678,52 @@ describe("Active Run Recovery", () => {
     );
   });
 
+  it("returns an outcome-only escape Replay with equal terminal facts", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(LOCATOR);
+
+    const { run, terminalResult } = finishWinningRun(controller, {
+      revealFirstHint: true
+    });
+
+    expect(terminalResult?.status).toBe("terminal");
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: LOCATOR.levelId,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    expect(timeline.terminal).toMatchObject({
+      outcome: "escaped",
+      moves: run.moves,
+      elapsedMs: Math.round(run.elapsedMs),
+      echoesCollected: run.echoes.length,
+      echoTotal: run.echoes.length,
+      wardensDefeated: run.wardensDefeated,
+      score: run.score,
+      vitality: run.explorer.vitality
+    });
+    expect(timeline.states.at(-1)?.status).toBe("won");
+    expect(replay?.actions).toContainEqual(
+      expect.objectContaining({ type: "hint" })
+    );
+    expect(timeline.events).toContainEqual(
+      expect.objectContaining({
+        label: "Hint revealed without retaining Question text."
+      })
+    );
+    expect(JSON.stringify(replay)).not.toMatch(
+      /answerId|choices|question|provider|account|email|runId/i
+    );
+  });
+
   it("clears terminal recovery and selected answer identifiers", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });
@@ -638,6 +742,7 @@ describe("Active Run Recovery", () => {
       question
     }));
     const startingVitality = run.explorer.vitality;
+    let terminalReplay = null;
     for (let attempt = 0; attempt < startingVitality; attempt += 1) {
       const currentQuestion =
         attempt === 0
@@ -668,12 +773,43 @@ describe("Active Run Recovery", () => {
       });
       run = transition.run;
       if (attempt === startingVitality - 1) {
-        expect(transition.result.status).toBe("cleared");
+        expect(transition.result.status).toBe("terminal");
+        terminalReplay =
+          "replay" in transition.result
+            ? transition.result.replay ?? null
+            : null;
       }
     }
 
     expect(run.status).toBe("lost");
     expect(storage.getItem(ACTIVE_RUN_RECOVERY_KEY)).toBeNull();
+    expect(terminalReplay).toMatchObject({
+      version: 1,
+      terminal: {
+        outcome: "defeated",
+        moves: run.moves,
+        elapsedMs: Math.round(run.elapsedMs),
+        echoesCollected: run.echoes.filter((echo) => echo.collected).length,
+        echoTotal: run.echoes.length,
+        wardensDefeated: run.wardensDefeated,
+        score: run.score,
+        vitality: 0
+      }
+    });
+    const serializedReplay = JSON.stringify(terminalReplay);
+    expect(serializedReplay).not.toContain(question.prompt);
+    expect(serializedReplay).not.toContain(question.answerId);
+    expect(serializedReplay).not.toMatch(
+      /answerId|choices|question|provider|account|email|runId/i
+    );
+    expect(buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: LOCATOR.levelId,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay: terminalReplay
+    }).terminal).toEqual(terminalReplay?.terminal);
   });
 
   it("enforces the 2,048-action and 256-KiB serialized bounds", () => {

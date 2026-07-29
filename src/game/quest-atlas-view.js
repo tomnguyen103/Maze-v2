@@ -447,7 +447,10 @@ function renderDetail(detail, node, { onContinue, onWatchTrail, close }) {
     const action = controlButton("Watch Trail");
     action.classList.add("primary-button");
     action.dataset.atlasWatchTrail = "";
-    action.addEventListener("click", () => onWatchTrail(node.id));
+    action.addEventListener("click", () => {
+      onWatchTrail(node.id);
+      close();
+    });
     detail.append(action);
   } else {
     const preview = document.createElement("p");

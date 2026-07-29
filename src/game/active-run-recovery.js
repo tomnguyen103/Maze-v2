@@ -1,6 +1,7 @@
 import { applyAction, createRun } from "./game-session.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
+import { createTerminalRunReplay } from "./run-replay-contract.js";
 import { normalizeRunRuleset } from "./run-ruleset.js";
 import {
   ACTIVE_RUN_RECOVERY_KEY,
@@ -31,7 +32,7 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
  *   | { type: "pulse" | "reveal-hint", elapsedMs: number }
  *   | { type: "provide-question", question: ReturnType<typeof normalizeQuestion>, elapsedMs: number }
- *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, elapsedMs: number }
+ *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, hintUsed: boolean, elapsedMs: number }
  * } RecoveryAction
  * @typedef {{
  *   version: 1,
@@ -119,11 +120,25 @@ export function createActiveRunRecoveryController(options = {}) {
         return { status: "inactive" };
       }
       if (next.status === "won" || next.status === "lost") {
+        /** @type {ReturnType<typeof createTerminalRunReplay>} */
+        let replay;
+        try {
+          const terminalEntry = recoveryEntry(previous, action, next);
+          const terminalActions = terminalEntry
+            ? appendRecoveryEntry(envelope.actions, terminalEntry)
+            : envelope.actions;
+          replay = createTerminalRunReplay(terminalActions, next);
+        } catch {
+          replay = null;
+        }
         const cleared = scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = !cleared;
         return cleared
-          ? { status: "cleared" }
+          ? {
+              status: "terminal",
+              ...(replay ? { replay } : {})
+            }
           : { status: "unavailable", reason: "storage" };
       }
       /** @type {RecoveryAction | null} */
@@ -423,6 +438,7 @@ function recoveryEntry(previous, action, next) {
       explanation: correct
         ? ""
         : previous.challenge.question.explanation,
+      hintUsed: previous.challenge.hintRevealed,
       elapsedMs
     };
   }
@@ -436,6 +452,7 @@ function recoveryEntry(previous, action, next) {
       type: "challenge-outcome",
       outcome: "skip",
       explanation: "",
+      hintUsed: previous.challenge.hintRevealed,
       elapsedMs
     };
   }
@@ -557,10 +574,13 @@ function replayChallengeOutcome(run, entry) {
     topicId: "arithmetic",
     learningObjectiveId: "scout-equal-groups"
   });
-  const withQuestion = applyAction(run, {
+  let withQuestion = applyAction(run, {
     type: "provide-question",
     question
   });
+  if (entry.hintUsed) {
+    withQuestion = applyAction(withQuestion, { type: "reveal-hint" });
+  }
   if (entry.outcome === "skip") {
     return applyAction(withQuestion, { type: "skip-question" });
   }
@@ -673,14 +693,22 @@ function normalizeAction(value) {
   }
   if (
     candidate.type === "challenge-outcome" &&
-    hasOnlyKeys(
-      value,
-      ["type", "outcome", "explanation", "elapsedMs"]
+    (
+      hasOnlyKeys(
+        value,
+        ["type", "outcome", "explanation", "elapsedMs"]
+      ) ||
+      hasOnlyKeys(
+        value,
+        ["type", "outcome", "explanation", "hintUsed", "elapsedMs"]
+      )
     ) &&
     typeof candidate.outcome === "string" &&
     ["correct", "wrong", "skip"].includes(candidate.outcome) &&
     typeof candidate.explanation === "string" &&
-    candidate.explanation.length <= 240
+    candidate.explanation.length <= 240 &&
+    (candidate.hintUsed === undefined ||
+      typeof candidate.hintUsed === "boolean")
   ) {
     return {
       type: "challenge-outcome",
@@ -688,6 +716,7 @@ function normalizeAction(value) {
         candidate.outcome
       ),
       explanation: candidate.explanation.trim(),
+      hintUsed: candidate.hintUsed === true,
       elapsedMs
     };
   }

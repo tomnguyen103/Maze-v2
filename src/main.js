@@ -60,7 +60,12 @@ import {
 import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
 import { projectQuestAtlas } from "./game/quest-atlas.js";
 import { renderQuestAtlasSummary } from "./game/quest-atlas-summary.js";
-import { loadRunRecords, saveRunRecord } from "./game/storage.js";
+import {
+  hasRunReplayOwnerMismatch,
+  loadRunRecords,
+  saveRunRecord,
+  scrubRunReplays
+} from "./game/storage.js";
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
@@ -367,6 +372,8 @@ let activeRunRecoveryController = null;
 /** @type {CampfireResumeView | null} */
 let campfireResumeView = null;
 let activeRunRecoveryUnavailableReported = false;
+/** @type {import("./game/run-replay-contract.js").RunReplay | null} */
+let pendingRunReplay = null;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
@@ -395,6 +402,11 @@ let touchStart = null;
 let atlasViewPromise = null;
 let atlasOpening = false;
 let atlasViewRetry = false;
+/** @type {Promise<ReturnType<typeof import("./game/run-replay-view.js").createRunReplayView>> | null} */
+let runReplayViewPromise = null;
+let runReplayOpening = false;
+let runReplayViewRetry = false;
+let resumeAfterRunReplay = false;
 /** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
 let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
@@ -610,6 +622,18 @@ async function showQuestAtlas(trigger) {
       atlasViewRetry = true;
       atlasViewPromise = viewModule.then(
         ({ createQuestAtlasView }) => createQuestAtlasView({
+        onWatchTrail: (landmarkId) => {
+          const record = replayRecordForLandmark(landmarkId);
+          if (!record) {
+            announce(
+              "That Trail is no longer retained on this device."
+            );
+            return;
+          }
+          resumeAfterRunReplay = resumeAfterAtlas;
+          resumeAfterAtlas = false;
+          void openRunReplay(record, elements.atlasButton);
+        },
         onClose: () => {
           if (resumeAfterAtlas && run.status === "paused") {
             togglePause();
@@ -620,7 +644,23 @@ async function showQuestAtlas(trigger) {
       );
     }
     const atlasView = await atlasViewPromise;
-    atlasView.show(projectQuestAtlas(questProgress), trigger);
+    atlasView.show(projectQuestAtlas(questProgress, {
+      watchTrailLandmarkIds: new Set(
+        runRecords
+          .filter(
+            (record) =>
+              record.replay &&
+              record.questId === questProgress.questId &&
+              record.questLevelId === questProgress.levelId &&
+              record.labyrinthNumber !== undefined
+          )
+          .map(
+            (record) =>
+              `${getDifficultyBand(record.labyrinthNumber ?? 1).id}-` +
+              `${record.labyrinthNumber}`
+          )
+      )
+    }), trigger);
   } catch {
     atlasViewPromise = null;
     if (resumeAfterAtlas && run.status === "paused") {
@@ -634,6 +674,81 @@ async function showQuestAtlas(trigger) {
     atlasOpening = false;
   }
 }
+
+/** @param {string} landmarkId */
+function replayRecordForLandmark(landmarkId) {
+  return runRecords.find(
+    (record) =>
+      record.replay &&
+      record.questId === questProgress.questId &&
+      record.questLevelId === questProgress.levelId &&
+      record.labyrinthNumber !== undefined &&
+      `${getDifficultyBand(record.labyrinthNumber).id}-` +
+        `${record.labyrinthNumber}` === landmarkId
+  ) ?? null;
+}
+
+/**
+ * @param {typeof runRecords[number]} record
+ * @param {HTMLElement} trigger
+ */
+async function openRunReplay(record, trigger) {
+  if (runReplayOpening || !record.replay) {
+    return;
+  }
+  runReplayOpening = true;
+  const retrying = runReplayViewRetry;
+  try {
+    let view;
+    try {
+      if (!runReplayViewPromise) {
+        /** @type {Promise<typeof import("./game/run-replay-view.js")>} */
+        const viewModule = retrying
+          // @ts-expect-error Vite treats the query as a distinct retry chunk.
+          ? import("./game/run-replay-view.js?retry=1")
+          : import("./game/run-replay-view.js");
+        runReplayViewRetry = true;
+        runReplayViewPromise = viewModule.then(
+          ({ createRunReplayView }) => createRunReplayView({
+            onClose: () => {
+              if (resumeAfterRunReplay && run.status === "paused") {
+                togglePause();
+              }
+              resumeAfterRunReplay = false;
+            }
+          })
+        );
+      }
+      view = await runReplayViewPromise;
+    } catch {
+      runReplayViewPromise = null;
+      if (resumeAfterRunReplay && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterRunReplay = false;
+      announce(
+        retrying
+          ? "This Trail is unavailable. Reload to try again."
+          : "This Trail is unavailable. Try again."
+      );
+      return;
+    }
+    try {
+      view.show(record, trigger);
+    } catch {
+      if (resumeAfterRunReplay && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterRunReplay = false;
+      announce(
+        "This Trail is corrupt, so it cannot be watched. Play This Seed is still available."
+      );
+    }
+  } finally {
+    runReplayOpening = false;
+  }
+}
+
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
   if (resumeAfterRecords) {
@@ -1042,6 +1157,21 @@ elements.runRecords.addEventListener("click", async (event) => {
     return;
   }
 
+  if (button.dataset.recordAction === "watch") {
+    const record = runRecords[Number(button.dataset.recordIndex)];
+    if (!record?.replay) {
+      announce(
+        "This Trail is missing or corrupt. Play This Seed is still available."
+      );
+      return;
+    }
+    resumeAfterRunReplay = resumeAfterRecords;
+    resumeAfterRecords = false;
+    elements.recordsDialog.close();
+    await openRunReplay(record, elements.recordsButton);
+    return;
+  }
+
   if (button.dataset.recordAction === "replay") {
     await startRecordedLabyrinth(
       button.dataset.level ?? "trail-scout",
@@ -1346,6 +1476,7 @@ function startRun(locator, daily = null, recoveredRun = null) {
     );
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
+  pendingRunReplay = null;
   if (!daily && !recoveredRun) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
@@ -1423,6 +1554,7 @@ function startFirstLight() {
   run = createFirstLightRun();
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
+  pendingRunReplay = null;
   lastTick = performance.now();
   questionRequestKey = "";
   runFinished = false;
@@ -2289,14 +2421,22 @@ function handleAuthenticationChange(signedIn) {
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   if (
-    authenticationObserved &&
-    authenticatedUserId &&
-    authenticatedUserId !== (userId ?? "")
+    (
+      authenticationObserved &&
+      authenticatedUserId &&
+      authenticatedUserId !== (userId ?? "")
+    ) ||
+    hasRunReplayOwnerMismatch(userId)
   ) {
     clearActiveRunRecoveryForIdentityChange();
   }
   authenticationObserved = true;
   authenticatedUserId = userId ?? "";
+  runRecords = loadRunRecords(undefined, userId);
+  bestEscapeRecord = bestEscape(runRecords);
+  if (elements.recordsDialog.open) {
+    renderRunRecords();
+  }
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
       ?.then((view) => view.replaceSavedSettings(record.settings))
@@ -2312,6 +2452,18 @@ function handleAuthenticationChange(signedIn) {
 }
 
 function clearActiveRunRecoveryForIdentityChange() {
+  if (scrubRunReplays()) {
+    runRecords = loadRunRecords();
+    bestEscapeRecord = bestEscape(runRecords);
+    if (elements.recordsDialog.open) {
+      renderRunRecords();
+    }
+  } else {
+    const message =
+      "This device could not erase account-context Run Replay details. Clear this site's data before another player uses this device.";
+    announce(message);
+    showEvent(message);
+  }
   if (!activeRunRecoveryController) {
     if (scrubActiveRunRecovery()) {
       return;
@@ -2660,6 +2812,12 @@ function transition(action) {
   syncChallengeDialog();
   if (recoveryResult?.status === "unavailable") {
     reportActiveRunRecoveryUnavailable();
+  }
+  if (
+    recoveryResult?.status === "terminal" &&
+    "replay" in recoveryResult
+  ) {
+    pendingRunReplay = recoveryResult.replay ?? null;
   }
   if (!runFinished && (run.status === "won" || run.status === "lost")) {
     finishRun();
@@ -3050,6 +3208,7 @@ function finishRun() {
   }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
+  const runReplayOwnerId = playerController.getAuthenticatedUserId();
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,
@@ -3057,11 +3216,21 @@ function finishRun() {
     outcome: won ? "escaped" : "defeated",
     echoesCollected,
     echoTotal: run.echoes.length,
+    questId: questProgress.questId,
     questLevelId: currentLevel.id,
     labyrinthNumber: currentLabyrinthNumber,
     atlasRegionId: run.ruleset.atlasRegionId,
-    rulesetRevision: run.ruleset.revision
-  });
+    rulesetRevision: run.ruleset.revision,
+    ...(pendingRunReplay
+      ? {
+          replay: pendingRunReplay,
+          ...(runReplayOwnerId
+            ? { replayOwnerId: runReplayOwnerId }
+            : {})
+        }
+      : {})
+  }, undefined, runReplayOwnerId);
+  pendingRunReplay = null;
   bestEscapeRecord = bestEscape(runRecords);
   if (won) {
     void playerController.submitEscapedRun(
@@ -3633,6 +3802,9 @@ function renderRunRecords() {
       const actions = document.createElement("div");
       const replay = document.createElement("button");
       const copy = document.createElement("button");
+      const watch = record.replay
+        ? document.createElement("button")
+        : null;
 
       const outcome = record.outcome === "escaped" ? "Escaped" : "Defeated";
       const level = getQuestLevel(record.questLevelId);
@@ -3660,6 +3832,18 @@ function renderRunRecords() {
       replay.dataset.recordAction = "replay";
       replay.textContent = "Play This Seed";
       replay.setAttribute("aria-label", `Play seed ${record.seed}`);
+      if (watch) {
+        watch.type = "button";
+        watch.className = "primary-button";
+        watch.dataset.seed = record.seed;
+        watch.dataset.recordAction = "watch";
+        watch.dataset.recordIndex = String(index);
+        watch.textContent = "Watch Trail";
+        watch.setAttribute(
+          "aria-label",
+          `Watch retained Trail for seed ${record.seed}`
+        );
+      }
       copy.type = "button";
       copy.className = "control-button";
       copy.dataset.seed = record.seed;
@@ -3672,7 +3856,11 @@ function renderRunRecords() {
       copy.setAttribute("aria-label", `Copy share link for seed ${record.seed}`);
       summary.append(title, detail);
       actions.className = "run-records__actions";
-      actions.append(copy, replay);
+      actions.append(copy);
+      if (watch) {
+        actions.append(watch);
+      }
+      actions.append(replay);
       item.append(summary, actions);
       return item;
     })
