@@ -9,9 +9,9 @@ Run `npm run build` followed by `npm run check:bundle`.
 
 | Asset | 2026-07-29 Milestone 1 baseline | Budget |
 |---|---:|---:|
-| Landing JavaScript | 7.56 KB gzip | 8 KB gzip |
-| Game JavaScript | 28.57 KB gzip | 30 KB gzip |
-| Shared styles | 10.41 KB gzip | 12 KB gzip |
+| Landing JavaScript | 7.60 KB gzip | 8 KB gzip |
+| Game JavaScript | 27.06 KB gzip | 30 KB gzip |
+| Shared styles | 10.76 KB gzip | 12 KB gzip |
 | Optional Clerk chunk | 544.21 KB gzip | 600 KB gzip |
 | Admin JavaScript | 5.78 KB gzip | 20 KB gzip |
 | Optional Sentry chunk | Not built (DSN unset) | 120 KB gzip |
