@@ -251,7 +251,7 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
 });
 
 test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
-  await page.route("**/api/leaderboard", (route) =>
+  await page.route("**/api/leaderboard**", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -1536,7 +1536,10 @@ test("never starts audio before the player opts in", async ({ page }) => {
 test("shows guest score state and the global top ten without changing Records", async ({
   page
 }) => {
-  await page.route("**/api/leaderboard", async (route) => {
+  /** @type {string[]} */
+  const leaderboardRequests = [];
+  await page.route("**/api/leaderboard**", async (route) => {
+    leaderboardRequests.push(route.request().url());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1555,7 +1558,9 @@ test("shows guest score state and the global top ten without changing Records", 
       })
     });
   });
-  await page.goto("/?seed=GLOBAL-BOARD&level=trail-scout");
+  await page.goto(
+    "/?seed=GLOBAL-BOARD&level=trail-scout&region=foundation&rules=echo-hush-v1"
+  );
   await expectGameReady(page);
 
   await expect(page.locator("#player-name")).toHaveText("Guest");
@@ -1567,6 +1572,21 @@ test("shows guest score state and the global top ten without changing Records", 
   ).toBeVisible();
   await expect(page.locator("#scoreboard-list")).toContainText("Moss Runner");
   await expect(page.locator("#scoreboard-list")).toContainText("900");
+  await expect(page.locator("#scoreboard-partition-label")).toHaveText(
+    "Showing Foundation · Echo Hush."
+  );
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("region"))
+    .toBe("foundation");
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("rules"))
+    .toBe("echo-hush-v1");
+
+  await page.locator("#scoreboard-partition").selectOption("classic-v1");
+  await expect(page.locator("#scoreboard-partition-label")).toHaveText(
+    "Showing Foundation · Classic Rules."
+  );
+  await expect.poll(() => leaderboardRequests.length).toBeGreaterThan(1);
+  expect(new URL(leaderboardRequests.at(-1) ?? "").searchParams.get("rules"))
+    .toBe("classic-v1");
   await expect(page.getByRole("button", { name: "Records", exact: true })).toBeVisible();
 });
 

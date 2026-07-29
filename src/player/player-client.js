@@ -229,8 +229,15 @@ export function createPlayerApiClient({
         body: JSON.stringify(profile)
       });
     },
-    async getLeaderboard() {
-      return request("/api/leaderboard");
+    /**
+     * @param {{ atlasRegionId: string, rulesetRevision: string }} partition
+     */
+    async getLeaderboard(partition) {
+      const query = new URLSearchParams({
+        region: partition.atlasRegionId,
+        rules: partition.rulesetRevision
+      });
+      return request(`/api/leaderboard?${query}`);
     },
     async getVerifiedDailyLeaderboard() {
       return request("/api/daily/leaderboard", {}, false);
@@ -340,7 +347,14 @@ function classroomDomainFrom(payload) {
 }
 
 /**
- * @param {{ seed: string, moves: number, elapsedMs: number, score: number }} run
+ * @param {{
+ *   seed: string,
+ *   moves: number,
+ *   elapsedMs: number,
+ *   score: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
+ * }} run
  * @param {string} levelId
  * @param {number} labyrinthNumber
  */
@@ -351,7 +365,10 @@ export function createRunIdempotencyKey(run, levelId, labyrinthNumber) {
     labyrinthNumber,
     run.moves,
     run.elapsedMs,
-    run.score
+    run.score,
+    ...(run.atlasRegionId && run.rulesetRevision
+      ? [run.atlasRegionId, run.rulesetRevision]
+      : [])
   ].join("|");
   let hash = 2166136261;
   for (const character of source) {

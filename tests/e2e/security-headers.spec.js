@@ -87,7 +87,7 @@ test("normal play never spends a rate-limit budget", async ({ page }) => {
     }
   });
 
-  await page.route("**/api/leaderboard", (route) =>
+  await page.route("**/api/leaderboard**", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",

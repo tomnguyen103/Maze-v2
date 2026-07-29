@@ -301,6 +301,12 @@ let questContinuityControllerPromise = null;
 let questContinuityLoadKind = null;
 const failedQuestContinuityLoads = new Set();
 const playerController = createPlayerController({
+  getScorePartition: () => ({
+    atlasRegionId: run.ruleset.atlasRegionId,
+    rulesetRevision: run.ruleset.revision,
+    regionLabel: getDifficultyBand(currentLabyrinthNumber).label,
+    rulesetLabel: run.ruleset.label
+  }),
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: handleAuthenticationChange,
   onIdentityEnd: clearActiveRunRecoveryForIdentityChange,
@@ -3267,7 +3273,9 @@ function finishRun() {
         elapsedMs: run.elapsedMs,
         score: run.score,
         wardensDefeated: run.wardensDefeated,
-        echoesCollected
+        echoesCollected,
+        atlasRegionId: run.ruleset.atlasRegionId,
+        rulesetRevision: run.ruleset.revision
       },
       currentLevel.id,
       finishedLabyrinthNumber

@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => {
       })
     })
   );
-  await page.route("**/api/leaderboard", (route) =>
+  await page.route("**/api/leaderboard**", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",

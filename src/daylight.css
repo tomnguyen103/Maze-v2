@@ -1698,6 +1698,29 @@ body[data-run-mode="first-light"] .play-workbench {
   font-size: 1rem;
 }
 
+.scoreboard-partition {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-weight: 700;
+}
+
+.scoreboard-partition select {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-stone-raised);
+  font: inherit;
+}
+
+.scoreboard-partition__label {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
 .player-form__status[data-state="error"] {
   padding: var(--space-2);
   color: var(--color-ink);

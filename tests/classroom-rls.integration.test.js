@@ -469,6 +469,8 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         moves: 40,
         elapsedMs: 60000,
         escaped: true,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1",
         score: 850
       };
       await scoreStore.submitScore(explorerId, scoreRun, classroomA);

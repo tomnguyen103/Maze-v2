@@ -103,7 +103,10 @@ export function createPlayerStore(pool) {
       return mapProfile(result.rows[0]);
     },
 
-    async getLeaderboard() {
+    /**
+     * @param {{ atlasRegionId: string, rulesetRevision: string }} partition
+     */
+    async getLeaderboard(partition) {
       const result = await pool.query(
         `WITH ranked_by_player AS (
            SELECT
@@ -126,6 +129,8 @@ export function createPlayerStore(pool) {
            FROM score_entries
            WHERE escaped = TRUE
              AND classroom_id IS NULL
+             AND atlas_region_id = $1
+             AND ruleset_revision = $2
          ),
          best_runs AS (
            SELECT *
@@ -155,7 +160,8 @@ export function createPlayerStore(pool) {
            best_runs.moves ASC,
            best_runs.elapsed_ms ASC,
            best_runs.created_at ASC
-         LIMIT 10`
+         LIMIT 10`,
+        [partition.atlasRegionId, partition.rulesetRevision]
       );
       const entries = result.rows.map(mapScoreEntry);
       return {
@@ -176,6 +182,8 @@ export function createPlayerStore(pool) {
      *   moves: number,
      *   elapsedMs: number,
      *   escaped: boolean,
+     *   atlasRegionId: string,
+     *   rulesetRevision: string,
      *   score: number
      * }} run
      * @param {string | null} [classroomId]
@@ -207,9 +215,13 @@ export function createPlayerStore(pool) {
              elapsed_ms,
              score,
              escaped,
-             classroom_id
+             classroom_id,
+             atlas_region_id,
+             ruleset_revision
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)
+           VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11, $12, $13
+           )
            ON CONFLICT (player_id, classroom_id, idempotency_key) DO UPDATE SET
              idempotency_key = score_entries.idempotency_key
            RETURNING
@@ -243,7 +255,9 @@ export function createPlayerStore(pool) {
           run.moves,
           run.elapsedMs,
           run.score,
-          classroomId
+          classroomId,
+          run.atlasRegionId,
+          run.rulesetRevision
         ]
       );
       const row = result.rows[0];

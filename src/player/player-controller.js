@@ -32,7 +32,13 @@ import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
  *   onAuthenticationChange?: (signedIn: boolean) => void,
  *   onIdentityEnd?: () => void,
  *   onJournalChange?: (journal: ReturnType<typeof import("../learning/lantern-journal.js").createLanternJournal>) => void,
- *   onJournalStatusChange?: (message: string) => void
+ *   onJournalStatusChange?: (message: string) => void,
+ *   getScorePartition?: () => {
+ *     atlasRegionId: string,
+ *     rulesetRevision: string,
+ *     regionLabel: string,
+ *     rulesetLabel: string
+ *   }
  * }} [options]
  */
 export function createPlayerController({
@@ -40,7 +46,13 @@ export function createPlayerController({
   onAuthenticationChange = () => {},
   onIdentityEnd = () => {},
   onJournalChange = () => {},
-  onJournalStatusChange = () => {}
+  onJournalStatusChange = () => {},
+  getScorePartition = () => ({
+    atlasRegionId: "foundation",
+    rulesetRevision: "classic-v1",
+    regionLabel: "Foundation",
+    rulesetLabel: "Classic Rules"
+  })
 } = {}) {
   const injectedDependencies = readE2ePlayerDependencies();
   const elements = {
@@ -59,12 +71,21 @@ export function createPlayerController({
     scoreboardDialog: requiredElement("scoreboard-dialog", HTMLDialogElement),
     scoreboardList: requiredElement("scoreboard-list", HTMLOListElement),
     scoreboardOpen: requiredElement("scoreboard-button", HTMLButtonElement),
+    scoreboardPartition: requiredElement(
+      "scoreboard-partition",
+      HTMLSelectElement
+    ),
+    scoreboardPartitionLabel: requiredElement(
+      "scoreboard-partition-label",
+      HTMLElement
+    ),
     scoreboardStatus: requiredElement("scoreboard-status", HTMLElement),
     signOut: requiredElement("player-sign-out", HTMLButtonElement),
     username: requiredElement("player-username", HTMLInputElement)
   };
   let authenticationReported = false;
   let reportedUserId = "";
+  let leaderboardRefreshId = 0;
   const clerkBrowser =
     injectedDependencies?.clerkBrowser ??
     createClerkBrowser({
@@ -186,7 +207,9 @@ export function createPlayerController({
      *   elapsedMs: number,
      *   score: number,
      *   wardensDefeated: number,
-     *   echoesCollected: number
+     *   echoesCollected: number,
+     *   atlasRegionId: string,
+     *   rulesetRevision: string
      * }} run
      * @param {string} levelId
      * @param {number} labyrinthNumber
@@ -209,7 +232,9 @@ export function createPlayerController({
           echoesCollected: run.echoesCollected,
           moves: run.moves,
           elapsedMs: Math.round(run.elapsedMs),
-          escaped: true
+          escaped: true,
+          atlasRegionId: run.atlasRegionId,
+          rulesetRevision: run.rulesetRevision
         });
         await refreshLeaderboard();
       } catch (error) {
@@ -299,6 +324,9 @@ export function createPlayerController({
         elements.scoreboardDialog.showModal();
       }
       void refreshLeaderboard();
+    });
+    elements.scoreboardPartition.addEventListener("change", () => {
+      void refreshLeaderboard(false);
     });
     elements.scoreboardClose.addEventListener("click", () =>
       elements.scoreboardDialog.close()
@@ -478,13 +506,53 @@ export function createPlayerController({
     elements.formStatus.dataset.state = state;
   }
 
-  async function refreshLeaderboard() {
+  /** @param {boolean} [resetPartition] */
+  async function refreshLeaderboard(resetPartition = true) {
+    const refreshId = ++leaderboardRefreshId;
+    const current = getScorePartition();
+    if (resetPartition || elements.scoreboardPartition.options.length === 0) {
+      const revisions = [
+        {
+          revision: current.rulesetRevision,
+          label: current.rulesetLabel
+        },
+        ...(current.rulesetRevision === "classic-v1"
+          ? []
+          : [{ revision: "classic-v1", label: "Classic Rules" }])
+      ];
+      elements.scoreboardPartition.replaceChildren(
+        ...revisions.map(({ revision, label }) => {
+          const option = document.createElement("option");
+          option.value = revision;
+          option.textContent = `${current.regionLabel} · ${label}`;
+          return option;
+        })
+      );
+    }
+    const rulesetRevision =
+      elements.scoreboardPartition.value || current.rulesetRevision;
+    const selectedLabel =
+      [...elements.scoreboardPartition.options].find(
+        (option) => option.value === rulesetRevision
+      )?.textContent ??
+      `${current.regionLabel} · ${current.rulesetLabel}`;
+    elements.scoreboardPartitionLabel.textContent =
+      `Showing ${selectedLabel}.`;
     elements.scoreboardStatus.textContent = "Loading scores…";
     try {
-      const result = await client.getLeaderboard();
+      const result = await client.getLeaderboard({
+        atlasRegionId: current.atlasRegionId,
+        rulesetRevision
+      });
+      if (refreshId !== leaderboardRefreshId) {
+        return;
+      }
       elements.globalMax.textContent = String(result.globalMaxScore ?? 0);
       renderLeaderboard(result.entries ?? []);
     } catch (error) {
+      if (refreshId !== leaderboardRefreshId) {
+        return;
+      }
       elements.globalMax.textContent = "—";
       elements.scoreboardList.replaceChildren();
       elements.scoreboardStatus.textContent = errorMessage(error);

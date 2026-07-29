@@ -30,6 +30,8 @@ function fixtureAdapter() {
       level_id: "trail-scout",
       labyrinth_number: 4,
       seed: "DAYLIGHT-0",
+      atlas_region_id: "foundation",
+      ruleset_revision: "classic-v1",
       wardens_defeated: 2,
       echoes_collected: 3,
       moves: 81,
@@ -182,6 +184,8 @@ describe("buildUserExport", () => {
     expect(exported.data.scores).toHaveLength(1);
     expect(exported.data.scores[0]).toMatchObject({
       classroom_id: "org_export_1",
+      atlas_region_id: "foundation",
+      ruleset_revision: "classic-v1",
       score: 900
     });
     expect(exported.data.run_access.access).toMatchObject({

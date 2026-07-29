@@ -13,6 +13,8 @@ function createStore() {
     profiles: new Map(),
     /** @type {Record<string, unknown> | null} */
     submittedRun: null,
+    /** @type {Record<string, string> | null} */
+    requestedPartition: null,
     /** @param {string} userId */
     async getProfile(userId) {
       return this.profiles.get(userId) ?? null;
@@ -26,7 +28,9 @@ function createStore() {
       this.profiles.set(userId, saved);
       return saved;
     },
-    async getLeaderboard() {
+    /** @param {Record<string, string>} partition */
+    async getLeaderboard(partition) {
+      this.requestedPartition = partition;
       return {
         entries: [
           {
@@ -92,12 +96,22 @@ describe("player API", () => {
     });
 
     await withServer(handler, async (origin) => {
-      const response = await fetch(`${origin}/api/leaderboard`);
+      const response = await fetch(
+        `${origin}/api/leaderboard?region=capable&rules=echo-bridges-v1`
+      );
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(body.globalMaxScore).toBe(1200);
       expect(body.verification).toBe("casual-v1");
+      expect(body.partition).toEqual({
+        atlasRegionId: "capable",
+        rulesetRevision: "echo-bridges-v1"
+      });
+      expect(store.requestedPartition).toEqual({
+        atlasRegionId: "capable",
+        rulesetRevision: "echo-bridges-v1"
+      });
       expect(body.entries[0]).not.toHaveProperty("userId");
     });
   });
@@ -131,7 +145,9 @@ describe("player API", () => {
 
     try {
       await withServer(handler, async (origin) => {
-        const response = await fetch(`${origin}/api/leaderboard`);
+        const response = await fetch(
+          `${origin}/api/leaderboard?region=foundation&rules=classic-v1`
+        );
 
         expect(response.status).toBe(500);
         expect(errorLog).toHaveBeenCalledWith(
@@ -207,6 +223,8 @@ describe("player API", () => {
           moves: 81,
           elapsedMs: 92000,
           escaped: true,
+          atlasRegionId: "foundation",
+          rulesetRevision: "echo-hush-v1",
           score: 999999
         })
       });
@@ -217,6 +235,9 @@ describe("player API", () => {
         userId: "user_123",
         classroomId: null,
         score: 850
+        ,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1"
       });
     });
   });
@@ -245,7 +266,9 @@ describe("player API", () => {
           echoesCollected: 3,
           moves: 81,
           elapsedMs: 92000,
-          escaped: true
+          escaped: true,
+          atlasRegionId: "foundation",
+          rulesetRevision: "echo-hush-v1"
         })
       });
       expect(response.status).toBe(201);

@@ -105,7 +105,10 @@ describe("player store", () => {
     };
     const store = createPlayerStore(pool);
 
-    await expect(store.getLeaderboard()).resolves.toEqual({
+    await expect(store.getLeaderboard({
+      atlasRegionId: "capable",
+      rulesetRevision: "echo-bridges-v1"
+    })).resolves.toEqual({
       entries: [
         {
           rank: 1,
@@ -122,6 +125,12 @@ describe("player store", () => {
     expect(pool.query.mock.calls[0][0]).toContain("ROW_NUMBER()");
     expect(pool.query.mock.calls[0][0]).toContain("player_id");
     expect(pool.query.mock.calls[0][0]).toContain("classroom_id IS NULL");
+    expect(pool.query.mock.calls[0][0]).toContain("atlas_region_id = $1");
+    expect(pool.query.mock.calls[0][0]).toContain("ruleset_revision = $2");
+    expect(pool.query.mock.calls[0][1]).toEqual([
+      "capable",
+      "echo-bridges-v1"
+    ]);
     expect(pool.query.mock.calls[0][0]).toContain(
       "best_runs.created_at ASC\n           ) AS rank"
     );
@@ -156,6 +165,8 @@ describe("player store", () => {
         moves: 81,
         elapsedMs: 92000,
         escaped: true,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1",
         score: 900
       })
     ).resolves.toMatchObject({
@@ -176,7 +187,9 @@ describe("player store", () => {
       81,
       92000,
       900,
-      null
+      null,
+      "foundation",
+      "echo-hush-v1"
     ]);
     expect(query.mock.calls[0][0]).toContain(
       "ON CONFLICT (player_id, classroom_id, idempotency_key) DO UPDATE"
@@ -230,6 +243,8 @@ describe("player store", () => {
         moves: 81,
         elapsedMs: 92000,
         escaped: true,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1",
         score: 900
       },
       "org_morning_123"
@@ -241,6 +256,6 @@ describe("player store", () => {
     ]);
     expect(query.mock.calls[0][0]).toContain("FROM classroom_memberships");
     expect(query.mock.calls[1][0]).toContain("classroom_id");
-    expect(query.mock.calls[1][1].at(-1)).toBe("org_morning_123");
+    expect(query.mock.calls[1][1][10]).toBe("org_morning_123");
   });
 });

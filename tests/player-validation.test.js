@@ -50,6 +50,8 @@ describe("player validation", () => {
       moves: 81,
       elapsedMs: 92000,
       escaped: true,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1",
       score: 999999
     });
 
@@ -63,6 +65,8 @@ describe("player validation", () => {
       moves: 81,
       elapsedMs: 92000,
       escaped: true,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1",
       score: 850
     });
   });
@@ -77,7 +81,9 @@ describe("player validation", () => {
       echoesCollected: 3,
       moves: 81,
       elapsedMs: 92000,
-      escaped: true
+      escaped: true,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     };
 
     expect(() => validateScoreInput({ ...base, escaped: false })).toThrow(
@@ -93,6 +99,16 @@ describe("player validation", () => {
     expect(() =>
       validateScoreInput({ ...base, wardensDefeated: 20 })
     ).toThrow("Warden count");
+    expect(() =>
+      validateScoreInput({ ...base, rulesetRevision: "unknown-v1" })
+    ).toThrow("ruleset");
+    expect(() =>
+      validateScoreInput({
+        ...base,
+        atlasRegionId: "developing",
+        rulesetRevision: "windways-v1"
+      })
+    ).toThrow("does not match");
   });
 
   it("uses the documented score formula", () => {
