@@ -2,6 +2,7 @@ import {
   DIFFICULTY_BANDS,
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
+  getQuestLevel,
   isGateWardenMilestone
 } from "../questions/quest-levels.js";
 
@@ -14,24 +15,88 @@ import {
  *   complete: boolean
  * }} QuestProgressLike */
 
+/** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
+const REGION_METADATA = Object.freeze({
+  foundation: Object.freeze({
+    motif: "Open trail",
+    fieldNotes: Object.freeze([
+      "A clear trail begins with one careful step.",
+      "The path widens where patient Explorers look twice.",
+      "Echo marks gather beside the first turns.",
+      "A diamond crest marks the first Gate Warden."
+    ])
+  }),
+  developing: Object.freeze({
+    motif: "Rising wind",
+    fieldNotes: Object.freeze([
+      "Wind marks point deeper into the expedition.",
+      "Longer passages reward a steady route.",
+      "The trail bends, but every choice stays readable.",
+      "The second diamond crest guards the windy ridge."
+    ])
+  }),
+  capable: Object.freeze({
+    motif: "Bridgework",
+    fieldNotes: Object.freeze([
+      "Rope bridges join the middle reaches.",
+      "Recovered Echoes make the route easier to remember.",
+      "Careful turns reveal how the crossings connect.",
+      "The central Gate Warden waits beyond the last bridge."
+    ])
+  }),
+  advanced: Object.freeze({
+    motif: "Tide marks",
+    fieldNotes: Object.freeze([
+      "Tide marks trace the safest known passage.",
+      "The route asks for calm choices under pressure.",
+      "Each landmark records another hard-won crossing.",
+      "A coral diamond marks the fourth Gate Warden."
+    ])
+  }),
+  mastery: Object.freeze({
+    motif: "Signal bells",
+    fieldNotes: Object.freeze([
+      "Bell marks carry across the final region.",
+      "The longest passages bring every skill together.",
+      "Only one landmark remains beyond this signal.",
+      "The final diamond crest closes the Quest."
+    ])
+  })
+});
+
 /**
  * Project the complete Echo Atlas without storing or changing Quest Progress.
  *
  * @param {QuestProgressLike} progress
+ * @param {{ watchTrailLandmarkIds?: ReadonlySet<string> }} [options]
  */
-export function projectQuestAtlas(progress) {
+export function projectQuestAtlas(
+  progress,
+  { watchTrailLandmarkIds = new Set() } = {}
+) {
+  const level = getQuestLevel(progress.levelId);
+  const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
   const regions = DIFFICULTY_BANDS.map((_, regionIndex) => {
     const start = regionIndex * 4 + 1;
     const end = start + 3;
     const band = getDifficultyBand(start);
+    const metadata = REGION_METADATA[band.id];
     const nodes = Array.from({ length: 4 }, (_, offset) =>
-      projectNode(progress, start + offset)
+      projectNode(
+        progress,
+        start + offset,
+        band,
+        metadata.fieldNotes[offset],
+        level.questionGuide,
+        retainedLandmarkIds
+      )
     );
     const sigilRestored = progress.completedLabyrinths >= end;
     return {
       id: band.id,
       index: regionIndex,
       label: band.label,
+      motif: metadata.motif,
       rangeLabel: `Labyrinths ${start}-${end}`,
       sigilRestored,
       sigilLabel: sigilRestored
@@ -65,8 +130,20 @@ export function projectQuestAtlas(progress) {
 /**
  * @param {QuestProgressLike} progress
  * @param {number} labyrinthNumber
+ * @param {{ id: string, label: string }} band
+ * @param {string} fieldNote
+ * @param {string} learningFocus
+ * @param {ReadonlySet<string>} retainedLandmarkIds
  */
-function projectNode(progress, labyrinthNumber) {
+function projectNode(
+  progress,
+  labyrinthNumber,
+  band,
+  fieldNote,
+  learningFocus,
+  retainedLandmarkIds
+) {
+  const id = `${band.id}-${labyrinthNumber}`;
   const milestone = isGateWardenMilestone(labyrinthNumber);
   const completed = labyrinthNumber <= progress.completedLabyrinths;
   const current = !progress.complete &&
@@ -84,9 +161,14 @@ function projectNode(progress, labyrinthNumber) {
   const stateLabel = atlasStateLabel({ completed, current, milestone });
 
   return {
+    id,
     labyrinthNumber,
+    difficultyBand: band.label,
+    fieldNote,
+    learningFocus,
     completed,
     current,
+    watchTrailAvailable: completed && retainedLandmarkIds.has(id),
     milestone,
     state,
     stateLabel,

@@ -354,6 +354,18 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   await expect(page.locator("[data-atlas-node='4']")).toContainText(
     "Current Gate Warden milestone"
   );
+  const zoomOutButton = atlas.getByRole("button", { name: "Zoom out" });
+  const zoomOutBounds = await zoomOutButton.boundingBox();
+  if (!zoomOutBounds) {
+    throw new Error("Expected the Atlas Zoom out button.");
+  }
+  await page.mouse.move(
+    zoomOutBounds.x + zoomOutBounds.width / 2,
+    zoomOutBounds.y + zoomOutBounds.height / 2
+  );
+  await page.mouse.down();
+  await expect(zoomOutButton).toHaveCSS("transform", "none");
+  await page.mouse.up();
   await expect(page.locator("#pause-run")).toHaveAttribute(
     "aria-pressed",
     "true"
@@ -385,6 +397,220 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
     "aria-pressed",
     "false"
   );
+});
+
+test("lazy Atlas keeps semantic map and list parity across a URL reload", async ({
+  page
+}) => {
+  await page.goto("/?seed=ATLAS-DEEP-LINK&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => entry.name.includes("quest-atlas-view"))
+      )
+    )
+    .toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+      )
+    )
+    .toBe(false);
+  const runStateBeforeAtlasSelection = await page.evaluate(() => ({
+    quest: localStorage.getItem("echo-maze:quest-progress:v1"),
+    locator: localStorage.getItem("echo-maze:active-run:v1"),
+    recovery: localStorage.getItem("echo-maze:active-run-recovery:v1")
+  }));
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => entry.name.includes("quest-atlas-view"))
+      )
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        performance.getEntriesByType("resource")
+          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+      )
+    )
+    .toBe(true);
+  await expect(atlas.locator("[data-atlas-landmark]")).toHaveCount(20);
+
+  await atlas.locator("[data-atlas-landmark='developing-7']").click();
+  await expect(page).toHaveURL(/atlas=developing-7/);
+  await expect(atlas.locator("[data-atlas-detail-title]"))
+    .toHaveText("Labyrinth 7");
+  await expect(atlas.locator("[data-atlas-detail]")).toContainText(
+    "Preview only"
+  );
+  await expect(atlas.locator("[data-atlas-detail-action]")).toHaveCount(0);
+
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await expect(atlas.locator("[data-atlas-landmarks]")).toHaveAttribute(
+    "data-view",
+    "list"
+  );
+  await expect(atlas.locator("[data-atlas-landmark]")).toHaveCount(20);
+
+  await page.reload();
+  await expectGameReady(page);
+  await expect(atlas).toBeVisible();
+  await expect(atlas.locator("[data-atlas-detail-title]"))
+    .toHaveText("Labyrinth 7");
+  expect(await page.evaluate(() => ({
+    quest: localStorage.getItem("echo-maze:quest-progress:v1"),
+    locator: localStorage.getItem("echo-maze:active-run:v1"),
+    recovery: localStorage.getItem("echo-maze:active-run-recovery:v1")
+  }))).toEqual(runStateBeforeAtlasSelection);
+
+  await atlas.locator("[data-atlas-landmark='foundation-4']").click();
+  await expect(atlas.locator("[data-atlas-detail]")).toContainText(
+    "Continue Quest"
+  );
+  await atlas.getByRole("button", { name: "Continue Quest" }).click();
+  await expect(atlas).not.toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+});
+
+test("keeps a Run paused when Atlas is activated twice while loading", async ({
+  page
+}) => {
+  await page.route("**/assets/quest-atlas-view-*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-DOUBLE&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).dblclick({
+    delay: 20
+  });
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("retries the Atlas view after its first chunk request fails", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/quest-atlas-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-RETRY&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+
+  await atlasButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Echo Atlas could not open"
+  );
+  await atlasButton.click();
+
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
+  expect(requests).toBe(2);
+});
+
+test("pans from the labeled viewport and centers the current landmark", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/?seed=ATLAS-CENTER&level=trail-scout&labyrinth=12");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const viewport = atlas.getByRole("group", { name: /Shift plus arrow keys/ });
+  const canvas = atlas.locator("[data-atlas-canvas]");
+
+  await viewport.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(canvas).toHaveCSS("transform", /matrix\([^,]+, 0, 0, [^,]+, -48,/);
+  await atlas.getByRole("button", { name: "Zoom in" }).click();
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 120;
+    element.scrollTop = 80;
+  });
+  await atlas.getByRole("button", { name: "Center Current" }).click();
+
+  const centers = await atlas.evaluate(() => {
+    const viewportElement = document.querySelector(".atlas-viewport");
+    const current = document.querySelector("[aria-current='step']");
+    if (!viewportElement || !current) {
+      throw new Error("Expected Atlas viewport and current landmark.");
+    }
+    const viewportBounds = viewportElement.getBoundingClientRect();
+    const currentBounds = current.getBoundingClientRect();
+    return {
+      viewportX: viewportBounds.left + viewportBounds.width / 2,
+      viewportY: viewportBounds.top + viewportBounds.height / 2,
+      currentX: currentBounds.left + currentBounds.width / 2,
+      currentY: currentBounds.top + currentBounds.height / 2
+    };
+  });
+  expect(Math.abs(centers.viewportX - centers.currentX)).toBeLessThanOrEqual(2);
+  expect(Math.abs(centers.viewportY - centers.currentY)).toBeLessThanOrEqual(2);
+});
+
+test("Atlas map and inspector fit every contracted viewport at 200-percent text", async ({
+  page
+}) => {
+  for (const viewport of [
+    { width: 320, height: 720 },
+    { width: 390, height: 844 },
+    { width: 768, height: 900 },
+    { width: 1440, height: 1000 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/?seed=ATLAS-FIT&level=trail-scout&labyrinth=4");
+    await expectGameReady(page);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "32px";
+    });
+    await page.getByRole("button", { name: "Atlas", exact: true }).click();
+    const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+    await expect(atlas).toBeVisible();
+    await expect(atlas.locator("[data-atlas-detail]")).toBeVisible();
+    await expect(atlas.getByRole("button", { name: "Center Current" }))
+      .toBeVisible();
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )).toBeLessThanOrEqual(1);
+    const bounds = await atlas.boundingBox();
+    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0))
+      .toBeLessThanOrEqual(viewport.width);
+    const detailBounds = await atlas.locator("[data-atlas-detail]")
+      .boundingBox();
+    expect(detailBounds?.y ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan((bounds?.y ?? 0) + (bounds?.height ?? 0));
+    if (viewport.width <= 768) {
+      expect((detailBounds?.y ?? 0) + (detailBounds?.height ?? 0))
+        .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0));
+    }
+  }
 });
 
 test("previews, saves, and resets presentation-only Explorer Access Settings", async ({

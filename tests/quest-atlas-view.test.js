@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { projectQuestAtlas } from "../src/game/quest-atlas.js";
 import {
@@ -13,6 +14,7 @@ import {
 
 describe("Echo Atlas view", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/play");
     document.body.innerHTML = `
       <button id="atlas-trigger">Quest Atlas</button>
       <dialog id="atlas-dialog" aria-labelledby="atlas-title">
@@ -40,6 +42,16 @@ describe("Echo Atlas view", () => {
 
     expect(document.querySelectorAll("[data-atlas-region]")).toHaveLength(5);
     expect(document.querySelectorAll("[data-atlas-node]")).toHaveLength(20);
+    expect(document.querySelectorAll("[data-atlas-landmark]")).toHaveLength(20);
+    expect(document.querySelector("[data-atlas-illustration]")
+      ?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelectorAll("[data-atlas-region-art]")).toHaveLength(5);
+    expect(document.querySelector("[data-atlas-node='1'] [data-state-mark]")
+      ?.getAttribute("data-state-mark")).toBe("stamp");
+    expect(document.querySelector("[data-atlas-node='4'] [data-state-mark]")
+      ?.getAttribute("data-state-mark")).toBe("signal");
+    expect(document.querySelector("[data-atlas-node='5'] [data-state-mark]")
+      ?.getAttribute("data-state-mark")).toBe("waypoint");
     expect(document.querySelector("[data-atlas-node='4']")?.textContent)
       .toContain("Current Gate Warden milestone");
     expect(document.querySelector("[data-atlas-node='4']")?.getAttribute(
@@ -56,6 +68,173 @@ describe("Echo Atlas view", () => {
       "Gate Warden here at Labyrinth 4"
     );
     expect(document.activeElement?.id).toBe("atlas-title");
+  });
+
+  it("removes landmark press movement when reduced motion is requested", () => {
+    const styles = readFileSync("src/game/quest-atlas.css", "utf8");
+    const reducedMotion = styles.match(
+      /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\}\s*$/
+    )?.[1];
+
+    expect(reducedMotion).toMatch(
+      /\.atlas-dialog button:active:not\(:disabled\),[\s\S]*\{\s*transform:\s*none;\s*\}/
+    );
+  });
+
+  it("keeps map and list semantics on one landmark collection", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout", 4)),
+      trigger
+    );
+
+    const collection = document.querySelector("[data-atlas-landmarks]");
+    expect(document.querySelector("[role='toolbar']")
+      ?.getAttribute("aria-label")).toBe("Atlas view controls");
+    expect(collection?.getAttribute("data-view")).toBe("map");
+    document.querySelector("[data-atlas-view='list']")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    expect(collection?.getAttribute("data-view")).toBe("list");
+    expect(document.querySelectorAll("[data-atlas-landmark]")).toHaveLength(20);
+    expect(document.querySelector("[data-atlas-landmark='foundation-4']")
+      ?.textContent).toContain("Current Gate Warden milestone");
+    expect(document.querySelector("[data-atlas-zoom='in']"))
+      .toHaveProperty("disabled", true);
+    expect(document.querySelector("[data-atlas-zoom='out']"))
+      .toHaveProperty("disabled", true);
+    expect(document.querySelector("[data-atlas-center-current]"))
+      .toHaveProperty("disabled", true);
+  });
+
+  it("disables zoom limits and Center Current when no landmark is current", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+    let progress = createQuestProgress("trail-scout", 20);
+    progress = advanceQuest(progress);
+
+    view.show(projectQuestAtlas(progress), trigger);
+
+    expect(document.querySelector("[data-atlas-center-current]"))
+      .toHaveProperty("disabled", true);
+    const zoomIn = /** @type {HTMLButtonElement} */ (
+      document.querySelector("[data-atlas-zoom='in']")
+    );
+    zoomIn.click();
+    zoomIn.click();
+    expect(zoomIn.disabled).toBe(true);
+    expect(document.querySelector("[data-atlas-zoom='out']"))
+      .toHaveProperty("disabled", false);
+  });
+
+  it("restores stable URL selection and exposes only the current action", () => {
+    window.history.replaceState(null, "", "/play?atlas=developing-7");
+    const onContinue = vi.fn();
+    const view = createQuestAtlasView({ onContinue });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout", 4)),
+      trigger
+    );
+
+    expect(document.querySelector("[data-atlas-detail-title]")?.textContent)
+      .toContain("Labyrinth 7");
+    expect(document.querySelector("[data-atlas-detail-action]")).toBeNull();
+
+    document.querySelector("[data-atlas-landmark='foundation-4']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(new URL(window.location.href).searchParams.get("atlas"))
+      .toBe("foundation-4");
+    expect(document.querySelector("[data-atlas-detail]")?.textContent)
+      .toContain("Continue Quest");
+    document.querySelector("[data-atlas-detail-action]")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    expect(onContinue).toHaveBeenCalledOnce();
+  });
+
+  it("exposes Watch Trail only for a completed landmark with retained memory", () => {
+    const onWatchTrail = vi.fn();
+    const view = createQuestAtlasView({ onWatchTrail });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout", 4), {
+        watchTrailLandmarkIds: new Set(["foundation-2"])
+      }),
+      trigger
+    );
+
+    document.querySelector("[data-atlas-landmark='foundation-2']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const action = /** @type {HTMLButtonElement | null} */ (
+      document.querySelector("[data-atlas-watch-trail]")
+    );
+    expect(action?.textContent).toBe("Watch Trail");
+    action?.click();
+    expect(onWatchTrail).toHaveBeenCalledWith("foundation-2");
+
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout", 4)),
+      trigger
+    );
+    document.querySelector("[data-atlas-landmark='foundation-2']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector("[data-atlas-watch-trail]")).toBeNull();
+  });
+
+  it("supports focus-safe landmark keys and explicit map controls", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+    view.show(
+      projectQuestAtlas(createQuestProgress("trail-scout", 4)),
+      trigger
+    );
+
+    const current = /** @type {HTMLButtonElement} */ (
+      document.querySelector("[data-atlas-landmark='foundation-4']")
+    );
+    current.focus();
+    current.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      bubbles: true
+    }));
+    expect(document.activeElement?.getAttribute("data-atlas-landmark"))
+      .toBe("developing-5");
+
+    document.querySelector("[data-atlas-zoom='in']")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    expect(document.querySelector("[data-atlas-canvas]")
+      ?.getAttribute("data-zoom")).toBe("1.2");
+    const viewport = /** @type {HTMLElement} */ (
+      document.querySelector(".atlas-viewport")
+    );
+    viewport.focus();
+    viewport.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      bubbles: true
+    }));
+    expect(document.querySelector("[data-atlas-canvas]")
+      ?.getAttribute("style")).toContain("translate(-48px, 0px)");
+    document.querySelector("[data-atlas-center-current]")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    expect(document.querySelector("[data-atlas-landmark='foundation-4']")
+      ?.getAttribute("aria-current")).toBe("step");
   });
 
   it("reveals the next Gate Warden and celebrates a completed Atlas", () => {

@@ -26,9 +26,13 @@ describe("Echo Atlas projection", () => {
     );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
+        id: "foundation-1",
         labyrinthNumber: 1,
         state: "current",
-        stateLabel: "Current Labyrinth"
+        stateLabel: "Current Labyrinth",
+        difficultyBand: "Foundation",
+        fieldNote: expect.any(String),
+        learningFocus: expect.stringContaining("multiplication")
       }),
       expect.objectContaining({
         labyrinthNumber: 2,
@@ -47,6 +51,35 @@ describe("Echo Atlas projection", () => {
         stateLabel: "Gate Warden milestone ahead"
       })
     ]);
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .map((node) => node.id)
+    ).toEqual([
+      "foundation-1",
+      "foundation-2",
+      "foundation-3",
+      "foundation-4",
+      "developing-5",
+      "developing-6",
+      "developing-7",
+      "developing-8",
+      "capable-9",
+      "capable-10",
+      "capable-11",
+      "capable-12",
+      "advanced-13",
+      "advanced-14",
+      "advanced-15",
+      "advanced-16",
+      "mastery-17",
+      "mastery-18",
+      "mastery-19",
+      "mastery-20"
+    ]);
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .every((node) => node.fieldNote.length > 0)
+    ).toBe(true);
   });
 
   it("derives restored sigils and current milestones without mutating progress", () => {
@@ -85,6 +118,24 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[1].nodes[0]).toMatchObject({
       state: "current",
       labyrinthNumber: 5
+    });
+  });
+
+  it("derives Watch Trail capability only from approved retained memory", () => {
+    const progress = createQuestProgress("maze-master", 5);
+    const atlas = projectQuestAtlas(progress, {
+      watchTrailLandmarkIds: new Set(["foundation-3", "developing-5"])
+    });
+
+    expect(atlas.regions[0].nodes[2]).toMatchObject({
+      id: "foundation-3",
+      completed: true,
+      watchTrailAvailable: true
+    });
+    expect(atlas.regions[1].nodes[0]).toMatchObject({
+      id: "developing-5",
+      current: true,
+      watchTrailAvailable: false
     });
   });
 

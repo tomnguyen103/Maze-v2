@@ -59,10 +59,7 @@ import {
 } from "./game/quest-progress.js";
 import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
 import { projectQuestAtlas } from "./game/quest-atlas.js";
-import {
-  createQuestAtlasView,
-  renderQuestAtlasSummary
-} from "./game/quest-atlas-view.js";
+import { renderQuestAtlasSummary } from "./game/quest-atlas-summary.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
@@ -394,20 +391,21 @@ if (
 let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
-const atlasView = createQuestAtlasView({
-  onClose: () => {
-    if (resumeAfterAtlas && run.status === "paused") {
-      togglePause();
-    }
-    resumeAfterAtlas = false;
-  }
-});
+/** @type {Promise<ReturnType<typeof import("./game/quest-atlas-view.js").createQuestAtlasView>> | null} */
+let atlasViewPromise = null;
+let atlasOpening = false;
+let atlasViewRetry = false;
 /** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
 let accessSettingsViewPromise = null;
 let accessSettingsOpening = false;
 let accessSettingsViewRetry = false;
 
 export const gameReady = initializeRunEntry();
+void gameReady.then(() => {
+  if (new URL(window.location.href).searchParams.has("atlas")) {
+    void showQuestAtlas(elements.atlasButton);
+  }
+});
 void playerController.isAuthenticated().then(handleAuthenticationChange);
 requestAnimationFrame(tick);
 
@@ -588,12 +586,54 @@ elements.skipConfirm.addEventListener("click", () => {
   transition({ type: "skip-question" });
 });
 elements.atlasButton.addEventListener("click", () => {
+  void showQuestAtlas(elements.atlasButton);
+});
+
+/** @param {HTMLElement} trigger */
+async function showQuestAtlas(trigger) {
+  if (atlasOpening) {
+    return;
+  }
+  atlasOpening = true;
   resumeAfterAtlas = run.status === "active";
   if (resumeAfterAtlas) {
     togglePause();
   }
-  atlasView.show(projectQuestAtlas(questProgress), elements.atlasButton);
-});
+  const retrying = atlasViewRetry;
+  try {
+    if (!atlasViewPromise) {
+      /** @type {Promise<typeof import("./game/quest-atlas-view.js")>} */
+      const viewModule = retrying
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("./game/quest-atlas-view.js?retry=1")
+        : import("./game/quest-atlas-view.js");
+      atlasViewRetry = true;
+      atlasViewPromise = viewModule.then(
+        ({ createQuestAtlasView }) => createQuestAtlasView({
+        onClose: () => {
+          if (resumeAfterAtlas && run.status === "paused") {
+            togglePause();
+          }
+          resumeAfterAtlas = false;
+        }
+        })
+      );
+    }
+    const atlasView = await atlasViewPromise;
+    atlasView.show(projectQuestAtlas(questProgress), trigger);
+  } catch {
+    atlasViewPromise = null;
+    if (resumeAfterAtlas && run.status === "paused") {
+      togglePause();
+    }
+    resumeAfterAtlas = false;
+    announce(
+      "Echo Atlas could not open. Continue the Quest and try again."
+    );
+  } finally {
+    atlasOpening = false;
+  }
+}
 elements.recordsButton.addEventListener("click", () => {
   resumeAfterRecords = run.status === "active";
   if (resumeAfterRecords) {
