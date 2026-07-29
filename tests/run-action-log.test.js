@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { applyAction, createRun } from "../src/game/game-session.js";
 import {
   appendRunAction,
-  createRunActionLog
+  createRunActionLog,
+  RUN_ACTION_LOG_MAX_ACTIONS,
+  tryAppendRunAction
 } from "../src/game/run-action-log.js";
 
 describe("Run Action Log", () => {
@@ -112,5 +114,44 @@ describe("Run Action Log", () => {
       ]
     });
     expect(JSON.stringify(log)).not.toContain(question.prompt);
+  });
+
+  it("fails verification closed without throwing through gameplay at the cap", () => {
+    const previous = createRun("REPLAY-LIMIT", {
+      size: 7,
+      echoCount: 0,
+      wardenCount: 0,
+      vitality: 3,
+      pulses: 1
+    });
+    const action = /** @type {const} */ ({
+      type: "move",
+      direction: "right"
+    });
+    const next = applyAction(previous, action);
+    const fullLog = {
+      version: /** @type {const} */ (1),
+      actions: Array.from(
+        { length: RUN_ACTION_LOG_MAX_ACTIONS },
+        () => ({
+          type: /** @type {const} */ ("move"),
+          direction: /** @type {const} */ ("right"),
+          elapsedMs: 0
+        })
+      )
+    };
+
+    expect(() =>
+      tryAppendRunAction(fullLog, previous, action, next)
+    ).not.toThrow();
+    expect(tryAppendRunAction(fullLog, previous, action, next)).toBeNull();
+    expect(
+      tryAppendRunAction(
+        fullLog,
+        previous,
+        { type: "move", direction: "up" },
+        previous
+      )
+    ).toBe(fullLog);
   });
 });

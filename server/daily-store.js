@@ -91,7 +91,73 @@ export function createDailyStore(pool) {
             entry.moves,
             entry.elapsedMs
           ];
-          const submission = await database.query(
+          await database.query(
+            `SELECT pg_advisory_xact_lock(
+               hashtextextended($1 || ':' || $2::text, 0)
+             )`,
+            [userId, entry.date]
+          );
+          const existing = await database.query(
+            `SELECT
+               players.username,
+               submissions.response_score AS score,
+               submissions.response_moves AS moves,
+               submissions.best_result
+             FROM verified_daily_submissions AS submissions
+             JOIN players ON players.clerk_user_id = submissions.player_id
+             WHERE submissions.player_id = $1
+               AND submissions.daily_date = $2::date
+               AND submissions.idempotency_key = $3
+             LIMIT 1`,
+            [userId, entry.date, entry.idempotencyKey]
+          );
+          if (existing.rows[0]) {
+            return {
+              duplicate: true,
+              improved: false,
+              bestResult:
+                /** @type {"created" | "improved" | "unchanged"} */ (
+                  existing.rows[0].best_result
+                ),
+              entry: mapEntry(existing.rows[0])
+            };
+          }
+
+          const previous = await database.query(
+            `SELECT
+               players.username,
+               entries.score,
+               entries.moves
+             FROM verified_daily_entries AS entries
+             JOIN players ON players.clerk_user_id = entries.player_id
+             WHERE entries.player_id = $1
+               AND entries.daily_date = $2::date
+             FOR UPDATE`,
+            [userId, entry.date]
+          );
+          const previousBest = previous.rows[0] ?? null;
+          const candidateImproves =
+            previousBest === null ||
+            entry.score > Number(previousBest.score) ||
+            (
+              entry.score === Number(previousBest.score) &&
+              entry.moves < Number(previousBest.moves)
+            );
+          /** @type {"created" | "improved" | "unchanged"} */
+          const bestResult =
+            previousBest === null
+              ? "created"
+              : candidateImproves
+                ? "improved"
+                : "unchanged";
+          const responseScore = candidateImproves
+            ? entry.score
+            : Number(previousBest?.score);
+          const responseMoves = candidateImproves
+            ? entry.moves
+            : Number(previousBest?.moves);
+
+          await database.query(
             `INSERT INTO verified_daily_submissions (
                player_id,
                daily_date,
@@ -101,29 +167,19 @@ export function createDailyStore(pool) {
                wardens_defeated,
                echoes_collected,
                moves,
-               elapsed_ms
+               elapsed_ms,
+               best_result,
+               response_score,
+               response_moves
              )
-             VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT DO NOTHING
-             RETURNING TRUE AS inserted`,
-            values
+             VALUES (
+               $1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+             )`,
+            [...values, bestResult, responseScore, responseMoves]
           );
-          const duplicate = submission.rows.length === 0;
-          let improved = false;
-          let hadBest = false;
           /** @type {Record<string, unknown> | null} */
-          let stored = null;
-
-          if (!duplicate) {
-            const previous = await database.query(
-              `SELECT TRUE AS present
-               FROM verified_daily_entries
-               WHERE player_id = $1
-                 AND daily_date = $2::date
-               FOR UPDATE`,
-              [userId, entry.date]
-            );
-            hadBest = previous.rows.length > 0;
+          let stored = previousBest;
+          if (candidateImproves) {
             const promoted = await database.query(
               `WITH upserted AS (
                  INSERT INTO verified_daily_entries (
@@ -164,36 +220,13 @@ export function createDailyStore(pool) {
               values
             );
             stored = promoted.rows[0] ?? null;
-            improved = stored !== null;
-          }
-
-          if (!stored) {
-            const current = await database.query(
-              `SELECT
-                 players.username,
-                 entries.score,
-                 entries.moves
-               FROM verified_daily_entries AS entries
-               JOIN players ON players.clerk_user_id = entries.player_id
-               WHERE entries.player_id = $1
-                 AND entries.daily_date = $2::date
-               LIMIT 1`,
-              [userId, entry.date]
-            );
-            stored = current.rows[0] ?? null;
           }
           if (!stored) {
             throw new Error("Verified Daily entry could not be saved.");
           }
-          /** @type {"created" | "improved" | "unchanged"} */
-          const bestResult = improved
-            ? hadBest
-              ? "improved"
-              : "created"
-            : "unchanged";
           return {
-            duplicate,
-            improved,
+            duplicate: false,
+            improved: candidateImproves,
             bestResult,
             entry: mapEntry(stored)
           };

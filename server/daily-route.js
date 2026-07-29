@@ -180,14 +180,18 @@ export function createDailyHandler({
           moves: result.moves
         }
       });
-      sendJson(response, stored.bestResult === "created" ? 201 : 200, {
+      sendJson(
+        response,
+        !stored.duplicate && stored.bestResult === "created" ? 201 : 200,
+        {
         date: daily.date,
         verification: "verified-replay-v1",
         duplicate: stored.duplicate,
         improved: stored.improved,
         bestResult: stored.bestResult,
         entry: publicEntry(stored.entry)
-      });
+        }
+      );
     } catch (error) {
       if (error instanceof DailyInputError || error instanceof ReplayInputError) {
         sendJson(

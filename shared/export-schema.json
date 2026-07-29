@@ -23,6 +23,7 @@
         "class_journals",
         "access_settings",
         "verified_daily_results",
+        "verified_daily_best_results",
         "role"
       ],
       "properties": {
@@ -84,7 +85,12 @@
           "type": ["object", "null"]
         },
         "verified_daily_results": {
-          "description": "Server-replayed Daily result submissions. Client idempotency tokens are excluded.",
+          "description": "Server-replayed Daily result submissions and their stable response classification. Client idempotency tokens are excluded.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "verified_daily_best_results": {
+          "description": "Current best replay-verified Daily result for each date, including its achievement time.",
           "type": "array",
           "items": { "type": "object" }
         },

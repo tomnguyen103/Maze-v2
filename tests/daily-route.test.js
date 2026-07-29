@@ -170,6 +170,39 @@ describe("Verified Daily API", () => {
     );
   });
 
+  it("returns 200 for a stable duplicate whose original result was created", async () => {
+    const store = createStore();
+    store.submitVerifiedEntry = async () => ({
+      duplicate: true,
+      improved: false,
+      bestResult: /** @type {const} */ ("created"),
+      entry: {
+        username: "Moss Runner",
+        score: 900,
+        moves: 76,
+        playerId: "user_private"
+      }
+    });
+
+    await withServer(handler(store), async (origin) => {
+      const response = await fetch(`${origin}/api/daily/scores`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-test-user": "user_123"
+        },
+        body: JSON.stringify(submission())
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        duplicate: true,
+        improved: false,
+        bestResult: "created"
+      });
+    });
+  });
+
   it("keeps reads public but requires identity and a Player Profile for writes", async () => {
     await withServer(handler(), async (origin) => {
       const guest = await fetch(`${origin}/api/daily/scores`, {
@@ -197,6 +230,22 @@ describe("Verified Daily API", () => {
       () =>
         submission({
           contract: { ...DAILY_REPLAY_FIXTURE, seed: "DAILY-FORGED" }
+        }),
+      409
+    ],
+    [
+      "altered Quest Level",
+      () =>
+        submission({
+          contract: { ...DAILY_REPLAY_FIXTURE, levelId: "maze-master" }
+        }),
+      409
+    ],
+    [
+      "altered Labyrinth Number",
+      () =>
+        submission({
+          contract: { ...DAILY_REPLAY_FIXTURE, labyrinthNumber: 6 }
         }),
       409
     ],
@@ -229,6 +278,70 @@ describe("Verified Daily API", () => {
         submission({
           claimed: { ...submission().claimed, status: "lost" }
         }),
+      400
+    ],
+    [
+      "altered elapsed time claim",
+      () =>
+        submission({
+          claimed: {
+            ...submission().claimed,
+            elapsedMs: DAILY_REPLAY_RESULT.elapsedMs + 1
+          }
+        }),
+      400
+    ],
+    [
+      "altered Moves claim",
+      () =>
+        submission({
+          claimed: {
+            ...submission().claimed,
+            moves: DAILY_REPLAY_RESULT.moves + 1
+          }
+        }),
+      400
+    ],
+    [
+      "altered Warden count claim",
+      () =>
+        submission({
+          claimed: {
+            ...submission().claimed,
+            wardensDefeated: DAILY_REPLAY_RESULT.wardensDefeated - 1
+          }
+        }),
+      400
+    ],
+    [
+      "altered Echo count claim",
+      () =>
+        submission({
+          claimed: {
+            ...submission().claimed,
+            echoesCollected: DAILY_REPLAY_RESULT.echoesCollected - 1
+          }
+        }),
+      400
+    ],
+    [
+      "forged encounter answer",
+      () => {
+        let replaced = false;
+        const actionLog = dailyWinningLog();
+        return submission({
+          actionLog: {
+            ...actionLog,
+            actions: actionLog.actions.map((action) => {
+              if (!replaced && action.type === "answer-question") {
+                replaced = true;
+                return { ...action, answerId: "forged-choice" };
+              }
+              return action;
+            })
+          }
+        });
+      },
       400
     ],
     [

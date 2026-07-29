@@ -47,9 +47,10 @@ Run, Quest, score, Question, or shared-link state.
   one, so a stolen admin session is the threat the audit trail is there for.
 - Score Entries include `classroom_id`: null means Personal Play and a Clerk
   Organization id means Class Play.
-- `verified_daily_results` contains the account holder's replay-derived Daily
-  facts and verification time. Client idempotency keys are excluded from the
-  export contract.
+- `verified_daily_results` contains every replay-derived Daily submission,
+  its stable response classification, and verification time.
+  `verified_daily_best_results` separately identifies each date's current best
+  result and achievement time. Client idempotency keys are excluded from both.
 - A Teacher can read only the count projection for a selected Classroom where
   the database-authoritative Membership role is Teacher. The projection has no
   prompt, answer, Question timestamp, or raw Journal JSON. Students and

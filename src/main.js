@@ -27,8 +27,8 @@ import {
   normalizeSeed
 } from "./game/game-session.js";
 import {
-  appendRunAction,
-  createRunActionLog
+  createRunActionLog,
+  tryAppendRunAction
 } from "./game/run-action-log.js";
 import { createVerifiedDailySubmission } from "./player/daily-submission.js";
 import {
@@ -243,6 +243,7 @@ let run = createRun(
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
 let runActionLog = createRunActionLog();
+let runActionLogOverflowed = false;
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
@@ -1053,6 +1054,7 @@ function startRun(locator, daily = null) {
     getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
   );
   runActionLog = createRunActionLog();
+  runActionLogOverflowed = false;
   if (!daily) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
@@ -2102,7 +2104,14 @@ function transition(action) {
   const previous = run;
   const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
-  runActionLog = appendRunAction(runActionLog, previous, action, run);
+  if (activeDaily && !runActionLogOverflowed) {
+    const nextLog = tryAppendRunAction(runActionLog, previous, action, run);
+    if (nextLog) {
+      runActionLog = nextLog;
+    } else {
+      runActionLogOverflowed = true;
+    }
+  }
   const eventType = run.event.type;
   const wardenMode = summarizeWardenMode(run);
   const eventChanged =
@@ -2694,10 +2703,19 @@ function finishDailyRun(daily, won) {
 /** @param {ReturnType<typeof createDailyContract>} daily */
 async function submitVerifiedDailyRun(daily) {
   const submittedLog = runActionLog;
-  const submission = createVerifiedDailySubmission(daily, submittedLog, run);
   const localKicker = elements.resultKicker.textContent ?? "";
   const localSummary = elements.resultSummary.textContent ?? "";
   const localRank = elements.resultRank.textContent ?? "";
+  if (runActionLogOverflowed) {
+    elements.resultKicker.textContent =
+      `${localKicker} · replay limit reached`;
+    elements.resultSummary.textContent =
+      `${localSummary} This long Run stayed playable, but its replay was too long for the verified board.`;
+    elements.resultRank.textContent = localRank;
+    announce("Daily replay limit reached. Your local result is unchanged.");
+    return;
+  }
+  const submission = createVerifiedDailySubmission(daily, submittedLog, run);
   if (playerController.hasAuthenticatedUser()) {
     elements.resultKicker.textContent = "Checking Daily replay";
     elements.resultRank.textContent = "Checking";

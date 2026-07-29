@@ -108,5 +108,56 @@ describe.runIf(runIntegration)("Verified Daily store on PostgreSQL", () => {
     ]);
     expect(JSON.stringify(board)).not.toContain(firstUser);
     expect(JSON.stringify(board)).not.toContain(secondUser);
+
+    const concurrentUser = `daily_concurrent_${suffix}`;
+    const concurrentDate = "2099-07-27";
+    await players.saveProfile(concurrentUser, {
+      username: `Cedar ${suffix}`,
+      usernameKey: `cedar-${suffix}`,
+      explorerPalette: "sunset",
+      playgroundPalette: "twilight"
+    });
+    const concurrentEntries = [
+      {
+        ...first,
+        date: concurrentDate,
+        idempotencyKey: `daily_${suffix}_concurrent_low`,
+        score: 800,
+        moves: 80
+      },
+      {
+        ...first,
+        date: concurrentDate,
+        idempotencyKey: `daily_${suffix}_concurrent_high`,
+        score: 900,
+        moves: 70
+      }
+    ];
+    const concurrentResults = await Promise.all(
+      concurrentEntries.map((entry) =>
+        daily.submitVerifiedEntry(concurrentUser, entry)
+      )
+    );
+    expect(
+      concurrentResults.filter((result) => result.bestResult === "created")
+    ).toHaveLength(1);
+    await expect(daily.getLeaderboard(concurrentDate, 10)).resolves.toEqual([
+      {
+        rank: 1,
+        username: `Cedar ${suffix}`,
+        score: 900,
+        moves: 70
+      }
+    ]);
+    for (const [index, entry] of concurrentEntries.entries()) {
+      await expect(
+        daily.submitVerifiedEntry(concurrentUser, entry)
+      ).resolves.toMatchObject({
+        duplicate: true,
+        improved: false,
+        bestResult: concurrentResults[index].bestResult,
+        entry: concurrentResults[index].entry
+      });
+    }
   });
 });

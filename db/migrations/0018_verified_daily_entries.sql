@@ -16,6 +16,12 @@ CREATE TABLE verified_daily_submissions (
   moves INTEGER NOT NULL CHECK (moves BETWEEN 1 AND 100000),
   elapsed_ms INTEGER NOT NULL
     CHECK (elapsed_ms BETWEEN 0 AND 14400000),
+  best_result VARCHAR(9) NOT NULL
+    CHECK (best_result IN ('created', 'improved', 'unchanged')),
+  response_score SMALLINT NOT NULL
+    CHECK (response_score BETWEEN 500 AND 3500),
+  response_moves INTEGER NOT NULL
+    CHECK (response_moves BETWEEN 1 AND 100000),
   verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (player_id, daily_date, idempotency_key)
 );

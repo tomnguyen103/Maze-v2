@@ -115,10 +115,16 @@ const SECTION_QUERIES = {
       updated_at
     FROM explorer_access_settings WHERE clerk_user_id = $1`,
   verified_daily_results: `SELECT daily_date, daily_version, score,
-      wardens_defeated, echoes_collected, moves, elapsed_ms, verified_at
+      wardens_defeated, echoes_collected, moves, elapsed_ms, best_result,
+      response_score, response_moves, verified_at
     FROM verified_daily_submissions
     WHERE player_id = $1
     ORDER BY daily_date, verified_at`,
+  verified_daily_best_results: `SELECT daily_date, daily_version, score,
+      wardens_defeated, echoes_collected, moves, elapsed_ms, achieved_at
+    FROM verified_daily_entries
+    WHERE player_id = $1
+    ORDER BY daily_date, achieved_at`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 
@@ -165,6 +171,9 @@ export async function buildUserExport(
   const personalJournal = await rowsOf("journal");
   const accessSettings = await rowsOf("access_settings");
   const verifiedDailyResults = await rowsOf("verified_daily_results");
+  const verifiedDailyBestResults = await rowsOf(
+    "verified_daily_best_results"
+  );
   const role = await rowsOf("role");
 
   /** @type {Record<string, unknown>[]} */
@@ -211,6 +220,7 @@ export async function buildUserExport(
       class_journals: classJournals,
       access_settings: accessSettings[0] ?? null,
       verified_daily_results: verifiedDailyResults,
+      verified_daily_best_results: verifiedDailyBestResults,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"
     }

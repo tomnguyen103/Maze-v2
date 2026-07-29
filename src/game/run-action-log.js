@@ -51,6 +51,30 @@ export function appendRunAction(log, previous, action, next) {
 }
 
 /**
+ * Browser-safe append boundary. A Daily that exceeds the replay protocol
+ * remains playable, but its truncated log must not be submitted as verified.
+ *
+ * @param {RunActionLog} log
+ * @param {GameRun} previous
+ * @param {Parameters<(typeof import("./game-session.js"))["applyAction"]>[1]} action
+ * @param {GameRun} next
+ * @returns {RunActionLog | null}
+ */
+export function tryAppendRunAction(log, previous, action, next) {
+  const entry = replayEntry(previous, action, next);
+  if (!entry) {
+    return log;
+  }
+  if (log.actions.length >= RUN_ACTION_LOG_MAX_ACTIONS) {
+    return null;
+  }
+  return {
+    version: RUN_ACTION_LOG_VERSION,
+    actions: [...log.actions, entry]
+  };
+}
+
+/**
  * @param {GameRun} previous
  * @param {Parameters<(typeof import("./game-session.js"))["applyAction"]>[1]} action
  * @param {GameRun} next

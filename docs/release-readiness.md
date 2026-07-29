@@ -68,13 +68,13 @@ Final integrated closure-candidate evidence:
 
 PR #94 adds a later verified-Daily candidate. Its pre-review evidence is:
 
-- Node 22.23.1 `npm run check:full`: 105 test files passed, 7 skipped; 926
+- Node 22.23.1 `npm run check:full`: 105 test files passed, 7 skipped; 936
   tests passed, 16 intentional environment skips; full Playwright desktop and
-  mobile matrix passed 126 tests with 12 intentional skips
+  mobile matrix passed 127 tests with 13 intentional skips
 - Daily browser coverage: signed-in created/improved/unchanged,
   rejected submission, Guest, loading, empty, retry, unavailable, UTC
   rollover, 200-percent text, desktop, and mobile
-- bundle gate: landing 7.56/8 KB, game 28.54/30 KB, shared styles 10.41/12 KB,
+- bundle gate: landing 7.56/8 KB, game 28.57/30 KB, shared styles 10.41/12 KB,
   optional Clerk 544.21/600 KB, and admin 5.78/20 KB gzip
 - visually reviewed `verified-daily-desktop.png` and
   `verified-daily-mobile.png`

@@ -81,7 +81,19 @@ test("normal play never spends a rate-limit budget", async ({ page }) => {
     }
   });
 
+  await page.route("**/api/leaderboard", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ globalMaxScore: 0, entries: [] })
+    })
+  );
+  const leaderboardLoaded = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/leaderboard"
+  );
   await page.goto("/play");
+  await leaderboardLoaded;
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {

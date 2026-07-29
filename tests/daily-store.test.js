@@ -75,7 +75,9 @@ describe("Verified Daily store", () => {
 
   it("records an idempotency key and promotes a new best entry atomically", async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ inserted: true }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
     const pool = tenantPool(query);
@@ -93,11 +95,18 @@ describe("Verified Daily store", () => {
       }
     });
 
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0][0]).toContain("pg_advisory_xact_lock");
+    expect(query.mock.calls[1][0]).toContain(
+      "FROM verified_daily_submissions"
+    );
+    expect(query.mock.calls[2][0]).toContain(
+      "FROM verified_daily_entries"
+    );
+    expect(query.mock.calls[2][0]).toContain("FOR UPDATE");
+    expect(query.mock.calls[3][0]).toContain(
       "INSERT INTO verified_daily_submissions"
     );
-    expect(query.mock.calls[0][0]).toContain("ON CONFLICT DO NOTHING");
-    expect(query.mock.calls[0][1]).toEqual([
+    expect(query.mock.calls[3][1]).toEqual([
       "user_123",
       "2026-07-26",
       "daily_01J1MOSSWATCH",
@@ -106,24 +115,27 @@ describe("Verified Daily store", () => {
       2,
       4,
       76,
-      7600
+      7600,
+      "created",
+      900,
+      76
     ]);
-    expect(query.mock.calls[1][0]).toContain(
-      "FROM verified_daily_entries"
-    );
-    expect(query.mock.calls[1][0]).toContain("FOR UPDATE");
-    expect(query.mock.calls[2][0]).toContain(
+    expect(query.mock.calls[4][0]).toContain(
       "INSERT INTO verified_daily_entries"
     );
-    expect(query.mock.calls[2][0]).toContain(
+    expect(query.mock.calls[4][0]).toContain(
       "EXCLUDED.score > verified_daily_entries.score"
     );
   });
 
   it("distinguishes an improved best from a newly created entry", async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ inserted: true }] })
-      .mockResolvedValueOnce({ rows: [{ present: true }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ ...STORED_ENTRY, score: 800, moves: 80 }]
+      })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
 
     await expect(
@@ -138,10 +150,17 @@ describe("Verified Daily store", () => {
     });
   });
 
-  it("returns the current best without rewriting on duplicate or worse submissions", async () => {
+  it("returns the original response for a duplicate after later improvements", async () => {
     const duplicateQuery = vi.fn()
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
+      .mockResolvedValueOnce({
+        rows: [{
+          username: "Moss Runner",
+          score: 900,
+          moves: 76,
+          best_result: "created"
+        }]
+      });
     await expect(
       createDailyStore(tenantPool(duplicateQuery)).submitVerifiedEntry(
         "user_123",
@@ -150,15 +169,18 @@ describe("Verified Daily store", () => {
     ).resolves.toMatchObject({
       duplicate: true,
       improved: false,
-      bestResult: "unchanged"
+      bestResult: "created",
+      entry: { score: 900, moves: 76 }
     });
     expect(duplicateQuery).toHaveBeenCalledTimes(2);
+  });
 
+  it("returns the current best without rewriting a worse new submission", async () => {
     const worseQuery = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ inserted: true }] })
-      .mockResolvedValueOnce({ rows: [{ present: true }] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ ...STORED_ENTRY, rank: undefined }] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [STORED_ENTRY] })
+      .mockResolvedValueOnce({ rows: [] });
     await expect(
       createDailyStore(tenantPool(worseQuery)).submitVerifiedEntry(
         "user_123",
@@ -170,5 +192,11 @@ describe("Verified Daily store", () => {
       bestResult: "unchanged"
     });
     expect(worseQuery).toHaveBeenCalledTimes(4);
+    expect(worseQuery.mock.calls[3][0]).toContain(
+      "INSERT INTO verified_daily_submissions"
+    );
+    expect(worseQuery.mock.calls[3][1]).toEqual(
+      expect.arrayContaining(["unchanged", 900, 76])
+    );
   });
 });

@@ -20,7 +20,9 @@ function verifiedClient() {
             purchases_deleted: true,
             journal_deleted: true,
             settings_deleted: true,
-            memberships_deleted: true
+            memberships_deleted: true,
+            verified_daily_submissions_deleted: true,
+            verified_daily_entries_deleted: true
           }]
         : []
     })),

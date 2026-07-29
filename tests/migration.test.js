@@ -17,6 +17,11 @@ describe("Run Access migration", () => {
     expect(sql).toContain("daily_version = 1");
     expect(sql).toContain("elapsed_ms BETWEEN 0 AND 14400000");
     expect(sql).toContain(
+      "best_result IN ('created', 'improved', 'unchanged')"
+    );
+    expect(sql).toContain("response_score SMALLINT NOT NULL");
+    expect(sql).toContain("response_moves INTEGER NOT NULL");
+    expect(sql).toContain(
       "PRIMARY KEY (player_id, daily_date, idempotency_key)"
     );
     expect(sql).toContain("PRIMARY KEY (player_id, daily_date)");

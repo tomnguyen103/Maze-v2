@@ -525,6 +525,11 @@ test("shows a public verified board and keeps Guest participation casual", async
   await expect(dialog).toContainText("900");
   await expect(dialog).toContainText("76 moves");
   await expect(dialog).not.toContainText(/user_|@/);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", {
+    name: "Daily",
+    exact: true
+  })).toBeFocused();
 });
 
 for (const outcome of /** @type {const} */ ([
@@ -786,6 +791,46 @@ test("switches an open tab to the new UTC Daily at midnight", async ({
   await dialog.getByRole("button", { name: "Start today’s Daily" }).click();
   await expect(page).toHaveURL(/daily=2026-07-27/);
   await expect(page.locator("#seed-value")).toHaveText("DAILY-20260727");
+});
+
+test("does not save or verify a Daily that crosses UTC midnight before escape", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One mid-Run UTC boundary proof is sufficient."
+  );
+  await page.clock.install({
+    time: new Date("2026-07-26T23:59:59.000Z")
+  });
+  const daily = createDailyContract("2026-07-26");
+  /** @type {string[]} */
+  const verifiedRequests = [];
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname === "/api/daily/scores" &&
+      request.method() === "POST"
+    ) {
+      verifiedRequests.push(request.url());
+    }
+  });
+
+  await page.goto(`/play?daily=${daily.date}`);
+  await expectGameReady(page);
+  await page.clock.fastForward("00:00:02");
+  await completeDaily(page, daily);
+
+  const result = page.getByRole("dialog", {
+    name: "This Daily has expired."
+  });
+  await expect(result).toContainText("UTC date changed");
+  await expect(result).toContainText("result was not saved");
+  expect(verifiedRequests).toEqual([]);
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("echo-maze:daily-records:v1") ?? "[]")
+    )
+  ).toEqual([]);
 });
 
 test("saves a Daily Personal Best without changing Quest, Records, or demo state", async ({
