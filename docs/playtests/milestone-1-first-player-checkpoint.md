@@ -27,7 +27,7 @@ run; named screen-reader use remains valid human evidence for issue #101.
 | Campfire Resume | A normal Quest movement creates a checkpoint; refresh pauses behind Continue and Restart; Continue restores the maze; Restart clears the checkpoint and restarts at zero moves. |
 | Terminal cleanup | Escape and defeat remove recovery before reload and do not duplicate Records, Quest progress, scores, or learning writes. |
 | Recovery failures | Denied storage, corrupt JSON, deletion denial, and a payload over 256 KiB use child-safe copy, expose no raw error, and keep current-tab play available. |
-| Exact Challenge recovery | Loading, wrong-answer feedback, replacement loading, exact accepted Reviewed Question Revision, Hint state, selected option IDs, vitality, Gate state, sign-out cleanup, defeat cleanup, and reload idempotency pass. |
+| Exact Challenge recovery | Loading, wrong-answer feedback, replacement loading, exact unresolved Reviewed Question Revision and Hint state, response-free resolved outcomes, vitality, Gate state, sign-out cleanup, defeat cleanup, and reload idempotency pass. |
 | Runtime quality | Focused Milestone 1 journeys emit no unhandled page error, console error or warning, or raw provider/storage error. |
 | Responsive access | First Light and Campfire actions stay single-line and at least 44 by 44 pixels at 320, 375, 390, 414, and 768 CSS pixels; desktop is checked at 1280 by 800. The exact 390 by 844 mobile state and 200-percent text have no horizontal page or dialog overflow. |
 
@@ -42,7 +42,7 @@ The integrated proof lives in
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` | Pass: 108 files passed, 7 intentionally skipped; 965 tests passed, 16 intentionally skipped |
+| `npm run test` | Pass: 108 files passed, 7 intentionally skipped; 966 tests passed, 16 intentionally skipped |
 | `npm run build` | Pass |
 | `npm run check:bundle` | Pass with every recorded ceiling unchanged |
 | `npx playwright test` after the E2E build | Pass: 168 passed, 14 deterministically skipped, 182 desktop/mobile cases total |
@@ -54,7 +54,7 @@ Recorded production bundle measurements:
 |---|---:|---:|
 | Landing JavaScript | 7.60 KB | 8 KB |
 | Gameplay JavaScript | 27.06 KB | 30 KB |
-| Campfire Resume JavaScript | 3.20 KB | 5 KB |
+| Campfire Resume JavaScript | 3.64 KB | 5 KB |
 | Shared styles | 10.76 KB | 12 KB |
 | Optional Clerk identity | 544.21 KB | 600 KB |
 | Admin JavaScript | 5.78 KB | 20 KB |

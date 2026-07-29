@@ -38,10 +38,11 @@ installed voices and identifiers differ by device. If that voice disappears,
 Question Narration may select another suitable local voice but never a remote
 voice. There is no preference that automatically reads all content.
 
-This ADR supersedes ADR 0020 only where it fixes the record to exactly four
-fields. Trail Compass enablement and narration pace remain presentation state
-and never enter Run, Quest, score, shared-link, Question, or deterministic
-gameplay state.
+This ADR supersedes ADR 0020 only by extending its fixed record. The next
+record contains exactly six fields: ADR 0020's four existing
+fields plus `trailCompassEnabled` and `narrationPace`. Trail Compass enablement
+and narration pace remain presentation state and never enter Run, Quest, score,
+shared-link, Question, or deterministic gameplay state.
 
 ## Consequences
 

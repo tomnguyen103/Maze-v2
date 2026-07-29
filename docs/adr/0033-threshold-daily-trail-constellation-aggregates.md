@@ -27,6 +27,14 @@ The Constellation remains in a **Paths are still forming** state until at least
 - the published projection refreshes only after a batch contains at least 10
   additional distinct contributors, never immediately in response to one Run.
 
+These account-count thresholds assume distinct authenticated Explorers are
+independent actors. They limit single-account and low-cohort inference but do
+not claim resistance to coordinated multi-account manipulation. Before
+production, the privacy review must either accept that explicit threat model
+with abuse controls or require a stronger privacy-preserving aggregation
+scheme; the public projection remains unavailable until that decision is
+evidenced.
+
 Aggregation occurs as part of successful server verification. This feature does
 not retain a personal route for later replacement or subtraction and never
 exposes an Explorer identifier, username, answer, score, elapsed time, or raw

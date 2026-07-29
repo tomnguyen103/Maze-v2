@@ -26,9 +26,9 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  * }} RecoveryIdentity
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
- *   | { type: "pulse" | "reveal-hint" | "skip-question", elapsedMs: number }
+ *   | { type: "pulse" | "reveal-hint", elapsedMs: number }
  *   | { type: "provide-question", question: ReturnType<typeof normalizeQuestion>, elapsedMs: number }
- *   | { type: "answer-question", answerId: string, elapsedMs: number }
+ *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, elapsedMs: number }
  * } RecoveryAction
  * @typedef {{
  *   version: 1,
@@ -131,7 +131,7 @@ export function createActiveRunRecoveryController(options = {}) {
         }
         candidate = {
           ...envelope,
-          actions: [...envelope.actions, entry],
+          actions: appendRecoveryEntry(envelope.actions, entry),
           checkpoint: checkpointForRun(next)
         };
         bounds = recoveryPayloadWithinBounds(candidate);
@@ -407,9 +407,14 @@ function recoveryEntry(previous, action, next) {
     ) &&
     next !== previous
   ) {
+    const correct =
+      action.answerId === previous.challenge.question.answerId;
     return {
-      type: "answer-question",
-      answerId: action.answerId,
+      type: "challenge-outcome",
+      outcome: correct ? "correct" : "wrong",
+      explanation: correct
+        ? ""
+        : previous.challenge.question.explanation,
       elapsedMs
     };
   }
@@ -419,9 +424,43 @@ function recoveryEntry(previous, action, next) {
     previous.challenge?.question &&
     next !== previous
   ) {
-    return { type: "skip-question", elapsedMs };
+    return {
+      type: "challenge-outcome",
+      outcome: "skip",
+      explanation: "",
+      elapsedMs
+    };
   }
   return null;
+}
+
+/**
+ * @param {RecoveryAction[]} actions
+ * @param {RecoveryAction} entry
+ */
+function appendRecoveryEntry(actions, entry) {
+  if (entry.type !== "challenge-outcome") {
+    return [...actions, entry];
+  }
+  let questionIndex = -1;
+  for (let index = actions.length - 1; index >= 0; index -= 1) {
+    if (actions[index].type === "provide-question") {
+      questionIndex = index;
+      break;
+    }
+  }
+  if (questionIndex < 0) {
+    throw new Error("Resolved Challenge has no recoverable Question.");
+  }
+  return [
+    ...actions.slice(0, questionIndex).map((action) =>
+      action.type === "challenge-outcome" &&
+      action.explanation
+        ? { ...action, explanation: "" }
+        : action
+    ),
+    entry
+  ];
 }
 
 /** @param {RecoveryEnvelope} envelope */
@@ -446,15 +485,19 @@ function replayEnvelope(envelope) {
         deltaMs: entry.elapsedMs - run.elapsedMs
       });
     }
-    const action = actionFromEntry(entry);
-    const previous = run;
-    run = applyAction(run, action);
-    const replayedEntry = recoveryEntry(previous, action, run);
-    if (
-      !replayedEntry ||
-      JSON.stringify(replayedEntry) !== JSON.stringify(entry)
-    ) {
-      throw new Error("Recovery action diverged from canonical Run rules.");
+    if (entry.type === "challenge-outcome") {
+      run = replayChallengeOutcome(run, entry);
+    } else {
+      const action = actionFromEntry(entry);
+      const previous = run;
+      run = applyAction(run, action);
+      const replayedEntry = recoveryEntry(previous, action, run);
+      if (
+        !replayedEntry ||
+        JSON.stringify(replayedEntry) !== JSON.stringify(entry)
+      ) {
+        throw new Error("Recovery action diverged from canonical Run rules.");
+      }
     }
     if (run.status === "won" || run.status === "lost") {
       throw new Error("Terminal Runs cannot remain recoverable.");
@@ -468,6 +511,49 @@ function replayEnvelope(envelope) {
     throw new Error("Recovery checkpoint diverged from replay.");
   }
   return run;
+}
+
+/**
+ * @param {ReturnType<typeof createRun>} run
+ * @param {Extract<RecoveryAction, { type: "challenge-outcome" }>} entry
+ */
+function replayChallengeOutcome(run, entry) {
+  if (
+    run.status !== "challenge" ||
+    !run.challenge ||
+    run.challenge.question !== null
+  ) {
+    throw new Error("Recovery Challenge outcome is out of sequence.");
+  }
+  const explanation =
+    entry.explanation || "The previous Question was resolved.";
+  const question = normalizeQuestion({
+    id: "recovery-outcome",
+    prompt: "Which recovery outcome is correct?",
+    choices: [
+      { id: "correct", label: "Correct outcome" },
+      { id: "wrong", label: "Wrong outcome" },
+      { id: "other", label: "Other outcome" }
+    ],
+    answerId: "correct",
+    hint: "This card reconstructs an earlier outcome.",
+    explanation,
+    difficultyBand: "foundation",
+    difficultyRank: 1,
+    topicId: "arithmetic",
+    learningObjectiveId: "scout-equal-groups"
+  });
+  const withQuestion = applyAction(run, {
+    type: "provide-question",
+    question
+  });
+  if (entry.outcome === "skip") {
+    return applyAction(withQuestion, { type: "skip-question" });
+  }
+  return applyAction(withQuestion, {
+    type: "answer-question",
+    answerId: entry.outcome === "correct" ? "correct" : "wrong"
+  });
 }
 
 /**
@@ -489,12 +575,6 @@ function actionFromEntry(entry) {
   }
   if (entry.type === "reveal-hint") {
     return { type: "reveal-hint" };
-  }
-  if (entry.type === "answer-question") {
-    return { type: "answer-question", answerId: entry.answerId };
-  }
-  if (entry.type === "skip-question") {
-    return { type: "skip-question" };
   }
   throw new Error("Recovery action type is not supported.");
 }
@@ -567,26 +647,33 @@ function normalizeAction(value) {
   }
   if (
     typeof candidate.type === "string" &&
-    ["pulse", "reveal-hint", "skip-question"].includes(candidate.type) &&
+    ["pulse", "reveal-hint"].includes(candidate.type) &&
     hasOnlyKeys(value, ["type", "elapsedMs"])
   ) {
     return {
-      type: /** @type {"pulse" | "reveal-hint" | "skip-question"} */ (
+      type: /** @type {"pulse" | "reveal-hint"} */ (
         candidate.type
       ),
       elapsedMs
     };
   }
   if (
-    candidate.type === "answer-question" &&
-    hasOnlyKeys(value, ["type", "answerId", "elapsedMs"]) &&
-    typeof candidate.answerId === "string" &&
-    candidate.answerId.length > 0 &&
-    candidate.answerId.length <= 12
+    candidate.type === "challenge-outcome" &&
+    hasOnlyKeys(
+      value,
+      ["type", "outcome", "explanation", "elapsedMs"]
+    ) &&
+    typeof candidate.outcome === "string" &&
+    ["correct", "wrong", "skip"].includes(candidate.outcome) &&
+    typeof candidate.explanation === "string" &&
+    candidate.explanation.length <= 240
   ) {
     return {
-      type: "answer-question",
-      answerId: candidate.answerId,
+      type: "challenge-outcome",
+      outcome: /** @type {"correct" | "wrong" | "skip"} */ (
+        candidate.outcome
+      ),
+      explanation: candidate.explanation.trim(),
       elapsedMs
     };
   }

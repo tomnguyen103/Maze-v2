@@ -2412,6 +2412,10 @@ test("restores wrong-answer feedback and replacement loading without duplicate l
   if (!savedLoadingState.recovery) {
     throw new Error("Expected a valid replacement-loading checkpoint.");
   }
+  expect(savedLoadingState.recovery).not.toContain(`"answerId"`);
+  expect(savedLoadingState.recovery).not.toContain(
+    firstQuestion.prompt
+  );
   const productStateBeforeReload = await page.evaluate(() => ({
     quest: (() => {
       const stored = localStorage.getItem(

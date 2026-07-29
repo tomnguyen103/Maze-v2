@@ -32,13 +32,16 @@ rejection preserves the local memory as **Offline—unverified** and cannot chan
 cloud or shared state. Transport failures remain retryable under the same
 idempotency key.
 
-The detailed local action log exists only while verification is pending.
-Successful replay or terminal rejection deletes it immediately. After terminal
-play, the client may retain it for at most 48 hours and never beyond the
-receipt's signed nine-day submission deadline. Missing that deadline deletes
-the log and leaves only the outcome-only local Run Record marked
-**Offline—unverified**. Selected option identifiers and the full route never
-enter persistent Run Replay storage.
+The detailed local action log exists only while verification is pending. It is
+a bounded, device-local verification recovery record that may survive a reload
+or transport retry; it is explicitly not persistent Run Replay history. The
+visible local Run Record retains only the outcome and verification label, not
+the pending action log. Successful replay or terminal rejection deletes the log
+immediately. After terminal play, the client may retain it for at most 48 hours
+and never beyond the receipt's signed nine-day submission deadline. Missing
+that deadline deletes the log and leaves only the outcome-only local Run Record
+marked **Offline—unverified**. Selected option identifiers and the full route
+never enter persistent Run Replay storage.
 
 Verified Daily remains Classic Rules under Run Action Log version 1. It does not
 accept regional actions or reuse the offline submission contract.

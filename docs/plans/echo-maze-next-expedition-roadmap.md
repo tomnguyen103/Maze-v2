@@ -590,12 +590,15 @@ boundary-only cloud continuity.
 
 **Grill decision — resolved:** Use exact Active Run Recovery. One temporary
 device-local recovery envelope may retain the bounded state-changing action
-sequence, including selected answer-option identifiers, until the Run escapes,
-is defeated, or is explicitly restarted. This data is not a learning
-transcript and never enters cloud continuity, Journal, analytics, export, or
-Run Records. Elapsed time freezes at the last durable gameplay checkpoint while
-the app is closed, and a recovered Run opens paused. “Exact” means every
-acknowledged state-changing action is preserved; it does not promise
+sequence until the Run escapes, is defeated, or is explicitly restarted. An
+unresolved Challenge may retain its exact normalized reviewed card. Once
+resolved, that card, its Hint, and the selected option compact to a
+response-free outcome plus only the feedback needed to reconstruct the current
+presentation. This data is not a learning transcript and never enters cloud
+continuity, Journal, analytics, export, or Run Records. Elapsed time freezes at
+the last durable gameplay checkpoint while the app is closed, and a recovered
+Run opens paused. “Exact” means every supported state-changing action committed
+to a durable recovery checkpoint is preserved; it does not promise
 millisecond-perfect persistence during abrupt process termination.
 
 **Terminology resolved:** The canonical domain term is **Active Run Recovery**
@@ -617,7 +620,8 @@ Practice and is deleted with the recovery record.
 - store the normalized reviewed-card snapshot accepted for each active
   Challenge; an ID alone is not enough because an admin overlay may change or
   disappear;
-- never persist the Explorer's selected answer as a learning transcript;
+- compact a resolved Challenge to a response-free outcome without retaining
+  its reviewed card, Hint, or selected option identifier;
 - reconstruct through existing `createRun` and `applyAction`, not a second
   engine;
 - restore Explorer position, revealed tiles, Echoes, Wardens, Vitality, Pulses,

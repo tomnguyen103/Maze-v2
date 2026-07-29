@@ -373,6 +373,46 @@ describe("Active Run Recovery", () => {
     );
   });
 
+  it("compacts a resolved Challenge to outcome-only recovery data", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(LOCATOR);
+    let run = reachChallenge(controller);
+    const question = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 9
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question
+    }));
+    const wrongAnswerId = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    )?.id;
+    if (!wrongAnswerId) {
+      throw new Error("Expected a reviewed wrong answer.");
+    }
+    ({ run } = durableTransition(controller, run, {
+      type: "answer-question",
+      answerId: wrongAnswerId
+    }));
+
+    const serialized =
+      storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "";
+    const envelope = JSON.parse(serialized);
+    expect(envelope.actions.at(-1)).toMatchObject({
+      type: "challenge-outcome",
+      outcome: "wrong",
+      explanation: question.explanation
+    });
+    expect(serialized).not.toContain(question.prompt);
+    expect(serialized).not.toContain(`"answerId"`);
+    expectRecoveredState(storage, run);
+  });
+
   it("reconstructs wrong answers, replacements, both Skips, and Warden defeat", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });
@@ -417,6 +457,11 @@ describe("Active Run Recovery", () => {
       type: "provide-question",
       question: freeSkipQuestion
     }));
+    expect(run.challenge?.feedback?.kind).toBe("wrong");
+    expect(
+      storage.getItem(ACTIVE_RUN_RECOVERY_KEY)
+    ).toContain(wrongQuestion.explanation);
+    expectRecoveredState(storage, run);
     ({ run } = durableTransition(controller, run, {
       type: "skip-question"
     }));
@@ -464,9 +509,23 @@ describe("Active Run Recovery", () => {
 
     const serialized =
       storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "";
-    expect(serialized).toContain(wrongAnswerId);
-    expect(serialized).toContain(wrongQuestion.prompt);
-    expect(serialized).toContain(correctQuestion.answerId);
+    const envelope = JSON.parse(serialized);
+    expect(
+      envelope.actions
+        .filter(
+          (/** @type {{ type?: string }} */ entry) =>
+            entry.type === "challenge-outcome"
+        )
+        .map(
+          (/** @type {{ outcome?: string }} */ entry) =>
+            entry.outcome
+        )
+    ).toEqual(["wrong", "skip", "skip", "correct"]);
+    expect(serialized).not.toContain(wrongQuestion.explanation);
+    expect(serialized).not.toContain(wrongQuestion.prompt);
+    expect(serialized).not.toContain(correctQuestion.prompt);
+    expect(serialized).not.toContain(`"answerId"`);
+    expect(serialized).not.toContain(`"provide-question"`);
     expect(serialized).not.toMatch(
       /account|analytics|email|providerDebug|userAuthored/i
     );

@@ -17,7 +17,7 @@ Run `npm run build` followed by `npm run check:bundle`.
 | Optional Sentry chunk | Not built (DSN unset) | 120 KB gzip |
 
 Campfire Resume ships as an independently enforced lazy chunk. The 2026-07-29
-Milestone 1 implementation measures 3.20 KB gzip against a 5 KB gzip ceiling;
+Milestone 1 implementation measures 3.64 KB gzip against a 5 KB gzip ceiling;
 it is not fetched by the landing page, First Light, or Verified Daily. The
 existing landing, game, style, Clerk, admin, and Sentry ceilings above remain
 unchanged.

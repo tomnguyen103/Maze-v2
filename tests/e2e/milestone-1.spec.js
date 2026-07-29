@@ -230,9 +230,9 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
     })
   ).not.toBeVisible();
   const trailScout = page.locator('[data-level="trail-scout"]');
+  await expect(trailScout).toBeEnabled();
   await trailScout.focus();
   await expect(trailScout).toBeFocused();
-  await expect(trailScout).toBeEnabled();
   await trailScout.press("Enter");
   await expect(levelChoice).not.toBeVisible({ timeout: 15000 });
   await expect(page.locator("body")).toHaveAttribute(
