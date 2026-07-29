@@ -146,10 +146,12 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   });
   await expect(firstLight).toBeVisible();
   await expect(page.locator("#first-light-title")).toBeFocused();
-  await page
-    .getByRole("button", { name: "Skip to Quest" })
-    .focus();
-  await page.keyboard.press("Enter");
+  const skipToQuest = page.getByRole("button", {
+    name: "Skip to Quest"
+  });
+  await skipToQuest.focus();
+  await expect(skipToQuest).toBeFocused();
+  await skipToQuest.press("Enter");
   const levelChoice = page.getByRole("dialog", {
     name: "Choose your Quest Level"
   });
@@ -160,10 +162,12 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
       page.evaluate((key) => localStorage.getItem(key), ACTIVE_RUN_RECOVERY_KEY)
     )
     .toBeNull();
-  await page
-    .getByRole("button", { name: "Replay First Light" })
-    .focus();
-  await page.keyboard.press("Enter");
+  const replayFirstLight = page.getByRole("button", {
+    name: "Replay First Light"
+  });
+  await replayFirstLight.focus();
+  await expect(replayFirstLight).toBeFocused();
+  await replayFirstLight.press("Enter");
   await expect(page.locator("body")).toHaveAttribute(
     "data-run-mode",
     "first-light"
@@ -182,10 +186,10 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
     name: "A Warden blocks the path."
   });
   await expect(challenge).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Show Hint" })
-  ).toBeFocused();
-  await page.keyboard.press("Enter");
+  const showHint = page.getByRole("button", { name: "Show Hint" });
+  await expect(showHint).toBeFocused();
+  await showHint.press("Enter");
+  await expect(page.locator("#challenge-question")).toBeFocused();
   const firstLightQuestion = getFirstLightQuestion({
     wardenId: 0,
     attempt: 0
@@ -194,7 +198,8 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
     `[data-answer="${firstLightQuestion.answerId}"]`
   );
   await correctChoice.focus();
-  await page.keyboard.press("Enter");
+  await expect(correctChoice).toBeFocused();
+  await correctChoice.press("Enter");
   await expect(challenge).not.toBeVisible();
   await expect
     .poll(() =>
@@ -211,10 +216,12 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   });
   await expect(result).toBeVisible();
   await expect(page.locator("#result-title")).toBeFocused();
-  await page
-    .getByRole("button", { name: "Choose Quest Level" })
-    .focus();
-  await page.keyboard.press("Enter");
+  const chooseQuestLevel = page.getByRole("button", {
+    name: "Choose Quest Level"
+  });
+  await chooseQuestLevel.focus();
+  await expect(chooseQuestLevel).toBeFocused();
+  await chooseQuestLevel.press("Enter");
 
   await expect(levelChoice).toBeVisible();
   await expect(
@@ -224,7 +231,9 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   ).not.toBeVisible();
   const trailScout = page.locator('[data-level="trail-scout"]');
   await trailScout.focus();
-  await page.keyboard.press("Enter");
+  await expect(trailScout).toBeFocused();
+  await expect(trailScout).toBeEnabled();
+  await trailScout.press("Enter");
   await expect(levelChoice).not.toBeVisible({ timeout: 15000 });
   await expect(page.locator("body")).toHaveAttribute(
     "data-run-mode",
@@ -249,7 +258,9 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   await expect(
     campfire.getByRole("button", { name: "Continue Run" })
   ).toBeFocused();
-  await page.keyboard.press("Enter");
+  await campfire
+    .getByRole("button", { name: "Continue Run" })
+    .press("Enter");
   await expect(campfire).not.toBeVisible();
   await expect(page.locator("#maze-canvas")).toBeFocused();
 
@@ -261,7 +272,9 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   await expect(
     campfire.getByRole("button", { name: "Restart Run" })
   ).toBeFocused();
-  await page.keyboard.press("Enter");
+  await campfire
+    .getByRole("button", { name: "Restart Run" })
+    .press("Enter");
   await expect(campfire).not.toBeVisible();
   await expect(page.locator("#maze-canvas")).toBeFocused();
   await expect(page.locator("#moves-value")).toHaveText("000");
