@@ -16,6 +16,12 @@ Run `npm run build` followed by `npm run check:bundle`.
 | Admin JavaScript | 5.78 KB gzip | 20 KB gzip |
 | Optional Sentry chunk | Not built (DSN unset) | 120 KB gzip |
 
+Campfire Resume ships as an independently enforced lazy chunk. The 2026-07-29
+Milestone 1 implementation measures 3.24 KB gzip against a 5 KB gzip ceiling;
+it is not fetched by the landing page, First Light, or Verified Daily. The
+existing landing, game, style, Clerk, admin, and Sentry ceilings above remain
+unchanged.
+
 The Clerk and Sentry budgets are tracked separately because they are optional,
 dynamically loaded dependencies. A Clerk outage must degrade to Guest play and
 cannot block the landing or deterministic Run bundle. With no Sentry DSN, the

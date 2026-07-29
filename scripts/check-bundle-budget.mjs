@@ -8,6 +8,12 @@ const files = await readdir(assetsDirectory);
 const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
   { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 30 },
+  {
+    label: "Campfire Resume JavaScript",
+    prefix: "active-run-recovery-",
+    suffix: ".js",
+    maxKb: 5
+  },
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 12 },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard

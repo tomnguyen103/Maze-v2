@@ -90,6 +90,8 @@ let lanternJournalUiFailedTwice = false;
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
+/** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
+/** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
@@ -329,6 +331,13 @@ let activeFirstLight = false;
 let firstLightEntryPending = false;
 let firstLightHandoff = false;
 let completedQuestIdle = false;
+/** @type {Promise<typeof import("./game/active-run-recovery.js") | null> | null} */
+let activeRunRecoveryModulePromise = null;
+/** @type {ActiveRunRecoveryController | null} */
+let activeRunRecoveryController = null;
+/** @type {CampfireResumeView | null} */
+let campfireResumeView = null;
+let activeRunRecoveryUnavailableReported = false;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
@@ -1102,6 +1111,111 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+async function loadActiveRunRecoveryModule() {
+  if (!activeRunRecoveryModulePromise) {
+    activeRunRecoveryModulePromise = import(
+      "./game/active-run-recovery.js"
+    ).catch(() => null);
+  }
+  const module = await activeRunRecoveryModulePromise;
+  if (module && !activeRunRecoveryController) {
+    activeRunRecoveryController =
+      module.createActiveRunRecoveryController();
+  }
+  return module;
+}
+
+/** @param {boolean} [force] */
+function reportActiveRunRecoveryUnavailable(force = false) {
+  if (activeRunRecoveryUnavailableReported && !force) {
+    return;
+  }
+  activeRunRecoveryUnavailableReported = true;
+  const message =
+    "Campfire Resume is unavailable for this Run. Current-tab play continues.";
+  announce(message);
+  showEvent(message);
+}
+
+/** @param {Parameters<typeof startRun>[0]} locator */
+async function beginActiveRunRecovery(locator) {
+  const module = await loadActiveRunRecoveryModule();
+  activeRunRecoveryUnavailableReported = false;
+  if (!module || !activeRunRecoveryController) {
+    reportActiveRunRecoveryUnavailable();
+    return;
+  }
+  const recovery = activeRunRecoveryController.begin(locator, {
+    clearStored: true
+  });
+  if (recovery.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
+}
+
+/** @param {Parameters<typeof startRun>[0]} locator */
+async function loadRecoveredRun(locator) {
+  const module = await loadActiveRunRecoveryModule();
+  if (!module || !activeRunRecoveryController) {
+    reportActiveRunRecoveryUnavailable();
+    return null;
+  }
+  const recovery = activeRunRecoveryController.load(locator);
+  if (recovery.status === "recovered" && recovery.run) {
+    activeRunRecoveryUnavailableReported = false;
+    return recovery.run;
+  }
+  if (
+    recovery.status === "invalid" ||
+    recovery.status === "unavailable"
+  ) {
+    reportActiveRunRecoveryUnavailable();
+  }
+  const nextRecovery = activeRunRecoveryController.begin(locator, {
+    clearStored: true
+  });
+  if (nextRecovery.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
+  return null;
+}
+
+async function openCampfireResume() {
+  const module = await loadActiveRunRecoveryModule();
+  if (!module) {
+    reportActiveRunRecoveryUnavailable();
+    return;
+  }
+  campfireResumeView ??= module.createCampfireResumeView({
+    onContinue: () => {
+      lastTick = performance.now();
+      if (run.status === "paused") {
+        transition({ type: "pause" });
+        canvas.focus({ preventScroll: true });
+      } else {
+        hintVisible = Boolean(run.challenge?.hintRevealed);
+        syncChallengeDialog();
+      }
+      announce("Campfire checkpoint continued.");
+      showEvent("Campfire checkpoint continued.");
+    },
+    onRestart: async () => {
+      const cleared = activeRunRecoveryController?.clear();
+      if (cleared?.status === "unavailable") {
+        reportActiveRunRecoveryUnavailable();
+      }
+      await startFreshRun(true);
+      if (activeRunRecoveryUnavailableReported) {
+        reportActiveRunRecoveryUnavailable(true);
+      }
+    }
+  });
+  campfireResumeView.show(run, {
+    levelName: currentLevel.name,
+    labyrinthNumber: currentLabyrinthNumber
+  });
+}
+
 /**
  * @param {{
  *   version: 2,
@@ -1112,8 +1226,9 @@ document.addEventListener("visibilitychange", () => {
  *   labyrinthNumber: number
  * }} locator
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
+ * @param {ReturnType<typeof createRun> | null} [recoveredRun]
  */
-function startRun(locator, daily = null) {
+function startRun(locator, daily = null, recoveredRun = null) {
   activeFirstLight = false;
   activeDaily = daily;
   dailyQuestionIndex = 0;
@@ -1121,13 +1236,15 @@ function startRun(locator, daily = null) {
   completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
-  run = createRun(
-    locator.seed,
-    getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
-  );
+  run =
+    recoveredRun ??
+    createRun(
+      locator.seed,
+      getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+    );
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
-  if (!daily) {
+  if (!daily && !recoveredRun) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
       questProgress = saveQuestProgress(rememberMap(questProgress, fingerprint));
@@ -1143,7 +1260,9 @@ function startRun(locator, daily = null) {
   storyEntries = [];
   hideSkipWarning();
   addStory(
-    daily
+    recoveredRun
+      ? `Campfire checkpoint found in Labyrinth ${currentLabyrinthNumber}. The Run is paused until you choose.`
+      : daily
       ? `${daily.date} UTC Daily begins. Recover every Echo; your Quest stays unchanged.`
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
@@ -1162,6 +1281,11 @@ function startRun(locator, daily = null) {
   }
   resumeAfterDaily = false;
   updateInterface();
+  if (recoveredRun) {
+    announce("Campfire checkpoint found. Choose Continue Run or Restart Run.");
+    showEvent("Campfire checkpoint found. The Run remains paused.");
+    return;
+  }
   canvas.focus({ preventScroll: true });
   announce(
     daily
@@ -1177,6 +1301,9 @@ function startRun(locator, daily = null) {
     lifetimeReturnConfirmed = false;
     announce("Lifetime access unlocked. Your saved Run is ready.");
     showEvent("Lifetime access unlocked. Your saved Run is ready.");
+  }
+  if (!daily && activeRunRecoveryUnavailableReported) {
+    reportActiveRunRecoveryUnavailable(true);
   }
 }
 
@@ -1463,7 +1590,8 @@ function returnToQuest() {
   window.location.assign("/play");
 }
 
-async function startFreshRun() {
+/** @param {boolean} [replaceRunIdentity] */
+async function startFreshRun(replaceRunIdentity = false) {
   const levelId = questProgress.levelId;
   const labyrinthNumber = questProgress.labyrinthNumber;
   let locator;
@@ -1471,13 +1599,23 @@ async function startFreshRun() {
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
-    locator = withRunAccessId(activeRunLocator);
+    locator = withRunAccessId(
+      replaceRunIdentity
+        ? {
+            ...activeRunLocator,
+            version: 2,
+            runId: createRunAccessId(),
+            pending: false
+          }
+        : activeRunLocator
+    );
   } else {
     locator = createFreshLocator(levelId, labyrinthNumber);
   }
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
@@ -1496,6 +1634,11 @@ async function startSharedRun(
   showAdjustedNotice = false,
   runId
 ) {
+  const canRecover =
+    typeof runId === "string" &&
+    activeRunLocator?.version === 2 &&
+    activeRunLocator.pending === false &&
+    activeRunLocator.runId === runId;
   const locator = withRunAccessId({
     version: runId ? 2 : 1,
     ...(runId ? { runId } : {}),
@@ -1506,10 +1649,22 @@ async function startSharedRun(
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
-  startRun(locator);
+  const recoveredRun = canRecover
+    ? await loadRecoveredRun(locator)
+    : null;
+  if (!canRecover) {
+    await beginActiveRunRecovery(locator);
+  }
+  startRun(locator, null, recoveredRun);
+  if (recoveredRun) {
+    await openCampfireResume();
+  }
   if (showAdjustedNotice) {
     announce("This share link was adjusted to a safe Labyrinth.");
     showEvent("This share link was adjusted to a safe Labyrinth.");
+  }
+  if (activeRunRecoveryUnavailableReported) {
+    reportActiveRunRecoveryUnavailable(true);
   }
   return true;
 }
@@ -1587,6 +1742,7 @@ async function startNewQuest(levelId, seed) {
   );
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
@@ -1615,6 +1771,7 @@ async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
     controller?.queueBoundary(questProgress) ?? false
   );
   window.history.replaceState({}, "", "/play");
+  await beginActiveRunRecovery(locator);
   startRun(locator);
   return true;
 }
@@ -2280,6 +2437,10 @@ function transition(action) {
   const previous = run;
   const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
+  const recoveryResult =
+    !activeFirstLight && activeDaily === null
+      ? activeRunRecoveryController?.record(previous, action, run)
+      : null;
   if (activeDaily && !runActionLogOverflowed) {
     const nextLog = tryAppendRunAction(runActionLog, previous, action, run);
     if (nextLog) {
@@ -2336,6 +2497,9 @@ function transition(action) {
 
   updateInterface();
   syncChallengeDialog();
+  if (recoveryResult?.status === "unavailable") {
+    reportActiveRunRecoveryUnavailable();
+  }
   if (!runFinished && (run.status === "won" || run.status === "lost")) {
     finishRun();
   }
