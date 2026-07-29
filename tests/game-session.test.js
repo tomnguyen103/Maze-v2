@@ -105,6 +105,37 @@ function pathBetween(run, start, goal) {
 
 /**
  * @param {TestRun} run
+ * @param {TestPosition} start
+ * @param {TestPosition} goal
+ */
+function canReachWithWindways(run, start, goal) {
+  const queue = [start];
+  const visited = new Set([tileKey(start)]);
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    if (tileKey(current) === tileKey(goal)) {
+      return true;
+    }
+    for (const move of openNeighbors(run, current)) {
+      const directTarget = {
+        row: current.row + move.row,
+        col: current.col + move.col
+      };
+      const windway = run.windways.find(
+        ({ source }) => tileKey(source) === tileKey(directTarget)
+      );
+      const next = windway?.destination ?? directTarget;
+      if (!visited.has(tileKey(next))) {
+        visited.add(tileKey(next));
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {TestRun} run
  * @param {TestDirection[]} moves
  */
 function follow(run, moves) {
@@ -171,6 +202,67 @@ describe("GameSession", () => {
       run.labyrinth.map((row) => row.join("")).join("/");
 
     expect(fingerprint(first)).not.toBe(fingerprint(second));
+  });
+
+  it("places deterministic Region 2 Windways off protected starting tiles", () => {
+    const config = {
+      ...getLabyrinthConfig("trail-scout", 5),
+      ruleset: getQuestRunRuleset(5)
+    };
+    const first = createRun("WINDWAYS-05", config);
+    const second = createRun("WINDWAYS-05", config);
+    const protectedTiles = new Set([
+      tileKey(first.explorer),
+      tileKey(first.gate),
+      ...first.echoes.map(tileKey),
+      ...first.wardens.map(tileKey)
+    ]);
+
+    expect(first.windways).toEqual(second.windways);
+    expect(first.windways).toHaveLength(2);
+    const windwayTiles = first.windways.flatMap((windway) => [
+      tileKey(windway.source),
+      tileKey(windway.destination)
+    ]);
+    expect(new Set(windwayTiles).size).toBe(windwayTiles.length);
+    for (const windway of first.windways) {
+      expect(protectedTiles.has(tileKey(windway.source))).toBe(false);
+      expect(protectedTiles.has(tileKey(windway.destination))).toBe(false);
+      expect(first.labyrinth[windway.source.row][windway.source.col]).toBe(1);
+      expect(
+        first.labyrinth[windway.destination.row][windway.destination.col]
+      ).toBe(1);
+      expect(
+        Math.abs(windway.source.row - windway.destination.row) +
+          Math.abs(windway.source.col - windway.destination.col)
+      ).toBe(1);
+    }
+
+    expect(createRun("WINDWAYS-05").windways).toEqual([]);
+  });
+
+  it("keeps every protected objective mutually reachable through Windways", () => {
+    for (const seed of ["WIND-TRAIL-5", "WINDWAYS-05", "WIND-REPLAY-5"]) {
+      const run = createRun(seed, {
+        ...getLabyrinthConfig("trail-scout", 5),
+        ruleset: getQuestRunRuleset(5)
+      });
+      const protectedPositions = [
+        run.explorer,
+        run.gate,
+        ...run.echoes,
+        ...run.wardens
+      ];
+
+      for (const start of protectedPositions) {
+        for (const goal of protectedPositions) {
+          expect(
+            canReachWithWindways(run, start, goal),
+            `${seed}: ${tileKey(start)} cannot reach ${tileKey(goal)}`
+          ).toBe(true);
+        }
+      }
+    }
   });
 
   it("places every entity on a unique reachable passage", () => {
@@ -390,6 +482,103 @@ describe("GameSession", () => {
       { type: "move", direction: "right" }
     );
     expect(classic.wardens).not.toEqual(staged.wardens);
+  });
+
+  it("travels one Windway as one Move before one Warden phase", () => {
+    const run = createRun("WINDWAY-TRAVEL", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(5)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 2 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 7, id: 0, mode: /** @type {const} */ ("patrol") }],
+      windways: [{
+        source: { row: 4, col: 3 },
+        destination: { row: 4, col: 4 },
+        direction: /** @type {const} */ ("right")
+      }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.explorer).toMatchObject({ row: 4, col: 4 });
+    expect(next.moves).toBe(1);
+    expect(next.event).toMatchObject({
+      type: "windway-travel",
+      message: expect.stringContaining("Windway")
+    });
+    expect(next.wardens).toEqual([
+      { row: 4, col: 6, id: 0, mode: "hunt" }
+    ]);
+  });
+
+  it("never chains Windways and rejects an invalid destination atomically", () => {
+    const run = createRun("WINDWAY-ATOMIC", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(5)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 2 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 6, col: 6, id: 0, mode: /** @type {const} */ ("patrol") }],
+      windways: [
+        {
+          source: { row: 4, col: 3 },
+          destination: { row: 4, col: 4 },
+          direction: /** @type {const} */ ("right")
+        },
+        {
+          source: { row: 4, col: 4 },
+          destination: { row: 4, col: 5 },
+          direction: /** @type {const} */ ("right")
+        }
+      ]
+    };
+
+    const traveled = applyAction(staged, {
+      type: "move",
+      direction: "right"
+    });
+    expect(traveled.explorer).toMatchObject({ row: 4, col: 4 });
+    expect(traveled.moves).toBe(1);
+
+    const invalid = applyAction(
+      {
+        ...staged,
+        windways: [{
+          source: { row: 4, col: 3 },
+          destination: { row: 0, col: 0 },
+          direction: /** @type {const} */ ("up")
+        }]
+      },
+      { type: "move", direction: "right" }
+    );
+    expect(invalid.explorer).toEqual(staged.explorer);
+    expect(invalid.moves).toBe(staged.moves);
+    expect(invalid.wardens).toEqual(staged.wardens);
+    expect(invalid.event).toMatchObject({
+      type: "blocked",
+      message: expect.stringContaining("Windway")
+    });
   });
 
   it("keeps a Patrol Warden off a reserved Echo tile", () => {

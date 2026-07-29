@@ -14,6 +14,14 @@ const REGION_THEMES = Object.freeze({
     wardenGuild: "Bramblewatch Guild",
     ambientLabel: "Mosslight night chorus",
     sigilName: "First Echo Sigil"
+  }),
+  developing: Object.freeze({
+    id: "windcall-ridge",
+    name: "Windcall Ridge",
+    motif: "Rising wind and bright trail ribbons",
+    wardenGuild: "Kitewatch Guild",
+    ambientLabel: "Windcall reed chorus",
+    sigilName: "Rising Wind Sigil"
   })
 });
 

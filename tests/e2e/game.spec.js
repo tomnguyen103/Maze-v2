@@ -79,12 +79,17 @@ function pathTo(run, goal) {
       break;
     }
     for (const move of moves) {
-      const next = {
+      const directTarget = {
         row: current.row + move.row,
         col: current.col + move.col
       };
+      const windway = run.windways.find(
+        ({ source }) => key(source) === key(directTarget)
+      );
+      const next = windway?.destination ?? directTarget;
       const nextKey = key(next);
       if (
+        run.labyrinth[directTarget.row]?.[directTarget.col] !== 1 ||
         run.labyrinth[next.row]?.[next.col] !== 1 ||
         previous.has(nextKey)
       ) {
@@ -113,12 +118,13 @@ function pathTo(run, goal) {
 
 /**
  * @param {string} seed
+ * @param {number} [labyrinthNumber]
  * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[], finalRun: ReturnType<typeof createRun> }}
  */
-function milestoneWinningPlan(seed) {
+function milestoneWinningPlan(seed, labyrinthNumber = 4) {
   let run = createRun(seed, {
-    ...getLabyrinthConfig("trail-scout", 4),
-    ruleset: getQuestRunRuleset(4)
+    ...getLabyrinthConfig("trail-scout", labyrinthNumber),
+    ruleset: getQuestRunRuleset(labyrinthNumber)
   });
   /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[]} */
   const actions = [];
@@ -1764,6 +1770,152 @@ test("round-trips an exact Region ruleset through share and active recovery iden
   );
   expect(copied.searchParams.get("region")).toBe("advanced");
   expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
+});
+
+test("carries Region 2 identity from Atlas through Windway play and Watch Trail", async ({
+  page
+}) => {
+  const retainedPlan = milestoneWinningPlan("WIND-TRAIL-5", 5);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 2 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "WIND-TRAIL-5",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_windways_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 5,
+      atlasRegionId: "developing",
+      rulesetRevision: "windways-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_windways_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 6,
+      completedLabyrinths: 5,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=WIND-VIEW-34&level=trail-scout&labyrinth=5&region=developing&rules=windways-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Developing"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Windways"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Kitewatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Windcall reed chorus is optional"
+  );
+  await expect(page.locator("#windway-legend")).toBeVisible();
+  await expect(page.getByLabel(/Interactive maze/)).toHaveAttribute(
+    "aria-label",
+    /directional Windway source and destination/
+  );
+  for (const action of await page.locator(".command-bar__actions > *").all()) {
+    expect(await action.evaluate((element) =>
+      element.scrollWidth <= element.clientWidth &&
+      element.scrollHeight <= element.clientHeight
+    )).toBe(true);
+  }
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const developingRegion = atlas.locator(
+    "[data-atlas-region='developing']"
+  );
+  await expect(developingRegion).toContainText("Windcall Ridge");
+  await expect(developingRegion).toContainText(
+    "Rising wind and bright trail ribbons"
+  );
+  await expect(developingRegion).toContainText("Rising Wind Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(atlas).not.toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+
+  for (let move = 0; move < 3; move += 1) {
+    await page.locator("[data-move='down']").dispatchEvent("click");
+    await expect(page.locator("#moves-value")).toHaveText(
+      String(move + 1).padStart(3, "0")
+    );
+  }
+  await expect(page.locator("#field-note")).toHaveText(
+    "Windway carried you down."
+  );
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("developing");
+  expect(copied.searchParams.get("rules")).toBe("windways-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Developing");
+  await expect(records).toContainText("Trail Twist: Windways");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed WIND-TRAIL-5"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByLabel(
+    "Reconstructed maze state for the selected Trail step."
+  )).toBeVisible();
+  await viewer.getByRole("heading", { name: "Watch Trail" }).focus();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(records).not.toBeVisible();
+
+  await page.goto(
+    "/?seed=WIND-SHELL-6&level=trail-scout&labyrinth=6&region=developing&rules=windways-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='developing-5']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
 });
 
 test("normalizes an impossible shared ruleset to safe Classic Rules", async ({

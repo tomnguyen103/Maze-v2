@@ -28,12 +28,12 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   developing: Object.freeze({
-    motif: "Rising wind",
+    motif: "Rising wind and bright trail ribbons",
     fieldNotes: Object.freeze([
-      "Wind marks point deeper into the expedition.",
-      "Longer passages reward a steady route.",
-      "The trail bends, but every choice stays readable.",
-      "The second diamond crest guards the windy ridge."
+      "Windcall ribbons point from each Windway source to its landing.",
+      "The Kitewatch keeps universal Warden marks clear in the rising wind.",
+      "One Windway action carries the Explorer exactly one extra legal tile.",
+      "The Rising Wind Sigil waits beyond the Gate Warden."
     ])
   }),
   capable: Object.freeze({

@@ -19,6 +19,25 @@ describe("Region Theme", () => {
       sigilName: "First Echo Sigil"
     });
     expect(ruleset).toEqual(before);
-    expect(getRegionTheme("developing")).toBeNull();
+  });
+
+  it("authors Region 2 presentation without changing Run rules", () => {
+    const ruleset = {
+      atlasRegionId: "developing",
+      revision: "windways-v1",
+      label: "Windways"
+    };
+    const before = structuredClone(ruleset);
+
+    expect(getRegionTheme(ruleset.atlasRegionId)).toEqual({
+      id: "windcall-ridge",
+      name: "Windcall Ridge",
+      motif: "Rising wind and bright trail ribbons",
+      wardenGuild: "Kitewatch Guild",
+      ambientLabel: "Windcall reed chorus",
+      sigilName: "Rising Wind Sigil"
+    });
+    expect(ruleset).toEqual(before);
+    expect(getRegionTheme("capable")).toBeNull();
   });
 });

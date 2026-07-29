@@ -7,6 +7,11 @@ import {
  * @typedef {"up" | "right" | "down" | "left"} Direction
  * @typedef {{ row: number, col: number }} Position
  * @typedef {Position & { collected: boolean }} Echo
+ * @typedef {{
+ *   source: Position,
+ *   destination: Position,
+ *   direction: Direction
+ * }} Windway
  * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
  * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
@@ -74,6 +79,7 @@ import {
  *   echoes: Echo[],
  *   gate: Position & { open: boolean, sealed?: boolean },
  *   wardens: Warden[],
+ *   windways: Windway[],
  *   gateWarden?: { id: number, defeated: boolean },
  *   challenge: WardenChallenge | null,
  *   revealed: string[],
@@ -182,6 +188,21 @@ export function createRun(requestedSeed, input = {}) {
   const wardens = gateWarden
     ? generatedWardens.slice(0, -1)
     : generatedWardens;
+  const protectedPositions = [
+    explorerPosition,
+    gatePosition,
+    ...echoes,
+    ...generatedWardens
+  ];
+  const windways = config.ruleset.revision === "windways-v1"
+    ? createWindways(
+        labyrinth,
+        occupied,
+        protectedPositions,
+        random,
+        2
+      )
+    : [];
 
   const explorer = {
     ...explorerPosition,
@@ -201,6 +222,7 @@ export function createRun(requestedSeed, input = {}) {
       ? { ...gatePosition, open: config.echoCount === 0, sealed: true }
       : { ...gatePosition, open: config.echoCount === 0 },
     wardens,
+    windways,
     ...(gateWarden
       ? { gateWarden: { id: gateWarden.id, defeated: false } }
       : {}),
@@ -490,9 +512,22 @@ function resolveMove(run, directionName) {
     };
   }
 
+  const windway = run.ruleset.revision === "windways-v1"
+    ? run.windways.find(({ source }) => samePosition(source, target))
+    : undefined;
+  if (windway && !isPassage(run.labyrinth, windway.destination)) {
+    return {
+      ...run,
+      event: {
+        type: "blocked",
+        message: "That Windway has no safe destination."
+      }
+    };
+  }
+  const destination = windway?.destination ?? target;
   const nextMoves = run.moves + 1;
   if (
-    samePosition(target, run.gate) &&
+    samePosition(destination, run.gate) &&
     run.gate.open &&
     run.gate.sealed &&
     run.gateWarden &&
@@ -521,10 +556,15 @@ function resolveMove(run, directionName) {
   /** @type {GameRun} */
   let next = {
     ...cloneRun(run),
-    explorer: { ...run.explorer, ...target },
+    explorer: { ...run.explorer, ...destination },
     moves: nextMoves,
     lastDirection: directionName,
-    event: { type: "moved", message: `Moved ${directionName}.` }
+    event: windway
+      ? {
+          type: "windway-travel",
+          message: `Windway carried you ${windway.direction}.`
+        }
+      : { type: "moved", message: `Moved ${directionName}.` }
   };
   next = expirePulse(next);
   next = revealExplorerArea(next);
@@ -832,6 +872,11 @@ function cloneRun(run) {
     gate: { ...run.gate },
     echoes: run.echoes.map((echo) => ({ ...echo })),
     wardens: run.wardens.map((warden) => ({ ...warden })),
+    windways: run.windways.map((windway) => ({
+      source: { ...windway.source },
+      destination: { ...windway.destination },
+      direction: windway.direction
+    })),
     ...(run.gateWarden
       ? { gateWarden: { ...run.gateWarden } }
       : {}),
@@ -1087,6 +1132,111 @@ function pickEntities(
     occupied.add(positionKey(position));
   }
   return selected;
+}
+
+/**
+ * @param {number[][]} labyrinth
+ * @param {Set<string>} protectedTiles
+ * @param {Position[]} protectedPositions
+ * @param {() => number} random
+ * @param {number} count
+ * @returns {Windway[]}
+ */
+function createWindways(
+  labyrinth,
+  protectedTiles,
+  protectedPositions,
+  random,
+  count
+) {
+  const candidates = getOpenTiles(labyrinth).flatMap((source) =>
+    DIRECTIONS.map((direction) => ({
+      source,
+      destination: {
+        row: source.row + direction.row,
+        col: source.col + direction.col
+      },
+      direction: direction.name
+    })).filter(
+      ({ destination }) =>
+        !protectedTiles.has(positionKey(source)) &&
+        !protectedTiles.has(positionKey(destination)) &&
+        isPassage(labyrinth, destination)
+    )
+  );
+  shuffle(candidates, random);
+  const reserved = new Set(protectedTiles);
+  /** @type {Windway[]} */
+  const windways = [];
+  for (const candidate of candidates) {
+    const sourceKey = positionKey(candidate.source);
+    const destinationKey = positionKey(candidate.destination);
+    if (reserved.has(sourceKey) || reserved.has(destinationKey)) {
+      continue;
+    }
+    const windway = {
+      source: { ...candidate.source },
+      destination: { ...candidate.destination },
+      direction: candidate.direction
+    };
+    if (!protectedTilesRemainMutuallyReachable(
+      labyrinth,
+      protectedPositions,
+      [...windways, windway]
+    )) {
+      continue;
+    }
+    windways.push(windway);
+    reserved.add(sourceKey);
+    reserved.add(destinationKey);
+    if (windways.length === count) {
+      break;
+    }
+  }
+  return windways;
+}
+
+/**
+ * @param {number[][]} labyrinth
+ * @param {Position[]} protectedPositions
+ * @param {Windway[]} windways
+ */
+function protectedTilesRemainMutuallyReachable(
+  labyrinth,
+  protectedPositions,
+  windways
+) {
+  const destinationsBySource = new Map(
+    windways.map(({ source, destination }) => [
+      positionKey(source),
+      destination
+    ])
+  );
+  const protectedKeys = protectedPositions.map(positionKey);
+  return protectedPositions.every((start) => {
+    const queue = [start];
+    const visited = new Set([positionKey(start)]);
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index];
+      for (const direction of DIRECTIONS) {
+        const directTarget = {
+          row: current.row + direction.row,
+          col: current.col + direction.col
+        };
+        if (!isPassage(labyrinth, directTarget)) {
+          continue;
+        }
+        const next =
+          destinationsBySource.get(positionKey(directTarget)) ?? directTarget;
+        const nextKey = positionKey(next);
+        if (!visited.has(nextKey)) {
+          visited.add(nextKey);
+          queue.push(next);
+        }
+      }
+    }
+    return protectedKeys.every((key) => visited.has(key));
+  });
 }
 
 /**

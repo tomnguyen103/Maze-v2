@@ -1110,6 +1110,19 @@ body[data-run-mode="first-light"] .play-workbench {
   width: min(46rem, calc(100% - 2rem));
 }
 
+.legend-mark--windway::before {
+  content: "→";
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--color-ink);
+  font-family: var(--font-utility);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 body[data-region-theme="mosslight-grove"] .canvas-frame {
   border-color: var(--color-gate);
   box-shadow:
@@ -1119,6 +1132,17 @@ body[data-region-theme="mosslight-grove"] .canvas-frame {
 
 body[data-region-theme="mosslight-grove"] .warden-readout {
   border-inline-start: 0.3rem solid var(--color-gate);
+}
+
+body[data-region-theme="windcall-ridge"] .canvas-frame {
+  border-color: var(--color-echo);
+  box-shadow:
+    0 0 0 3px var(--color-signal-glow),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="windcall-ridge"] .warden-readout {
+  box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
 }
 
 .journal-status {
@@ -2521,12 +2545,20 @@ body[data-region-theme="mosslight-grove"] .warden-readout {
   .command-bar button {
     min-width: 0;
     padding-block: var(--space-1);
-    padding-inline: var(--space-1);
+    padding-inline: 0;
     flex: 1 1 0;
     font-size: var(--text-compact);
     line-height: 1.05;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  #sound-toggle {
+    flex-grow: 1.15;
+  }
+
+  #new-run {
+    flex-grow: 1.3;
   }
 
   .play-grid {

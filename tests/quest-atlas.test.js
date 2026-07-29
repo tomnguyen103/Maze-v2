@@ -24,6 +24,16 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[0].sigilLabel).toBe(
       "First Echo Sigil restores at Labyrinth 4"
     );
+    expect(atlas.regions[1]).toMatchObject({
+      id: "developing",
+      themeName: "Windcall Ridge",
+      wardenGuild: "Kitewatch Guild",
+      motif: "Rising wind and bright trail ribbons",
+      sigilLabel: "Rising Wind Sigil restores at Labyrinth 8"
+    });
+    expect(atlas.regions[1].nodes[0].fieldNote).toContain(
+      "Windway source"
+    );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
         id: "foundation-1",

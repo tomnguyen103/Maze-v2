@@ -2,6 +2,12 @@
  * Small opt-in Web Audio soundscape. No audio context exists before the user
  * explicitly enables sound.
  */
+/** @type {Readonly<Record<string, number>>} */
+const AMBIENT_FREQUENCIES = Object.freeze({
+  foundation: 82,
+  developing: 110
+});
+
 export class EchoAudio {
   /** @type {AudioContext | null} */
   #context = null;
@@ -86,11 +92,12 @@ export class EchoAudio {
   }
 
   #syncAmbient() {
+    const ambientFrequency = AMBIENT_FREQUENCIES[this.#ambientRegionId];
     if (
       !this.#enabled ||
       !this.#context ||
       !this.#ambientActive ||
-      this.#ambientRegionId !== "foundation"
+      !ambientFrequency
     ) {
       this.#stopAmbient();
       return;
@@ -101,7 +108,10 @@ export class EchoAudio {
     const oscillator = this.#context.createOscillator();
     const gain = this.#context.createGain();
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(82, this.#context.currentTime);
+    oscillator.frequency.setValueAtTime(
+      ambientFrequency,
+      this.#context.currentTime
+    );
     gain.gain.setValueAtTime(0.012, this.#context.currentTime);
     oscillator.connect(gain);
     gain.connect(this.#context.destination);

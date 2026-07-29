@@ -5,6 +5,11 @@
  * @typedef {Position & { collected: boolean }} Echo
  * @typedef {Position & { open: boolean, sealed?: boolean }} Gate
  * @typedef {Position & { id: number, mode: "patrol" | "hunt" | "intercept" }} Warden
+ * @typedef {{
+ *   source: Position,
+ *   destination: Position,
+ *   direction: "up" | "right" | "down" | "left"
+ * }} Windway
  */
 
 /**
@@ -33,6 +38,15 @@ export function createCanvasRenderer(canvas) {
     const size = run.labyrinth.length;
     const tile = canvas.width / size;
     const revealed = new Set([...run.revealed, ...run.pulseVisible]);
+    for (const windway of run.windways) {
+      const sourceKey = `${windway.source.row},${windway.source.col}`;
+      const destinationKey =
+        `${windway.destination.row},${windway.destination.col}`;
+      if (revealed.has(sourceKey) || revealed.has(destinationKey)) {
+        revealed.add(sourceKey);
+        revealed.add(destinationKey);
+      }
+    }
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = palette.fog;
@@ -55,6 +69,11 @@ export function createCanvasRenderer(canvas) {
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
       drawGate(run.gate, tile);
+    }
+    for (const windway of run.windways) {
+      if (revealed.has(`${windway.source.row},${windway.source.col}`)) {
+        drawWindway(windway, tile);
+      }
     }
     for (const echo of run.echoes) {
       if (!echo.collected && revealed.has(`${echo.row},${echo.col}`)) {
@@ -239,6 +258,48 @@ export function createCanvasRenderer(canvas) {
         tile * 0.16 * scale
       );
     }
+  }
+
+  /** @param {Windway} windway @param {number} tile */
+  function drawWindway(windway, tile) {
+    const source = centerOf(windway.source, tile);
+    const destination = centerOf(windway.destination, tile);
+    const scale = palette.markScale;
+    const rowDelta = windway.destination.row - windway.source.row;
+    const colDelta = windway.destination.col - windway.source.col;
+    const startX = source.x + colDelta * tile * 0.18;
+    const startY = source.y + rowDelta * tile * 0.18;
+    const endX = destination.x - colDelta * tile * 0.2;
+    const endY = destination.y - rowDelta * tile * 0.2;
+    const sideX = -rowDelta;
+    const sideY = colDelta;
+
+    context.save();
+    context.strokeStyle = palette.signal;
+    context.lineWidth = Math.max(2, tile * 0.09 * scale);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.arc(
+      source.x,
+      source.y,
+      tile * 0.18 * scale,
+      0,
+      Math.PI * 2
+    );
+    context.moveTo(startX, startY);
+    context.lineTo(endX, endY);
+    context.lineTo(
+      endX - colDelta * tile * 0.18 + sideX * tile * 0.13,
+      endY - rowDelta * tile * 0.18 + sideY * tile * 0.13
+    );
+    context.moveTo(endX, endY);
+    context.lineTo(
+      endX - colDelta * tile * 0.18 - sideX * tile * 0.13,
+      endY - rowDelta * tile * 0.18 - sideY * tile * 0.13
+    );
+    context.stroke();
+    context.restore();
   }
 
   /** @param {Warden} warden @param {number} tile */

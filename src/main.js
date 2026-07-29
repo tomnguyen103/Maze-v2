@@ -211,7 +211,8 @@ const elements = {
   vitalityMeter: requiredElement("vitality-meter", HTMLElement),
   wardenReadout: requiredElement("warden-readout", HTMLElement),
   wardenGuild: requiredElement("warden-guild", HTMLElement),
-  wardenState: requiredElement("warden-state", HTMLElement)
+  wardenState: requiredElement("warden-state", HTMLElement),
+  windwayLegend: requiredElement("windway-legend", HTMLLIElement)
 };
 
 const dailyRequest = resolveDailyRequest(
@@ -3173,7 +3174,9 @@ function updateInterface() {
     "aria-label",
     activeFirstLight
       ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
-      : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+      : run.windways.length > 0
+        ? "Interactive maze with directional Windway source and destination marks. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
+        : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
   );
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
@@ -3247,6 +3250,7 @@ function updateInterface() {
   elements.wardenGuild.textContent = regionTheme
     ? `${regionTheme.wardenGuild} · ${regionTheme.ambientLabel} is optional.`
     : "Universal Warden marks";
+  elements.windwayLegend.hidden = run.windways.length === 0;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");
   renderPips(
