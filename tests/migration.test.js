@@ -499,6 +499,8 @@ describe("Regional shared-score partition migration", () => {
     expect(sql).toContain("ADD COLUMN ruleset_revision");
     expect(sql).toContain("ruleset_revision = 'classic-v1'");
     expect(sql).toContain("labyrinth_number BETWEEN 1 AND 4");
+    expect(sql).toContain("Invalid legacy score_entries.labyrinth_number");
+    expect(sql).toContain("WHEN labyrinth_number BETWEEN 17 AND 20");
     expect(sql).toContain("score_entries_partition_ranking_idx");
     expect(sql).toContain("CHECK (");
     expect(sql).toContain("echo-hush-v1");

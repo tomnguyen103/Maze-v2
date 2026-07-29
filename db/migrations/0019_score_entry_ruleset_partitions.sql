@@ -5,6 +5,19 @@ ALTER TABLE score_entries
   ADD COLUMN atlas_region_id VARCHAR(16),
   ADD COLUMN ruleset_revision VARCHAR(32);
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM score_entries
+    WHERE labyrinth_number NOT BETWEEN 1 AND 20
+  ) THEN
+    RAISE EXCEPTION
+      'Invalid legacy score_entries.labyrinth_number outside 1-20';
+  END IF;
+END
+$$;
+
 UPDATE score_entries
 SET
   atlas_region_id = CASE
@@ -12,7 +25,7 @@ SET
     WHEN labyrinth_number BETWEEN 5 AND 8 THEN 'developing'
     WHEN labyrinth_number BETWEEN 9 AND 12 THEN 'capable'
     WHEN labyrinth_number BETWEEN 13 AND 16 THEN 'advanced'
-    ELSE 'mastery'
+    WHEN labyrinth_number BETWEEN 17 AND 20 THEN 'mastery'
   END,
   ruleset_revision = 'classic-v1'
 WHERE atlas_region_id IS NULL

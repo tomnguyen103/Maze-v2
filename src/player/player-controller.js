@@ -232,6 +232,7 @@ export function createPlayerController({
           echoesCollected: run.echoesCollected,
           moves: run.moves,
           elapsedMs: Math.round(run.elapsedMs),
+          score: run.score,
           escaped: true,
           atlasRegionId: run.atlasRegionId,
           rulesetRevision: run.rulesetRevision
@@ -307,11 +308,7 @@ export function createPlayerController({
     });
     elements.signOut.addEventListener("click", async () => {
       await clerkBrowser.signOut();
-      onIdentityEnd();
-      playerState = reducePlayerState(playerState, {
-        type: "auth-changed",
-        userId: ""
-      });
+      await syncAuthenticatedPlayer();
       reportAuthenticationChange();
       if (elements.dialog.open) {
         elements.dialog.close();
@@ -351,6 +348,9 @@ export function createPlayerController({
     if (userId === playerState.userId) {
       renderAuth();
       return;
+    }
+    if (playerState.userId) {
+      onIdentityEnd();
     }
     playerState = reducePlayerState(playerState, {
       type: "auth-changed",

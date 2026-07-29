@@ -122,6 +122,24 @@ describe("Active Run Locator", () => {
     expect(storage.getItem("echo-maze:active-run:v1")).toBeNull();
   });
 
+  it("rejects an invalid version 3 Labyrinth before ruleset normalization", () => {
+    expect(() =>
+      saveActiveRunLocator(
+        {
+          version: 3,
+          runId: "access_01J1MOSSWATCH",
+          pending: false,
+          seed: "STONE-VAULT-00",
+          levelId: "trail-scout",
+          labyrinthNumber: /** @type {any} */ ("x"),
+          atlasRegionId: "foundation",
+          rulesetRevision: "echo-hush-v1"
+        },
+        createStorage()
+      )
+    ).toThrow("Cannot save an invalid Active Run Locator.");
+  });
+
   it("clears the saved locator without affecting other device state", () => {
     const storage = createStorage();
     storage.setItem("other-key", "preserved");

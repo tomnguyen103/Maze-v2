@@ -131,16 +131,17 @@ export function validateScoreInput(value) {
     throw new InputError("Only escaped runs can enter the Global Scoreboard.");
   }
 
+  const labyrinthNumber = boundedInteger(
+    input,
+    "labyrinthNumber",
+    1,
+    20,
+    "Labyrinth"
+  );
   const run = {
     idempotencyKey: input.idempotencyKey,
     levelId: input.levelId,
-    labyrinthNumber: boundedInteger(
-      input,
-      "labyrinthNumber",
-      1,
-      20,
-      "Labyrinth"
-    ),
+    labyrinthNumber,
     seed: input.seed,
     wardensDefeated: boundedInteger(
       input,
@@ -161,7 +162,8 @@ export function validateScoreInput(value) {
     escaped: true,
     ...validateScorePartition({
       atlasRegionId: input.atlasRegionId,
-      rulesetRevision: input.rulesetRevision
+      rulesetRevision: input.rulesetRevision,
+      labyrinthNumber
     })
   };
   if (
@@ -174,7 +176,7 @@ export function validateScoreInput(value) {
     )
   ) {
     throw new InputError(
-      "Score Region and ruleset does not match the selected Labyrinth."
+      "Score Region and ruleset do not match the selected Labyrinth."
     );
   }
   const config = getLabyrinthConfig(run.levelId, run.labyrinthNumber);
@@ -192,8 +194,23 @@ export function validateScoreInput(value) {
   return { ...run, score: computeRunScore(run) };
 }
 
-/** @param {{ atlasRegionId?: unknown, rulesetRevision?: unknown }} input */
+/** @param {{ atlasRegionId?: unknown, rulesetRevision?: unknown, labyrinthNumber?: number }} input */
 export function validateScorePartition(input) {
+  const labyrinthNumber = Number(input.labyrinthNumber);
+  if (
+    input.atlasRegionId === undefined &&
+    input.rulesetRevision === undefined &&
+    Number.isInteger(labyrinthNumber)
+  ) {
+    const ruleset = normalizeRunRuleset(undefined, labyrinthNumber);
+    if (!ruleset) {
+      throw new InputError("Score Labyrinth is not supported.");
+    }
+    return {
+      atlasRegionId: ruleset.atlasRegionId,
+      rulesetRevision: ruleset.revision
+    };
+  }
   if (
     typeof input.atlasRegionId !== "string" ||
     typeof input.rulesetRevision !== "string"

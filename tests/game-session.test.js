@@ -544,6 +544,7 @@ describe("GameSession", () => {
     expect(next.explorer).toMatchObject({ row: 4, col: 5 });
     expect(next.wardens[0]).toMatchObject({ row: 4, col: 5 });
     expect(next.status).toBe("challenge");
+    expect(next.event.message).not.toContain("Tide Doors are now");
     expect(next.tideDoors.every((door) => !door.open)).toBe(true);
     expect(next.moves).toBe(staged.moves + 1);
     expect(staged.tideDoors.every((door) => door.open)).toBe(true);
@@ -582,6 +583,11 @@ describe("GameSession", () => {
       { type: "pulse" }
     );
     expect(emptyPulse.tideDoors).toEqual(pulsed.tideDoors);
+    const noDoors = applyAction(
+      { ...run, tideDoors: [] },
+      { type: "pulse" }
+    );
+    expect(noDoors.event.message).not.toContain("Tide Doors are now");
     expect(door).toBeDefined();
   });
 

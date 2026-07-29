@@ -108,7 +108,26 @@ describe("player validation", () => {
         atlasRegionId: "developing",
         rulesetRevision: "windways-v1"
       })
-    ).toThrow("does not match");
+    ).toThrow("do not match");
+  });
+
+  it("maps legacy score submissions to Classic Rules", () => {
+    expect(
+      validateScoreInput({
+        idempotencyKey: "run_01J1MOSSWATCH",
+        levelId: "trail-scout",
+        labyrinthNumber: 5,
+        seed: "MOSS-WATCH-11",
+        wardensDefeated: 2,
+        echoesCollected: 4,
+        moves: 81,
+        elapsedMs: 92000,
+        escaped: true
+      })
+    ).toMatchObject({
+      atlasRegionId: "developing",
+      rulesetRevision: "classic-v1"
+    });
   });
 
   it("uses the documented score formula", () => {

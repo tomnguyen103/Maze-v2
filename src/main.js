@@ -3523,6 +3523,7 @@ async function finishRun() {
     terminal.regionTheme !== null;
   setTerminalPresentationPending(true);
 
+  try {
   let atlasModule = null;
   let atlasSummaryModule = null;
   try {
@@ -3534,8 +3535,6 @@ async function finishRun() {
     // The terminal record is already saved; presentation falls back below.
   }
   if (run !== terminal.run || !runFinished) {
-    setTerminalPresentationPending(false);
-    updateInterface();
     return;
   }
 
@@ -3548,15 +3547,18 @@ async function finishRun() {
     }
   }
   if (run !== terminal.run || !runFinished) {
-    setTerminalPresentationPending(false);
-    updateInterface();
     return;
   }
-  const sigilCeremony =
-    ceremonyModule?.claimRegionCeremony(
-      terminal.progress.questId,
-      terminal.run.ruleset.atlasRegionId
-    ) === "full";
+  let sigilCeremony = false;
+  try {
+    sigilCeremony =
+      ceremonyModule?.claimRegionCeremony(
+        terminal.progress.questId,
+        terminal.run.ruleset.atlasRegionId
+      ) === "full";
+  } catch {
+    // Storage access cannot strand the saved terminal result.
+  }
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
     : sigilCeremony
@@ -3632,8 +3634,10 @@ async function finishRun() {
   elements.resultSeed.textContent = terminal.run.seed;
   elements.resultRank.textContent = terminal.standing;
   renderRunRecords();
-  setTerminalPresentationPending(false);
-  updateInterface();
+  } finally {
+    setTerminalPresentationPending(false);
+    updateInterface();
+  }
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }

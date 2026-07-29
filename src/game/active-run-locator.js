@@ -81,6 +81,13 @@ function normalizeLocator(value) {
   const candidate = /** @type {Partial<ActiveRunLocator>} */ (value);
   const version = Number(candidate.version);
   const labyrinthNumber = Number(candidate.labyrinthNumber);
+  if (
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  ) {
+    return null;
+  }
   const ruleset =
     version === 3
       ? normalizeRunRuleset(
@@ -103,10 +110,7 @@ function normalizeLocator(value) {
     candidate.seed.length > 24 ||
     (candidate.levelId !== "bright-start" &&
       candidate.levelId !== "trail-scout" &&
-      candidate.levelId !== "maze-master") ||
-    !Number.isInteger(candidate.labyrinthNumber) ||
-    labyrinthNumber < 1 ||
-    labyrinthNumber > QUEST_LABYRINTH_COUNT
+      candidate.levelId !== "maze-master")
   ) {
     return null;
   }

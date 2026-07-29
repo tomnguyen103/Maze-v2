@@ -509,7 +509,7 @@ a:active {
 }
 
 .warden-readout[data-mode="lured"] strong::before {
-  content: "))) ";
+  content: "))) " / "";
   font-family: var(--font-utility);
   font-size: 0.78em;
 }
@@ -1135,7 +1135,7 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .legend-mark--windway::before {
-  content: "→";
+  content: "→" / "";
   display: grid;
   width: 100%;
   height: 100%;
@@ -1155,13 +1155,13 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .legend-mark--tide-door::before {
-  content: "≈";
+  content: "≈" / "";
   color: var(--color-signal);
   font: 800 1rem/1 var(--font-body);
 }
 
 .legend-mark--signal-bell::before {
-  content: ")))";
+  content: ")))" / "";
   color: var(--color-signal-deep);
   font: 800 0.72rem/1 var(--font-utility);
 }

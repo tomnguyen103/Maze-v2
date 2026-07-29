@@ -135,6 +135,7 @@ describe("Canvas renderer", () => {
       ruleset: getQuestRunRuleset(17)
     });
 
+    expect(run.signalBells.length).toBeGreaterThanOrEqual(2);
     createCanvasRenderer(
       /** @type {HTMLCanvasElement} */ (
         /** @type {unknown} */ (canvas)

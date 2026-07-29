@@ -39,6 +39,9 @@ export function createQuestAtlasView({
   elements.dialog.addEventListener("close", () => {
     const target = returnFocus;
     returnFocus = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("atlas");
+    window.history.replaceState(window.history.state, "", url);
     onClose();
     target?.focus();
   });

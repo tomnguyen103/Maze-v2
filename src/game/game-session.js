@@ -539,7 +539,8 @@ export function applyAction(run, action) {
 function resolveTidePhase(previous, next) {
   if (
     previous.ruleset.revision !== "tide-doors-v1" ||
-    next.moves !== previous.moves + 1
+    next.moves !== previous.moves + 1 ||
+    next.tideDoors.length === 0
   ) {
     return next;
   }
@@ -548,9 +549,15 @@ function resolveTidePhase(previous, next) {
     open: !door.open
   }));
   const open = tideDoors[0]?.open ?? false;
-  return {
+  const phased = {
     ...next,
-    tideDoors,
+    tideDoors
+  };
+  if (next.status !== "active") {
+    return phased;
+  }
+  return {
+    ...phased,
     event: {
       ...next.event,
       message: `${next.event.message} Tide Doors are now ${open ? "open" : "sealed"}.`

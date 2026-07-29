@@ -241,6 +241,8 @@ describe("Echo Atlas view", () => {
     }));
     expect(document.activeElement?.getAttribute("data-atlas-landmark"))
       .toBe("developing-5");
+    expect(new URL(window.location.href).searchParams.get("atlas"))
+      .toBe("developing-5");
 
     document.querySelector("[data-atlas-zoom='in']")?.dispatchEvent(
       new MouseEvent("click", { bubbles: true })
@@ -301,10 +303,15 @@ describe("Echo Atlas view", () => {
     );
     trigger.focus();
     view.show(projectQuestAtlas(createQuestProgress("bright-start")), trigger);
+    document.querySelector("[data-atlas-landmark='foundation-2']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(new URL(window.location.href).searchParams.get("atlas"))
+      .toBe("foundation-2");
 
     document.getElementById("atlas-close")?.click();
 
     expect(onClose).toHaveBeenCalledOnce();
+    expect(new URL(window.location.href).searchParams.has("atlas")).toBe(false);
     expect(document.activeElement).toBe(trigger);
   });
 

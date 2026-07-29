@@ -164,7 +164,7 @@ Restraint 5; Variety 4. No axis required a release-blocking revision.
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Lint → typecheck → unit → build → bundle | `npm run check` | Pass — 1,031 unit tests passed, 17 skipped; 114 files passed, 8 skipped; game entry 28.02/30 KB gzip; shared styles 10.62/12 KB gzip |
+| Lint → typecheck → unit → build → bundle | `npm run check` | Pass — 1,033 unit tests passed, 17 skipped; 114 files passed, 8 skipped; game entry 28.02/30 KB gzip; shared styles 10.63/12 KB gzip |
 | Desktop + mobile browser matrix | `npm run test:e2e` | Pass — 200 passed, 18 intentional environment skips |
 | Standards review | local review of `git diff f97a5a6...HEAD` plus #114 evidence changes | Pass — clean |
 | Spec review | local review against #103, #104–#114, CONTEXT.md, and ADRs 0025–0037 | Pass — clean |

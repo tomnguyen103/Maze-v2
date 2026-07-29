@@ -197,7 +197,8 @@ describe("Player Profile dialog", () => {
 
     expect(client.submitScore).toHaveBeenCalledWith(expect.objectContaining({
       atlasRegionId: "foundation",
-      rulesetRevision: "echo-hush-v1"
+      rulesetRevision: "echo-hush-v1",
+      score: 850
     }));
   });
 
@@ -272,10 +273,11 @@ describe("Player Profile dialog", () => {
 
   it("reports the initial identity and its explicit sign-out", async () => {
     const onAuthenticationChange = vi.fn();
+    const onIdentityEnd = vi.fn();
     clerkBrowser.signOut.mockImplementationOnce(async () => {
       clerkBrowser.user = null;
     });
-    createPlayerController({ onAuthenticationChange });
+    createPlayerController({ onAuthenticationChange, onIdentityEnd });
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
@@ -286,12 +288,14 @@ describe("Player Profile dialog", () => {
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
+      expect(onIdentityEnd).toHaveBeenCalledOnce();
     });
   });
 
   it("reports when Clerk removes the active account identity", async () => {
     const onAuthenticationChange = vi.fn();
-    createPlayerController({ onAuthenticationChange });
+    const onIdentityEnd = vi.fn();
+    createPlayerController({ onAuthenticationChange, onIdentityEnd });
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
     });
@@ -301,6 +305,7 @@ describe("Player Profile dialog", () => {
 
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
+      expect(onIdentityEnd).toHaveBeenCalledOnce();
     });
   });
 
