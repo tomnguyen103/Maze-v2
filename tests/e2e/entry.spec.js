@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { installSignedInQuestPlayer } from "./signed-player.js";
 import { loadEnv } from "vite";
 import { getFirstLightQuestion } from "../../src/game/first-light.js";
 
@@ -287,6 +288,110 @@ test("offers First Light again after an unfinished attempt is abandoned", async 
   await expect(
     page.getByRole("dialog", { name: "Your First Light" })
   ).toBeVisible();
+});
+
+test("scrubs prior Challenge history on sign out without loading Campfire Resume", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run-recovery:v1",
+      JSON.stringify({
+        acceptedQuestion: "private reviewed Question",
+        selectedOptionId: "b"
+      })
+    );
+  });
+  let recoveryChunkRequests = 0;
+  await page.route(
+    "**/assets/active-run-recovery-*.js",
+    async (route) => {
+      recoveryChunkRequests += 1;
+      await route.abort();
+    }
+  );
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+  await page.getByRole("button", { name: "Start First Light" }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+  expect(recoveryChunkRequests).toBe(0);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toContain("private reviewed Question");
+
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
+  expect(recoveryChunkRequests).toBe(0);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-run-mode",
+    "first-light"
+  );
+});
+
+test("warns when sign out cannot scrub the prior Quest checkpoint", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run-recovery:v1",
+      JSON.stringify({
+        acceptedQuestion: "private reviewed Question",
+        selectedOptionId: "b"
+      })
+    );
+    Storage.prototype.removeItem = () => {
+      throw new DOMException("Deletion denied.", "SecurityError");
+    };
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Overwrite denied.", "SecurityError");
+    };
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#player-name")).toHaveText("Moss Runner");
+
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+
+  await expect(page.locator("#live-region")).toContainText(
+    "could not erase the old Quest checkpoint"
+  );
+  await expect(page.locator("#live-region")).toContainText(
+    "Clear this site's data before another player uses this device"
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toContain("private reviewed Question");
 });
 
 test("defeats and freely retries First Light through touch controls", async ({

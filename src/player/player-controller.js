@@ -61,11 +61,13 @@ export function createPlayerController({
     signOut: requiredElement("player-sign-out", HTMLButtonElement),
     username: requiredElement("player-username", HTMLInputElement)
   };
+  let authenticationReported = false;
+  let reportedUserId = "";
   const clerkBrowser =
     injectedDependencies?.clerkBrowser ??
     createClerkBrowser({
       onChange: () => {
-        onAuthenticationChange(Boolean(clerkBrowser.user));
+        reportAuthenticationChange();
         void syncAuthenticatedPlayer();
       }
     });
@@ -282,6 +284,7 @@ export function createPlayerController({
         type: "auth-changed",
         userId: ""
       });
+      reportAuthenticationChange();
       if (elements.dialog.open) {
         elements.dialog.close();
       }
@@ -309,6 +312,7 @@ export function createPlayerController({
       return;
     }
     await syncAuthenticatedPlayer();
+    reportAuthenticationChange();
   }
 
   async function syncAuthenticatedPlayer() {
@@ -450,6 +454,16 @@ export function createPlayerController({
         ? "Choose a unique username before joining the Global Scoreboard."
         : "Your username and colors follow you on this browser."
       : "Sign in to save a username, colors, and escaped-run scores.";
+  }
+
+  function reportAuthenticationChange() {
+    const userId = clerkBrowser.user?.id ?? "";
+    if (authenticationReported && userId === reportedUserId) {
+      return;
+    }
+    authenticationReported = true;
+    reportedUserId = userId;
+    onAuthenticationChange(Boolean(userId));
   }
 
   /**

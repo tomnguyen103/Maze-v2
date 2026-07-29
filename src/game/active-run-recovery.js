@@ -1,9 +1,12 @@
 import { applyAction, createRun } from "./game-session.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
+import {
+  ACTIVE_RUN_RECOVERY_KEY,
+  scrubActiveRunRecovery
+} from "./local-recovery-scrub.js";
 
-export const ACTIVE_RUN_RECOVERY_KEY =
-  "echo-maze:active-run-recovery:v1";
+export { ACTIVE_RUN_RECOVERY_KEY };
 export const ACTIVE_RUN_RECOVERY_MAX_ACTIONS = 2048;
 export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
 
@@ -82,7 +85,7 @@ export function createActiveRunRecoveryController(options = {}) {
       }
       if (
         clearStored &&
-        !clearStoredRecovery(storage)
+        !scrubActiveRunRecovery(storage)
       ) {
         envelope = null;
         disabled = true;
@@ -108,7 +111,7 @@ export function createActiveRunRecoveryController(options = {}) {
         return { status: "inactive" };
       }
       if (next.status === "won" || next.status === "lost") {
-        const cleared = clearStoredRecovery(storage);
+        const cleared = scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = !cleared;
         return cleared
@@ -133,13 +136,13 @@ export function createActiveRunRecoveryController(options = {}) {
         };
         bounds = recoveryPayloadWithinBounds(candidate);
       } catch {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = true;
         return { status: "unavailable", reason: "serialization" };
       }
       if (!bounds.ok) {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = true;
         return { status: "unavailable", reason: bounds.reason };
@@ -147,7 +150,7 @@ export function createActiveRunRecoveryController(options = {}) {
       try {
         storage?.setItem(ACTIVE_RUN_RECOVERY_KEY, bounds.serialized);
       } catch {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         envelope = null;
         disabled = true;
         return { status: "unavailable", reason: "storage" };
@@ -160,7 +163,7 @@ export function createActiveRunRecoveryController(options = {}) {
     load(locator) {
       const identity = normalizeIdentity(locator);
       if (!identity) {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         return { status: "invalid", reason: "identity" };
       }
       if (!storage) {
@@ -177,7 +180,7 @@ export function createActiveRunRecoveryController(options = {}) {
         return { status: "none" };
       }
       if (utf8Size(serialized) > ACTIVE_RUN_RECOVERY_MAX_BYTES) {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         return { status: "invalid", reason: "size-limit" };
       }
       try {
@@ -204,14 +207,14 @@ export function createActiveRunRecoveryController(options = {}) {
               : run
         };
       } catch {
-        clearStoredRecovery(storage);
+        scrubActiveRunRecovery(storage);
         envelope = null;
         return { status: "invalid", reason: "corrupt" };
       }
     },
 
     clear() {
-      const cleared = clearStoredRecovery(storage);
+      const cleared = scrubActiveRunRecovery(storage);
       envelope = null;
       disabled = !cleared;
       return cleared
@@ -730,21 +733,4 @@ function formatElapsed(elapsedMs) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-/** @param {StorageLike | undefined | null} storage */
-function clearStoredRecovery(storage) {
-  if (!storage) {
-    return false;
-  }
-  try {
-    if (storage.getItem(ACTIVE_RUN_RECOVERY_KEY) === null) {
-      return true;
-    }
-    storage.removeItem(ACTIVE_RUN_RECOVERY_KEY);
-    return storage.getItem(ACTIVE_RUN_RECOVERY_KEY) === null;
-  } catch {
-    // Storage failures cannot block current-tab gameplay.
-    return false;
-  }
 }

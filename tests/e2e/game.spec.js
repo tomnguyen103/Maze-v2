@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
+import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
 
@@ -1263,6 +1265,13 @@ test("requires account creation before a guest starts a second Labyrinth", async
     name: "Create an account for three free Runs."
   });
   await expect(dialog).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
   await expect(page.locator("#result-rank")).toHaveText("Attempt #1");
   await expect(
     page.getByRole("button", { name: "Create account for three Runs" })
@@ -1617,6 +1626,39 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
       return stored ? JSON.parse(stored) : null;
     })
   ).toMatchObject({ labyrinthNumber: 2, completedLabyrinths: 1 });
+  const escapedBoundary = await page.evaluate((seed) => {
+    const records =
+      /** @type {Array<{
+       *   seed?: string,
+       *   outcome?: string,
+       *   labyrinthNumber?: number
+       * }>} */ (JSON.parse(
+        localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+      ));
+    const progress = JSON.parse(
+      localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+    );
+    return {
+      recovery: localStorage.getItem(
+        "echo-maze:active-run-recovery:v1"
+      ),
+      matchingRecords: records.filter(
+        (record) =>
+          record.seed === seed &&
+          record.outcome === "escaped" &&
+          record.labyrinthNumber === 1
+      ).length,
+      progress
+    };
+  }, WINNING_SEED);
+  expect(escapedBoundary).toMatchObject({
+    recovery: null,
+    matchingRecords: 1,
+    progress: {
+      labyrinthNumber: 2,
+      completedLabyrinths: 1
+    }
+  });
 
   if (await page.getByRole("button", { name: "Continue Quest" }).isVisible()) {
   await page.getByRole("button", { name: "Continue Quest" }).click();
@@ -1632,6 +1674,42 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 2 of 20 · Foundation"
   );
+  await expect(
+    page.getByRole("dialog", { name: "Continue from the Campfire?" })
+  ).not.toBeVisible();
+  expect(
+    await page.evaluate((seed) => {
+      const records =
+        /** @type {Array<{
+         *   seed?: string,
+         *   outcome?: string,
+         *   labyrinthNumber?: number
+         * }>} */ (JSON.parse(
+          localStorage.getItem("echo-maze:run-records:v1") ?? "[]"
+        ));
+      const progress = JSON.parse(
+        localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+      );
+      return {
+        recovery: localStorage.getItem(
+          "echo-maze:active-run-recovery:v1"
+        ),
+        matchingRecords: records.filter(
+          (record) =>
+            record.seed === seed &&
+            record.outcome === "escaped" &&
+            record.labyrinthNumber === 1
+        ).length,
+        labyrinthNumber: progress?.labyrinthNumber,
+        completedLabyrinths: progress?.completedLabyrinths
+      };
+    }, WINNING_SEED)
+  ).toEqual({
+    recovery: null,
+    matchingRecords: 1,
+    labyrinthNumber: 2,
+    completedLabyrinths: 1
+  });
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });
@@ -2017,7 +2095,7 @@ test("continues current-tab play when recovery storage writes are denied", async
   );
 });
 
-test("does not resurrect a checkpoint when Campfire deletion is denied", async ({
+test("scrubs a checkpoint when Campfire deletion is denied", async ({
   page
 }) => {
   await page.goto("/?seed=CAMPFIRE-DELETE&level=trail-scout");
@@ -2071,27 +2149,26 @@ test("does not resurrect a checkpoint when Campfire deletion is denied", async (
     .click();
   await expect(campfire).not.toBeVisible();
   await expect(page.locator("#moves-value")).toHaveText("000");
-  await expect(page.locator("#event-ribbon")).toContainText(
+  await expect(page.locator("#event-ribbon")).not.toContainText(
     "Campfire Resume is unavailable"
   );
   const replacement = await page.evaluate(() => {
     const locator = JSON.parse(
       localStorage.getItem("echo-maze:active-run:v1") ?? "{}"
     );
-    const recovery = JSON.parse(
-      localStorage.getItem(
-        "echo-maze:active-run-recovery:v1"
-      ) ?? "{}"
+    const recovery = localStorage.getItem(
+      "echo-maze:active-run-recovery:v1"
     );
     return {
       locatorRunId: locator.runId,
-      recoveryRunId: recovery.identity?.runId
+      recovery
     };
   });
   expect(replacement.locatorRunId).not.toBe(
     oldIdentity.locatorRunId
   );
-  expect(replacement.recoveryRunId).toBe(
+  expect(replacement.recovery).toBe("");
+  expect(replacement.recovery).not.toContain(
     oldIdentity.recoveryRunId
   );
 
@@ -2108,6 +2185,301 @@ test("does not resurrect a checkpoint when Campfire deletion is denied", async (
     .toBeNull();
 });
 
+test("waits for Campfire Continue before resolving a loading Challenge", async ({
+  page
+}) => {
+  const questionRoute = "**/api/question?**";
+  let initialRequestCount = 0;
+  let continuedRequestCount = 0;
+  let releaseInitialQuestion = () => {};
+  let settleInitialQuestion = () => {};
+  const initialQuestionReleased = /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      releaseInitialQuestion = resolve;
+    })
+  );
+  const initialQuestionSettled = /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      settleInitialQuestion = resolve;
+    })
+  );
+  await page.route(questionRoute, async (route) => {
+    initialRequestCount += 1;
+    await initialQuestionReleased;
+    try {
+      await route.abort();
+    } catch {
+      // Closing the original page abandons this resolver.
+    } finally {
+      settleInitialQuestion();
+    }
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-question")).toHaveText(
+    /Preparing your question/
+  );
+  await expect.poll(() => initialRequestCount).toBe(1);
+  const savedLoadingState = await page.evaluate(() => ({
+    recovery: localStorage.getItem(
+      "echo-maze:active-run-recovery:v1"
+    ),
+    quest: localStorage.getItem("echo-maze:quest-progress:v1")
+  }));
+  if (!savedLoadingState.recovery) {
+    throw new Error("Expected a valid loading Challenge checkpoint.");
+  }
+
+  const context = page.context();
+  const closePage = page.close();
+  releaseInitialQuestion();
+  await initialQuestionSettled;
+  await closePage;
+  const recoveredPage = await context.newPage();
+  await recoveredPage.addInitScript(
+    ({ recovery, quest }) => {
+      if (recovery !== null) {
+        localStorage.setItem(
+          "echo-maze:active-run-recovery:v1",
+          recovery
+        );
+      }
+      if (quest === null) {
+        localStorage.removeItem("echo-maze:quest-progress:v1");
+      } else {
+        localStorage.setItem("echo-maze:quest-progress:v1", quest);
+      }
+    },
+    savedLoadingState
+  );
+  await recoveredPage.route(questionRoute, async (route) => {
+    continuedRequestCount += 1;
+    const ordinal = Number(
+      new URL(route.request().url()).searchParams.get("question") ?? 0
+    );
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question: reviewedQuestionForRequest(ordinal),
+        source: "bundled"
+      })
+    });
+  });
+  await recoveredPage.goto(
+    `/?seed=${DEFEAT_SEED}&level=trail-scout`
+  );
+  await expectGameReady(recoveredPage);
+  const campfire = recoveredPage.getByRole("dialog", {
+    name: "Continue from the Campfire?"
+  });
+  await expect(campfire).toBeVisible();
+  await expect(
+    recoveredPage.locator("#challenge-dialog")
+  ).not.toBeVisible();
+  expect(continuedRequestCount).toBe(0);
+  await campfire
+    .getByRole("button", { name: "Continue Run" })
+    .click();
+
+  await expect(
+    recoveredPage.locator("#challenge-dialog")
+  ).toBeVisible();
+  await expect.poll(() => continuedRequestCount).toBe(1);
+  await expect(
+    recoveredPage.locator("#challenge-question")
+  ).toHaveText(reviewedQuestionForRequest(0).prompt);
+});
+
+test("restores wrong-answer feedback and replacement loading without duplicate learning writes", async ({
+  page
+}) => {
+  const questionRoute = "**/api/question?**";
+  let initialRequestCount = 0;
+  let continuedRequestCount = 0;
+  let releaseReplacement = () => {};
+  let settleReplacement = () => {};
+  const replacementReleased = /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      releaseReplacement = resolve;
+    })
+  );
+  const replacementSettled = /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      settleReplacement = resolve;
+    })
+  );
+  const firstQuestion = reviewedQuestionForRequest(0);
+  await page.route(questionRoute, async (route) => {
+    initialRequestCount += 1;
+    const ordinal = Number(
+      new URL(route.request().url()).searchParams.get("question") ?? 0
+    );
+    if (initialRequestCount === 2) {
+      await replacementReleased;
+      try {
+        await route.abort();
+      } catch {
+        // Closing the original page abandons this resolver.
+      } finally {
+        settleReplacement();
+      }
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question: reviewedQuestionForRequest(ordinal),
+        source: "bundled"
+      })
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-question")).toHaveText(
+    firstQuestion.prompt
+  );
+  const wrongChoice = firstQuestion.choices.find(
+    (choice) => choice.id !== firstQuestion.answerId
+  );
+  if (!wrongChoice) {
+    throw new Error("Expected a reviewed wrong answer.");
+  }
+  await page
+    .locator(`[data-answer="${wrongChoice.id}"]`)
+    .click();
+  await expect(page.locator("#challenge-feedback")).toContainText(
+    firstQuestion.explanation
+  );
+  await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+  await expect.poll(() => initialRequestCount).toBe(2);
+  await expect(page.locator("#challenge-question")).toHaveText(
+    /draws a new question/
+  );
+  const savedLoadingState = await page.evaluate(() => ({
+    recovery: localStorage.getItem(
+      "echo-maze:active-run-recovery:v1"
+    ),
+    quest: localStorage.getItem("echo-maze:quest-progress:v1")
+  }));
+  if (!savedLoadingState.recovery) {
+    throw new Error("Expected a valid replacement-loading checkpoint.");
+  }
+  const productStateBeforeReload = await page.evaluate(() => ({
+    quest: (() => {
+      const stored = localStorage.getItem(
+        "echo-maze:quest-progress:v1"
+      );
+      if (!stored) {
+        return null;
+      }
+      const progress = JSON.parse(stored);
+      delete progress.usedQuestionIds;
+      delete progress.nextQuestionOrdinal;
+      return progress;
+    })(),
+    records: localStorage.getItem("echo-maze:run-records:v1"),
+    journal: Object.keys(localStorage)
+      .filter((key) => key.startsWith("echo-maze:lantern-journal"))
+      .sort()
+      .map((key) => [key, localStorage.getItem(key)])
+  }));
+
+  const context = page.context();
+  const closePage = page.close();
+  releaseReplacement();
+  await replacementSettled;
+  await closePage;
+  const recoveredPage = await context.newPage();
+  await recoveredPage.addInitScript(
+    ({ recovery, quest }) => {
+      if (recovery !== null) {
+        localStorage.setItem(
+          "echo-maze:active-run-recovery:v1",
+          recovery
+        );
+      }
+      if (quest === null) {
+        localStorage.removeItem("echo-maze:quest-progress:v1");
+      } else {
+        localStorage.setItem("echo-maze:quest-progress:v1", quest);
+      }
+    },
+    savedLoadingState
+  );
+  await recoveredPage.route(questionRoute, async (route) => {
+    continuedRequestCount += 1;
+    const ordinal = Number(
+      new URL(route.request().url()).searchParams.get("question") ?? 0
+    );
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question: reviewedQuestionForRequest(ordinal),
+        source: "bundled"
+      })
+    });
+  });
+  await recoveredPage.goto(
+    `/?seed=${DEFEAT_SEED}&level=trail-scout`
+  );
+  await expectGameReady(recoveredPage);
+  const campfire = recoveredPage.getByRole("dialog", {
+    name: "Continue from the Campfire?"
+  });
+  await expect(campfire).toBeVisible();
+  await expect(
+    recoveredPage.locator("#challenge-dialog")
+  ).not.toBeVisible();
+  expect(continuedRequestCount).toBe(0);
+  await campfire
+    .getByRole("button", { name: "Continue Run" })
+    .click();
+
+  await expect(
+    recoveredPage.locator("#challenge-dialog")
+  ).toBeVisible();
+  await expect(
+    recoveredPage.locator("#challenge-feedback")
+  ).toContainText(firstQuestion.explanation);
+  await expect(
+    recoveredPage.locator("#vitality-count")
+  ).toHaveText("2 / 3");
+  await expect.poll(() => continuedRequestCount).toBe(1);
+  await expect(
+    recoveredPage.locator("#challenge-question")
+  ).toHaveText(reviewedQuestionForRequest(1).prompt);
+  expect(
+    await recoveredPage.evaluate(() => ({
+      quest: (() => {
+        const stored = localStorage.getItem(
+          "echo-maze:quest-progress:v1"
+        );
+        if (!stored) {
+          return null;
+        }
+        const progress = JSON.parse(stored);
+        delete progress.usedQuestionIds;
+        delete progress.nextQuestionOrdinal;
+        return progress;
+      })(),
+      records: localStorage.getItem("echo-maze:run-records:v1"),
+      journal: Object.keys(localStorage)
+        .filter((key) => key.startsWith("echo-maze:lantern-journal"))
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    }))
+  ).toEqual(productStateBeforeReload);
+});
+
 test("recovers the exact reviewed Question revision and revealed Hint without another provider call", async ({
   page
 }) => {
@@ -2119,11 +2491,30 @@ test("recovers the exact reviewed Question revision and revealed Hint without an
     const ordinal = Number(
       new URL(route.request().url()).searchParams.get("question") ?? 0
     );
-    servedQuestion = reviewedQuestionForRequest(ordinal);
+    const reviewedQuestion = reviewedQuestionForRequest(ordinal);
+    servedQuestion = normalizeQuestion({
+      ...reviewedQuestion,
+      prompt: `  ${reviewedQuestion.prompt}  `,
+      choices: reviewedQuestion.choices.map((choice) => ({
+        ...choice,
+        label: ` ${choice.label} `
+      })),
+      providerDebug: "must-not-persist",
+      userAuthoredText: "must-not-persist"
+    });
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        question: servedQuestion,
+        question: {
+          ...reviewedQuestion,
+          prompt: `  ${reviewedQuestion.prompt}  `,
+          choices: reviewedQuestion.choices.map((choice) => ({
+            ...choice,
+            label: ` ${choice.label} `
+          })),
+          providerDebug: "must-not-persist",
+          userAuthoredText: "must-not-persist"
+        },
         source: "bundled"
       })
     });
@@ -2142,6 +2533,9 @@ test("recovers the exact reviewed Question revision and revealed Hint without an
   await expect(page.locator("#challenge-question")).toHaveText(
     expectedQuestion.prompt
   );
+  expect(
+    await page.locator("#challenge-question").textContent()
+  ).toBe(expectedQuestion.prompt);
   await page.getByRole("button", { name: "Show Hint" }).click();
   await expect(page.locator("#question-hint")).toHaveText(
     expectedQuestion.hint
@@ -2194,6 +2588,130 @@ test("recovers the exact reviewed Question revision and revealed Hint without an
       localStorage.getItem("echo-maze:active-run-recovery:v1")
     )
   ).toContain(expectedQuestion.prompt);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).not.toMatch(/providerDebug|userAuthoredText|must-not-persist/);
+});
+
+test("erases temporary Challenge history when the signed-in identity ends", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  const question = reviewedQuestionForRequest(0);
+  await page.route("**/api/question?**", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question,
+        source: "bundled"
+      })
+    })
+  );
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-question")).toHaveText(
+    question.prompt
+  );
+  const wrongChoice = question.choices.find(
+    (choice) => choice.id !== question.answerId
+  );
+  if (!wrongChoice) {
+    throw new Error("Expected a reviewed wrong answer.");
+  }
+  await page
+    .locator(`[data-answer="${wrongChoice.id}"]`)
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toContain(wrongChoice.id);
+
+  await page.evaluate(() => {
+    const signOut = document.getElementById("player-sign-out");
+    if (!(signOut instanceof HTMLButtonElement)) {
+      throw new Error("Expected the signed-in Player control.");
+    }
+    signOut.click();
+  });
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+});
+
+test("keeps Challenge history erased after terminal defeat and reload", async ({
+  page
+}) => {
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongChoice = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongChoice) {
+      throw new Error("Expected a reviewed wrong answer.");
+    }
+    await page
+      .locator(`[data-answer="${wrongChoice.id}"]`)
+      .click();
+    if (attempt < 2) {
+      await expect
+        .poll(() => getCurrentQuestion().id)
+        .not.toBe(question.id);
+    }
+  }
+
+  await expect(page.locator("#run-state")).toHaveText("Light lost");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("echo-maze:active-run-recovery:v1")
+      )
+    )
+    .toBeNull();
+  const recordsBeforeReload = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:run-records:v1")
+  );
+
+  await page.reload();
+  await expectGameReady(page);
+  await expect(
+    page.getByRole("dialog", {
+      name: "Continue from the Campfire?"
+    })
+  ).not.toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:run-records:v1")
+    )
+  ).toBe(recordsBeforeReload);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("echo-maze:active-run-recovery:v1")
+    )
+  ).toBeNull();
 });
 
 test("upgrades a locator-only device without changing its Labyrinth", async ({

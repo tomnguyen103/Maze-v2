@@ -58,8 +58,9 @@ import {
   renderQuestAtlasSummary
 } from "./game/quest-atlas-view.js";
 import { loadRunRecords, saveRunRecord } from "./game/storage.js";
+import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
-import { isLearningMetadata } from "./questions/learning-objectives.js";
+import { normalizeQuestion } from "./questions/question-contract.js";
 import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
@@ -260,6 +261,8 @@ let runActionLogOverflowed = false;
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
+let authenticationObserved = false;
+let authenticatedUserId = "";
 /** @type {QuestContinuityController | null} */
 let questContinuityController = null;
 /** @type {Promise<QuestContinuityController | null> | null} */
@@ -1133,6 +1136,13 @@ function reportActiveRunRecoveryUnavailable(force = false) {
   activeRunRecoveryUnavailableReported = true;
   const message =
     "Campfire Resume is unavailable for this Run. Current-tab play continues.";
+  announce(message);
+  showEvent(message);
+}
+
+function reportActiveRunRecoveryScrubFailed() {
+  const message =
+    "This device could not erase the old Quest checkpoint. Clear this site's data before another player uses this device.";
   announce(message);
   showEvent(message);
 }
@@ -2150,6 +2160,15 @@ function handleAuthenticationChange(signedIn) {
     renderDailyBoardParticipation();
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
+  if (
+    authenticationObserved &&
+    authenticatedUserId &&
+    authenticatedUserId !== (userId ?? "")
+  ) {
+    clearActiveRunRecoveryForIdentityChange();
+  }
+  authenticationObserved = true;
+  authenticatedUserId = userId ?? "";
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
       ?.then((view) => view.replaceSavedSettings(record.settings))
@@ -2162,6 +2181,20 @@ function handleAuthenticationChange(signedIn) {
     controller.setAuthenticated(userId);
     return userId ? controller.retry(loadQuestProgress()) : false;
   });
+}
+
+function clearActiveRunRecoveryForIdentityChange() {
+  if (!activeRunRecoveryController) {
+    if (scrubActiveRunRecovery()) {
+      return;
+    }
+    reportActiveRunRecoveryScrubFailed();
+    return;
+  }
+  const result = activeRunRecoveryController.clear();
+  if (result.status === "unavailable") {
+    reportActiveRunRecoveryScrubFailed();
+  }
 }
 
 /**
@@ -2703,10 +2736,7 @@ async function loadChallengeQuestion() {
         throw new Error("Question service unavailable.");
       }
       const payload = await response.json();
-      if (!isClientQuestion(payload.question)) {
-        throw new Error("Question service returned an invalid card.");
-      }
-      question = payload.question;
+      question = normalizeQuestion(payload.question);
       source = payload.source;
     } catch {
       question = getBundledQuestion(request);
@@ -2771,31 +2801,6 @@ function questionRequestIdentifier(request) {
     request.labyrinthNumber,
     request.questionOrdinal
   ].join(":");
-}
-
-/** @param {unknown} value */
-function isClientQuestion(value) {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const question = /** @type {Record<string, unknown>} */ (value);
-  return (
-    typeof question.id === "string" &&
-    typeof question.prompt === "string" &&
-    typeof question.answerId === "string" &&
-    typeof question.hint === "string" &&
-    typeof question.explanation === "string" &&
-    typeof question.difficultyBand === "string" &&
-    typeof question.difficultyRank === "number" &&
-    typeof question.topicId === "string" &&
-    typeof question.learningObjectiveId === "string" &&
-    isLearningMetadata(
-      question.topicId,
-      question.learningObjectiveId
-    ) &&
-    Array.isArray(question.choices) &&
-    question.choices.length === 3
-  );
 }
 
 function updateInterface() {

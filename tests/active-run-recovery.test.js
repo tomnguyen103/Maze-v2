@@ -17,6 +17,14 @@ import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
  *   setItem: (key: string, value: string) => unknown,
  *   removeItem: (key: string) => unknown
  * }} StorageLike
+ * @typedef {{
+ *   version: 2,
+ *   runId: string,
+ *   pending: false,
+ *   seed: string,
+ *   levelId: "bright-start" | "trail-scout" | "maze-master",
+ *   labyrinthNumber: number
+ * }} RecoveryLocator
  * @typedef {ReturnType<typeof createActiveRunRecoveryController>} RecoveryController
  */
 
@@ -27,6 +35,11 @@ const LOCATOR = Object.freeze({
   seed: "CAMPFIRE-17",
   levelId: "bright-start",
   labyrinthNumber: 1
+});
+const GATE_LOCATOR = Object.freeze({
+  ...LOCATOR,
+  runId: "run_recovery_gate_123",
+  labyrinthNumber: 4
 });
 
 /** @returns {StorageLike & { readonly writes: number, readonly removals: number }} */
@@ -58,10 +71,11 @@ function createMemoryStorage() {
   };
 }
 
-function initialRun() {
+/** @param {RecoveryLocator} [locator] */
+function initialRun(locator = LOCATOR) {
   return createRun(
-    LOCATOR.seed,
-    getLabyrinthConfig(LOCATOR.levelId, LOCATOR.labyrinthNumber)
+    locator.seed,
+    getLabyrinthConfig(locator.levelId, locator.labyrinthNumber)
   );
 }
 
@@ -183,9 +197,12 @@ function pathTo(run, goal) {
   return path;
 }
 
-/** @param {RecoveryController} controller */
-function reachChallenge(controller) {
-  let run = initialRun();
+/**
+ * @param {RecoveryController} controller
+ * @param {RecoveryLocator} [locator]
+ */
+function reachChallenge(controller, locator = LOCATOR) {
+  let run = initialRun(locator);
   for (let step = 0; step < 800 && run.status !== "challenge"; step += 1) {
     const target =
       run.echoes.find((echo) => !echo.collected) ?? run.gate;
@@ -202,6 +219,71 @@ function reachChallenge(controller) {
     throw new Error("Recovery fixture did not reach a Warden.");
   }
   return run;
+}
+
+/**
+ * @param {StorageLike} storage
+ * @param {ReturnType<typeof createRun>} expected
+ */
+function expectRecoveredState(storage, expected) {
+  const recovered = createActiveRunRecoveryController({
+    storage
+  }).load(LOCATOR);
+  expect(recovered.status).toBe("recovered");
+  if (!recovered.run) {
+    throw new Error("Expected a recovered Run.");
+  }
+  expect(comparableState(recovered.run)).toEqual(
+    comparableState(expected)
+  );
+  expect(recovered.run?.status).toBe(
+    expected.status === "active" ? "paused" : expected.status
+  );
+}
+
+/** @param {RecoveryController} controller */
+function reachGateWardenChallenge(controller) {
+  let run = initialRun(GATE_LOCATOR);
+  let questionOrdinal = 0;
+  for (let step = 0; step < 2000; step += 1) {
+    if (
+      run.status === "challenge" &&
+      run.challenge?.kind === "gate-warden"
+    ) {
+      return run;
+    }
+    if (run.status === "challenge" && run.challenge) {
+      const question = getBundledQuestion({
+        levelId: GATE_LOCATOR.levelId,
+        seed: run.seed,
+        wardenId: run.challenge.wardenId,
+        attempt: run.challenge.attempt,
+        labyrinthNumber: GATE_LOCATOR.labyrinthNumber,
+        questionOrdinal
+      });
+      questionOrdinal += 1;
+      ({ run } = durableTransition(controller, run, {
+        type: "provide-question",
+        question
+      }));
+      ({ run } = durableTransition(controller, run, {
+        type: "answer-question",
+        answerId: question.answerId
+      }));
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a path toward the Gate Warden.");
+    }
+    ({ run } = durableTransition(controller, run, {
+      type: "move",
+      direction
+    }));
+  }
+  throw new Error("Recovery fixture did not reach the Gate Warden.");
 }
 
 describe("Active Run Recovery", () => {
@@ -288,6 +370,147 @@ describe("Active Run Recovery", () => {
     expect(comparableState(recovered.run)).toEqual(comparableState(run));
     expect(storage.getItem(ACTIVE_RUN_RECOVERY_KEY)).toContain(
       question.prompt
+    );
+  });
+
+  it("reconstructs wrong answers, replacements, both Skips, and Warden defeat", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(LOCATOR);
+    let run = reachChallenge(controller);
+    const initialVitality = run.explorer.vitality;
+
+    const wrongQuestion = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 0
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question: wrongQuestion
+    }));
+    const wrongAnswerId = wrongQuestion.choices.find(
+      (choice) => choice.id !== wrongQuestion.answerId
+    )?.id;
+    if (!wrongAnswerId) {
+      throw new Error("Expected an incorrect reviewed option.");
+    }
+    ({ run } = durableTransition(controller, run, {
+      type: "answer-question",
+      answerId: wrongAnswerId
+    }));
+    expect(run.challenge?.feedback?.kind).toBe("wrong");
+    expect(run.challenge?.question).toBeNull();
+    expect(run.explorer.vitality).toBe(initialVitality - 1);
+    expectRecoveredState(storage, run);
+
+    const freeSkipQuestion = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 1
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question: freeSkipQuestion
+    }));
+    ({ run } = durableTransition(controller, run, {
+      type: "skip-question"
+    }));
+    expect(run.challenge?.feedback?.kind).toBe("skipped");
+    expect(run.freeQuestionSkipAvailable).toBe(false);
+    expect(run.explorer.vitality).toBe(initialVitality - 1);
+    expectRecoveredState(storage, run);
+
+    const paidSkipQuestion = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 2
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question: paidSkipQuestion
+    }));
+    ({ run } = durableTransition(controller, run, {
+      type: "skip-question"
+    }));
+    expect(run.challenge?.feedback?.kind).toBe("skipped");
+    expect(run.explorer.vitality).toBe(initialVitality - 2);
+    expectRecoveredState(storage, run);
+
+    const correctQuestion = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 3
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question: correctQuestion
+    }));
+    ({ run } = durableTransition(controller, run, {
+      type: "answer-question",
+      answerId: correctQuestion.answerId
+    }));
+    expect(run.status).toBe("active");
+    expect(run.wardensDefeated).toBe(1);
+    expectRecoveredState(storage, run);
+
+    const serialized =
+      storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "";
+    expect(serialized).toContain(wrongAnswerId);
+    expect(serialized).toContain(wrongQuestion.prompt);
+    expect(serialized).toContain(correctQuestion.answerId);
+    expect(serialized).not.toMatch(
+      /account|analytics|email|providerDebug|userAuthored/i
+    );
+  });
+
+  it("reconstructs the Gate Warden seal and defeat state", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(GATE_LOCATOR);
+    let run = reachGateWardenChallenge(controller);
+    expect(run.challenge?.kind).toBe("gate-warden");
+    expect(run.gateWarden?.defeated).toBe(false);
+
+    const question = getBundledQuestion({
+      levelId: GATE_LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      attempt: run.challenge?.attempt ?? 0,
+      labyrinthNumber: GATE_LOCATOR.labyrinthNumber,
+      questionOrdinal: 40,
+      challengeKind: "gate-warden"
+    });
+    ({ run } = durableTransition(controller, run, {
+      type: "provide-question",
+      question
+    }));
+    ({ run } = durableTransition(controller, run, {
+      type: "answer-question",
+      answerId: question.answerId
+    }));
+
+    expect(run.gateWarden?.defeated).toBe(true);
+    expect(run.gate.sealed).toBe(false);
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(GATE_LOCATOR);
+    expect(recovered.status).toBe("recovered");
+    if (!recovered.run) {
+      throw new Error("Expected a recovered Gate Warden Run.");
+    }
+    expect(recovered.run?.gateWarden).toEqual(run.gateWarden);
+    expect(recovered.run?.gate).toEqual(run.gate);
+    expect(comparableState(recovered.run)).toEqual(
+      comparableState(run)
     );
   });
 
@@ -538,6 +761,56 @@ describe("Active Run Recovery", () => {
       reason: "storage"
     });
     expect(deniedStorage.getItem()).toBe(stored);
+  });
+
+  it("scrubs Challenge content when deletion is denied but overwrite works", () => {
+    const storage = createMemoryStorage();
+    const writer = createActiveRunRecoveryController({ storage });
+    writer.begin(LOCATOR);
+    let run = reachChallenge(writer);
+    const question = getBundledQuestion({
+      levelId: LOCATOR.levelId,
+      seed: run.seed,
+      wardenId: run.challenge?.wardenId ?? 0,
+      labyrinthNumber: LOCATOR.labyrinthNumber,
+      questionOrdinal: 8
+    });
+    ({ run } = durableTransition(writer, run, {
+      type: "provide-question",
+      question
+    }));
+    const wrongAnswerId = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    )?.id;
+    if (!wrongAnswerId) {
+      throw new Error("Expected a reviewed wrong answer.");
+    }
+    durableTransition(writer, run, {
+      type: "answer-question",
+      answerId: wrongAnswerId
+    });
+    let stored = storage.getItem(ACTIVE_RUN_RECOVERY_KEY);
+    const removeDeniedStorage = {
+      getItem() {
+        return stored;
+      },
+      /** @param {string} _key @param {string} value */
+      setItem(_key, value) {
+        stored = value;
+      },
+      removeItem() {
+        throw new Error("deletion denied");
+      }
+    };
+    const controller = createActiveRunRecoveryController({
+      storage: removeDeniedStorage
+    });
+    expect(controller.load(LOCATOR).status).toBe("recovered");
+
+    expect(controller.clear()).toEqual({ status: "cleared" });
+    expect(stored).toBe("");
+    expect(stored).not.toContain(question.prompt);
+    expect(stored).not.toContain(wrongAnswerId);
   });
 
   it("treats a denied global storage getter as unavailable", () => {
