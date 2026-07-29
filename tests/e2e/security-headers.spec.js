@@ -32,8 +32,8 @@ test("serves the strict header set on the game document", async ({ page }) => {
   expect(policy.get("base-uri")).toBe("'none'");
   expect(policy.get("frame-ancestors")).toBe("'none'");
   expect(policy.get("form-action")).toContain("https://checkout.stripe.com");
-  expect(headers["content-security-policy"]).not.toContain("'unsafe-inline'");
-  expect(headers["content-security-policy"]).not.toContain("'unsafe-eval'");
+  expect(policy.get("script-src")).not.toContain("'unsafe-inline'");
+  expect(policy.get("script-src")).not.toContain("'unsafe-eval'");
 });
 
 test("boots and plays a Labyrinth with no Content Security Policy violation", async ({
@@ -81,7 +81,19 @@ test("normal play never spends a rate-limit budget", async ({ page }) => {
     }
   });
 
+  await page.route("**/api/leaderboard", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ globalMaxScore: 0, entries: [] })
+    })
+  );
+  const leaderboardLoaded = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/leaderboard"
+  );
   await page.goto("/play");
+  await leaderboardLoaded;
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {

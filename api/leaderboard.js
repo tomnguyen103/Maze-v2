@@ -3,6 +3,7 @@ import { createPlayerApi } from "../server/player-api.js";
 const handler = createPlayerApi();
 
 const HEALTH_ROUTES = new Set(["health", "ready"]);
+const DAILY_ROUTES = new Set(["leaderboard", "scores"]);
 
 /**
  * Also hosts `/api/health` and `/api/ready` via vercel.json rewrites: the
@@ -16,6 +17,16 @@ const HEALTH_ROUTES = new Set(["health", "ready"]);
  */
 export default function leaderboard(request, response) {
   const url = new URL(request.url ?? "", "http://local");
+  const dailyRoute = url.searchParams.get("_dailyRoute");
+  if (dailyRoute !== null) {
+    if (!DAILY_ROUTES.has(dailyRoute)) {
+      response.statusCode = 404;
+      response.setHeader("content-type", "application/json; charset=utf-8");
+      response.end(JSON.stringify({ error: "Unknown Daily route." }));
+      return undefined;
+    }
+    request.url = `/api/daily/${dailyRoute}`;
+  }
   const healthRoute = url.searchParams.get("_healthRoute");
   if (healthRoute !== null) {
     if (!HEALTH_ROUTES.has(healthRoute)) {

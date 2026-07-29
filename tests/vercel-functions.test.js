@@ -40,9 +40,54 @@ describe("Vercel function budget", () => {
         {
           source: "/api/admin/:adminPath*",
           destination: "/api/admin?_adminPath=:adminPath*"
+        },
+        {
+          source: "/api/daily/leaderboard",
+          destination: "/api/leaderboard?_dailyRoute=leaderboard"
+        },
+        {
+          source: "/api/daily/scores",
+          destination: "/api/leaderboard?_dailyRoute=scores"
         }
       ])
     );
+  });
+
+  it("routes the verified Daily namespace through the leaderboard function", async () => {
+    for (const [incoming, expectedUrl, expectedStatus] of [
+      [
+        "/api/leaderboard?_dailyRoute=leaderboard",
+        "/api/daily/leaderboard",
+        200
+      ],
+      [
+        "/api/leaderboard?_dailyRoute=../secret",
+        "/api/leaderboard?_dailyRoute=../secret",
+        404
+      ]
+    ]) {
+      const request = /** @type {import("node:http").IncomingMessage} */ (
+        /** @type {unknown} */ ({ method: "GET", url: incoming, headers: {} })
+      );
+      /** @type {(status: number) => void} */
+      let settle = () => {};
+      const finished = new Promise((resolve) => {
+        settle = resolve;
+      });
+      const response = /** @type {import("node:http").ServerResponse} */ (
+        /** @type {unknown} */ ({
+          statusCode: 0,
+          setHeader() {},
+          on() {},
+          end() {
+            settle(response.statusCode);
+          }
+        })
+      );
+      await leaderboard(request, response);
+      expect(request.url).toBe(expectedUrl);
+      await expect(finished).resolves.toBe(expectedStatus);
+    }
   });
 
   it("normalizes every admin path, including a bare /api/admin", async () => {

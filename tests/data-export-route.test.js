@@ -46,7 +46,7 @@ function makeHandler(overrides = {}) {
   const recordAudit = vi.fn(() => Promise.resolve());
   const exportUser = vi.fn(() =>
     Promise.resolve({
-      schema: "echo-maze-export/2",
+      schema: "echo-maze-export/3",
       generated_at: "2026-07-27T00:00:00.000Z",
       data: {}
     })
@@ -127,7 +127,7 @@ describe("GET /api/me/export", () => {
       "echo-maze-export"
     );
     expect(response.headers["cache-control"]).toBe("no-store");
-    expect(response.json().schema).toBe("echo-maze-export/2");
+    expect(response.json().schema).toBe("echo-maze-export/3");
     expect(recordAudit).toHaveBeenCalledWith(request, {
       actorId: "user_export_1",
       action: "export.self",

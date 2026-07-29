@@ -18,6 +18,8 @@ give the account holder both halves of their data rights.
 | Explorer Access Settings | `explorer_access_settings` | four presentation-only booleans + optimistic revision |
 | Classroom Memberships | `classroom_memberships` | Clerk membership id, Classroom id, and Teacher/Student role |
 | Classroom Progress Counts | `classroom_progress_counts` | per-Student/per-objective correct, wrong, Hint, Skip, and total counts only |
+| Verified Daily Submissions | `verified_daily_submissions` | current-UTC date, idempotency key, and server-replayed bounded result facts; no action log or Question text |
+| Verified Daily Best | `verified_daily_entries` | one best replay-verified result per Explorer/date; public API exposes username, rank, score, and Moves only |
 
 Guests keep Explorer Access Settings only on their device. Signed-in Explorers
 sync the same four presentation-only choices to their profile. They never enter
@@ -30,7 +32,7 @@ Run, Quest, score, Question, or shared-link state.
 - Returns a versioned envelope conforming to the checked-in contract
   `shared/export-schema.json` (structurally pinned by unit test — the schema
   file itself documents per-section constraints for external consumers):
-  `{ "schema": "echo-maze-export/2", "generated_at": …, "data": { … } }`,
+  `{ "schema": "echo-maze-export/3", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows. Classroom Memberships and Personal/Class Play
@@ -45,6 +47,10 @@ Run, Quest, score, Question, or shared-link state.
   one, so a stolen admin session is the threat the audit trail is there for.
 - Score Entries include `classroom_id`: null means Personal Play and a Clerk
   Organization id means Class Play.
+- `verified_daily_results` contains every replay-derived Daily submission,
+  its stable response classification, and verification time.
+  `verified_daily_best_results` separately identifies each date's current best
+  result and achievement time. Client idempotency keys are excluded from both.
 - A Teacher can read only the count projection for a selected Classroom where
   the database-authoritative Membership role is Teacher. The projection has no
   prompt, answer, Question timestamp, or raw Journal JSON. Students and
@@ -61,6 +67,8 @@ stays idempotent. Deletion then export yields empty sections — the export
 endpoint deliberately does not error for a deleted or empty account.
 The deletion transaction explicitly removes and verifies the signed-in
 Explorer Access Settings and Classroom Membership records.
+Verified Daily submissions and best rows cascade from the deleted Player
+Profile and are included in the deletion verification.
 Removing one Classroom Membership also removes that Explorer's Quest Progress
 and Lantern Journal for that Classroom. Its derived progress counts cascade
 with the Membership. Personal Play remains.

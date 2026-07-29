@@ -27,9 +27,10 @@ remote `main`.
 | Lantern Journal and Practice Lantern | Journal/learning-objective/continuity tests and browser passage | Clear, sync, non-repeat, no gameplay effect | Pass - integrated closure candidate |
 | Explorer Access Settings | Settings adapter/view tests and browser passage | 390 px, 200% text, reduced motion, persistence/reset | Pass - integrated closure candidate |
 | Daily Shared Labyrinth | Daily contract/storage tests and `tests/e2e/daily.spec.js` | Desktop, mobile, UTC rollover, expired link, Quest isolation | Pass - integrated closure candidate |
+| Verified Daily replay and board | Run Action Log, replay verifier, migration, store, route, client/controller, and `tests/e2e/daily.spec.js` | Signed-in created/improved/unchanged, Guest, loading, empty, rejected, network, unavailable, keyboard, reduced motion, 200% text, desktop/mobile | Pass - PR #94 engineering candidate; live migration remains external |
 | Account deletion | Signed Clerk webhook, deletion-store, and migration tests | Retry-safe transactional cascade | Pass - integrated closure candidate |
 | Billing disable and rollback | Access-config tests and `docs/lifetime-membership-operations.md` | Desktop/mobile starts, entitlement preserved, webhook retained | Pass - integrated closure candidate |
-| Explorer Access Settings profile sync | Settings adapter/controller/route/store and export/deletion tests | Guest local-only, signed-in optimistic sync, conflict, device change | Pass - export schema `echo-maze-export/2` approved |
+| Explorer Access Settings profile sync | Settings adapter/controller/route/store and export/deletion tests | Guest local-only, signed-in optimistic sync, conflict, device change | Pass - export schema `echo-maze-export/3` approved |
 | Audit ownership and immutable checkpoints | Migration, append-function, checkpoint adapter, chain verifier, and operations-contract tests | Non-owner runtime, create-only checkpoints, retained-anchor verification | Pass - adapter configured for `<immutable sink/bucket>`; live sink provisioning remains external |
 | Classroom authority and Class Play isolation | Authority, tenant-context, RLS, route/store/controller tests plus `tests/e2e/classroom.spec.js` | Signed-out, empty, Student, Teacher, loading, stale, error; desktop/mobile/200%/keyboard/reduced motion | Pass - live PostgreSQL cross-Class denial and count-only Teacher read |
 
@@ -64,6 +65,22 @@ Final integrated closure-candidate evidence:
 - Shared styles: 10.21 KB gzip / 12 KB
 - Admin JavaScript: 5.78 KB gzip / 20 KB
 - Optional Clerk boundary: 544.21 KB gzip / 600 KB
+
+PR #94 adds a later verified-Daily candidate. Its pre-review evidence is:
+
+- Node 22.23.1 `npm run check:full`: 105 test files passed, 7 skipped; 937
+  tests passed, 16 intentional environment skips; full Playwright desktop and
+  mobile matrix passed 127 tests with 13 intentional skips
+- Daily browser coverage: signed-in created/improved/unchanged,
+  rejected submission, Guest, loading, empty, retry, unavailable, UTC
+  rollover, 200-percent text, desktop, and mobile
+- bundle gate: landing 7.56/8 KB, game 28.57/30 KB, shared styles 10.41/12 KB,
+  optional Clerk 544.21/600 KB, and admin 5.78/20 KB gzip
+- visually reviewed `verified-daily-desktop.png` and
+  `verified-daily-mobile.png`
+- Hallmark component-scope slop audit passed without changing locked tokens or
+  page macrostructure
+- Actions API remained `enabled=false`
 
 ## Operational drills
 
@@ -123,7 +140,9 @@ These are external production decisions, not unfinished engineering:
 - creation and approval of a live one-time Stripe Product and `$5.99 USD`
   Price;
 - authorization to enable production enforcement; and
-- authorization for a live purchase-and-refund smoke test.
+- authorization for a live purchase-and-refund smoke test; and
+- operator application of additive migration
+  `db/migrations/0018_verified_daily_entries.sql` to the live database.
 
 They remain deferred with production enforcement off. Stripe test-mode proof
 is required and does not perform a live charge.

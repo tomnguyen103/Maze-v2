@@ -20,6 +20,10 @@ import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
  *   explorerPalette: string,
  *   playgroundPalette: string
  * }} PlayerProfile
+ * @typedef {{
+ *   clerkBrowser: ReturnType<typeof createClerkBrowser>,
+ *   client: ReturnType<typeof createPlayerApiClient>
+ * }} PlayerDependencies
  */
 
 /**
@@ -36,6 +40,7 @@ export function createPlayerController({
   onJournalChange = () => {},
   onJournalStatusChange = () => {}
 } = {}) {
+  const injectedDependencies = readE2ePlayerDependencies();
   const elements = {
     auth: requiredElement("player-auth-button", HTMLButtonElement),
     close: requiredElement("player-close", HTMLButtonElement),
@@ -56,21 +61,25 @@ export function createPlayerController({
     signOut: requiredElement("player-sign-out", HTMLButtonElement),
     username: requiredElement("player-username", HTMLInputElement)
   };
-  const clerkBrowser = createClerkBrowser({
-    onChange: () => {
-      onAuthenticationChange(Boolean(clerkBrowser.user));
-      void syncAuthenticatedPlayer();
-    }
-  });
+  const clerkBrowser =
+    injectedDependencies?.clerkBrowser ??
+    createClerkBrowser({
+      onChange: () => {
+        onAuthenticationChange(Boolean(clerkBrowser.user));
+        void syncAuthenticatedPlayer();
+      }
+    });
   let clerkAvailable = false;
   /** @type {Parameters<typeof reducePlayerState>[0]} */
   let playerState = { ...INITIAL_PLAYER_STATE };
   let score = 0;
-  const client = createPlayerApiClient({
-    getToken: clerkBrowser.getToken,
-    getClassroomId: () =>
-      loadSelectedClassroom(globalThis.localStorage, clerkBrowser.user?.id)
-  });
+  const client =
+    injectedDependencies?.client ??
+    createPlayerApiClient({
+      getToken: clerkBrowser.getToken,
+      getClassroomId: () =>
+        loadSelectedClassroom(globalThis.localStorage, clerkBrowser.user?.id)
+    });
   const journalContinuity = createJournalContinuity({
     client,
     onChange: onJournalChange,
@@ -90,6 +99,9 @@ export function createPlayerController({
     },
     async getRunAccess() {
       return client.getRunAccess();
+    },
+    async getVerifiedDailyLeaderboard() {
+      return client.getVerifiedDailyLeaderboard();
     },
     async getCloudQuestProgress() {
       await clerkBrowser.initialize();
@@ -198,6 +210,50 @@ export function createPlayerController({
         await refreshLeaderboard();
       } catch (error) {
         setFormStatus(errorMessage(error), "error");
+      }
+    },
+    /** @param {Record<string, unknown>} submission */
+    async submitVerifiedDaily(submission) {
+      await clerkBrowser.initialize();
+      if (!clerkBrowser.user) {
+        return { state: "signed-out" };
+      }
+      try {
+        if (!playerState.profile) {
+          const result = await client.getProfile();
+          if (!result.profile) {
+            return { state: "profile-required" };
+          }
+          playerState = reducePlayerState(playerState, {
+            type: "profile-loaded",
+            profile: result.profile
+          });
+          setPalettes(result.profile);
+          fillProfileForm(result.profile);
+          renderAuth();
+        }
+        return {
+          state: "verified",
+          ...(await client.submitVerifiedDaily(submission))
+        };
+      } catch (error) {
+        const status =
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          typeof error.status === "number"
+            ? error.status
+            : 0;
+        return {
+          state: status === 401
+            ? "signed-out"
+            : status === 400 || status === 409
+              ? "rejected"
+              : status === 0
+                ? "network-failure"
+                : "unavailable",
+          message: errorMessage(error)
+        };
       }
     }
   };
@@ -443,6 +499,21 @@ export function createPlayerController({
         ? "No escaped runs yet. The first Gate is waiting."
         : `${entries.length} ${entries.length === 1 ? "Explorer" : "Explorers"} ranked.`;
   }
+}
+
+/** @returns {PlayerDependencies | null} */
+function readE2ePlayerDependencies() {
+  if (import.meta.env.VITE_ENABLE_E2E_PLAYER_DEPENDENCIES !== "true") {
+    return null;
+  }
+  const dependencies = Reflect.get(
+    globalThis,
+    "__echoMazePlayerDependencies"
+  );
+  if (!dependencies || typeof dependencies !== "object") {
+    return null;
+  }
+  return /** @type {PlayerDependencies} */ (dependencies);
 }
 
 /** @param {unknown} error */

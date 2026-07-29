@@ -242,6 +242,13 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
 });
 
 test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
+  await page.route("**/api/leaderboard", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ globalMaxScore: 0, entries: [] })
+    })
+  );
   /** @type {string[]} */
   const pageErrors = [];
   /** @type {string[]} */

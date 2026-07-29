@@ -27,6 +27,11 @@ import {
   normalizeSeed
 } from "./game/game-session.js";
 import {
+  createRunActionLog,
+  tryAppendRunAction
+} from "./game/run-action-log.js";
+import { createVerifiedDailySubmission } from "./player/daily-submission.js";
+import {
   createRunAccessId,
   isAdmittedRunResume,
   runLocatorMatches,
@@ -98,6 +103,11 @@ const elements = {
   challengeSource: requiredElement("challenge-source", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
   dailyButton: requiredElement("daily-button", HTMLButtonElement),
+  dailyBoardDate: requiredElement("daily-board-date", HTMLElement),
+  dailyBoardList: requiredElement("daily-board-list", HTMLOListElement),
+  dailyBoardNote: requiredElement("daily-board-note", HTMLElement),
+  dailyBoardRetry: requiredElement("daily-board-retry", HTMLButtonElement),
+  dailyBoardStatus: requiredElement("daily-board-status", HTMLElement),
   dailyClose: requiredElement("daily-close", HTMLButtonElement),
   dailyCopy: requiredElement("daily-copy", HTMLButtonElement),
   dailyDate: requiredElement("daily-date", HTMLElement),
@@ -232,6 +242,8 @@ let run = createRun(
   normalizedLocationSeed ?? activeRunLocator?.seed ?? createSeed(),
   getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
 );
+let runActionLog = createRunActionLog();
+let runActionLogOverflowed = false;
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
@@ -300,6 +312,7 @@ let hintVisible = false;
 /** @type {ReturnType<typeof createDailyContract> | null} */
 let activeDaily = null;
 let dailyQuestionIndex = 0;
+let dailyBoardRequestId = 0;
 let demoAccessPending = hasCompletedGuestDemo();
 let completedQuestIdle = false;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
@@ -402,6 +415,11 @@ elements.dailyStart.addEventListener("click", () => {
 });
 elements.dailyCopy.addEventListener("click", async () => {
   await copyDailyLink(elements.dailyCopy);
+});
+elements.dailyBoardRetry.addEventListener("click", () => {
+  void refreshVerifiedDailyBoard(
+    createDailyContract(elements.dailyBoardDate.textContent ?? utcDateKey())
+  );
 });
 elements.dailyReturn.addEventListener("click", returnToQuest);
 elements.levelCards.addEventListener("click", async (event) => {
@@ -1035,6 +1053,8 @@ function startRun(locator, daily = null) {
     locator.seed,
     getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
   );
+  runActionLog = createRunActionLog();
+  runActionLogOverflowed = false;
   if (!daily) {
     const fingerprint = labyrinthFingerprint(run);
     if (!questProgress.usedMapFingerprints.includes(fingerprint)) {
@@ -1170,6 +1190,7 @@ function openDailyDialog() {
   }
   const record = loadDailyRecord(currentDaily.date);
   elements.dailyDate.textContent = `${currentDaily.date} UTC`;
+  elements.dailyBoardDate.textContent = currentDaily.date;
   elements.dailyRecord.textContent = record?.completed
     ? `Personal Best ${formatTime(record.bestElapsedMs ?? 0)} · ${record.bestMoves} moves. Stored only on this device.`
     : "No Daily escape recorded today. Results stay only on this device.";
@@ -1191,12 +1212,88 @@ function openDailyDialog() {
     : "Start today’s Daily";
   elements.dailyClose.textContent =
     expiredRequest || expiredActive ? "Return to Quest" : "Close";
+  renderDailyBoardParticipation();
+  void refreshVerifiedDailyBoard(currentDaily);
   if (!elements.dailyDialog.open) {
     elements.dailyDialog.showModal();
   }
   requestAnimationFrame(() => {
     elements.dailyTitle?.focus?.({ preventScroll: true });
   });
+}
+
+function renderDailyBoardParticipation() {
+  elements.dailyBoardNote.textContent = playerController.hasAuthenticatedUser()
+    ? "Signed-in escapes with a saved username are checked by replay before they join this board."
+    : "Guest Daily stays casual. Sign in and create a username to join the verified board.";
+}
+
+/** @param {ReturnType<typeof createDailyContract>} daily */
+async function refreshVerifiedDailyBoard(daily) {
+  const requestId = ++dailyBoardRequestId;
+  elements.dailyBoardList.replaceChildren();
+  elements.dailyBoardRetry.hidden = true;
+  elements.dailyBoardStatus.dataset.state = "loading";
+  elements.dailyBoardStatus.textContent = "Loading verified escapes…";
+  try {
+    const result = await playerController.getVerifiedDailyLeaderboard();
+    if (
+      requestId !== dailyBoardRequestId ||
+      elements.dailyBoardDate.textContent !== daily.date
+    ) {
+      return;
+    }
+    if (result.date !== daily.date) {
+      elements.dailyBoardStatus.dataset.state = "error";
+      elements.dailyBoardStatus.textContent =
+        "Verified Daily Board date changed. Reopen Daily to see the current board.";
+      return;
+    }
+    const entries = Array.isArray(result.entries) ? result.entries : [];
+    renderVerifiedDailyEntries(entries);
+  } catch (error) {
+    if (
+      requestId !== dailyBoardRequestId ||
+      elements.dailyBoardDate.textContent !== daily.date
+    ) {
+      return;
+    }
+    elements.dailyBoardList.replaceChildren();
+    elements.dailyBoardRetry.hidden = false;
+    elements.dailyBoardStatus.dataset.state = "error";
+    elements.dailyBoardStatus.textContent = errorStatus(error) === 0
+      ? "Network could not reach the Verified Daily Board. Local Daily play still works."
+      : "Verified Daily services are unavailable. Local Daily play still works.";
+  }
+}
+
+/** @param {Record<string, unknown>[]} entries */
+function renderVerifiedDailyEntries(entries) {
+  elements.dailyBoardList.replaceChildren(
+    ...entries.slice(0, 10).map((entry, index) => {
+      const item = document.createElement("li");
+      const rank = document.createElement("span");
+      const username = document.createElement("strong");
+      const score = document.createElement("span");
+      const moves = document.createElement("span");
+      rank.className = "daily-board__rank";
+      rank.textContent = `#${entry.rank ?? index + 1}`;
+      username.className = "daily-board__username";
+      username.textContent = String(entry.username ?? "Explorer");
+      score.className = "daily-board__score";
+      score.textContent = `${entry.score ?? 0} pts`;
+      moves.className = "daily-board__moves";
+      moves.textContent = `${entry.moves ?? 0} moves`;
+      item.append(rank, username, score, moves);
+      return item;
+    })
+  );
+  elements.dailyBoardStatus.dataset.state = entries.length === 0
+    ? "empty"
+    : "success";
+  elements.dailyBoardStatus.textContent = entries.length === 0
+    ? "No verified escapes yet. The first checked Gate is waiting."
+    : `${entries.length} verified ${entries.length === 1 ? "Explorer" : "Explorers"} ranked today.`;
 }
 
 function closeDailyDialog() {
@@ -1736,6 +1833,9 @@ function syncDemoAccountAction(signedIn) {
 /** @param {boolean} signedIn */
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
+  if (elements.dailyDialog.open) {
+    renderDailyBoardParticipation();
+  }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
@@ -2004,6 +2104,14 @@ function transition(action) {
   const previous = run;
   const previousWardenMode = summarizeWardenMode(previous);
   run = applyAction(run, action);
+  if (activeDaily && !runActionLogOverflowed) {
+    const nextLog = tryAppendRunAction(runActionLog, previous, action, run);
+    if (nextLog) {
+      runActionLog = nextLog;
+    } else {
+      runActionLogOverflowed = true;
+    }
+  }
   const eventType = run.event.type;
   const wardenMode = summarizeWardenMode(run);
   const eventChanged =
@@ -2587,6 +2695,92 @@ function finishDailyRun(daily, won) {
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
+  if (won) {
+    void submitVerifiedDailyRun(daily);
+  }
+}
+
+/** @param {ReturnType<typeof createDailyContract>} daily */
+async function submitVerifiedDailyRun(daily) {
+  const submittedLog = runActionLog;
+  const localKicker = elements.resultKicker.textContent ?? "";
+  const localSummary = elements.resultSummary.textContent ?? "";
+  const localRank = elements.resultRank.textContent ?? "";
+  if (runActionLogOverflowed) {
+    elements.resultKicker.textContent =
+      `${localKicker} · replay limit reached`;
+    elements.resultSummary.textContent =
+      `${localSummary} This long Run stayed playable, but its replay was too long for the verified board.`;
+    elements.resultRank.textContent = localRank;
+    announce("Daily replay limit reached. Your local result is unchanged.");
+    return;
+  }
+  const submission = createVerifiedDailySubmission(daily, submittedLog, run);
+  if (playerController.hasAuthenticatedUser()) {
+    elements.resultKicker.textContent = "Checking Daily replay";
+    elements.resultRank.textContent = "Checking";
+  }
+  const result = await playerController.submitVerifiedDaily(submission);
+  if (activeDaily?.date !== daily.date || runActionLog !== submittedLog) {
+    return;
+  }
+  if (result.state === "verified") {
+    elements.resultKicker.textContent =
+      `${localKicker} · verified replay`;
+    if (result.bestResult === "created") {
+      elements.resultSummary.textContent =
+        `${localSummary} Your first checked score joined today’s Verified Daily Board.`;
+      elements.resultRank.textContent = `${localRank} · Verified`;
+      announce("Daily escape verified. Your first entry joined the board.");
+    } else if (result.bestResult === "improved") {
+      elements.resultSummary.textContent =
+        `${localSummary} Your checked score improved today’s Verified Daily best.`;
+      elements.resultRank.textContent = `${localRank} · Verified`;
+      announce("Daily escape verified. Your board best improved.");
+    } else {
+      elements.resultSummary.textContent =
+        `${localSummary} Replay passed. Your existing Verified Daily best stays on the board.`;
+      elements.resultRank.textContent = `${localRank} · Verified`;
+      announce("Daily escape verified. Your existing board best remains.");
+    }
+    return;
+  }
+  elements.resultRank.textContent = localRank;
+  if (result.state === "signed-out") {
+    elements.resultKicker.textContent = `${localKicker} · sign in needed`;
+    elements.resultSummary.textContent =
+      `${localSummary} Sign in before a future escape can join the verified board.`;
+    announce("Daily result remains local. Sign in for future verified entries.");
+    return;
+  }
+  if (result.state === "profile-required") {
+    elements.resultKicker.textContent = `${localKicker} · username needed`;
+    elements.resultSummary.textContent =
+      `${localSummary} Create a username before a future escape can join the verified board.`;
+    announce("Daily result remains local. Create a username for future verified entries.");
+    return;
+  }
+  if (result.state === "rejected") {
+    elements.resultKicker.textContent = `${localKicker} · replay not verified`;
+    elements.resultSummary.textContent =
+      `${localSummary} This result did not pass the replay check. Local Daily play still works.`;
+    announce("Daily replay was not verified. Your local result is unchanged.");
+    return;
+  }
+  if (result.state === "network-failure") {
+    elements.resultKicker.textContent = `${localKicker} · replay not sent`;
+    elements.resultSummary.textContent =
+      `${localSummary} The network could not reach the verified board. Your local Daily result is unchanged.`;
+    announce("Network could not verify the Daily result. Local result unchanged.");
+    return;
+  }
+  if (result.state === "unavailable") {
+    elements.resultKicker.textContent =
+      `${localKicker} · verification unavailable`;
+    elements.resultSummary.textContent =
+      `${localSummary} The verified board could not be reached. Your local Daily result is unchanged.`;
+    announce("Verified Daily service unavailable. Local result unchanged.");
+  }
 }
 
 /** @param {number} now */
@@ -2667,6 +2861,16 @@ function announce(message) {
   requestAnimationFrame(() => {
     elements.liveRegion.textContent = message;
   });
+}
+
+/** @param {unknown} error */
+function errorStatus(error) {
+  return error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof error.status === "number"
+    ? error.status
+    : 0;
 }
 
 /** @param {number} elapsedMs */

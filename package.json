@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "vite build --mode e2e && playwright test",
     "build": "vite build",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "verify:audit": "node scripts/verify-audit-chain.mjs",

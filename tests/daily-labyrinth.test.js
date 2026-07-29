@@ -8,6 +8,8 @@ import {
   saveDailyResult,
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
+import { createRun } from "../src/game/game-session.js";
+import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 
 function createStorage() {
   /** @type {Map<string, string>} */
@@ -47,6 +49,28 @@ describe("Daily Shared Labyrinth", () => {
       createDailyContract("2026-07-27").questionStartOrdinal -
         daily.questionStartOrdinal
     ).toBe(64);
+  });
+
+  it("gives two clients the same maze and Question order for one UTC date", () => {
+    const firstDaily = createDailyContract("2026-07-26");
+    const secondDaily = createDailyContract("2026-07-26");
+    const firstRun = createRun(
+      firstDaily.seed,
+      getLabyrinthConfig(firstDaily.levelId, firstDaily.labyrinthNumber)
+    );
+    const secondRun = createRun(
+      secondDaily.seed,
+      getLabyrinthConfig(secondDaily.levelId, secondDaily.labyrinthNumber)
+    );
+    const firstQuestions = [0, 1, 2].map((index) =>
+      getDailyQuestion(firstDaily, index)
+    );
+    const secondQuestions = [0, 1, 2].map((index) =>
+      getDailyQuestion(secondDaily, index)
+    );
+
+    expect(firstRun).toEqual(secondRun);
+    expect(firstQuestions).toEqual(secondQuestions);
   });
 
   it("accepts only today's UTC link and explains every other date as expired", () => {

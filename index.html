@@ -403,8 +403,9 @@
         <button class="control-button" id="daily-close" type="button">Close</button>
       </div>
       <p class="dialog-intro" id="daily-intro">
-        A casual shared maze with the same reviewed Questions for everyone.
-        It never changes your Quest, Atlas, Run Access, or Global Scoreboard.
+        Everyone gets the same maze and reviewed Questions. Signed-in escapes
+        can join the Verified Daily Board after a server replay. Your Quest,
+        Atlas, Run Access, and Casual Global Scoreboard never change.
       </p>
       <div class="daily-contract" aria-label="Today’s Daily details">
         <span class="section-label">Today in UTC</span>
@@ -417,6 +418,39 @@
         instead of replaying an expired one.
       </p>
       <p class="daily-record" id="daily-record"></p>
+      <section
+        class="daily-board"
+        aria-labelledby="daily-board-title"
+        aria-describedby="daily-board-status daily-board-note"
+      >
+        <div class="daily-board__heading">
+          <h3 id="daily-board-title">Verified Daily Board</h3>
+          <span id="daily-board-date"></span>
+        </div>
+        <p
+          class="daily-board__status"
+          id="daily-board-status"
+          role="status"
+          aria-live="polite"
+          aria-label="Verified Daily Board status"
+        >
+          Loading verified escapes…
+        </p>
+        <ol
+          class="daily-board__list"
+          id="daily-board-list"
+          aria-label="Verified Daily Board"
+        ></ol>
+        <button
+          class="control-button daily-board__retry"
+          id="daily-board-retry"
+          type="button"
+          hidden
+        >
+          Retry verified board
+        </button>
+        <p class="daily-board__note" id="daily-board-note"></p>
+      </section>
       <div class="daily-dialog__actions">
         <button class="primary-button" id="daily-start" type="button">
           Start today’s Daily
@@ -620,12 +654,13 @@
       <div class="dialog-heading">
         <div>
           <span class="section-label">All Explorers</span>
-          <h2 id="scoreboard-title">Global Scoreboard</h2>
+          <h2 id="scoreboard-title">Casual Global Scoreboard</h2>
         </div>
         <button class="control-button" id="scoreboard-close" type="button">Close</button>
       </div>
       <p class="dialog-intro">
-        Each Explorer’s best escaped run. Warden 100 · Echo 50 · Escape 500.
+        Best escaped runs from the compatibility score path. These scores are
+        casual, not server-replayed. Warden 100 · Echo 50 · Escape 500.
       </p>
       <p class="scoreboard-status" id="scoreboard-status" role="status" aria-live="polite">
         Loading scores…

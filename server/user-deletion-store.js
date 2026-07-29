@@ -96,7 +96,15 @@ export function createUserDeletionStore(pool) {
               NOT EXISTS (
                 SELECT 1 FROM classroom_memberships
                 WHERE clerk_user_id = $1
-              ) AS memberships_deleted`,
+              ) AS memberships_deleted,
+              NOT EXISTS (
+                SELECT 1 FROM verified_daily_submissions
+                WHERE player_id = $1
+              ) AS verified_daily_submissions_deleted,
+              NOT EXISTS (
+                SELECT 1 FROM verified_daily_entries
+                WHERE player_id = $1
+              ) AS verified_daily_entries_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -125,7 +133,7 @@ function deletionVerified(row) {
   return Boolean(
     row &&
     typeof row === "object" &&
-    Object.values(row).length === 10 &&
+    Object.values(row).length === 12 &&
     Object.values(row).every((value) => value === true)
   );
 }

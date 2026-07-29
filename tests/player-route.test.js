@@ -97,6 +97,7 @@ describe("player API", () => {
 
       expect(response.status).toBe(200);
       expect(body.globalMaxScore).toBe(1200);
+      expect(body.verification).toBe("casual-v1");
       expect(body.entries[0]).not.toHaveProperty("userId");
     });
   });
@@ -211,6 +212,7 @@ describe("player API", () => {
       });
 
       expect(response.status).toBe(201);
+      expect((await response.json()).verification).toBe("casual-v1");
       expect(store.submittedRun).toMatchObject({
         userId: "user_123",
         classroomId: null,
