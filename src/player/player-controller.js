@@ -30,6 +30,7 @@ import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
  * @param {{
  *   onPaletteChange?: () => void,
  *   onAuthenticationChange?: (signedIn: boolean) => void,
+ *   onIdentityEnd?: () => void,
  *   onJournalChange?: (journal: ReturnType<typeof import("../learning/lantern-journal.js").createLanternJournal>) => void,
  *   onJournalStatusChange?: (message: string) => void
  * }} [options]
@@ -37,6 +38,7 @@ import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
 export function createPlayerController({
   onPaletteChange = () => {},
   onAuthenticationChange = () => {},
+  onIdentityEnd = () => {},
   onJournalChange = () => {},
   onJournalStatusChange = () => {}
 } = {}) {
@@ -280,6 +282,7 @@ export function createPlayerController({
     });
     elements.signOut.addEventListener("click", async () => {
       await clerkBrowser.signOut();
+      onIdentityEnd();
       playerState = reducePlayerState(playerState, {
         type: "auth-changed",
         userId: ""

@@ -18,12 +18,14 @@ import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
  *   removeItem: (key: string) => unknown
  * }} StorageLike
  * @typedef {{
- *   version: 2,
+ *   version: 2 | 3,
  *   runId: string,
  *   pending: false,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} RecoveryLocator
  * @typedef {ReturnType<typeof createActiveRunRecoveryController>} RecoveryController
  */
@@ -40,6 +42,16 @@ const GATE_LOCATOR = Object.freeze({
   ...LOCATOR,
   runId: "run_recovery_gate_123",
   labyrinthNumber: 4
+});
+const RULESET_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_rules_123",
+  pending: false,
+  seed: "CAMPFIRE-RULES-09",
+  levelId: "trail-scout",
+  labyrinthNumber: 9,
+  atlasRegionId: "capable",
+  rulesetRevision: "echo-bridges-v1"
 });
 
 /** @returns {StorageLike & { readonly writes: number, readonly removals: number }} */
@@ -75,7 +87,17 @@ function createMemoryStorage() {
 function initialRun(locator = LOCATOR) {
   return createRun(
     locator.seed,
-    getLabyrinthConfig(locator.levelId, locator.labyrinthNumber)
+    {
+      ...getLabyrinthConfig(locator.levelId, locator.labyrinthNumber),
+      ...(locator.atlasRegionId && locator.rulesetRevision
+        ? {
+            ruleset: {
+              atlasRegionId: locator.atlasRegionId,
+              revision: locator.rulesetRevision
+            }
+          }
+        : {})
+    }
   );
 }
 
@@ -287,6 +309,31 @@ function reachGateWardenChallenge(controller) {
 }
 
 describe("Active Run Recovery", () => {
+  it("preserves exact Region rules through recovery reconstruction", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(RULESET_LOCATOR);
+    const run = initialRun(RULESET_LOCATOR);
+    const transition = durableTransition(controller, run, {
+      type: "move",
+      direction: firstLegalDirection(run)
+    });
+
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(RULESET_LOCATOR);
+
+    expect(recovered.status).toBe("recovered");
+    expect(recovered.run?.ruleset).toEqual(run.ruleset);
+    expect(transition.run.ruleset).toEqual(run.ruleset);
+    expect(
+      JSON.parse(storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "{}").identity
+    ).toMatchObject({
+      atlasRegionId: "capable",
+      rulesetRevision: "echo-bridges-v1"
+    });
+  });
+
   it("restores acknowledged movement, Pulse state, and durable elapsed time exactly", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });

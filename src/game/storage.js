@@ -1,3 +1,5 @@
+import { normalizeRunRuleset } from "./run-ruleset.js";
+
 const BEST_RUN_KEY = "echo-maze:best-run:v1";
 const RUN_RECORDS_KEY = "echo-maze:run-records:v1";
 const RUN_RECORD_LIMIT = 5;
@@ -10,14 +12,18 @@ const RUN_RECORD_LIMIT = 5;
  *   echoesCollected: number,
  *   echoTotal?: number,
  *   labyrinthNumber?: number,
- *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master",
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} RunRecord
  * @typedef {BestRun & {
  *   outcome?: RunOutcome,
  *   echoesCollected?: number,
  *   echoTotal?: number,
  *   labyrinthNumber?: number,
- *   questLevelId?: "bright-start" | "trail-scout" | "maze-master"
+ *   questLevelId?: "bright-start" | "trail-scout" | "maze-master",
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} RunRecordCandidate
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -191,6 +197,21 @@ function normalizeRunRecord(value) {
     Number(candidate.labyrinthNumber) <= 20
       ? Number(candidate.labyrinthNumber)
       : undefined;
+  const hasRuleset =
+    candidate.atlasRegionId !== undefined ||
+    candidate.rulesetRevision !== undefined;
+  const ruleset = normalizeRunRuleset(
+    hasRuleset
+      ? {
+          atlasRegionId: candidate.atlasRegionId,
+          revision: candidate.rulesetRevision
+        }
+      : undefined,
+    labyrinthNumber ?? 1
+  );
+  if (!ruleset) {
+    return null;
+  }
   return {
     elapsedMs: value.elapsedMs,
     moves: value.moves,
@@ -199,7 +220,13 @@ function normalizeRunRecord(value) {
     echoesCollected,
     ...(candidate.echoTotal === undefined ? {} : { echoTotal }),
     ...(labyrinthNumber ? { labyrinthNumber } : {}),
-    ...(questLevelId ? { questLevelId } : {})
+    ...(questLevelId ? { questLevelId } : {}),
+    ...(hasRuleset
+      ? {
+          atlasRegionId: ruleset.atlasRegionId,
+          rulesetRevision: ruleset.revision
+        }
+      : {})
   };
 }
 
@@ -212,8 +239,19 @@ function rankRunRecords(records) {
   const bestByQuest = new Map();
 
   for (const record of records) {
+    const ruleset = normalizeRunRuleset(
+      record.atlasRegionId !== undefined ||
+        record.rulesetRevision !== undefined
+        ? {
+            atlasRegionId: record.atlasRegionId,
+            revision: record.rulesetRevision
+          }
+        : undefined,
+      record.labyrinthNumber ?? 1
+    );
     const questKey =
-      `${record.questLevelId ?? "trail-scout"}:${record.labyrinthNumber ?? 1}:${record.seed}`;
+      `${record.questLevelId ?? "trail-scout"}:${record.labyrinthNumber ?? 1}:` +
+      `${ruleset?.revision ?? "invalid"}:${record.seed}`;
     const current = bestByQuest.get(questKey);
     if (!current || compareRuns(record, current) < 0) {
       bestByQuest.set(questKey, record);

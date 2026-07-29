@@ -18,12 +18,14 @@ describe("browser Run Access identity", () => {
 
   it("preserves a locator's id across reload retries", () => {
     const locator = {
-      version: 2,
+      version: 3,
       runId: "access_existing",
       pending: true,
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     };
 
     expect(withRunAccessId(locator, () => "unused")).toEqual(locator);
@@ -31,12 +33,14 @@ describe("browser Run Access identity", () => {
 
   it("recognizes only the same admitted Run as a free-warning bypass", () => {
     const admitted = {
-      version: 2,
+      version: 3,
       runId: "access_existing",
       pending: false,
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     };
 
     expect(isAdmittedRunResume(admitted, admitted)).toBe(true);
@@ -62,34 +66,47 @@ describe("browser Run Access identity", () => {
         () => "01J1MOSS-WATCH"
       )
     ).toEqual({
-      version: 2,
+      version: 3,
       runId: "access_01J1MOSS-WATCH",
       pending: false,
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1"
     });
   });
 
   it("matches a direct-link refresh only when every Run fact is identical", () => {
     const locator = {
-      version: 2,
+      version: 3,
       runId: "access_existing",
       pending: false,
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     };
 
     expect(runLocatorMatches(locator, {
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
     })).toBe(true);
     expect(runLocatorMatches(locator, {
       seed: "DIFFERENT-SEED",
       levelId: "trail-scout",
       labyrinthNumber: 4
+    })).toBe(false);
+    expect(runLocatorMatches(locator, {
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "classic-v1"
     })).toBe(false);
   });
 });

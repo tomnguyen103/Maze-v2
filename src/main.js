@@ -36,6 +36,12 @@ import {
   createRunActionLog,
   tryAppendRunAction
 } from "./game/run-action-log.js";
+import {
+  CLASSIC_RULESET_REVISION,
+  getClassicRunRuleset,
+  getQuestRunRuleset,
+  normalizeRunRuleset
+} from "./game/run-ruleset.js";
 import { createVerifiedDailySubmission } from "./player/daily-submission.js";
 import {
   createRunAccessId,
@@ -207,11 +213,21 @@ const sharedParametersNeedNotice =
 const storedQuestProgress = loadQuestProgress();
 const normalizedLocationSeed =
   locationSeed === null ? null : normalizeSeed(locationSeed);
+/** @type {{ seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string }} */
 const sharedLocationFacts = {
   seed: normalizedLocationSeed ?? "",
   levelId: getQuestLevel(levelFromLocation()).id,
   labyrinthNumber: labyrinthFromLocation() ?? 1
 };
+const sharedLocationRuleset =
+  locationSeed === null
+    ? null
+    : rulesetFromLocation(sharedLocationFacts.labyrinthNumber) ??
+      getClassicRunRuleset(sharedLocationFacts.labyrinthNumber);
+if (sharedLocationRuleset) {
+  sharedLocationFacts.atlasRegionId = sharedLocationRuleset.atlasRegionId;
+  sharedLocationFacts.rulesetRevision = sharedLocationRuleset.revision;
+}
 let activeRunLocator =
   dailyRequest.status === "none" ? loadActiveRunLocator() : null;
 if (
@@ -252,9 +268,21 @@ let questProgress =
       );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
+const initialRuleset =
+  activeRunLocator
+    ? normalizeRunRuleset(
+        rulesetIdentityFromLocator(activeRunLocator),
+        currentLabyrinthNumber
+      )
+    : sharedLocationRuleset ??
+      getQuestRunRuleset(currentLabyrinthNumber);
 let run = createRun(
   normalizedLocationSeed ?? activeRunLocator?.seed ?? createSeed(),
-  getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+  {
+    ...getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber),
+    ruleset:
+      initialRuleset ?? getClassicRunRuleset(currentLabyrinthNumber)
+  }
 );
 let runActionLog = createRunActionLog();
 let runActionLogOverflowed = false;
@@ -273,6 +301,7 @@ const failedQuestContinuityLoads = new Set();
 const playerController = createPlayerController({
   onPaletteChange: () => renderer.render(run),
   onAuthenticationChange: handleAuthenticationChange,
+  onIdentityEnd: clearActiveRunRecoveryForIdentityChange,
   onJournalChange: (journal) => {
     lanternJournal = journal;
     void syncPracticeOffer();
@@ -977,7 +1006,11 @@ elements.runRecords.addEventListener("click", async (event) => {
     await startRecordedLabyrinth(
       button.dataset.level ?? "trail-scout",
       Number(button.dataset.labyrinth ?? 1),
-      button.dataset.seed
+      button.dataset.seed,
+      {
+        atlasRegionId: button.dataset.region,
+        revision: button.dataset.ruleset
+      }
     );
     return;
   }
@@ -988,7 +1021,11 @@ elements.runRecords.addEventListener("click", async (event) => {
         createShareLink(
           button.dataset.seed,
           button.dataset.level ?? "trail-scout",
-          Number(button.dataset.labyrinth ?? 1)
+          Number(button.dataset.labyrinth ?? 1),
+          {
+            atlasRegionId: button.dataset.region,
+            revision: button.dataset.ruleset
+          }
         )
       );
       button.textContent = "Copied";
@@ -1229,12 +1266,14 @@ async function openCampfireResume() {
 
 /**
  * @param {{
- *   version: 2,
+ *   version: 2 | 3,
  *   runId: string,
  *   pending: boolean,
  *   seed: string,
  *   levelId: string,
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId?: string,
+ *   rulesetRevision?: string
  * }} locator
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
  * @param {ReturnType<typeof createRun> | null} [recoveredRun]
@@ -1247,11 +1286,23 @@ function startRun(locator, daily = null, recoveredRun = null) {
   completedQuestIdle = false;
   currentLevel = getQuestLevel(locator.levelId);
   currentLabyrinthNumber = locator.labyrinthNumber;
+  const ruleset = daily
+    ? getClassicRunRuleset(currentLabyrinthNumber)
+    : normalizeRunRuleset(
+        rulesetIdentityFromLocator(locator),
+        currentLabyrinthNumber
+      );
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   run =
     recoveredRun ??
     createRun(
       locator.seed,
-      getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber)
+      {
+        ...getLabyrinthConfig(currentLevel.id, currentLabyrinthNumber),
+        ruleset
+      }
     );
   runActionLog = createRunActionLog();
   runActionLogOverflowed = false;
@@ -1398,7 +1449,10 @@ async function initializeRunEntry() {
       currentLevel.id,
       currentLabyrinthNumber,
       sharedParametersNeedNotice,
-      locator?.runId
+      locator?.runId,
+      locator
+        ? rulesetIdentityFromLocator(locator)
+        : sharedLocationRuleset
     );
     return;
   }
@@ -1614,7 +1668,7 @@ async function startFreshRun(replaceRunIdentity = false) {
       replaceRunIdentity
         ? {
             ...activeRunLocator,
-            version: 2,
+            version: 3,
             runId: createRunAccessId(),
             pending: false
           }
@@ -1637,25 +1691,34 @@ async function startFreshRun(replaceRunIdentity = false) {
  * @param {number} labyrinthNumber
  * @param {boolean} [showAdjustedNotice]
  * @param {string} [runId]
+ * @param {{ atlasRegionId?: string, revision?: string } | null} [rulesetIdentity]
  */
 async function startSharedRun(
   seed,
   levelId,
   labyrinthNumber,
   showAdjustedNotice = false,
-  runId
+  runId,
+  rulesetIdentity
 ) {
   const canRecover =
     typeof runId === "string" &&
-    activeRunLocator?.version === 2 &&
+    (activeRunLocator?.version === 2 || activeRunLocator?.version === 3) &&
     activeRunLocator.pending === false &&
     activeRunLocator.runId === runId;
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const locator = withRunAccessId({
-    version: runId ? 2 : 1,
+    version: 3,
     ...(runId ? { runId } : {}),
+    pending: false,
     seed,
     levelId,
-    labyrinthNumber
+    labyrinthNumber,
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   });
   if (!(await authorizeRunLocator(locator))) {
     return false;
@@ -1683,7 +1746,11 @@ async function startSharedRun(
 /** @param {string} levelId @param {number} labyrinthNumber */
 function createFreshLocator(levelId, labyrinthNumber) {
   const level = getQuestLevel(levelId);
-  const config = getLabyrinthConfig(levelId, labyrinthNumber);
+  const ruleset = getQuestRunRuleset(labyrinthNumber);
+  const config = {
+    ...getLabyrinthConfig(levelId, labyrinthNumber),
+    ruleset
+  };
   const usedFingerprints = new Set([
     ...questProgress.usedMapFingerprints,
     labyrinthFingerprint(run)
@@ -1696,12 +1763,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     const candidate = createRun(seed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
       return withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed: candidate.seed,
         levelId: level.id,
-        labyrinthNumber
+        labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       });
     }
   }
@@ -1711,12 +1780,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
     const candidate = createRun(fallbackSeed, config);
     if (!usedFingerprints.has(labyrinthFingerprint(candidate))) {
       return withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed: candidate.seed,
         levelId: level.id,
-        labyrinthNumber
+        labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       });
     }
   }
@@ -1727,14 +1798,17 @@ function createFreshLocator(levelId, labyrinthNumber) {
 /** @param {string} levelId @param {string} [seed] */
 async function startNewQuest(levelId, seed) {
   const nextProgress = createQuestProgress(levelId);
+  const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
   const locator = seed
     ? withRunAccessId({
-        version: 2,
+        version: 3,
         runId: createRunAccessId(),
         pending: false,
         seed,
         levelId: nextProgress.levelId,
-        labyrinthNumber: nextProgress.labyrinthNumber
+        labyrinthNumber: nextProgress.labyrinthNumber,
+        atlasRegionId: ruleset.atlasRegionId,
+        rulesetRevision: ruleset.revision
       })
     : createFreshLocator(
         nextProgress.levelId,
@@ -1762,15 +1836,27 @@ async function startNewQuest(levelId, seed) {
  * @param {string} levelId
  * @param {number} labyrinthNumber
  * @param {string} seed
+ * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
  */
-async function startRecordedLabyrinth(levelId, labyrinthNumber, seed) {
+async function startRecordedLabyrinth(
+  levelId,
+  labyrinthNumber,
+  seed,
+  rulesetIdentity
+) {
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const locator = withRunAccessId({
-    version: 2,
+    version: 3,
     runId: createRunAccessId(),
     pending: false,
     seed,
     levelId,
-    labyrinthNumber
+    labyrinthNumber,
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   });
   if (!(await authorizeRunLocator(locator))) {
     return false;
@@ -2087,7 +2173,8 @@ async function resumePendingRun() {
     activeRunLocator.levelId,
     activeRunLocator.labyrinthNumber,
     false,
-    activeRunLocator.runId
+    activeRunLocator.runId,
+    rulesetIdentityFromLocator(activeRunLocator)
   );
   if (!started) {
     lifetimeReturnConfirmed = false;
@@ -2823,7 +2910,7 @@ function updateInterface() {
     ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
     : activeFirstLight
       ? "One Echo · One Warden · One Gate"
-      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${difficultyBand.label}`;
+      : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} · ${formatRunRulesetLabel(run.ruleset, currentLabyrinthNumber)}`;
   elements.questHeadline.textContent = activeDaily
     ? `Today’s shared Labyrinth: find ${run.echoes.length} Echoes and outsmart ${run.config.wardenCount} ${run.config.wardenCount === 1 ? "Warden" : "Wardens"}.`
     : activeFirstLight
@@ -2931,7 +3018,9 @@ function finishRun() {
     echoesCollected,
     echoTotal: run.echoes.length,
     questLevelId: currentLevel.id,
-    labyrinthNumber: currentLabyrinthNumber
+    labyrinthNumber: currentLabyrinthNumber,
+    atlasRegionId: run.ruleset.atlasRegionId,
+    rulesetRevision: run.ruleset.revision
   });
   bestEscapeRecord = bestEscape(runRecords);
   if (won) {
@@ -3352,16 +3441,24 @@ function createDailyShareLink(daily) {
  * @param {string} [seed]
  * @param {string} [levelId]
  * @param {number} [labyrinthNumber]
+ * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
  */
 function createShareLink(
   seed = run.seed,
   levelId = currentLevel.id,
-  labyrinthNumber = currentLabyrinthNumber
+  labyrinthNumber = currentLabyrinthNumber,
+  rulesetIdentity = run.ruleset
 ) {
+  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   const url = new URL("/play", window.location.origin);
   url.searchParams.set("seed", seed);
   url.searchParams.set("level", levelId);
   url.searchParams.set("labyrinth", String(labyrinthNumber));
+  url.searchParams.set("region", ruleset.atlasRegionId);
+  url.searchParams.set("rules", ruleset.revision);
   return url.toString();
 }
 
@@ -3374,14 +3471,67 @@ function hasInvalidSharedParameters() {
   const seed = url.searchParams.get("seed");
   const levelId = url.searchParams.get("level");
   const labyrinthNumber = Number(url.searchParams.get("labyrinth"));
+  const ruleset = rulesetFromLocation(labyrinthNumber);
+  const hasRegion = url.searchParams.has("region");
+  const hasRules = url.searchParams.has("rules");
   return (
     !seed ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(seed) ||
     !["bright-start", "trail-scout", "maze-master"].includes(levelId ?? "") ||
     !Number.isInteger(labyrinthNumber) ||
     labyrinthNumber < 1 ||
-    labyrinthNumber > QUEST_LABYRINTH_COUNT
+    labyrinthNumber > QUEST_LABYRINTH_COUNT ||
+    hasRegion !== hasRules ||
+    (hasRegion && ruleset === null)
   );
+}
+
+/** @param {number} labyrinthNumber */
+function rulesetFromLocation(labyrinthNumber) {
+  if (
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  ) {
+    return null;
+  }
+  const url = new URL(window.location.href);
+  const atlasRegionId = url.searchParams.get("region");
+  const revision = url.searchParams.get("rules");
+  if (atlasRegionId === null && revision === null) {
+    return getClassicRunRuleset(labyrinthNumber);
+  }
+  if (!atlasRegionId || !revision) {
+    return null;
+  }
+  return normalizeRunRuleset(
+    { atlasRegionId, revision },
+    labyrinthNumber
+  );
+}
+
+/**
+ * @param {{ atlasRegionId?: string, rulesetRevision?: string }} locator
+ */
+function rulesetIdentityFromLocator(locator) {
+  return locator.atlasRegionId === undefined &&
+    locator.rulesetRevision === undefined
+    ? undefined
+    : {
+        atlasRegionId: locator.atlasRegionId,
+        revision: locator.rulesetRevision
+      };
+}
+
+/**
+ * @param {{ revision: string, label: string }} ruleset
+ * @param {number} labyrinthNumber
+ */
+function formatRunRulesetLabel(ruleset, labyrinthNumber) {
+  const region = getDifficultyBand(labyrinthNumber);
+  return ruleset.revision === CLASSIC_RULESET_REVISION
+    ? `Atlas Region: ${region.label} · Classic Rules`
+    : `Atlas Region: ${region.label} · Trail Twist: ${ruleset.label}`;
 }
 
 function levelFromLocation() {
@@ -3446,23 +3596,37 @@ function renderRunRecords() {
 
       const outcome = record.outcome === "escaped" ? "Escaped" : "Defeated";
       const level = getQuestLevel(record.questLevelId);
+      const ruleset =
+        normalizeRunRuleset(
+          record.atlasRegionId || record.rulesetRevision
+            ? {
+                atlasRegionId: record.atlasRegionId,
+                revision: record.rulesetRevision
+              }
+            : undefined,
+          record.labyrinthNumber ?? 1
+        ) ?? getClassicRunRuleset(record.labyrinthNumber ?? 1);
       title.textContent =
         `#${index + 1} ${outcome} / ${level.name} / ${formatTime(record.elapsedMs)}`;
       detail.textContent =
-        `Labyrinth ${record.labyrinthNumber ?? 1} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
+        `Labyrinth ${record.labyrinthNumber ?? 1} / ${formatRunRulesetLabel(ruleset, record.labyrinthNumber ?? 1)} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
       replay.type = "button";
       replay.className = "control-button";
       replay.dataset.seed = record.seed;
       replay.dataset.level = record.questLevelId ?? "trail-scout";
       replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
+      replay.dataset.region = ruleset.atlasRegionId;
+      replay.dataset.ruleset = ruleset.revision;
       replay.dataset.recordAction = "replay";
-      replay.textContent = "Replay";
-      replay.setAttribute("aria-label", `Replay seed ${record.seed}`);
+      replay.textContent = "Play This Seed";
+      replay.setAttribute("aria-label", `Play seed ${record.seed}`);
       copy.type = "button";
       copy.className = "control-button";
       copy.dataset.seed = record.seed;
       copy.dataset.level = record.questLevelId ?? "trail-scout";
       copy.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
+      copy.dataset.region = ruleset.atlasRegionId;
+      copy.dataset.ruleset = ruleset.revision;
       copy.dataset.recordAction = "copy";
       copy.textContent = "Copy Share Link";
       copy.setAttribute("aria-label", `Copy share link for seed ${record.seed}`);
@@ -3480,7 +3644,10 @@ function resultStanding() {
     (record) =>
       record.seed === run.seed &&
       (record.questLevelId ?? "trail-scout") === currentLevel.id &&
-      (record.labyrinthNumber ?? 1) === currentLabyrinthNumber
+      (record.labyrinthNumber ?? 1) === currentLabyrinthNumber &&
+      (record.atlasRegionId ?? run.ruleset.atlasRegionId) ===
+        run.ruleset.atlasRegionId &&
+      (record.rulesetRevision ?? "classic-v1") === run.ruleset.revision
   );
   if (index === -1) {
     return "Outside top 5";

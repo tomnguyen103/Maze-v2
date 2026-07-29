@@ -91,6 +91,63 @@ describe("run record storage", () => {
     });
   });
 
+  it("preserves exact Region rules and separates unlike rulesets", () => {
+    const storage = createStorage();
+    saveRunRecord(
+      {
+        elapsedMs: 45000,
+        moves: 55,
+        seed: "RULESET-RECORD",
+        outcome: "escaped",
+        echoesCollected: 3,
+        questLevelId: "trail-scout",
+        labyrinthNumber: 1,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1"
+      },
+      storage
+    );
+    const records = saveRunRecord(
+      {
+        elapsedMs: 47000,
+        moves: 57,
+        seed: "RULESET-RECORD",
+        outcome: "escaped",
+        echoesCollected: 3,
+        questLevelId: "trail-scout",
+        labyrinthNumber: 1,
+        atlasRegionId: "foundation",
+        rulesetRevision: "echo-hush-v1"
+      },
+      storage
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.rulesetRevision)).toEqual([
+      "classic-v1",
+      "echo-hush-v1"
+    ]);
+  });
+
+  it("rejects a Record with an impossible Region and ruleset pair", () => {
+    expect(
+      saveRunRecord(
+        {
+          elapsedMs: 45000,
+          moves: 55,
+          seed: "BROKEN-RULESET",
+          outcome: "escaped",
+          echoesCollected: 3,
+          questLevelId: "trail-scout",
+          labyrinthNumber: 1,
+          atlasRegionId: "foundation",
+          rulesetRevision: "windways-v1"
+        },
+        createStorage()
+      )
+    ).toEqual([]);
+  });
+
   it("ranks defeated attempts by Echo progress", () => {
     const storage = createStorage();
     saveRunRecord(

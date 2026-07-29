@@ -1,3 +1,8 @@
+import {
+  getClassicRunRuleset,
+  normalizeKnownRunRuleset
+} from "./run-ruleset.js";
+
 /**
  * @typedef {"up" | "right" | "down" | "left"} Direction
  * @typedef {{ row: number, col: number }} Position
@@ -34,7 +39,12 @@
  *   wardenCount?: number,
  *   vitality?: number,
  *   pulses?: number,
- *   gateWarden?: boolean
+ *   gateWarden?: boolean,
+ *   ruleset?: {
+ *     atlasRegionId: string,
+ *     revision: string,
+ *     label?: string
+ *   }
  * }} RunConfigInput
  * @typedef {{
  *   size: number,
@@ -42,7 +52,12 @@
  *   wardenCount: number,
  *   vitality: number,
  *   pulses: number,
- *   gateWarden?: true
+ *   gateWarden?: true,
+ *   ruleset: {
+ *     atlasRegionId: string,
+ *     revision: string,
+ *     label: string
+ *   }
  * }} RunConfig
  * @typedef {"active" | "paused" | "challenge" | "won" | "lost"} RunStatus
  * @typedef {{
@@ -53,6 +68,7 @@
  *   version: 1,
  *   seed: string,
  *   config: RunConfig,
+ *   ruleset: RunConfig["ruleset"],
  *   labyrinth: number[][],
  *   explorer: Position & { vitality: number, maxVitality: number },
  *   echoes: Echo[],
@@ -177,6 +193,7 @@ export function createRun(requestedSeed, input = {}) {
     version: 1,
     seed,
     config,
+    ruleset: config.ruleset,
     labyrinth,
     explorer,
     echoes,
@@ -830,6 +847,13 @@ function cloneRun(run) {
  * @returns {RunConfig}
  */
 function normalizeConfig(input) {
+  const ruleset =
+    input.ruleset === undefined
+      ? getClassicRunRuleset(1)
+      : normalizeKnownRunRuleset(input.ruleset);
+  if (!ruleset) {
+    throw new Error("Run ruleset identity is invalid.");
+  }
   let size = clampInteger(input.size, DEFAULT_CONFIG.size, 9, 25);
   if (size % 2 === 0) {
     size += size === 25 ? -1 : 1;
@@ -839,7 +863,8 @@ function normalizeConfig(input) {
     echoCount: clampInteger(input.echoCount, DEFAULT_CONFIG.echoCount, 0, 8),
     wardenCount: clampInteger(input.wardenCount, DEFAULT_CONFIG.wardenCount, 0, 6),
     vitality: clampInteger(input.vitality, DEFAULT_CONFIG.vitality, 1, 9),
-    pulses: clampInteger(input.pulses, DEFAULT_CONFIG.pulses, 0, 5)
+    pulses: clampInteger(input.pulses, DEFAULT_CONFIG.pulses, 0, 5),
+    ruleset
   };
   return input.gateWarden === true
     ? { ...config, gateWarden: true }

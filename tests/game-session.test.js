@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, createRun } from "../src/game/game-session.js";
+import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 
 /** @typedef {ReturnType<typeof createRun>} TestRun */
@@ -114,6 +115,26 @@ function follow(run, moves) {
 }
 
 describe("GameSession", () => {
+  it("keeps one immutable ruleset identity through Run restart", () => {
+    const ruleset = getQuestRunRuleset(9);
+    const run = createRun("BRIDGE-RULES-09", {
+      ...getLabyrinthConfig("trail-scout", 9),
+      ruleset
+    });
+
+    expect(run.ruleset).toEqual(ruleset);
+    expect(applyAction(run, { type: "restart" }).ruleset).toEqual(ruleset);
+    expect(() =>
+      createRun("BROKEN-RULES-09", {
+        ...getLabyrinthConfig("trail-scout", 9),
+        ruleset: {
+          atlasRegionId: "capable",
+          revision: "unknown-v1"
+        }
+      })
+    ).toThrow("Run ruleset identity is invalid.");
+  });
+
   it("creates the same run from the same seed", () => {
     const first = createRun("EMBER-17");
     const second = createRun("EMBER-17");

@@ -308,7 +308,7 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
     "Quest Level 2 · Trail Scout"
   );
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 1 of 20 · Foundation"
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
@@ -1103,7 +1103,7 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
     page.getByRole("button", { name: "Copy share link for seed NARROW-RECORD" })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Replay seed NARROW-RECORD" })
+    page.getByRole("button", { name: "Play seed NARROW-RECORD" })
   ).toBeVisible();
   const dialog = await page.locator("#records-dialog").boundingBox();
   if (!dialog) {
@@ -1111,9 +1111,9 @@ test("keeps saved Record actions usable on a narrow screen", async ({ page }) =>
   }
   expect(dialog.x).toBeGreaterThanOrEqual(0);
   expect(dialog.x + dialog.width).toBeLessThanOrEqual(320);
-  await page.getByRole("button", { name: "Replay seed NARROW-RECORD" }).click();
+  await page.getByRole("button", { name: "Play seed NARROW-RECORD" }).click();
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 13 of 20 · Advanced"
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
   );
   await expect(page.locator("#echo-count")).toHaveText("0 / 5");
 });
@@ -1125,9 +1125,78 @@ test("hydrates a shared seed at its Labyrinth Number", async ({ page }) => {
   await expectGameReady(page);
 
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 13 of 20 · Advanced"
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
   );
   await expect(page.locator("#echo-count")).toHaveText("0 / 5");
+});
+
+test("round-trips an exact Region ruleset through share and active recovery identity", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+  });
+  await page.goto(
+    "/?seed=RULESET-SHARE&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Trail Twist: Tide Doors"
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({
+      version: 3,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1"
+    });
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("advanced");
+  expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
+});
+
+test("normalizes an impossible shared ruleset to safe Classic Rules", async ({
+  page
+}) => {
+  await page.goto(
+    "/?seed=RULESET-MISMATCH&level=trail-scout&labyrinth=13&region=foundation&rules=echo-hush-v1"
+  );
+  await expectGameReady(page);
+
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 13 of 20 · Atlas Region: Advanced · Classic Rules"
+  );
+  await expect(page.locator("#event-ribbon")).toContainText(
+    "adjusted to a safe Labyrinth"
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({
+      version: 3,
+      atlasRegionId: "advanced",
+      rulesetRevision: "classic-v1"
+    });
 });
 
 test("preserves native button keyboard behavior and pause timing", async ({
@@ -1704,14 +1773,14 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   await expect(dialog).not.toBeVisible();
   await expect(page.locator("#seed-value")).not.toHaveText(WINNING_SEED);
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 2 of 20 · Foundation"
+    "Labyrinth 2 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
 
   await page.reload();
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 2 of 20 · Foundation"
+    "Labyrinth 2 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
   );
   await expect(
     page.getByRole("dialog", { name: "Continue from the Campfire?" })
@@ -1754,11 +1823,11 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   const records = page.getByRole("dialog", { name: "Run Records" });
   await expect(records).toBeVisible();
   await expect(records).toContainText(WINNING_SEED);
-  await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
+  await page.getByRole("button", { name: `Play seed ${WINNING_SEED}` }).click();
   await expect(records).not.toBeVisible();
   await expect(page.locator("#seed-value")).toHaveText(WINNING_SEED);
   await expect(page.locator("#quest-stage")).toHaveText(
-    "Labyrinth 1 of 20 · Foundation"
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Classic Rules"
   );
 
   for (const direction of WINNING_PATH) {
@@ -1791,7 +1860,7 @@ test("completes a guest Labyrinth and persists Quest progress before account cre
   expect(
     await page.evaluate(() => Reflect.get(window, "__copiedSeed"))
   ).toContain(`/play?seed=${WINNING_SEED}&level=trail-scout&labyrinth=1`);
-  await page.getByRole("button", { name: `Replay seed ${WINNING_SEED}` }).click();
+  await page.getByRole("button", { name: `Play seed ${WINNING_SEED}` }).click();
   await expect(records).not.toBeVisible();
 
   await page.reload();
@@ -2797,10 +2866,60 @@ test("upgrades a locator-only device without changing its Labyrinth", async ({
     JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
   );
   expect(locator).toMatchObject({
-    version: 2,
+    version: 3,
     pending: false,
     seed: "LEGACY-CAMPFIRE",
     levelId: "trail-scout",
-    labyrinthNumber: 1
+    labyrinthNumber: 1,
+    atlasRegionId: "foundation",
+    rulesetRevision: "classic-v1"
+  });
+});
+
+test("upgrades a version 2 locator to Classic Rules", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        levelId: "trail-scout",
+        labyrinthNumber: 1,
+        completedLabyrinths: 0,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: false
+      })
+    );
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 2,
+        runId: "legacy_locator_v2",
+        pending: false,
+        seed: "LEGACY-CAMPFIRE",
+        levelId: "trail-scout",
+        labyrinthNumber: 1
+      })
+    );
+    localStorage.removeItem("echo-maze:active-run-recovery:v1");
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await expect(page.locator("#seed-value")).toHaveText("LEGACY-CAMPFIRE");
+  await expect(page.locator("#quest-stage")).toHaveText(
+    "Labyrinth 1 of 20 · Atlas Region: Foundation · Classic Rules"
+  );
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+    )
+  ).toMatchObject({
+    version: 3,
+    runId: "legacy_locator_v2",
+    pending: false,
+    atlasRegionId: "foundation",
+    rulesetRevision: "classic-v1"
   });
 });

@@ -1,6 +1,7 @@
 import { applyAction, createRun } from "./game-session.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
+import { normalizeRunRuleset } from "./run-ruleset.js";
 import {
   ACTIVE_RUN_RECOVERY_KEY,
   scrubActiveRunRecovery
@@ -17,12 +18,14 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  *   removeItem: (key: string) => unknown
  * }} StorageLike
  * @typedef {{
- *   version: 2,
+ *   version: 3,
  *   runId: string,
  *   pending: false,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
- *   labyrinthNumber: number
+ *   labyrinthNumber: number,
+ *   atlasRegionId: string,
+ *   rulesetRevision: string
  * }} RecoveryIdentity
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
@@ -38,13 +41,18 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  * }} RecoveryEnvelope
  */
 
-const IDENTITY_KEYS = [
+const LEGACY_IDENTITY_KEYS = [
   "version",
   "runId",
   "pending",
   "seed",
   "levelId",
   "labyrinthNumber"
+];
+const IDENTITY_KEYS = [
+  ...LEGACY_IDENTITY_KEYS,
+  "atlasRegionId",
+  "rulesetRevision"
 ];
 const ENVELOPE_KEYS = [
   "version",
@@ -467,10 +475,16 @@ function appendRecoveryEntry(actions, entry) {
 function replayEnvelope(envelope) {
   let run = createRun(
     envelope.identity.seed,
-    getLabyrinthConfig(
-      envelope.identity.levelId,
-      envelope.identity.labyrinthNumber
-    )
+    {
+      ...getLabyrinthConfig(
+        envelope.identity.levelId,
+        envelope.identity.labyrinthNumber
+      ),
+      ruleset: {
+        atlasRegionId: envelope.identity.atlasRegionId,
+        revision: envelope.identity.rulesetRevision
+      }
+    }
   );
   for (const entry of envelope.actions) {
     if (entry.elapsedMs < run.elapsedMs) {
@@ -701,14 +715,30 @@ function normalizeAction(value) {
 function normalizeIdentity(value) {
   if (
     !value ||
-    typeof value !== "object" ||
-    !hasOnlyKeys(value, IDENTITY_KEYS)
+    typeof value !== "object"
   ) {
     return null;
   }
   const candidate = /** @type {Record<string, unknown>} */ (value);
   if (
-    candidate.version !== 2 ||
+    (candidate.version === 2 &&
+      !hasOnlyKeys(value, LEGACY_IDENTITY_KEYS)) ||
+    (candidate.version === 3 && !hasOnlyKeys(value, IDENTITY_KEYS))
+  ) {
+    return null;
+  }
+  const ruleset = normalizeRunRuleset(
+    candidate.version === 3
+      ? {
+          atlasRegionId: candidate.atlasRegionId,
+          revision: candidate.rulesetRevision
+        }
+      : undefined,
+    Number(candidate.labyrinthNumber)
+  );
+  if (
+    (candidate.version !== 2 && candidate.version !== 3) ||
+    !ruleset ||
     candidate.pending !== false ||
     typeof candidate.runId !== "string" ||
     !/^[a-zA-Z0-9_-]{12,128}$/.test(candidate.runId) ||
@@ -726,14 +756,16 @@ function normalizeIdentity(value) {
     return null;
   }
   return {
-    version: 2,
+    version: 3,
     runId: candidate.runId,
     pending: false,
     seed: candidate.seed,
     levelId: /** @type {RecoveryIdentity["levelId"]} */ (
       candidate.levelId
     ),
-    labyrinthNumber: Number(candidate.labyrinthNumber)
+    labyrinthNumber: Number(candidate.labyrinthNumber),
+    atlasRegionId: ruleset.atlasRegionId,
+    rulesetRevision: ruleset.revision
   };
 }
 
@@ -782,7 +814,9 @@ function sameIdentity(left, right) {
     left.pending === right.pending &&
     left.seed === right.seed &&
     left.levelId === right.levelId &&
-    left.labyrinthNumber === right.labyrinthNumber
+    left.labyrinthNumber === right.labyrinthNumber &&
+    left.atlasRegionId === right.atlasRegionId &&
+    left.rulesetRevision === right.rulesetRevision
   );
 }
 
