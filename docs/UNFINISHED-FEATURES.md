@@ -1,19 +1,17 @@
 # Unfinished Features — Consolidated Backlog
 
-Generated: 2026-07-27 | Source docs scanned: 63 (7 plans, 18 ADRs, 9 docs/, 3 docs/agents, 23 .scratch specs/tickets, 4 root docs, 2 design-system docs)
+Generated: 2026-07-27 | Updated: 2026-07-28 after PR #94 delivery
 
 ## Summary
 
-17 items were catalogued here; items 1-15 are delivered, leaving 2 open. They
-come out of a doc corpus in which the four product plans (master plan, roadmap,
-entry, membership) and all 23 `.scratch` specs/tickets are fully delivered
-through PRs #34–#63 — their unchecked checkboxes are stale, not open work.
-The remaining work is scoreboard verification. Both open items —
-cheat-resistant action replay and verified Daily ranking — are deferred by
-explicit ADR language, not oversight. A hard cross-cutting constraint repeats
-across ADRs 0015–0019: the repo sits at Vercel's 12-function Hobby ceiling, so
-every new endpoint must route through an existing function (enforced by
-`tests/vercel-functions.test.js`).
+17 items were catalogued here; all 17 are delivered in repository scope. The
+four product plans (master plan, roadmap, entry, membership) and all 23
+`.scratch` specs/tickets are also delivered — their unchecked checkboxes are
+stale, not open work. PR #94 closes the final two items with bounded
+server-authoritative replay and a replay-verified current-UTC Daily board.
+Migration 0018 is authored and tested but intentionally not applied to a live
+database; that remains an external operator action. Daily routes reuse the
+existing leaderboard function, preserving the enforced Vercel function ceiling.
 
 ## Backlog
 
@@ -227,31 +225,40 @@ every new endpoint must route through an existing function (enforced by
   - [x] Gate Warden encounters draw from a curated capstone deck when available, band-matched fallback otherwise
   - [x] Capstone cards pass the same review/validation path as the reviewed bank
 
-### 16. Server-authoritative action replay (anti-cheat) — [NOT_STARTED]
+### 16. Server-authoritative action replay (anti-cheat) — [DELIVERED] — DONE, PR #94
 
 - What: A modified client can fabricate plausible Run facts; the score route only recalculates from bounded client-supplied inputs. ADR 0005 says a cheat-resistant scoreboard "would require server-authoritative action replay and is outside this change."
 - Why it matters: Global Scoreboard integrity rests on client honesty; also the prerequisite for any verified competitive claim (17).
 - Source: docs/adr/0005-authenticated-profiles-and-global-scoreboard.md — "Security and integrity boundaries"
-- Evidence checked: grep `replayVerif|action.replay|server.*replay` in server/, api/ — not found.
-- Touches: src/game/ (action log emission), new server replay engine, server/player-route.js, migration (STOP-and-ask)
-- Depends on: none. NOTE: significant architecture decision — executor should stop and ask before starting.
+- Evidence checked: `src/game/run-action-log.js` records only accepted replay
+  actions; `server/run-replay.js` validates bounded logs and replays the
+  canonical Run through `createRun`/`applyAction`; ADR 0024 records trust,
+  versioning, limits, compatibility, migration, and rollback.
+- Touches: `src/game/run-action-log.js`, `server/run-replay.js`,
+  `server/daily-route.js`, tests
+- Depends on: none; ADR 0024 records the approved architecture decision.
 - Effort: L
 - Acceptance criteria:
-  - [ ] Server re-simulates a submitted Run from seed + action log and rejects divergent scores
-  - [ ] Existing casual submission path still works during rollout (flagged)
+  - [x] Server re-simulates a submitted Run from seed + action log and rejects divergent scores
+  - [x] Existing casual submission path still works during rollout and is explicitly labelled `casual-v1`
 
-### 17. Verified Global Daily Labyrinth ranking — [NOT_STARTED]
+### 17. Verified Global Daily Labyrinth ranking — [DELIVERED] — DONE, PR #94
 
 - What: A server-verified global leaderboard (ranking/streaks/rewards) for the Daily Shared Labyrinth. Casual personal Daily shipped (PR #54); global ranking was explicitly deferred "until the server can verify action replay or the product accepts a casual trust model."
 - Why it matters: The competitive layer of the Daily loop; blocked on an explicit fairness decision.
 - Source: docs/plans/echo-maze-prioritized-feature-roadmap.md — §12; docs/plans/echo-maze-lifetime-membership-and-echo-atlas-master-plan.md — §25 P3; docs/adr/0012-utc-casual-daily-shared-labyrinth.md — Decision
-- Evidence checked: grep `daily` in server/ — only unrelated salt-rotation hits; no daily API route in api/. `tests/e2e/daily.spec.js:379` asserts the *absence* of leaderboard/rank/streak text. Client Daily exists: `src/game/daily-labyrinth.js`.
-- Touches: new server route/store on an existing function, migration (STOP-and-ask), src/game/daily-labyrinth.js, fairness design
-- Depends on: 16 (or an explicit product acceptance of a casual trust model — a product decision; executor must stop and ask)
+- Evidence checked: `server/daily-route.js` and `server/daily-store.js` accept
+  replay-derived current-date entries; migration 0018 retains one best row per
+  Explorer/date; `/api/daily/leaderboard` exposes a privacy-minimized Top-10;
+  the Daily dialog covers signed-in, Guest, loading, empty, rejected, network,
+  unavailable, UTC rollover, keyboard, reduced-motion, and 200-percent states.
+- Touches: `db/migrations/0018_verified_daily_entries.sql`, Daily route/store,
+  shared leaderboard function, player client/controller, Daily dialog, tests
+- Depends on: 16, delivered in the same PR.
 - Effort: L
 - Acceptance criteria:
-  - [ ] Daily submissions verified (via 16) or explicitly accepted as trust-based by recorded product decision
-  - [ ] Top-N daily board scoped to UTC date, tested for idempotent resubmission
+  - [x] Daily submissions are verified through feature 16 before persistence
+  - [x] Top-10 Daily board is scoped to current UTC date and idempotent resubmission is tested
 
 ## Already Implemented (docs are stale)
 
@@ -288,11 +295,10 @@ every new endpoint must route through an existing function (enforced by
 4 — admin shell guard; unblocks all admin UI work. Done: PR #67.
 5, 6 — small admin API sub-paths on the existing function; each independently shippable after 4. Done: PRs #68, #69.
 7, 8 — question bank storage and admin dashboard UI. Done: PR #70.
-9 — settings sync (independent; migration gate).
+9 — settings sync. Done: PR #81.
 10 — guest demo enforcement. Done: PR #70.
-11 — audit anchoring (independent; migration + infra gate).
-12 — phase 8 multi-tenancy (large; after admin surface exists to operate it).
-13, 14 — hard-depend on 12.
-15 — content pass, anytime (content-decision gate).
-16 — action replay (architecture-decision gate).
-17 — verified Daily ranking; depends on 16 or an explicit trust-model product decision.
+11 — audit anchoring. Done: PR #81; live immutable-sink provisioning stays external.
+12 — phase 8 multi-tenancy. Done: PRs #81–#83.
+13, 14 — delivered after 12 in PR #88.
+15 — curated capstone content. Done: PR #88.
+16, 17 — bounded replay plus verified Daily ranking. Done together: PR #94.

@@ -1,6 +1,7 @@
 # Verified Daily replay implementation coverage
 
-**Status:** In progress
+**Status:** Delivered engineering candidate in PR #94; final CodeRabbit,
+merge, and merged-main runtime evidence is recorded in the PR and handoff.
 
 **Scope:** Backlog features 16 and 17, delivered together in one branch and one
 pull request.
@@ -110,6 +111,19 @@ boundaries. No lower-level private helper tests are planned.
 
 ## Completion evidence
 
-To be filled from merged `main`. No row is considered delivered until its
-implementation, tests, local review, CodeRabbit review, merge, merged-main gate,
-and runtime smoke evidence are recorded.
+| Scope | Repository evidence | Verification evidence | Status |
+| --- | --- | --- | --- |
+| R01–R12, R18 | `src/game/run-action-log.js`, `server/run-replay.js`, canonical `createRun`/`applyAction` boundary | Run Action Log and replay suites cover legal actions, trusted Questions, tampering, divergence, terminal state, and resource limits | Delivered candidate |
+| R13–R17, R19–R20 | ADR 0024, separate Daily routes/tables, parameterized store, explicit `casual-v1` compatibility | player, route, store, privacy, migration, export, deletion, and Vercel routing suites | Delivered candidate |
+| D01–D08, D23–D25 | migration 0018 plus Daily route/store | current-date authorization, replay-derived persistence, idempotency, complete ranking order, privacy, and opt-in PostgreSQL coverage | Delivered candidate; live apply external |
+| D09–D14, D21–D22 | isolated Daily completion path and separate player client/controller | storage/API-spy browser assertions preserve Quest, locator, Records, demo, Atlas, cosmetics, Run Access, Classroom, and casual scoreboard state | Delivered candidate |
+| D15–D20, D24, D26–D29 | Verified Daily dialog and e2e-only signed-player dependency seam compiled out of production mode | signed-in created/improved/unchanged, Guest, loading, empty, rejected, retry, unavailable, wrong-date, UTC rollover, 200-percent, desktop/mobile, and deterministic two-client checks | Delivered candidate |
+| G01–G06 | no gameplay-rule fork; replay calls existing engine and trusted bundled Question resolver | full gameplay/unit browser gate plus fixed deterministic replay fixtures | Delivered candidate |
+| O01 | migration authored/tested only; no secrets, billing, dashboard, or production enforcement changed | branch diff and operations review | External live migration only |
+| O02 | both Daily paths rewrite to the existing `/api/leaderboard` function | `tests/vercel-functions.test.js` and bundle/function-count gate | Delivered candidate |
+| O03 | public GET and authenticated POST share safe Daily handler responses | merged-main HTTP smoke recorded after PR #94 merge | Pending merge-time proof |
+
+Repository documentation cannot truthfully contain its own future merge SHA.
+PR #94 therefore owns final CodeRabbit, merge, synchronized-main gate, endpoint
+smoke, and issue-state evidence. No requirement is treated as complete before
+those external facts are verified.
