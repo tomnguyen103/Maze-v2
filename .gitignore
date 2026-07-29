@@ -7,6 +7,9 @@ coverage/
 playwright-report/
 test-results/
 .scratch/
+.claude-flow/
+.swarm/
+ruvector.db
 .env
 .env.*
 !.env.example

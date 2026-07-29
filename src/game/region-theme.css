@@ -1,0 +1,55 @@
+body[data-region-theme="mosslight-grove"] .canvas-frame {
+  border-color: var(--color-gate);
+  box-shadow:
+    0 0 0 3px var(--color-echo-soft),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="mosslight-grove"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-gate);
+}
+
+body[data-region-theme="windcall-ridge"] .canvas-frame {
+  border-color: var(--color-echo);
+  box-shadow:
+    0 0 0 3px var(--color-signal-glow),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="windcall-ridge"] .warden-readout {
+  box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
+}
+
+body[data-region-theme="sunspan-crossing"] .canvas-frame {
+  border-color: var(--color-explorer);
+  box-shadow:
+    0 0 0 3px var(--color-echo-soft),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="sunspan-crossing"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-explorer);
+  box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
+}
+
+body[data-region-theme="tideglass-reach"] .canvas-frame {
+  border-color: var(--color-playground-sea-glass);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-playground-sea-glass) 34%, transparent),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="tideglass-reach"] .warden-readout {
+  border-color: var(--color-playground-sea-glass);
+}
+
+body[data-region-theme="bellroot-summit"] .canvas-frame {
+  border-color: var(--color-signal-deep);
+  box-shadow:
+    0 0 0 3px var(--color-signal-glow),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="bellroot-summit"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-signal-deep);
+}

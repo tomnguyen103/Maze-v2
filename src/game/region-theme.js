@@ -1,3 +1,5 @@
+import "./region-theme.css";
+
 /** @type {Readonly<Record<string, Readonly<{
  *   id: string,
  *   name: string,

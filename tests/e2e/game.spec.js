@@ -417,6 +417,30 @@ async function recordRegion5Screenshot(page, testInfo, state) {
 
 /**
  * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {string} slug
+ */
+async function recordMilestone2EvidenceScreenshot(page, testInfo, slug) {
+  const body = await page.screenshot();
+  await testInfo.attach(`${slug}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-${slug}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
  * @param {string} seed
  * @param {ReturnType<typeof milestoneWinningPlan>} plan
  * @param {{ checkGateStaging?: boolean }} [options]
@@ -583,7 +607,18 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
-test("starts a playable maze and responds to keyboard actions", async ({ page }) => {
+test("starts a playable maze and responds to keyboard actions", async ({
+  page
+}, testInfo) => {
+  const getCurrentQuestion = await mockQuestionApi(page);
+  /** @type {string[]} */
+  const presentationRequests = [];
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (/\/assets\/(?:region-theme|audio)-/.test(pathname)) {
+      presentationRequests.push(pathname);
+    }
+  });
   await page.route("**/api/leaderboard**", (route) =>
     route.fulfill({
       status: 200,
@@ -632,7 +667,18 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await expect(page.locator('[data-level="trail-scout"]')).toContainText(
     "times tables"
   );
+  expect(presentationRequests).toEqual([]);
   await chooseTrailScout(page);
+  await expect.poll(() =>
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/region-theme-")
+    )
+  ).toBe(true);
+  expect(
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/audio-")
+    )
+  ).toBe(false);
   await expect(
     page.getByRole("heading", {
       name: /Labyrinth 1: find 3 Echoes and outsmart 2 Wardens/i
@@ -647,18 +693,119 @@ test("starts a playable maze and responds to keyboard actions", async ({ page })
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   await expect(page.locator("#echo-count")).toHaveText("0 / 3");
 
-  for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {
-    await page.keyboard.press(key);
-    if ((await page.locator("#moves-value").textContent()) !== "000") {
+  const seed = (await page.locator("#seed-value").textContent())?.trim();
+  if (!seed) {
+    throw new Error("Expected the active Region 1 seed.");
+  }
+  const plan = milestoneWinningPlan(seed, 1);
+  for (const action of plan.actions) {
+    if (action.type === "answer") {
+      await answerCorrectlyIfChallenged(page, getCurrentQuestion);
+      continue;
+    }
+    await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    await answerCorrectlyIfChallenged(page, getCurrentQuestion);
+    if ((await page.locator("#echo-count").textContent()) === "1 / 3") {
       break;
     }
   }
   await expect(page.locator("#moves-value")).not.toHaveText("000");
-
+  await expect(page.locator("#echo-count")).toHaveText("1 / 3");
+  await expect(page.locator("#field-note")).toContainText(
+    "Echo Hush keeps ordinary Wardens still for this action"
+  );
+  await recordMilestone2EvidenceScreenshot(
+    page,
+    testInfo,
+    "region-1-echo-hush"
+  );
+  await page.getByRole("button", { name: "Sound off" }).click();
+  await expect(page.getByRole("button", { name: "Sound on" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await expect.poll(() =>
+    presentationRequests.some((pathname) =>
+      pathname.includes("/assets/audio-")
+    )
+  ).toBe(true);
+  const pulsesBefore = Number(
+    await page.locator("#pulse-count").textContent()
+  );
+  await page.locator("#maze-canvas").focus();
   await page.keyboard.press("q");
-  await expect(page.locator("#pulse-count")).toHaveText("1");
+  await expect(page.locator("#pulse-count")).toHaveText(
+    String(pulsesBefore - 1)
+  );
   expect(pageErrors).toEqual([]);
   expect(consoleProblems).toEqual([]);
+});
+
+test("keeps Classic Daily presentation universal after a themed Quest", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One history-dependent Classic presentation proof is sufficient."
+  );
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-region-theme",
+    "mosslight-grove"
+  );
+
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+  const dailyDialog = page.getByRole("dialog", {
+    name: "Daily Shared Labyrinth"
+  });
+  await dailyDialog.getByRole("button", {
+    name: "Start today’s Daily"
+  }).click();
+
+  await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
+  await expect(page.locator("#warden-guild")).toHaveText(
+    "Universal Warden marks"
+  );
+});
+
+test("retries Region presentation after a failed optional chunk", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One optional presentation retry is sufficient."
+  );
+  let regionThemeRequests = 0;
+  await page.route("**/assets/region-theme-*.js", async (route) => {
+    regionThemeRequests += 1;
+    if (regionThemeRequests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  await expect.poll(() => regionThemeRequests).toBe(1);
+  await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
+  await expect(page.locator("#warden-guild")).toHaveText(
+    "Universal Warden marks"
+  );
+
+  await page.getByRole("button", { name: "New Quest" }).click();
+  await chooseTrailScout(page);
+
+  await expect.poll(() => regionThemeRequests).toBe(2);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-region-theme",
+    "mosslight-grove"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Bramblewatch Guild"
+  );
 });
 
 test("opens the full Echo Atlas, pauses time, and restores trigger focus", async ({
@@ -909,7 +1056,8 @@ test("pans from the labeled viewport and centers the current landmark", async ({
 
 test("Atlas map and inspector fit every contracted viewport at 200-percent text", async ({
   page
-}) => {
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   for (const viewport of [
     { width: 320, height: 720 },
     { width: 390, height: 844 },
@@ -943,6 +1091,17 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
     if (viewport.width <= 768) {
       expect((detailBounds?.y ?? 0) + (detailBounds?.height ?? 0))
         .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0));
+    }
+    const isEvidenceViewport =
+      testInfo.project.name === "mobile"
+        ? viewport.width === 390
+        : viewport.width === 1440;
+    if (isEvidenceViewport) {
+      await recordMilestone2EvidenceScreenshot(
+        page,
+        testInfo,
+        "atlas-200pct-reduced"
+      );
     }
   }
 });
@@ -1107,6 +1266,23 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await viewer.getByRole("button", { name: "Restart" }).click();
     await expect(viewer.locator("[data-run-replay-status]"))
       .toContainText(`Step 0 of ${replay.actions.length}`);
+    const isEvidenceViewport =
+      testInfo.project.name === "mobile"
+        ? viewport.width === 390
+        : viewport.width === 1440;
+    if (isEvidenceViewport) {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await viewer.evaluate((dialog) => {
+        dialog.scrollTop = 0;
+      });
+      await expect.poll(() => viewer.evaluate((dialog) => dialog.scrollTop))
+        .toBe(0);
+      await recordMilestone2EvidenceScreenshot(
+        page,
+        testInfo,
+        "watch-trail-200pct-reduced"
+      );
+    }
 
     const bounds = await viewer.boundingBox();
     expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
@@ -2029,7 +2205,7 @@ test("round-trips an exact Region ruleset through share and active recovery iden
 
 test("carries Region 2 identity from Atlas through Windway play and Watch Trail", async ({
   page
-}) => {
+}, testInfo) => {
   const retainedPlan = milestoneWinningPlan("WIND-TRAIL-5", 5);
   const retainedReplay = createTerminalRunReplay(
     retainedPlan.actions.map((action) =>
@@ -2131,6 +2307,11 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
   }
   await expect(page.locator("#field-note")).toHaveText(
     "Windway carried you down."
+  );
+  await recordMilestone2EvidenceScreenshot(
+    page,
+    testInfo,
+    "region-2-windway"
   );
 
   await page.locator("#seed-copy").click();
@@ -3507,6 +3688,24 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   );
   /** @type {Array<string | null>} */
   const requestedChallengeKinds = [];
+  /** @type {string[]} */
+  const ceremonyRequests = [];
+  let atlasChunkRequested = false;
+  let releaseAtlasChunk = () => {};
+  const atlasChunkGate = new Promise((resolve) => {
+    releaseAtlasChunk = () => resolve(undefined);
+  });
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (pathname.includes("/assets/region-ceremony-")) {
+      ceremonyRequests.push(pathname);
+    }
+  });
+  await page.route("**/assets/quest-atlas-*.js", async (route) => {
+    atlasChunkRequested = true;
+    await atlasChunkGate;
+    await route.continue();
+  });
   await page.route("**/api/question?**", async (route) => {
     requestedChallengeKinds.push(
       new URL(route.request().url()).searchParams.get("challenge")
@@ -3521,10 +3720,19 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     `/?seed=${seed}&level=trail-scout&labyrinth=4` +
     "&region=foundation&rules=echo-hush-v1"
   );
+  expect(ceremonyRequests).toEqual([]);
   const { gateChallenges, questionOrdinal } =
     await completeMilestonePlan(page, seed, plan, {
       checkGateStaging: true
     });
+
+  await expect.poll(() => atlasChunkRequested).toBe(true);
+  await expect(page.locator("#run-state")).toHaveText("Escaped");
+  await expect(page.getByRole("button", { name: "New Quest" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Atlas", exact: true })
+  ).toBeDisabled();
+  releaseAtlasChunk();
 
   expect(gateChallenges).toBe(1);
   expect(requestedChallengeKinds.filter(
@@ -3547,6 +3755,7 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   await expect(page.locator("#result-kicker")).toHaveText(
     "Mosslight Grove Sigil ceremony"
   );
+  await expect.poll(() => ceremonyRequests.length).toBe(1);
   await expect(page.locator("#result-title")).toHaveText(
     "The First Echo Sigil returns."
   );
@@ -3594,6 +3803,58 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     labyrinthNumber: 4,
     questLevelId: "trail-scout",
     outcome: "escaped"
+  });
+});
+
+test("keeps a saved terminal result usable when Atlas presentation fails", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One terminal presentation fallback is sufficient."
+  );
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await page.route("**/assets/quest-atlas-*.js", (route) => route.abort());
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) {
+      throw new Error("Reviewed fixture needs a wrong answer.");
+    }
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+    if (attempt < 2) {
+      await expect.poll(() => getCurrentQuestion().id).not.toBe(question.id);
+    }
+  }
+
+  await expect(page.locator("#run-state")).toHaveText("Light lost");
+  await expect(page.locator("#result-atlas")).toHaveText(
+    "Atlas summary unavailable. Quest progress is saved."
+  );
+  await expect(page.locator("#result-seed")).toHaveText(DEFEAT_SEED);
+  await expect.poll(() =>
+    page.evaluate((seed) => {
+      const stored = localStorage.getItem("echo-maze:run-records:v1");
+      const records = /** @type {{ seed: string, outcome: string }[]} */ (
+        stored ? JSON.parse(stored) : []
+      );
+      return records.find((record) => record.seed === seed) ?? null;
+    }, DEFEAT_SEED)
+  ).toMatchObject({
+    seed: DEFEAT_SEED,
+    outcome: "defeated"
   });
 });
 
@@ -4562,11 +4823,11 @@ test("keeps a previous owner's Trail hidden when identity scrub writes fail", as
   const demoGate = page.getByRole("dialog", {
     name: "Create an account for three free Runs."
   });
-  if (await demoGate.isVisible()) {
-    await demoGate.getByRole("button", {
-      name: "Create account for three Runs"
-    }).click();
-  }
+  await expect(demoGate).toBeVisible();
+  await demoGate.getByRole("button", {
+    name: "Create account for three Runs"
+  }).click();
+  await expect(demoGate).not.toBeVisible();
 
   await page.getByRole("button", { name: "Records", exact: true }).click();
   const records = page.getByRole("dialog", { name: "Run Records" });

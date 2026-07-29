@@ -1,4 +1,3 @@
-import { EchoAudio } from "./game/audio.js";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
@@ -42,8 +41,6 @@ import {
   getQuestRunRuleset,
   normalizeRunRuleset
 } from "./game/run-ruleset.js";
-import { getRegionTheme } from "./game/region-theme.js";
-import { claimRegionCeremony } from "./game/region-ceremony.js";
 import { createVerifiedDailySubmission } from "./player/daily-submission.js";
 import {
   createRunAccessId,
@@ -60,8 +57,6 @@ import {
   saveQuestProgress
 } from "./game/quest-progress.js";
 import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
-import { projectQuestAtlas } from "./game/quest-atlas.js";
-import { renderQuestAtlasSummary } from "./game/quest-atlas-summary.js";
 import {
   hasRunReplayOwnerMismatch,
   loadRunRecords,
@@ -104,10 +99,87 @@ let lanternJournalUiFailedTwice = false;
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
+/** @typedef {InstanceType<typeof import("./game/audio.js").EchoAudio>} EchoAudio */
+/** @typedef {typeof import("./game/region-theme.js").getRegionTheme} RegionThemeLookup */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
-const audio = new EchoAudio();
+/** @type {EchoAudio | null} */
+let audio = null;
+/** @type {Promise<EchoAudio> | null} */
+let audioPromise = null;
+let ambientRegionId = "";
+let ambientActive = false;
+/** @type {RegionThemeLookup | null} */
+let regionThemeLookup = null;
+/** @type {Promise<RegionThemeLookup | null> | null} */
+let regionThemePromise = null;
+let regionThemeRetry = false;
+
+function loadAudio() {
+  if (!audioPromise) {
+    audioPromise = import("./game/audio.js").then(({ EchoAudio }) => {
+      audio = new EchoAudio();
+      audio.setAmbient(ambientRegionId, ambientActive);
+      return audio;
+    }).catch((error) => {
+      audioPromise = null;
+      throw error;
+    });
+  }
+  return audioPromise;
+}
+
+/**
+ * @param {string} regionId
+ * @param {boolean} active
+ */
+function setAmbientAudio(regionId, active) {
+  ambientRegionId = regionId;
+  ambientActive = active;
+  audio?.setAmbient(regionId, active);
+}
+
+/** @param {AudioCue} cue */
+function playAudio(cue) {
+  audio?.play(cue);
+}
+
+function loadRegionTheme() {
+  if (!regionThemePromise) {
+    const themeModule = regionThemeRetry
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./game/region-theme.js?retry=1")
+      : import("./game/region-theme.js");
+    regionThemeRetry = true;
+    regionThemePromise = themeModule
+      .then(({ getRegionTheme }) => {
+        regionThemeLookup = getRegionTheme;
+        return getRegionTheme;
+      })
+      .catch(() => {
+        regionThemePromise = null;
+        return null;
+      });
+  }
+  return regionThemePromise;
+}
+
+/** @param {string} atlasRegionId */
+function currentRegionTheme(atlasRegionId) {
+  return regionThemeLookup?.(atlasRegionId) ?? null;
+}
+
+function activeRegionTheme() {
+  if (
+    activeFirstLight ||
+    activeDaily !== null ||
+    run.ruleset.revision === CLASSIC_RULESET_REVISION
+  ) {
+    return null;
+  }
+  return currentRegionTheme(run.ruleset.atlasRegionId);
+}
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
@@ -374,6 +446,7 @@ let resumeAfterQuestConflict = false;
 let deferredCloudQuest = null;
 let questionRequestKey = "";
 let runFinished = false;
+let terminalPresentationPending = false;
 let hintVisible = false;
 /** @type {number | null} */
 let stagedGateWardenId = null;
@@ -675,7 +748,10 @@ async function showQuestAtlas(trigger) {
         })
       );
     }
-    const atlasView = await atlasViewPromise;
+    const [atlasView, { projectQuestAtlas }] = await Promise.all([
+      atlasViewPromise,
+      import("./game/quest-atlas.js")
+    ]);
     const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
     atlasView.show(projectQuestAtlas(questProgress, {
       watchTrailLandmarkIds
@@ -1312,7 +1388,9 @@ elements.replay.addEventListener("click", async () => {
   await openLevelPicker();
 });
 elements.sound.addEventListener("click", async () => {
-  const enabled = await audio.toggle();
+  const enabled = await loadAudio()
+    .then((loadedAudio) => loadedAudio.toggle())
+    .catch(() => false);
   elements.sound.textContent = enabled ? "Sound on" : "Sound off";
   elements.sound.setAttribute("aria-pressed", String(enabled));
 });
@@ -1506,7 +1584,10 @@ async function openCampfireResume() {
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
  * @param {ReturnType<typeof createRun> | null} [recoveredRun]
  */
-function startRun(locator, daily = null, recoveredRun = null) {
+async function startRun(locator, daily = null, recoveredRun = null) {
+  if (!daily) {
+    await loadRegionTheme();
+  }
   activeFirstLight = false;
   activeDaily = daily;
   dailyQuestionIndex = 0;
@@ -1732,7 +1813,7 @@ function startDailyRun() {
     "",
     `/play?daily=${encodeURIComponent(daily.date)}`
   );
-  startRun(locator, daily);
+  void startRun(locator, daily);
 }
 
 function openDailyDialog() {
@@ -1911,7 +1992,7 @@ async function startFreshRun(replaceRunIdentity = false) {
     return false;
   }
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -1959,7 +2040,7 @@ async function startSharedRun(
   if (!canRecover) {
     await beginActiveRunRecovery(locator);
   }
-  startRun(locator, null, recoveredRun);
+  await startRun(locator, null, recoveredRun);
   if (recoveredRun) {
     await openCampfireResume();
   }
@@ -2058,7 +2139,7 @@ async function startNewQuest(levelId, seed) {
   currentLabyrinthNumber = questProgress.labyrinthNumber;
   window.history.replaceState({}, "", "/play");
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -2099,7 +2180,7 @@ async function startRecordedLabyrinth(
   );
   window.history.replaceState({}, "", "/play");
   await beginActiveRunRecovery(locator);
-  startRun(locator);
+  await startRun(locator);
   return true;
 }
 
@@ -2895,7 +2976,7 @@ function transition(action) {
     pendingRunReplay = recoveryResult.replay ?? null;
   }
   if (!runFinished && (run.status === "won" || run.status === "lost")) {
-    finishRun();
+    void finishRun();
   }
 }
 
@@ -2963,7 +3044,7 @@ function syncChallengeDialog() {
     elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
     if (isGateWarden && !gateStagingComplete) {
-      const theme = getRegionTheme(run.ruleset.atlasRegionId);
+      const theme = activeRegionTheme();
       elements.challengeKicker.textContent =
         `${theme?.wardenGuild ?? "Gate Warden"} entrance`;
       elements.challengeQuestion.textContent =
@@ -3188,9 +3269,9 @@ function questionRequestIdentifier(request) {
 }
 
 function updateInterface() {
-  const regionTheme = getRegionTheme(run.ruleset.atlasRegionId);
+  const regionTheme = activeRegionTheme();
   document.body.dataset.regionTheme = regionTheme?.id ?? "";
-  audio.setAmbient(
+  setAmbientAudio(
     run.ruleset.atlasRegionId,
     !activeFirstLight && run.status === "active" && !document.hidden
   );
@@ -3262,14 +3343,22 @@ function updateInterface() {
   elements.bell.hidden = !adjacentBell;
   elements.bell.disabled = run.status !== "active";
   elements.dailyButton.disabled =
-    run.status === "challenge" || activeFirstLight;
+    terminalPresentationPending || run.status === "challenge" || activeFirstLight;
   elements.atlasButton.disabled =
-    run.status === "challenge" || activeDaily !== null || activeFirstLight;
+    terminalPresentationPending ||
+    run.status === "challenge" ||
+    activeDaily !== null ||
+    activeFirstLight;
   elements.journalButton.disabled =
-    run.status === "challenge" || activeFirstLight;
+    terminalPresentationPending || run.status === "challenge" || activeFirstLight;
   elements.recordsButton.disabled =
-    run.status === "challenge" || activeDaily !== null || activeFirstLight;
-  elements.settingsButton.disabled = run.status === "challenge";
+    terminalPresentationPending ||
+    run.status === "challenge" ||
+    activeDaily !== null ||
+    activeFirstLight;
+  elements.settingsButton.disabled =
+    terminalPresentationPending || run.status === "challenge";
+  elements.newRun.disabled = terminalPresentationPending;
   elements.newRun.textContent = activeDaily
     ? "Return to Quest"
     : activeFirstLight
@@ -3332,7 +3421,22 @@ function updateInterface() {
   renderStory();
 }
 
-function finishRun() {
+/** @param {boolean} pending */
+function setTerminalPresentationPending(pending) {
+  terminalPresentationPending = pending;
+  for (const button of [
+    elements.atlasButton,
+    elements.dailyButton,
+    elements.journalButton,
+    elements.newRun,
+    elements.recordsButton,
+    elements.settingsButton
+  ]) {
+    button.disabled = pending;
+  }
+}
+
+async function finishRun() {
   runFinished = true;
   const won = run.status === "won";
   if (activeFirstLight) {
@@ -3400,53 +3504,97 @@ function finishRun() {
   );
   window.history.replaceState({}, "", "/play");
 
-  const questComplete = won && questProgress.complete;
-  const regionTheme = getRegionTheme(run.ruleset.atlasRegionId);
+  const terminal = {
+    run,
+    progress: questProgress,
+    levelName: currentLevel.name,
+    labyrinthNumber: finishedLabyrinthNumber,
+    echoesCollected,
+    standing: resultStanding(),
+    regionTheme: activeRegionTheme(),
+    oneFreeRunRemaining:
+      latestRunAccess?.state === "free" &&
+      latestRunAccess.freeRunsRemaining === 1
+  };
+  const questComplete = won && terminal.progress.complete;
   const sigilMilestone =
     won &&
-    isGateWardenMilestone(finishedLabyrinthNumber) &&
-    regionTheme !== null;
+    isGateWardenMilestone(terminal.labyrinthNumber) &&
+    terminal.regionTheme !== null;
+  setTerminalPresentationPending(true);
+
+  let atlasModule = null;
+  let atlasSummaryModule = null;
+  try {
+    [atlasModule, atlasSummaryModule] = await Promise.all([
+      import("./game/quest-atlas.js"),
+      import("./game/quest-atlas-summary.js")
+    ]);
+  } catch {
+    // The terminal record is already saved; presentation falls back below.
+  }
+  if (run !== terminal.run || !runFinished) {
+    setTerminalPresentationPending(false);
+    updateInterface();
+    return;
+  }
+
+  let ceremonyModule = null;
+  if (sigilMilestone) {
+    try {
+      ceremonyModule = await import("./game/region-ceremony.js");
+    } catch {
+      // A ceremony is presentation only; the compact milestone remains usable.
+    }
+  }
+  if (run !== terminal.run || !runFinished) {
+    setTerminalPresentationPending(false);
+    updateInterface();
+    return;
+  }
   const sigilCeremony =
-    sigilMilestone &&
-    claimRegionCeremony(
-      questProgress.questId,
-      run.ruleset.atlasRegionId
+    ceremonyModule?.claimRegionCeremony(
+      terminal.progress.questId,
+      terminal.run.ruleset.atlasRegionId
     ) === "full";
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
     : sigilCeremony
-      ? `${regionTheme.name} Sigil ceremony`
+      ? `${terminal.regionTheme?.name ?? "Region"} Sigil ceremony`
     : sigilMilestone
-      ? `${regionTheme.name} milestone`
+      ? `${terminal.regionTheme?.name ?? "Region"} milestone`
     : won
-      ? `Labyrinth ${finishedLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
-      : `Labyrinth ${finishedLabyrinthNumber} ended`;
+      ? `Labyrinth ${terminal.labyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
+      : `Labyrinth ${terminal.labyrinthNumber} ended`;
   elements.resultTitle.textContent = questComplete
     ? "You mastered all twenty Labyrinths."
     : sigilCeremony
-      ? `The ${regionTheme.sigilName} returns.`
+      ? `The ${terminal.regionTheme?.sigilName ?? "Sigil"} returns.`
     : sigilMilestone
-      ? `The ${regionTheme.sigilName} remains restored.`
+      ? `The ${terminal.regionTheme?.sigilName ?? "Sigil"} remains restored.`
     : won
       ? "You brought these Echoes home."
       : "The maze light needs a rest.";
   elements.resultSummary.textContent = questComplete
-    ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
+    ? `${terminal.levelName} is complete. Every Warden Question in this Quest stayed unique.`
     : sigilCeremony
       ? "The restored Atlas landmark is the only lasting result. No currency, inventory, or gameplay reward is created."
     : sigilMilestone
       ? "Compact result: the Atlas landmark is already restored. No additional gameplay reward is created."
     : won
-      ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
-      : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
-  renderQuestAtlasSummary(
-    elements.resultAtlas,
-    projectQuestAtlas(questProgress),
-    { finishedLabyrinthNumber, won }
-  );
-  elements.resultAccessNote.hidden =
-    latestRunAccess?.state !== "free" ||
-    latestRunAccess.freeRunsRemaining !== 1;
+      ? `Next: Labyrinth ${terminal.progress.labyrinthNumber} · ${getDifficultyBand(terminal.progress.labyrinthNumber).label}. Its paths and Questions will be harder.`
+      : `You found ${terminal.echoesCollected} of ${terminal.run.echoes.length} Echoes. Try Labyrinth ${terminal.labyrinthNumber} again with a fresh path and full Vitality.`;
+  if (atlasModule && atlasSummaryModule) {
+    atlasSummaryModule.renderQuestAtlasSummary(
+      elements.resultAtlas,
+      atlasModule.projectQuestAtlas(terminal.progress),
+      { finishedLabyrinthNumber: terminal.labyrinthNumber, won }
+    );
+  } else {
+    elements.resultAtlas.textContent =
+      "Atlas summary unavailable. Quest progress is saved.";
+  }
+  elements.resultAccessNote.hidden = !terminal.oneFreeRunRemaining;
   elements.resultAccessNote.textContent = elements.resultAccessNote.hidden
     ? ""
     : "One free Run remains.";
@@ -3479,11 +3627,12 @@ function finishRun() {
       demoAccessPending = true;
     });
   }
-  elements.resultTime.textContent = formatTime(run.elapsedMs);
-  elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
-  elements.resultSeed.textContent = run.seed;
-  elements.resultRank.textContent = resultStanding();
+  elements.resultTime.textContent = formatTime(terminal.run.elapsedMs);
+  elements.resultMoves.textContent = String(terminal.run.moves).padStart(3, "0");
+  elements.resultSeed.textContent = terminal.run.seed;
+  elements.resultRank.textContent = terminal.standing;
   renderRunRecords();
+  setTerminalPresentationPending(false);
   updateInterface();
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
@@ -3730,7 +3879,7 @@ function playEventSound(type) {
   });
   const cue = cues[type];
   if (cue) {
-    audio.play(cue);
+    playAudio(cue);
   }
 }
 
