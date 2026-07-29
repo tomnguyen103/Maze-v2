@@ -265,6 +265,200 @@ describe("GameSession", () => {
     }
   });
 
+  it("pairs every Region 3 Echo with one deterministic sealed Bridge", () => {
+    const config = {
+      ...getLabyrinthConfig("trail-scout", 9),
+      ruleset: getQuestRunRuleset(9)
+    };
+    const first = createRun("ECHO-BRIDGES-09", config);
+    const second = createRun("ECHO-BRIDGES-09", config);
+    const protectedTiles = new Set([
+      tileKey(first.explorer),
+      tileKey(first.gate),
+      ...first.echoes.map(tileKey),
+      ...first.wardens.map(tileKey)
+    ]);
+
+    expect(first.echoBridges).toEqual(second.echoBridges);
+    expect(first.echoBridges).toHaveLength(first.echoes.length);
+    expect(first.echoBridges.map((bridge) => bridge.echoIndex)).toEqual(
+      first.echoes.map((_, index) => index)
+    );
+    expect(
+      new Set(
+        first.echoBridges.map((bridge) =>
+          [tileKey(bridge.from), tileKey(bridge.to)].sort().join("|")
+        )
+      ).size
+    ).toBe(first.echoBridges.length);
+    for (const bridge of first.echoBridges) {
+      const midpoint = {
+        row: (bridge.from.row + bridge.to.row) / 2,
+        col: (bridge.from.col + bridge.to.col) / 2
+      };
+      expect(bridge.open).toBe(false);
+      expect(protectedTiles.has(tileKey(bridge.from))).toBe(false);
+      expect(protectedTiles.has(tileKey(bridge.to))).toBe(false);
+      expect(first.labyrinth[bridge.from.row][bridge.from.col]).toBe(1);
+      expect(first.labyrinth[bridge.to.row][bridge.to.col]).toBe(1);
+      expect(first.labyrinth[midpoint.row][midpoint.col]).toBe(0);
+      expect(
+        Math.abs(bridge.from.row - bridge.to.row) +
+          Math.abs(bridge.from.col - bridge.to.col)
+      ).toBe(2);
+    }
+
+    expect(createRun("ECHO-BRIDGES-09").echoBridges).toEqual([]);
+  });
+
+  it("creates one Echo Bridge per Echo across 2,000 Region 3 seeds", () => {
+    const levels = ["bright-start", "trail-scout", "maze-master"];
+    for (let index = 0; index < 2_000; index += 1) {
+      const levelId = levels[index % levels.length];
+      const labyrinthNumber = 9 + (index % 4);
+      const run = createRun(`BRIDGE-STRESS-${index}`, {
+        ...getLabyrinthConfig(levelId, labyrinthNumber),
+        ruleset: getQuestRunRuleset(labyrinthNumber)
+      });
+      expect(
+        run.echoBridges.length,
+        `${levelId} seed ${index}`
+      ).toBe(run.echoes.length);
+    }
+  });
+
+  it("opens only the Bridge paired with a recovered Echo", () => {
+    const run = createRun("BRIDGE-OPEN", {
+      echoCount: 2,
+      size: 9,
+      wardenCount: 0,
+      ruleset: getQuestRunRuleset(9)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    openLabyrinth[4][4] = 0;
+    openLabyrinth[6][4] = 0;
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 2, col: 2 },
+      echoes: [
+        { row: 2, col: 3, collected: false },
+        { row: 6, col: 6, collected: false }
+      ],
+      gate: { row: 7, col: 7, open: false },
+      echoBridges: [
+        {
+          echoIndex: 0,
+          from: { row: 4, col: 3 },
+          to: { row: 4, col: 5 },
+          open: false
+        },
+        {
+          echoIndex: 1,
+          from: { row: 6, col: 3 },
+          to: { row: 6, col: 5 },
+          open: false
+        }
+      ]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.echoBridges).toEqual([
+      expect.objectContaining({ echoIndex: 0, open: true }),
+      expect.objectContaining({ echoIndex: 1, open: false })
+    ]);
+    expect(next.event).toMatchObject({
+      type: "echo-collected",
+      message: expect.stringContaining("Bridge opened")
+    });
+    expect(staged.echoBridges.every((bridge) => !bridge.open)).toBe(true);
+  });
+
+  it("crosses an open Echo Bridge in one Move and blocks its sealed form", () => {
+    const run = createRun("BRIDGE-TRAVEL", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 0,
+      ruleset: getQuestRunRuleset(9)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    openLabyrinth[4][4] = 0;
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      echoBridges: [{
+        echoIndex: 0,
+        from: { row: 4, col: 3 },
+        to: { row: 4, col: 5 },
+        open: false
+      }]
+    };
+
+    const sealed = applyAction(staged, { type: "move", direction: "right" });
+    expect(sealed.explorer).toEqual(staged.explorer);
+    expect(sealed.moves).toBe(staged.moves);
+
+    const opened = applyAction(
+      {
+        ...staged,
+        echoBridges: [{ ...staged.echoBridges[0], open: true }]
+      },
+      { type: "move", direction: "right" }
+    );
+    expect(opened.explorer).toMatchObject({ row: 4, col: 5 });
+    expect(opened.moves).toBe(staged.moves + 1);
+    expect(opened.event).toMatchObject({
+      type: "echo-bridge-travel",
+      message: expect.stringContaining("Echo Bridge")
+    });
+    expect(opened.labyrinth).toEqual(staged.labyrinth);
+  });
+
+  it("uses open Echo Bridges for Warden movement", () => {
+    const run = createRun("BRIDGE-WARDEN", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(9)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    openLabyrinth[4][4] = 0;
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 2 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 5, id: 0, mode: /** @type {const} */ ("patrol") }],
+      echoBridges: [{
+        echoIndex: 0,
+        from: { row: 4, col: 3 },
+        to: { row: 4, col: 5 },
+        open: true
+      }]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "up" });
+
+    expect(next.wardens).toEqual([
+      { row: 4, col: 3, id: 0, mode: "hunt" }
+    ]);
+  });
+
   it("places every entity on a unique reachable passage", () => {
     const run = createRun("REACHABLE-31");
     const reachable = new Set(

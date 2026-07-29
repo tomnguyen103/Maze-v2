@@ -37,12 +37,12 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   capable: Object.freeze({
-    motif: "Bridgework",
+    motif: "Joined arches and clear blue spans",
     fieldNotes: Object.freeze([
-      "Rope bridges join the middle reaches.",
-      "Recovered Echoes make the route easier to remember.",
-      "Careful turns reveal how the crossings connect.",
-      "The central Gate Warden waits beyond the last bridge."
+      "Each sealed Echo Bridge marks a shortcut waiting to open.",
+      "A recovered Echo opens its paired Bridge for Explorer and Warden.",
+      "Sunspan crossings add paths without closing the stone route.",
+      "The Joined Path Sigil waits beyond the Gate Warden."
     ])
   }),
   advanced: Object.freeze({

@@ -12,6 +12,12 @@ import {
  *   destination: Position,
  *   direction: Direction
  * }} Windway
+ * @typedef {{
+ *   echoIndex: number,
+ *   from: Position,
+ *   to: Position,
+ *   open: boolean
+ * }} EchoBridge
  * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
  * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
@@ -80,6 +86,7 @@ import {
  *   gate: Position & { open: boolean, sealed?: boolean },
  *   wardens: Warden[],
  *   windways: Windway[],
+ *   echoBridges: EchoBridge[],
  *   gateWarden?: { id: number, defeated: boolean },
  *   challenge: WardenChallenge | null,
  *   revealed: string[],
@@ -203,6 +210,14 @@ export function createRun(requestedSeed, input = {}) {
         2
       )
     : [];
+  const echoBridges = config.ruleset.revision === "echo-bridges-v1"
+    ? createEchoBridges(
+        labyrinth,
+        occupied,
+        echoes.length,
+        random
+      )
+    : [];
 
   const explorer = {
     ...explorerPosition,
@@ -223,6 +238,7 @@ export function createRun(requestedSeed, input = {}) {
       : { ...gatePosition, open: config.echoCount === 0 },
     wardens,
     windways,
+    echoBridges,
     ...(gateWarden
       ? { gateWarden: { id: gateWarden.id, defeated: false } }
       : {}),
@@ -500,12 +516,14 @@ function resolveMove(run, directionName) {
     };
   }
 
-  const target = {
+  const directTarget = {
     row: run.explorer.row + direction.row,
     col: run.explorer.col + direction.col
   };
-
-  if (!isPassage(run.labyrinth, target)) {
+  const echoBridge = run.ruleset.revision === "echo-bridges-v1"
+    ? openBridgeAcrossWall(run.echoBridges, run.explorer, directTarget)
+    : undefined;
+  if (!isPassage(run.labyrinth, directTarget) && !echoBridge) {
     return {
       ...run,
       event: { type: "blocked", message: "Wall. Choose another direction." }
@@ -513,7 +531,7 @@ function resolveMove(run, directionName) {
   }
 
   const windway = run.ruleset.revision === "windways-v1"
-    ? run.windways.find(({ source }) => samePosition(source, target))
+    ? run.windways.find(({ source }) => samePosition(source, directTarget))
     : undefined;
   if (windway && !isPassage(run.labyrinth, windway.destination)) {
     return {
@@ -524,7 +542,8 @@ function resolveMove(run, directionName) {
       }
     };
   }
-  const destination = windway?.destination ?? target;
+  const destination =
+    echoBridge?.destination ?? windway?.destination ?? directTarget;
   const nextMoves = run.moves + 1;
   if (
     samePosition(destination, run.gate) &&
@@ -559,12 +578,17 @@ function resolveMove(run, directionName) {
     explorer: { ...run.explorer, ...destination },
     moves: nextMoves,
     lastDirection: directionName,
-    event: windway
+    event: echoBridge
       ? {
+          type: "echo-bridge-travel",
+          message: "Echo Bridge carried you across the sealed wall."
+        }
+      : windway
+        ? {
           type: "windway-travel",
           message: `Windway carried you ${windway.direction}.`
         }
-      : { type: "moved", message: `Moved ${directionName}.` }
+        : { type: "moved", message: `Moved ${directionName}.` }
   };
   next = expirePulse(next);
   next = revealExplorerArea(next);
@@ -689,18 +713,26 @@ function collectEcho(run) {
     index === echoIndex ? { ...echo, collected: true } : echo
   );
   const allCollected = echoes.every((echo) => echo.collected);
+  const echoBridges = run.echoBridges.map((bridge) =>
+    bridge.echoIndex === echoIndex ? { ...bridge, open: true } : bridge
+  );
+  const bridgeOpened = echoBridges.some(
+    (bridge, index) => bridge.open && !run.echoBridges[index]?.open
+  );
+  const bridgeMessage = bridgeOpened ? " Bridge opened." : "";
   return {
     ...run,
     echoes,
+    echoBridges,
     score: run.score + 50,
     gate: { ...run.gate, open: allCollected },
     event: {
       type: "echo-collected",
       message: allCollected
         ? run.gate.sealed
-          ? "Final Echo recovered. The Gate is open but sealed. The Gate Warden waits. You earned 50 score."
-          : "Final Echo recovered. The Gate is open. You earned 50 score."
-        : `Echo recovered. ${echoes.filter((echo) => !echo.collected).length} remain. You earned 50 score.`
+          ? `Final Echo recovered.${bridgeMessage} The Gate is open but sealed. The Gate Warden waits. You earned 50 score.`
+          : `Final Echo recovered.${bridgeMessage} The Gate is open. You earned 50 score.`
+        : `Echo recovered.${bridgeMessage} ${echoes.filter((echo) => !echo.collected).length} remain. You earned 50 score.`
     }
   };
 }
@@ -716,7 +748,11 @@ function moveWardens(run) {
       .filter((echo) => !echo.collected)
       .map((echo) => positionKey(echo))
   ]);
-  const explorerDistances = distancesFrom(run.labyrinth, run.explorer);
+  const explorerDistances = distancesFrom(
+    run.labyrinth,
+    run.explorer,
+    run.echoBridges
+  );
   const originalWardenPositions = new Set(run.wardens.map(positionKey));
   /** @type {Warden[]} */
   const wardens = [];
@@ -728,7 +764,11 @@ function moveWardens(run) {
       ...wardens.map(positionKey)
     ]);
     /** @type {Position[]} */
-    const candidates = passageNeighbors(run.labyrinth, warden).filter(
+    const candidates = passageNeighbors(
+      run.labyrinth,
+      warden,
+      run.echoBridges
+    ).filter(
       (position) =>
         !reserved.has(positionKey(position)) &&
         !occupiedByWarden.has(positionKey(position))
@@ -753,7 +793,11 @@ function moveWardens(run) {
         : mode === "hunt"
           ? run.explorer
           : patrolTarget(run, warden);
-    const targetDistances = distancesFrom(run.labyrinth, target);
+    const targetDistances = distancesFrom(
+      run.labyrinth,
+      target,
+      run.echoBridges
+    );
     /** @type {Position[]} */
     const ordered = [...legal].sort((left, right) => {
       const leftDistance = targetDistances.get(positionKey(left)) ?? Infinity;
@@ -852,7 +896,11 @@ function patrolTarget(run, warden) {
     return run.gate;
   }
 
-  const distances = distancesFrom(run.labyrinth, warden);
+  const distances = distancesFrom(
+    run.labyrinth,
+    warden,
+    run.echoBridges
+  );
   return [...targets].sort(
     (left, right) =>
       (distances.get(positionKey(left)) ?? Infinity) -
@@ -876,6 +924,12 @@ function cloneRun(run) {
       source: { ...windway.source },
       destination: { ...windway.destination },
       direction: windway.direction
+    })),
+    echoBridges: run.echoBridges.map((bridge) => ({
+      echoIndex: bridge.echoIndex,
+      from: { ...bridge.from },
+      to: { ...bridge.to },
+      open: bridge.open
     })),
     ...(run.gateWarden
       ? { gateWarden: { ...run.gateWarden } }
@@ -1020,15 +1074,20 @@ function generateLabyrinth(size, random) {
 /**
  * @param {number[][]} labyrinth
  * @param {Position} start
+ * @param {EchoBridge[]} [echoBridges]
  */
-function distancesFrom(labyrinth, start) {
+function distancesFrom(labyrinth, start, echoBridges = []) {
   const distances = new Map([[positionKey(start), 0]]);
   const queue = [start];
 
   for (let index = 0; index < queue.length; index += 1) {
     const current = queue[index];
     const distance = distances.get(positionKey(current)) ?? 0;
-    for (const neighbor of passageNeighbors(labyrinth, current)) {
+    for (const neighbor of passageNeighbors(
+      labyrinth,
+      current,
+      echoBridges
+    )) {
       const key = positionKey(neighbor);
       if (distances.has(key)) {
         continue;
@@ -1043,12 +1102,29 @@ function distancesFrom(labyrinth, start) {
 /**
  * @param {number[][]} labyrinth
  * @param {Position} position
+ * @param {EchoBridge[]} [echoBridges]
  */
-function passageNeighbors(labyrinth, position) {
-  return DIRECTIONS.map((direction) => ({
+function passageNeighbors(labyrinth, position, echoBridges = []) {
+  const direct = DIRECTIONS.map((direction) => ({
     row: position.row + direction.row,
     col: position.col + direction.col
   })).filter((candidate) => isPassage(labyrinth, candidate));
+  const bridgeNeighbors = echoBridges
+    .filter((bridge) => bridge.open)
+    .flatMap((bridge) => {
+      if (samePosition(bridge.from, position)) {
+        return [{ ...bridge.to }];
+      }
+      if (samePosition(bridge.to, position)) {
+        return [{ ...bridge.from }];
+      }
+      return [];
+    });
+  return [...direct, ...bridgeNeighbors].filter(
+    (candidate, index, positions) =>
+      positions.findIndex((position) => samePosition(position, candidate)) ===
+      index
+  );
 }
 
 /**
@@ -1194,6 +1270,111 @@ function createWindways(
     }
   }
   return windways;
+}
+
+/**
+ * @param {number[][]} labyrinth
+ * @param {Set<string>} protectedTiles
+ * @param {number} count
+ * @param {() => number} random
+ * @returns {EchoBridge[]}
+ */
+function createEchoBridges(labyrinth, protectedTiles, count, random) {
+  const candidates = [];
+  for (let row = 1; row < labyrinth.length - 1; row += 1) {
+    for (let col = 1; col < labyrinth[row].length - 1; col += 1) {
+      if (labyrinth[row][col] !== 0) {
+        continue;
+      }
+      const pairs = [
+        [
+          { row, col: col - 1 },
+          { row, col: col + 1 }
+        ],
+        [
+          { row: row - 1, col },
+          { row: row + 1, col }
+        ]
+      ];
+      for (const [from, to] of pairs) {
+        if (
+          isPassage(labyrinth, from) &&
+          isPassage(labyrinth, to) &&
+          !protectedTiles.has(positionKey(from)) &&
+          !protectedTiles.has(positionKey(to))
+        ) {
+          candidates.push({ from, to });
+        }
+      }
+    }
+  }
+  shuffle(candidates, random);
+  const reserved = new Set(protectedTiles);
+  const selected = [];
+  for (const candidate of candidates) {
+    if (
+      reserved.has(positionKey(candidate.from)) ||
+      reserved.has(positionKey(candidate.to))
+    ) {
+      continue;
+    }
+    selected.push(candidate);
+    reserved.add(positionKey(candidate.from));
+    reserved.add(positionKey(candidate.to));
+    if (selected.length === count) {
+      break;
+    }
+  }
+  if (selected.length < count) {
+    for (const candidate of candidates) {
+      if (
+        selected.some(
+          (bridge) =>
+            samePosition(bridge.from, candidate.from) &&
+            samePosition(bridge.to, candidate.to)
+        )
+      ) {
+        continue;
+      }
+      selected.push(candidate);
+      if (selected.length === count) {
+        break;
+      }
+    }
+  }
+  return selected.map((bridge, echoIndex) => ({
+    echoIndex,
+    from: { ...bridge.from },
+    to: { ...bridge.to },
+    open: false
+  }));
+}
+
+/**
+ * @param {EchoBridge[]} bridges
+ * @param {Position} position
+ * @param {Position} wall
+ */
+function openBridgeAcrossWall(bridges, position, wall) {
+  for (const bridge of bridges) {
+    if (!bridge.open) {
+      continue;
+    }
+    const midpoint = {
+      row: (bridge.from.row + bridge.to.row) / 2,
+      col: (bridge.from.col + bridge.to.col) / 2
+    };
+    if (!samePosition(midpoint, wall)) {
+      continue;
+    }
+    if (samePosition(bridge.from, position)) {
+      return { bridge, destination: bridge.to };
+    }
+    if (samePosition(bridge.to, position)) {
+      return { bridge, destination: bridge.from };
+    }
+  }
+  return undefined;
 }
 
 /**

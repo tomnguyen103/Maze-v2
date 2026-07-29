@@ -10,6 +10,12 @@
  *   destination: Position,
  *   direction: "up" | "right" | "down" | "left"
  * }} Windway
+ * @typedef {{
+ *   echoIndex: number,
+ *   from: Position,
+ *   to: Position,
+ *   open: boolean
+ * }} EchoBridge
  */
 
 /**
@@ -47,7 +53,6 @@ export function createCanvasRenderer(canvas) {
         revealed.add(destinationKey);
       }
     }
-
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = palette.fog;
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -75,9 +80,12 @@ export function createCanvasRenderer(canvas) {
         drawWindway(windway, tile);
       }
     }
-    for (const echo of run.echoes) {
+    for (const bridge of run.echoBridges) {
+      drawEchoBridge(bridge, tile);
+    }
+    for (const [echoIndex, echo] of run.echoes.entries()) {
       if (!echo.collected && revealed.has(`${echo.row},${echo.col}`)) {
-        drawEcho(echo, tile);
+        drawEcho(echo, tile, echoIndex + 1);
       }
     }
     for (const warden of run.wardens) {
@@ -190,8 +198,12 @@ export function createCanvasRenderer(canvas) {
     context.fill();
   }
 
-  /** @param {Echo} echo @param {number} tile */
-  function drawEcho(echo, tile) {
+  /**
+   * @param {Echo} echo
+   * @param {number} tile
+   * @param {number} pairNumber
+   */
+  function drawEcho(echo, tile, pairNumber) {
     const { x, y } = centerOf(echo, tile);
     const scale = palette.markScale;
     context.save();
@@ -211,6 +223,14 @@ export function createCanvasRenderer(canvas) {
       tile * 0.2 * scale,
       tile * 0.2 * scale
     );
+    context.restore();
+    context.save();
+    context.fillStyle = palette.night;
+    context.font =
+      `700 ${Math.max(8, tile * 0.2 * scale)}px ${palette.fontBody}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(String(pairNumber), x, y);
     context.restore();
   }
 
@@ -299,6 +319,73 @@ export function createCanvasRenderer(canvas) {
       endY - rowDelta * tile * 0.18 - sideY * tile * 0.13
     );
     context.stroke();
+    context.restore();
+  }
+
+  /** @param {EchoBridge} bridge @param {number} tile */
+  function drawEchoBridge(bridge, tile) {
+    const from = centerOf(bridge.from, tile);
+    const to = centerOf(bridge.to, tile);
+    const midpoint = {
+      x: (from.x + to.x) / 2,
+      y: (from.y + to.y) / 2
+    };
+    const scale = palette.markScale;
+    context.save();
+    context.strokeStyle = bridge.open ? palette.signal : palette.gate;
+    context.lineWidth = Math.max(2, tile * 0.1 * scale);
+    context.lineCap = "round";
+    context.setLineDash(
+      bridge.open
+        ? []
+        : [tile * 0.16 * scale, tile * 0.13 * scale]
+    );
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+    context.setLineDash([]);
+    for (const endpoint of [from, to]) {
+      context.beginPath();
+      context.arc(
+        endpoint.x,
+        endpoint.y,
+        tile * 0.12 * scale,
+        0,
+        Math.PI * 2
+      );
+      context.fillStyle = palette.night;
+      context.fill();
+      context.stroke();
+    }
+    if (!bridge.open) {
+      context.beginPath();
+      context.moveTo(midpoint.x - tile * 0.11, midpoint.y - tile * 0.11);
+      context.lineTo(midpoint.x + tile * 0.11, midpoint.y + tile * 0.11);
+      context.moveTo(midpoint.x + tile * 0.11, midpoint.y - tile * 0.11);
+      context.lineTo(midpoint.x - tile * 0.11, midpoint.y + tile * 0.11);
+      context.stroke();
+    }
+    context.beginPath();
+    context.arc(
+      midpoint.x,
+      midpoint.y - tile * 0.24 * scale,
+      tile * 0.13 * scale,
+      0,
+      Math.PI * 2
+    );
+    context.fillStyle = palette.night;
+    context.fill();
+    context.fillStyle = palette.paper;
+    context.font =
+      `700 ${Math.max(8, tile * 0.19 * scale)}px ${palette.fontBody}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(
+      String(bridge.echoIndex + 1),
+      midpoint.x,
+      midpoint.y - tile * 0.24 * scale
+    );
     context.restore();
   }
 

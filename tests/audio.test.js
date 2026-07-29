@@ -66,7 +66,16 @@ describe("EchoAudio ambient Region layer", () => {
       0
     );
     expect(regionTwoAmbient.stop).not.toHaveBeenCalled();
-    await audio.toggle();
+
+    audio.setAmbient("capable", true);
     expect(regionTwoAmbient.stop).toHaveBeenCalledOnce();
+    const regionThreeAmbient = oscillators.at(-1);
+    expect(regionThreeAmbient.frequency.setValueAtTime).toHaveBeenCalledWith(
+      147,
+      0
+    );
+    expect(regionThreeAmbient.stop).not.toHaveBeenCalled();
+    await audio.toggle();
+    expect(regionThreeAmbient.stop).toHaveBeenCalledOnce();
   });
 });

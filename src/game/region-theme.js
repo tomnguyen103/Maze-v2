@@ -22,6 +22,14 @@ const REGION_THEMES = Object.freeze({
     wardenGuild: "Kitewatch Guild",
     ambientLabel: "Windcall reed chorus",
     sigilName: "Rising Wind Sigil"
+  }),
+  capable: Object.freeze({
+    id: "sunspan-crossing",
+    name: "Sunspan Crossing",
+    motif: "Joined arches and clear blue spans",
+    wardenGuild: "Spanwatch Guild",
+    ambientLabel: "Sunspan string chorus",
+    sigilName: "Joined Path Sigil"
   })
 });
 

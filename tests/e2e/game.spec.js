@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expectGameReady } from "./game-ready.js";
 import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
@@ -158,6 +160,104 @@ function milestoneWinningPlan(seed, labyrinthNumber = 4) {
     throw new Error("Milestone plan did not reach the Gate.");
   }
   return { actions, finalRun: run };
+}
+
+/**
+ * @param {string} seed
+ * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[], finalRun: ReturnType<typeof createRun> }}
+ */
+function echoBridgeTravelPlan(seed) {
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 9),
+    ruleset: getQuestRunRuleset(9)
+  });
+  const bridge = run.echoBridges[0];
+  if (!bridge) {
+    throw new Error("Expected an Echo Bridge fixture.");
+  }
+  /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[]} */
+  const actions = [];
+  for (const target of [run.echoes[bridge.echoIndex], bridge.from]) {
+    for (let step = 0; step < 400; step += 1) {
+      if (run.status === "challenge") {
+        const kind = run.challenge?.kind;
+        actions.push({
+          type: "answer",
+          ...(kind ? { kind } : {}),
+          wardenId: run.challenge?.wardenId ?? 0
+        });
+        run = applyAction(run, {
+          type: "provide-question",
+          question: TEST_QUESTION
+        });
+        run = applyAction(run, {
+          type: "answer-question",
+          answerId: TEST_QUESTION.answerId
+        });
+        continue;
+      }
+      if (
+        run.explorer.row === target.row &&
+        run.explorer.col === target.col
+      ) {
+        break;
+      }
+      const direction = pathTo(run, target)[0];
+      if (!direction) {
+        throw new Error("Expected a move toward the Echo Bridge fixture.");
+      }
+      actions.push({ type: "move", direction });
+      run = applyAction(run, {
+        type: "move",
+        direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+      });
+    }
+  }
+  const rowDelta = bridge.to.row - bridge.from.row;
+  const colDelta = bridge.to.col - bridge.from.col;
+  const direction = rowDelta < 0
+    ? "up"
+    : rowDelta > 0
+      ? "down"
+      : colDelta < 0
+        ? "left"
+        : "right";
+  actions.push({ type: "move", direction });
+  run = applyAction(run, {
+    type: "move",
+    direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+  });
+  if (
+    run.explorer.row !== bridge.to.row ||
+    run.explorer.col !== bridge.to.col
+  ) {
+    throw new Error("Echo Bridge fixture did not cross its opened Bridge.");
+  }
+  return { actions, finalRun: run };
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"shell" | "opened-bridge"} state
+ */
+async function recordRegion3Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-3-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-3-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
 }
 
 /**
@@ -1912,6 +2012,214 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await atlas.getByRole("button", { name: "List view" }).click();
   await atlas.locator("[data-atlas-landmark='developing-5']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 3 identity through Echo Bridge play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const retainedPlan = milestoneWinningPlan("BRIDGE-TRAIL-9", 9);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  const travelPlan = echoBridgeTravelPlan("BRIDGE-VIEW-9");
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 3 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "BRIDGE-TRAIL-9",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_bridges_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 9,
+      atlasRegionId: "capable",
+      rulesetRevision: "echo-bridges-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_bridges_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 10,
+      completedLabyrinths: 9,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=BRIDGE-VIEW-9&level=trail-scout&labyrinth=9&region=capable&rules=echo-bridges-v1"
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Capable"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Echo Bridges"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Spanwatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Sunspan string chorus is optional"
+  );
+  await expect(page.locator("#echo-bridge-legend")).toBeVisible();
+  await expect(page.getByLabel(/Interactive maze/)).toHaveAttribute(
+    "aria-label",
+    /Pair 1 sealed/
+  );
+  for (const action of await page
+    .locator(".command-bar__actions > :visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth,
+        id: element.id,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth,
+        text: element.textContent?.trim() ?? ""
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `${fit.id || fit.text} must not clip: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+  await atlasButton.click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const capableRegion = atlas.locator("[data-atlas-region='capable']");
+  await expect(capableRegion).toContainText("Sunspan Crossing");
+  await expect(capableRegion).toContainText(
+    "Joined arches and clear blue spans"
+  );
+  await expect(capableRegion).toContainText("Joined Path Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+
+  await expect(atlasButton).toBeFocused();
+  const maze = page.getByLabel(/Interactive maze/);
+  await recordRegion3Screenshot(page, testInfo, "shell");
+  const challenge = page.locator("#challenge-dialog");
+  let expectedMoves = 0;
+  let questionOrdinal = 0;
+  for (const [actionIndex, action] of travelPlan.actions.entries()) {
+    if (action.type === "move") {
+      await maze.press(KEY_BY_DIRECTION[action.direction]);
+      expectedMoves += 1;
+      await expect.poll(async () => {
+        const state = await page.evaluate(() => ({
+          activeElement: document.activeElement?.id ?? "",
+          challengeVisible: document
+            .querySelector("#challenge-dialog")
+            ?.matches(":modal") ?? false,
+          moves: Number(document.querySelector("#moves-value")?.textContent ?? -1),
+          openDialogs: [...document.querySelectorAll("dialog[open]")]
+            .map((dialog) => dialog.id)
+        }));
+        return state.moves === expectedMoves || state.challengeVisible
+          ? "acknowledged"
+          : JSON.stringify(state);
+      }, {
+        message:
+          `Region 3 action ${actionIndex} (${action.direction}) was not acknowledged`
+      }).toBe("acknowledged");
+      continue;
+    }
+    await expect(challenge, {
+      message: `Region 3 action ${actionIndex} expected a Warden Challenge`
+    }).toBeVisible();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 9,
+      questionOrdinal,
+      seed: "BRIDGE-VIEW-9",
+      wardenId: action.wardenId,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+  }
+  await expect(page.locator("#field-note")).toHaveText(
+    "Echo Bridge carried you across the sealed wall."
+  );
+  await expect(page.locator("#moves-value")).toHaveText(
+    String(travelPlan.finalRun.moves).padStart(3, "0")
+  );
+  await maze.scrollIntoViewIfNeeded();
+  await recordRegion3Screenshot(page, testInfo, "opened-bridge");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("capable");
+  expect(copied.searchParams.get("rules")).toBe("echo-bridges-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Capable");
+  await expect(records).toContainText("Trail Twist: Echo Bridges");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed BRIDGE-TRAIL-9"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=BRIDGE-SHELL-10&level=trail-scout&labyrinth=10&region=capable&rules=echo-bridges-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='capable-9']").click();
   await expect(atlas.getByRole("button", { name: "Watch Trail" }))
     .toBeVisible();
   await atlas.getByRole("button", { name: "Watch Trail" }).click();

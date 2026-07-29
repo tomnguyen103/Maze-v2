@@ -1123,6 +1123,13 @@ body[data-run-mode="first-light"] .play-workbench {
   line-height: 1;
 }
 
+.legend-mark--echo-bridge::before {
+  content: "";
+  display: block;
+  width: 100%;
+  border-block-start: 0.18rem dashed var(--color-gate);
+}
+
 body[data-region-theme="mosslight-grove"] .canvas-frame {
   border-color: var(--color-gate);
   box-shadow:
@@ -1142,6 +1149,18 @@ body[data-region-theme="windcall-ridge"] .canvas-frame {
 }
 
 body[data-region-theme="windcall-ridge"] .warden-readout {
+  box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
+}
+
+body[data-region-theme="sunspan-crossing"] .canvas-frame {
+  border-color: var(--color-explorer);
+  box-shadow:
+    0 0 0 3px var(--color-echo-soft),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="sunspan-crossing"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-explorer);
   box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
 }
 

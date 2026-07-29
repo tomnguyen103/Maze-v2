@@ -141,12 +141,15 @@ function comparableState(run) {
   return {
     seed: run.seed,
     config: run.config,
+    ruleset: run.ruleset,
     labyrinth: run.labyrinth,
     explorer: run.explorer,
     echoes: run.echoes,
     gate: run.gate,
     gateWarden: run.gateWarden,
     wardens: run.wardens,
+    windways: run.windways,
+    echoBridges: run.echoBridges,
     challenge: run.challenge,
     revealed: run.revealed,
     pulseVisible: run.pulseVisible,
@@ -222,10 +225,19 @@ function pathTo(run, goal) {
 
 /**
  * @param {RecoveryController} controller
- * @param {{ revealFirstHint?: boolean }} [options]
+ * @param {{
+ *   revealFirstHint?: boolean,
+ *   locator?: RecoveryLocator
+ * }} [options]
  */
-function finishWinningRun(controller, { revealFirstHint = false } = {}) {
-  let run = initialRun();
+function finishWinningRun(
+  controller,
+  {
+    revealFirstHint = false,
+    locator = LOCATOR
+  } = {}
+) {
+  let run = initialRun(locator);
   const pulseTransition = durableTransition(controller, run, { type: "pulse" });
   run = pulseTransition.run;
   let terminalResult = pulseTransition.result;
@@ -233,11 +245,11 @@ function finishWinningRun(controller, { revealFirstHint = false } = {}) {
   for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
     if (run.status === "challenge") {
       const question = getBundledQuestion({
-        levelId: LOCATOR.levelId,
-        seed: LOCATOR.seed,
+        levelId: locator.levelId,
+        seed: locator.seed,
         wardenId: run.challenge?.wardenId ?? 0,
         attempt: run.challenge?.attempt ?? 0,
-        labyrinthNumber: LOCATOR.labyrinthNumber,
+        labyrinthNumber: locator.labyrinthNumber,
         questionOrdinal
       });
       questionOrdinal += 1;
@@ -371,11 +383,52 @@ describe("Active Run Recovery", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });
     controller.begin(RULESET_LOCATOR);
-    const run = initialRun(RULESET_LOCATOR);
-    const transition = durableTransition(controller, run, {
-      type: "move",
-      direction: firstLegalDirection(run)
-    });
+    let run = initialRun(RULESET_LOCATOR);
+    let questionOrdinal = 0;
+    for (
+      let step = 0;
+      step < 800 && !run.echoes[0].collected;
+      step += 1
+    ) {
+      if (run.status === "challenge") {
+        const question = getBundledQuestion({
+          levelId: RULESET_LOCATOR.levelId,
+          seed: RULESET_LOCATOR.seed,
+          wardenId: run.challenge?.wardenId ?? 0,
+          attempt: run.challenge?.attempt ?? 0,
+          labyrinthNumber: RULESET_LOCATOR.labyrinthNumber,
+          questionOrdinal
+        });
+        questionOrdinal += 1;
+        ({ run } = durableTransition(controller, run, {
+          type: "provide-question",
+          question
+        }));
+        ({ run } = durableTransition(controller, run, {
+          type: "answer-question",
+          answerId: question.answerId
+        }));
+        continue;
+      }
+      const direction = pathTo(run, run.echoes[0])[0];
+      if (!direction) {
+        throw new Error("Expected a route to the first paired Echo.");
+      }
+      ({ run } = durableTransition(controller, run, {
+        type: "move",
+        direction
+      }));
+    }
+    expect(run.echoes[0].collected).toBe(true);
+    expect(run.echoBridges).toEqual([
+      expect.objectContaining({ echoIndex: 0, open: true }),
+      ...run.echoBridges.slice(1).map((bridge) =>
+        expect.objectContaining({
+          echoIndex: bridge.echoIndex,
+          open: false
+        })
+      )
+    ]);
 
     const recovered = createActiveRunRecoveryController({
       storage
@@ -383,7 +436,7 @@ describe("Active Run Recovery", () => {
 
     expect(recovered.status).toBe("recovered");
     expect(recovered.run?.ruleset).toEqual(run.ruleset);
-    expect(transition.run.ruleset).toEqual(run.ruleset);
+    expect(recovered.run?.echoBridges).toEqual(run.echoBridges);
     expect(
       JSON.parse(storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "{}").identity
     ).toMatchObject({
@@ -722,6 +775,44 @@ describe("Active Run Recovery", () => {
     expect(JSON.stringify(replay)).not.toMatch(
       /answerId|choices|question|provider|account|email|runId/i
     );
+  });
+
+  it("reconstructs the exact opened Echo Bridge pair in a retained Replay", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(RULESET_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: RULESET_LOCATOR
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: RULESET_LOCATOR.levelId,
+      labyrinthNumber: RULESET_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    const firstOpenedPair = timeline.states.find((state) =>
+      state.echoBridges.some((bridge) => bridge.open) &&
+      state.echoBridges.some((bridge) => !bridge.open)
+    );
+
+    expect(firstOpenedPair?.echoBridges).toEqual([
+      expect.objectContaining({ echoIndex: 0, open: true }),
+      ...run.echoBridges.slice(1).map((bridge) =>
+        expect.objectContaining({
+          echoIndex: bridge.echoIndex,
+          open: false
+        })
+      )
+    ]);
+    expect(timeline.states.at(-1)?.echoBridges.every(
+      (bridge) => bridge.open
+    )).toBe(true);
   });
 
   it("clears terminal recovery and selected answer identifiers", () => {

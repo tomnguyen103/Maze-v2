@@ -34,6 +34,16 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[1].nodes[0].fieldNote).toContain(
       "Windway source"
     );
+    expect(atlas.regions[2]).toMatchObject({
+      id: "capable",
+      themeName: "Sunspan Crossing",
+      wardenGuild: "Spanwatch Guild",
+      motif: "Joined arches and clear blue spans",
+      sigilLabel: "Joined Path Sigil restores at Labyrinth 12"
+    });
+    expect(atlas.regions[2].nodes[0].fieldNote).toContain(
+      "sealed Echo Bridge"
+    );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
         id: "foundation-1",

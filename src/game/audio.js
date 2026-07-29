@@ -5,7 +5,8 @@
 /** @type {Readonly<Record<string, number>>} */
 const AMBIENT_FREQUENCIES = Object.freeze({
   foundation: 82,
-  developing: 110
+  developing: 110,
+  capable: 147
 });
 
 export class EchoAudio {

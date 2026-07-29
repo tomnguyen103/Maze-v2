@@ -212,6 +212,7 @@ const elements = {
   wardenReadout: requiredElement("warden-readout", HTMLElement),
   wardenGuild: requiredElement("warden-guild", HTMLElement),
   wardenState: requiredElement("warden-state", HTMLElement),
+  echoBridgeLegend: requiredElement("echo-bridge-legend", HTMLLIElement),
   windwayLegend: requiredElement("windway-legend", HTMLLIElement)
 };
 
@@ -3174,6 +3175,16 @@ function updateInterface() {
     "aria-label",
     activeFirstLight
       ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
+      : run.echoBridges.length > 0
+        ? `Interactive maze with matching numbered Echo and Echo Bridge marks. ${
+          run.echoBridges
+            .map((bridge) =>
+              `Pair ${bridge.echoIndex + 1} ${
+                bridge.open ? "open" : "sealed"
+              }`
+            )
+            .join(", ")
+        }. Each Bridge is visible through Fog and works for Explorer and Warden. Use arrow keys or WASD to move. Press Q or Space to use Pulse.`
       : run.windways.length > 0
         ? "Interactive maze with directional Windway source and destination marks. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
         : "Interactive maze. Use arrow keys or WASD to move. Press Q or Space to use Pulse."
@@ -3250,6 +3261,7 @@ function updateInterface() {
   elements.wardenGuild.textContent = regionTheme
     ? `${regionTheme.wardenGuild} · ${regionTheme.ambientLabel} is optional.`
     : "Universal Warden marks";
+  elements.echoBridgeLegend.hidden = run.echoBridges.length === 0;
   elements.windwayLegend.hidden = run.windways.length === 0;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");

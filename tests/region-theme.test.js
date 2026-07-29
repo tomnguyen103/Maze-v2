@@ -38,6 +38,25 @@ describe("Region Theme", () => {
       sigilName: "Rising Wind Sigil"
     });
     expect(ruleset).toEqual(before);
-    expect(getRegionTheme("capable")).toBeNull();
+  });
+
+  it("authors Region 3 presentation without changing Run rules", () => {
+    const ruleset = {
+      atlasRegionId: "capable",
+      revision: "echo-bridges-v1",
+      label: "Echo Bridges"
+    };
+    const before = structuredClone(ruleset);
+
+    expect(getRegionTheme(ruleset.atlasRegionId)).toEqual({
+      id: "sunspan-crossing",
+      name: "Sunspan Crossing",
+      motif: "Joined arches and clear blue spans",
+      wardenGuild: "Spanwatch Guild",
+      ambientLabel: "Sunspan string chorus",
+      sigilName: "Joined Path Sigil"
+    });
+    expect(ruleset).toEqual(before);
+    expect(getRegionTheme("advanced")).toBeNull();
   });
 });
