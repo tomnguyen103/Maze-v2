@@ -125,7 +125,7 @@
           <div class="warden-readout" id="warden-readout" data-mode="patrol">
             <span class="section-label">Warden mode</span>
             <strong id="warden-state">Patrol</strong>
-            <p>Answer correctly to defeat it.</p>
+            <p id="warden-guild">Universal Warden marks</p>
           </div>
         </aside>
 
@@ -516,6 +516,14 @@
       <span class="section-label" id="challenge-kicker">Warden challenge</span>
       <h2 id="challenge-title">A Warden blocks the path.</h2>
       <p class="challenge-dialog__promise" id="challenge-promise">Answer correctly and the Warden is defeated.</p>
+      <button
+        class="control-button"
+        id="gate-staging-skip"
+        type="button"
+        hidden
+      >
+        Skip entrance
+      </button>
       <div class="challenge-feedback" id="challenge-feedback" role="status">
         Think carefully. Your timer is paused.
       </div>

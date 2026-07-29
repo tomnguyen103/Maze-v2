@@ -29,7 +29,7 @@ export function renderQuestAtlasSummary(
   state.textContent = node?.stateLabel ?? "Quest position saved";
   const detail = document.createElement("span");
   detail.textContent = won && node?.milestone && region?.sigilRestored
-    ? `${region.label} Sigil restored`
+    ? `${region.label} ${region.sigilLabel}`
     : won
       ? `${region?.label ?? "Quest"} · Labyrinth ${finishedLabyrinthNumber} mapped`
       : `${region?.label ?? "Quest"} · Labyrinth ${nodeNumber} remains current`;

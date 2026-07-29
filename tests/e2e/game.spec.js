@@ -7,6 +7,7 @@ import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
+import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -115,7 +116,10 @@ function pathTo(run, goal) {
  * @returns {{ actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[], finalRun: ReturnType<typeof createRun> }}
  */
 function milestoneWinningPlan(seed) {
-  let run = createRun(seed, getLabyrinthConfig("trail-scout", 4));
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 4),
+    ruleset: getQuestRunRuleset(4)
+  });
   /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden" })[]} */
   const actions = [];
   for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
@@ -148,6 +152,74 @@ function milestoneWinningPlan(seed) {
     throw new Error("Milestone plan did not reach the Gate.");
   }
   return { actions, finalRun: run };
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {string} seed
+ * @param {ReturnType<typeof milestoneWinningPlan>} plan
+ * @param {{ checkGateStaging?: boolean }} [options]
+ */
+async function completeMilestonePlan(
+  page,
+  seed,
+  plan,
+  { checkGateStaging = false } = {}
+) {
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+
+  let gateChallenges = 0;
+  let questionOrdinal = 0;
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      continue;
+    }
+
+    const challenge = page.locator("#challenge-dialog");
+    await expect(challenge).toBeVisible();
+    if (action.kind === "gate-warden") {
+      gateChallenges += 1;
+      if (checkGateStaging) {
+        await expect(page.locator("#gate-staging-skip")).toBeFocused();
+        await expect(page.locator("#challenge-question")).toContainText(
+          "universal diamond crest"
+        );
+      }
+      await page.locator("#gate-staging-skip").click();
+      if (checkGateStaging) {
+        await expect(page.locator("#challenge-title")).toHaveText(
+          "The Gate Warden seals the way."
+        );
+        await expect(page.locator("#challenge-promise")).toContainText(
+          "break the seal"
+        );
+        await expect(page.locator("#run-state")).toHaveText("Brain battle");
+      }
+    }
+    await expect(page.locator("#challenge-question")).toBeFocused();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      questionOrdinal,
+      seed,
+      wardenId: questionOrdinal,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await expect(page.locator("#challenge-source")).toContainText(
+      "trusty question card"
+    );
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+    if (checkGateStaging && action.kind === "gate-warden") {
+      await expect(page.locator("#run-state")).toHaveText("Gate open");
+    }
+  }
+  return { gateChallenges, questionOrdinal };
 }
 
 /** @param {import("@playwright/test").Page} page */
@@ -2448,51 +2520,14 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
       body: JSON.stringify({ error: "forced fallback" })
     });
   });
-  await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
-  await expectGameReady(page);
-  await page.getByLabel(/Interactive maze/).focus();
-
-  let gateChallenges = 0;
-  let questionOrdinal = 0;
-  for (const action of plan.actions) {
-    if (action.type === "move") {
-      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
-      continue;
-    }
-
-    const challenge = page.locator("#challenge-dialog");
-    await expect(challenge).toBeVisible();
-    await expect(page.locator("#challenge-question")).toBeFocused();
-    if (action.kind === "gate-warden") {
-      gateChallenges += 1;
-      await expect(page.locator("#challenge-title")).toHaveText(
-        "The Gate Warden seals the way."
-      );
-      await expect(page.locator("#challenge-promise")).toContainText(
-        "break the seal"
-      );
-      await expect(page.locator("#run-state")).toHaveText("Brain battle");
-    }
-    const bundled = getBundledQuestion({
-      levelId: "trail-scout",
-      labyrinthNumber: 4,
-      questionOrdinal,
-      seed,
-      wardenId: questionOrdinal,
-      challengeKind: action.kind === "gate-warden"
-        ? "gate-warden"
-        : "warden"
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=4` +
+    "&region=foundation&rules=echo-hush-v1"
+  );
+  const { gateChallenges, questionOrdinal } =
+    await completeMilestonePlan(page, seed, plan, {
+      checkGateStaging: true
     });
-    questionOrdinal += 1;
-    await expect(page.locator("#challenge-source")).toContainText(
-      "trusty question card"
-    );
-    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
-    await expect(challenge).not.toBeVisible();
-    if (action.kind === "gate-warden") {
-      await expect(page.locator("#run-state")).toHaveText("Gate open");
-    }
-  }
 
   expect(gateChallenges).toBe(1);
   expect(requestedChallengeKinds.filter(
@@ -2504,13 +2539,30 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   ).toBeVisible();
   await expect(page.locator("#result-atlas")).toContainText("Atlas 4 / 20");
   await expect(page.locator("#result-atlas")).toContainText(
-    "Foundation Sigil restored"
+    "Foundation First Echo Sigil restored"
   );
   await expect(page.locator("#result-atlas")).toContainText(
     "Gate Warden milestone completed"
   );
   await expect(page.locator("#player-score")).toHaveText(
     String(plan.finalRun.score)
+  );
+  await expect(page.locator("#result-kicker")).toHaveText(
+    "Mosslight Grove Sigil ceremony"
+  );
+  await expect(page.locator("#result-title")).toHaveText(
+    "The First Echo Sigil returns."
+  );
+  await expect(page.locator("#result-summary")).toContainText(
+    "No currency, inventory, or gameplay reward"
+  );
+  await expect(page.locator("#replay-run")).toHaveText(
+    "Skip ceremony · Continue Quest"
+  );
+  await page.locator("#replay-run").click();
+  await expect(page.locator("#result-kicker")).toHaveText("Demo complete");
+  await expect(page.locator("#replay-run")).toHaveText(
+    "Create account for three Runs"
   );
   await expect.poll(() =>
     page.evaluate(() => {
@@ -2546,6 +2598,64 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     questLevelId: "trail-scout",
     outcome: "escaped"
   });
+});
+
+test("uses a compact result after the Region Sigil ceremony was seen", async ({
+  page
+}) => {
+  const seed = "MILESTONE-4-REPEAT";
+  const questId = "quest_region_repeat";
+  const plan = milestoneWinningPlan(seed);
+  await installSignedInQuestPlayer(page);
+  await page.goto("/");
+  await page.evaluate(({ activeQuestId }) => {
+    localStorage.setItem(
+      "echo-maze:quest-progress:v1",
+      JSON.stringify({
+        version: 1,
+        questId: activeQuestId,
+        levelId: "trail-scout",
+        labyrinthNumber: 4,
+        completedLabyrinths: 3,
+        usedMapFingerprints: [],
+        usedQuestionIds: [],
+        nextQuestionOrdinal: 0,
+        complete: false
+      })
+    );
+    localStorage.setItem(
+      "echo-maze:region-ceremonies:v1",
+      JSON.stringify({
+        version: 1,
+        questId: activeQuestId,
+        seenRegionIds: ["foundation"]
+      })
+    );
+  }, { activeQuestId: questId });
+  await page.route("**/api/question?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 503,
+      body: JSON.stringify({ error: "forced fallback" })
+    });
+  });
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=4` +
+    "&region=foundation&rules=echo-hush-v1"
+  );
+
+  await completeMilestonePlan(page, seed, plan);
+
+  await expect(page.locator("#result-kicker")).toHaveText(
+    "Mosslight Grove milestone"
+  );
+  await expect(page.locator("#result-title")).toHaveText(
+    "The First Echo Sigil remains restored."
+  );
+  await expect(page.locator("#result-summary")).toContainText(
+    "Compact result"
+  );
+  await expect(page.locator("#replay-run")).toHaveText("Continue Quest");
 });
 
 test("reflows across required widths and keeps the game in the laptop fold", async ({

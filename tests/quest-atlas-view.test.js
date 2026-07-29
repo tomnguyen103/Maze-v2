@@ -63,7 +63,7 @@ describe("Echo Atlas view", () => {
     expect(document.querySelector("[data-atlas-node='4'] [data-milestone-mark]")
       ?.textContent).toBe("◆");
     expect(document.querySelector("[data-atlas-region='foundation']")
-      ?.textContent).toContain("Sigil restores at Labyrinth 4");
+      ?.textContent).toContain("First Echo Sigil restores at Labyrinth 4");
     expect(document.getElementById("atlas-progress")?.textContent).toContain(
       "Gate Warden here at Labyrinth 4"
     );
@@ -323,7 +323,9 @@ describe("Echo Atlas view", () => {
     );
 
     expect(container.textContent).toContain("Atlas 4 / 20");
-    expect(container.textContent).toContain("Foundation Sigil restored");
+    expect(container.textContent).toContain(
+      "Foundation First Echo Sigil restored"
+    );
     expect(container.querySelector("[data-atlas-summary-state]")
       ?.textContent).toContain("Gate Warden milestone completed");
   });

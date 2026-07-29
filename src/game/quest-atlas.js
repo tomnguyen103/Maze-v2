@@ -5,6 +5,7 @@ import {
   getQuestLevel,
   isGateWardenMilestone
 } from "../questions/quest-levels.js";
+import { getRegionTheme } from "./region-theme.js";
 
 /** @typedef {"completed" | "current" | "ahead" | "milestone" | "completed-milestone"} AtlasNodeState */
 /** @typedef {{
@@ -18,12 +19,12 @@ import {
 /** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
 const REGION_METADATA = Object.freeze({
   foundation: Object.freeze({
-    motif: "Open trail",
+    motif: "Lantern moss and quiet stone",
     fieldNotes: Object.freeze([
-      "A clear trail begins with one careful step.",
-      "The path widens where patient Explorers look twice.",
-      "Echo marks gather beside the first turns.",
-      "A diamond crest marks the first Gate Warden."
+      "Mosslight wakes along the first quiet stones.",
+      "The Bramblewatch keeps its universal Patrol marks.",
+      "An Echo hushes ordinary footsteps for one action.",
+      "The First Echo Sigil waits beyond the Gate Warden."
     ])
   }),
   developing: Object.freeze({
@@ -81,6 +82,7 @@ export function projectQuestAtlas(
     const end = start + 3;
     const band = getDifficultyBand(start);
     const metadata = REGION_METADATA[band.id];
+    const theme = getRegionTheme(band.id);
     const nodes = Array.from({ length: 4 }, (_, offset) =>
       projectNode(
         progress,
@@ -96,12 +98,14 @@ export function projectQuestAtlas(
       id: band.id,
       index: regionIndex,
       label: band.label,
+      themeName: theme?.name ?? band.label,
+      wardenGuild: theme?.wardenGuild ?? null,
       motif: metadata.motif,
       rangeLabel: `Labyrinths ${start}-${end}`,
       sigilRestored,
       sigilLabel: sigilRestored
-        ? "Sigil restored"
-        : `Sigil restores at Labyrinth ${end}`,
+        ? `${theme?.sigilName ?? "Sigil"} restored`
+        : `${theme?.sigilName ?? "Sigil"} restores at Labyrinth ${end}`,
       nodes
     };
   });

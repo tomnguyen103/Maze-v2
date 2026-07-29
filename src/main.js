@@ -42,6 +42,8 @@ import {
   getQuestRunRuleset,
   normalizeRunRuleset
 } from "./game/run-ruleset.js";
+import { getRegionTheme } from "./game/region-theme.js";
+import { claimRegionCeremony } from "./game/region-ceremony.js";
 import { createVerifiedDailySubmission } from "./player/daily-submission.js";
 import {
   createRunAccessId,
@@ -73,7 +75,8 @@ import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
   getLabyrinthConfig,
-  getQuestLevel
+  getQuestLevel,
+  isGateWardenMilestone
 } from "./questions/quest-levels.js";
 import {
   createLifetimeView
@@ -119,6 +122,10 @@ const elements = {
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
+  gateStagingSkip: requiredElement(
+    "gate-staging-skip",
+    HTMLButtonElement
+  ),
   dailyButton: requiredElement("daily-button", HTMLButtonElement),
   dailyBoardDate: requiredElement("daily-board-date", HTMLElement),
   dailyBoardList: requiredElement("daily-board-list", HTMLOListElement),
@@ -203,6 +210,7 @@ const elements = {
   vitalityCount: requiredElement("vitality-count", HTMLElement),
   vitalityMeter: requiredElement("vitality-meter", HTMLElement),
   wardenReadout: requiredElement("warden-readout", HTMLElement),
+  wardenGuild: requiredElement("warden-guild", HTMLElement),
   wardenState: requiredElement("warden-state", HTMLElement)
 };
 
@@ -362,6 +370,9 @@ let deferredCloudQuest = null;
 let questionRequestKey = "";
 let runFinished = false;
 let hintVisible = false;
+/** @type {number | null} */
+let stagedGateWardenId = null;
+let gateStagingComplete = false;
 /** @type {ReturnType<typeof createDailyContract> | null} */
 let activeDaily = null;
 let dailyQuestionIndex = 0;
@@ -607,6 +618,11 @@ elements.skipConfirm.addEventListener("click", () => {
 });
 elements.atlasButton.addEventListener("click", () => {
   void showQuestAtlas(elements.atlasButton);
+});
+elements.gateStagingSkip.addEventListener("click", () => {
+  gateStagingComplete = true;
+  elements.gateStagingSkip.hidden = true;
+  syncChallengeDialog();
 });
 
 /** @param {HTMLElement} trigger */
@@ -2859,6 +2875,9 @@ function transition(action) {
 
 function syncChallengeDialog() {
   if (run.status !== "challenge" || !run.challenge) {
+    stagedGateWardenId = null;
+    gateStagingComplete = false;
+    elements.gateStagingSkip.hidden = true;
     hintVisible = false;
     hideSkipWarning();
     if (elements.challengeDialog.open) {
@@ -2873,6 +2892,10 @@ function syncChallengeDialog() {
   }
 
   const isGateWarden = run.challenge.kind === "gate-warden";
+  if (isGateWarden && stagedGateWardenId !== run.challenge.wardenId) {
+    stagedGateWardenId = run.challenge.wardenId;
+    gateStagingComplete = false;
+  }
   elements.challengeDialog.dataset.kind = isGateWarden
     ? "gate-warden"
     : "warden";
@@ -2913,6 +2936,22 @@ function syncChallengeDialog() {
     elements.skipQuestion.disabled = true;
     elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
+    if (isGateWarden && !gateStagingComplete) {
+      const theme = getRegionTheme(run.ruleset.atlasRegionId);
+      elements.challengeKicker.textContent =
+        `${theme?.wardenGuild ?? "Gate Warden"} entrance`;
+      elements.challengeQuestion.textContent =
+        "The universal diamond crest marks the Gate Warden. The timer is paused.";
+      elements.challengeSource.textContent =
+        "Skip the entrance whenever you are ready. No Run state changes.";
+      elements.gateStagingSkip.hidden = false;
+      elements.gateStagingSkip.textContent = "Skip entrance · Begin challenge";
+      requestAnimationFrame(() =>
+        elements.gateStagingSkip.focus({ preventScroll: true })
+      );
+      return;
+    }
+    elements.gateStagingSkip.hidden = true;
     void loadChallengeQuestion();
     return;
   }
@@ -3123,6 +3162,12 @@ function questionRequestIdentifier(request) {
 }
 
 function updateInterface() {
+  const regionTheme = getRegionTheme(run.ruleset.atlasRegionId);
+  document.body.dataset.regionTheme = regionTheme?.id ?? "";
+  audio.setAmbient(
+    run.ruleset.atlasRegionId,
+    !activeFirstLight && run.status === "active" && !document.hidden
+  );
   renderer.render(run);
   canvas.setAttribute(
     "aria-label",
@@ -3199,6 +3244,9 @@ function updateInterface() {
   const wardenMode = summarizeWardenMode();
   elements.wardenState.textContent = wardenModeLabel(wardenMode);
   elements.wardenReadout.dataset.mode = wardenMode;
+  elements.wardenGuild.textContent = regionTheme
+    ? `${regionTheme.wardenGuild} · ${regionTheme.ambientLabel} is optional.`
+    : "Universal Warden marks";
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");
   renderPips(
@@ -3295,18 +3343,41 @@ function finishRun() {
   window.history.replaceState({}, "", "/play");
 
   const questComplete = won && questProgress.complete;
+  const regionTheme = getRegionTheme(run.ruleset.atlasRegionId);
+  const sigilMilestone =
+    won &&
+    isGateWardenMilestone(finishedLabyrinthNumber) &&
+    regionTheme !== null;
+  const sigilCeremony =
+    sigilMilestone &&
+    claimRegionCeremony(
+      questProgress.questId,
+      run.ruleset.atlasRegionId
+    ) === "full";
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
+    : sigilCeremony
+      ? `${regionTheme.name} Sigil ceremony`
+    : sigilMilestone
+      ? `${regionTheme.name} milestone`
     : won
       ? `Labyrinth ${finishedLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} complete`
       : `Labyrinth ${finishedLabyrinthNumber} ended`;
   elements.resultTitle.textContent = questComplete
     ? "You mastered all twenty Labyrinths."
+    : sigilCeremony
+      ? `The ${regionTheme.sigilName} returns.`
+    : sigilMilestone
+      ? `The ${regionTheme.sigilName} remains restored.`
     : won
       ? "You brought these Echoes home."
       : "The maze light needs a rest.";
   elements.resultSummary.textContent = questComplete
     ? `${currentLevel.name} is complete. Every Warden Question in this Quest stayed unique.`
+    : sigilCeremony
+      ? "The restored Atlas landmark is the only lasting result. No currency, inventory, or gameplay reward is created."
+    : sigilMilestone
+      ? "Compact result: the Atlas landmark is already restored. No additional gameplay reward is created."
     : won
       ? `Next: Labyrinth ${questProgress.labyrinthNumber} · ${getDifficultyBand(questProgress.labyrinthNumber).label}. Its paths and Questions will be harder.`
       : `You found ${echoesCollected} of ${run.echoes.length} Echoes. Try Labyrinth ${finishedLabyrinthNumber} again with a fresh path and full Vitality.`;
@@ -3328,6 +3399,8 @@ function finishRun() {
       : "retry";
   elements.replay.textContent = questComplete
     ? "New Quest"
+    : sigilCeremony
+      ? "Skip ceremony · Continue Quest"
     : won
       ? "Continue Quest"
       : "Retry Labyrinth";
@@ -3335,7 +3408,9 @@ function finishRun() {
   if (!playerController.hasAuthenticatedUser()) {
     markGuestDemoPendingAuthentication();
     demoAccessPending = true;
-    showDemoAccountGate();
+    if (!sigilMilestone) {
+      showDemoAccountGate();
+    }
     void playerController.isAuthenticated().then((authenticated) => {
       if (authenticated) {
         clearPendingGuestDemo();

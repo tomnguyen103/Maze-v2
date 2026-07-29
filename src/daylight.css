@@ -1110,6 +1110,17 @@ body[data-run-mode="first-light"] .play-workbench {
   width: min(46rem, calc(100% - 2rem));
 }
 
+body[data-region-theme="mosslight-grove"] .canvas-frame {
+  border-color: var(--color-gate);
+  box-shadow:
+    0 0 0 3px var(--color-echo-soft),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="mosslight-grove"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-gate);
+}
+
 .journal-status {
   min-height: 1.5em;
   margin: var(--space-3) 0;
@@ -2594,7 +2605,9 @@ body[data-run-mode="first-light"] .play-workbench {
   .daily-dialog__actions,
   .first-light-dialog__actions,
   .lifetime-dialog__actions,
-  .quest-conflict-dialog__actions {
+  .quest-conflict-dialog__actions,
+  .result-dialog__actions {
+    align-items: stretch;
     flex-direction: column;
   }
 

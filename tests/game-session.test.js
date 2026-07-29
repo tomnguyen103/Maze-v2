@@ -347,6 +347,51 @@ describe("GameSession", () => {
     ]);
   });
 
+  it("applies Echo Hush only to the Echo-collecting action", () => {
+    const run = createRun("ECHO-HUSH-01", {
+      echoCount: 1,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(1)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 1, col: 1 },
+      echoes: [{ row: 1, col: 2, collected: false }],
+      gate: { row: 7, col: 7, open: false },
+      wardens: [{ row: 6, col: 6, id: 0, mode: /** @type {const} */ ("patrol") }]
+    };
+
+    const hush = applyAction(staged, { type: "move", direction: "right" });
+    expect(hush.wardens).toEqual(staged.wardens);
+    expect(hush.event).toMatchObject({
+      type: "echo-collected",
+      message: expect.stringContaining("Echo Hush")
+    });
+
+    const restored = applyAction(hush, { type: "move", direction: "right" });
+    expect(restored.wardens).not.toEqual(hush.wardens);
+
+    const classic = applyAction(
+      {
+        ...staged,
+        ruleset: {
+          atlasRegionId: "foundation",
+          revision: "classic-v1",
+          label: "Classic Rules"
+        }
+      },
+      { type: "move", direction: "right" }
+    );
+    expect(classic.wardens).not.toEqual(staged.wardens);
+  });
+
   it("keeps a Patrol Warden off a reserved Echo tile", () => {
     const run = createRun("PATROL-RESERVED", {
       echoCount: 1,

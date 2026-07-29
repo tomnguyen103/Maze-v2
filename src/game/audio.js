@@ -6,6 +6,12 @@ export class EchoAudio {
   /** @type {AudioContext | null} */
   #context = null;
   #enabled = false;
+  /** @type {OscillatorNode | null} */
+  #ambientOscillator = null;
+  /** @type {GainNode | null} */
+  #ambientGain = null;
+  #ambientRegionId = "";
+  #ambientActive = false;
 
   get enabled() {
     return this.#enabled;
@@ -21,8 +27,22 @@ export class EchoAudio {
     this.#enabled = !this.#enabled;
     if (this.#enabled) {
       this.play("enabled");
+      this.#syncAmbient();
+    } else {
+      this.#stopAmbient();
     }
     return this.#enabled;
+  }
+
+  /** @param {string} regionId @param {boolean} active */
+  setAmbient(regionId, active) {
+    const changed = this.#ambientRegionId !== regionId;
+    this.#ambientRegionId = regionId;
+    this.#ambientActive = active;
+    if (changed) {
+      this.#stopAmbient();
+    }
+    this.#syncAmbient();
   }
 
   /**
@@ -63,5 +83,42 @@ export class EchoAudio {
     gain.connect(this.#context.destination);
     oscillator.start(now);
     oscillator.stop(now + duration + 0.03);
+  }
+
+  #syncAmbient() {
+    if (
+      !this.#enabled ||
+      !this.#context ||
+      !this.#ambientActive ||
+      this.#ambientRegionId !== "foundation"
+    ) {
+      this.#stopAmbient();
+      return;
+    }
+    if (this.#ambientOscillator) {
+      return;
+    }
+    const oscillator = this.#context.createOscillator();
+    const gain = this.#context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(82, this.#context.currentTime);
+    gain.gain.setValueAtTime(0.012, this.#context.currentTime);
+    oscillator.connect(gain);
+    gain.connect(this.#context.destination);
+    oscillator.start();
+    this.#ambientOscillator = oscillator;
+    this.#ambientGain = gain;
+  }
+
+  #stopAmbient() {
+    try {
+      this.#ambientOscillator?.stop();
+    } catch {
+      // A stopped oscillator cannot be restarted; cleanup is still complete.
+    }
+    this.#ambientOscillator?.disconnect();
+    this.#ambientGain?.disconnect();
+    this.#ambientOscillator = null;
+    this.#ambientGain = null;
   }
 }

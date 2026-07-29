@@ -140,7 +140,8 @@ function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
       const title = document.createElement("h3");
       title.textContent = region.label;
       const range = document.createElement("span");
-      range.textContent = `${region.rangeLabel} · ${region.motif}`;
+      range.textContent =
+        `${region.themeName} · ${region.rangeLabel} · ${region.motif}`;
       heading.append(title, range);
 
       const sigil = document.createElement("p");

@@ -557,6 +557,19 @@ function resolveMove(run, directionName) {
     };
   }
 
+  if (
+    next.event.type === "echo-collected" &&
+    next.ruleset.revision === "echo-hush-v1"
+  ) {
+    return {
+      ...next,
+      event: {
+        ...next.event,
+        message: `${next.event.message} Echo Hush keeps ordinary Wardens still for this action.`
+      }
+    };
+  }
+
   next = moveWardens(next);
   return resolveWardenContact(next);
 }

@@ -22,7 +22,7 @@ describe("Echo Atlas projection", () => {
     expect(atlas.nextMilestoneNumber).toBe(4);
     expect(atlas.labyrinthsToNextMilestone).toBe(3);
     expect(atlas.regions[0].sigilLabel).toBe(
-      "Sigil restores at Labyrinth 4"
+      "First Echo Sigil restores at Labyrinth 4"
     );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
