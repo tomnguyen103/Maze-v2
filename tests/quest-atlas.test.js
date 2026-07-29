@@ -44,6 +44,16 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[2].nodes[0].fieldNote).toContain(
       "sealed Echo Bridge"
     );
+    expect(atlas.regions[3]).toMatchObject({
+      id: "advanced",
+      themeName: "Tideglass Reach",
+      wardenGuild: "Currentwatch Guild",
+      motif: "Sea-glass channels and alternating tide marks",
+      sigilLabel: "Turning Tide Sigil restores at Labyrinth 16"
+    });
+    expect(atlas.regions[3].nodes[0].fieldNote).toContain(
+      "Visible Tide Doors"
+    );
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
         id: "foundation-1",

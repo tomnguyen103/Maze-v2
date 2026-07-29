@@ -54,6 +54,16 @@ const RULESET_LOCATOR = Object.freeze({
   atlasRegionId: "capable",
   rulesetRevision: "echo-bridges-v1"
 });
+const TIDE_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_tide_123",
+  pending: false,
+  seed: "CAMPFIRE-TIDE-13",
+  levelId: "trail-scout",
+  labyrinthNumber: 13,
+  atlasRegionId: "advanced",
+  rulesetRevision: "tide-doors-v1"
+});
 
 /** @returns {StorageLike & { readonly writes: number, readonly removals: number }} */
 function createMemoryStorage() {
@@ -150,6 +160,7 @@ function comparableState(run) {
     wardens: run.wardens,
     windways: run.windways,
     echoBridges: run.echoBridges,
+    tideDoors: run.tideDoors,
     challenge: run.challenge,
     revealed: run.revealed,
     pulseVisible: run.pulseVisible,
@@ -443,6 +454,31 @@ describe("Active Run Recovery", () => {
       atlasRegionId: "capable",
       rulesetRevision: "echo-bridges-v1"
     });
+  });
+
+  it("recovers the exact Tide Door phase after a successful action", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(TIDE_LOCATOR);
+    const initial = initialRun(TIDE_LOCATOR);
+    const direction = firstLegalDirection(initial);
+    const { run, result } = durableTransition(controller, initial, {
+      type: "move",
+      direction
+    });
+
+    expect(result.status).toBe("saved");
+    expect(initial.tideDoors.every((door) => door.open)).toBe(true);
+    expect(run.tideDoors.every((door) => !door.open)).toBe(true);
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(TIDE_LOCATOR);
+    expect(recovered.status).toBe("recovered");
+    if (!recovered.run) {
+      throw new Error("Expected a recovered Tide Door Run.");
+    }
+    expect(recovered.run.tideDoors).toEqual(run.tideDoors);
+    expect(comparableState(recovered.run)).toEqual(comparableState(run));
   });
 
   it("restores acknowledged movement, Pulse state, and durable elapsed time exactly", () => {
@@ -813,6 +849,41 @@ describe("Active Run Recovery", () => {
     expect(timeline.states.at(-1)?.echoBridges.every(
       (bridge) => bridge.open
     )).toBe(true);
+  });
+
+  it("replays the exact alternating Tide Door phase through terminal state", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(TIDE_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: TIDE_LOCATOR
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: TIDE_LOCATOR.levelId,
+      labyrinthNumber: TIDE_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+
+    expect(timeline.states[0].tideDoors.every((door) => door.open)).toBe(true);
+    for (const [index, state] of timeline.states.entries()) {
+      expect(state.tideDoors).toEqual(
+        state.tideDoors.map((door) => ({
+          ...door,
+          open: state.moves % 2 === 0
+        }))
+      );
+      if (index > 0 && state.moves === timeline.states[index - 1].moves) {
+        expect(state.tideDoors).toEqual(timeline.states[index - 1].tideDoors);
+      }
+    }
+    expect(timeline.states.at(-1)?.tideDoors).toEqual(run.tideDoors);
   });
 
   it("clears terminal recovery and selected answer identifiers", () => {

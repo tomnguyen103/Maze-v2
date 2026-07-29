@@ -30,6 +30,14 @@ const REGION_THEMES = Object.freeze({
     wardenGuild: "Spanwatch Guild",
     ambientLabel: "Sunspan string chorus",
     sigilName: "Joined Path Sigil"
+  }),
+  advanced: Object.freeze({
+    id: "tideglass-reach",
+    name: "Tideglass Reach",
+    motif: "Sea-glass channels and alternating tide marks",
+    wardenGuild: "Currentwatch Guild",
+    ambientLabel: "Tideglass shell chorus",
+    sigilName: "Turning Tide Sigil"
   })
 });
 

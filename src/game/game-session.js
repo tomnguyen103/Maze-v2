@@ -18,6 +18,12 @@ import {
  *   to: Position,
  *   open: boolean
  * }} EchoBridge
+ * @typedef {{
+ *   id: number,
+ *   from: Position,
+ *   to: Position,
+ *   open: boolean
+ * }} TideDoor
  * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
  * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
@@ -87,6 +93,7 @@ import {
  *   wardens: Warden[],
  *   windways: Windway[],
  *   echoBridges: EchoBridge[],
+ *   tideDoors: TideDoor[],
  *   gateWarden?: { id: number, defeated: boolean },
  *   challenge: WardenChallenge | null,
  *   revealed: string[],
@@ -218,6 +225,9 @@ export function createRun(requestedSeed, input = {}) {
         random
       )
     : [];
+  const tideDoors = config.ruleset.revision === "tide-doors-v1"
+    ? createTideDoors(labyrinth, occupied, 2, random)
+    : [];
 
   const explorer = {
     ...explorerPosition,
@@ -239,6 +249,7 @@ export function createRun(requestedSeed, input = {}) {
     wardens,
     windways,
     echoBridges,
+    tideDoors,
     ...(gateWarden
       ? { gateWarden: { id: gateWarden.id, defeated: false } }
       : {}),
@@ -492,14 +503,44 @@ export function applyAction(run, action) {
   }
 
   if (action.type === "pulse") {
-    return resolvePulse(run);
+    return resolveTidePhase(run, resolvePulse(run));
   }
 
   if (action.type !== "move") {
     return run;
   }
 
-  return resolveMove(run, action.direction);
+  return resolveTidePhase(run, resolveMove(run, action.direction));
+}
+
+/**
+ * Tide Doors keep one visible phase for the entire action, including Warden
+ * movement, and change only after a Move or Pulse spends a turn.
+ *
+ * @param {GameRun} previous
+ * @param {GameRun} next
+ * @returns {GameRun}
+ */
+function resolveTidePhase(previous, next) {
+  if (
+    previous.ruleset.revision !== "tide-doors-v1" ||
+    next.moves !== previous.moves + 1
+  ) {
+    return next;
+  }
+  const tideDoors = next.tideDoors.map((door) => ({
+    ...door,
+    open: !door.open
+  }));
+  const open = tideDoors[0]?.open ?? false;
+  return {
+    ...next,
+    tideDoors,
+    event: {
+      ...next.event,
+      message: `${next.event.message} Tide Doors are now ${open ? "open" : "sealed"}.`
+    }
+  };
 }
 
 /**
@@ -521,9 +562,12 @@ function resolveMove(run, directionName) {
     col: run.explorer.col + direction.col
   };
   const echoBridge = run.ruleset.revision === "echo-bridges-v1"
-    ? openBridgeAcrossWall(run.echoBridges, run.explorer, directTarget)
+    ? openShortcutAcrossWall(run.echoBridges, run.explorer, directTarget)
     : undefined;
-  if (!isPassage(run.labyrinth, directTarget) && !echoBridge) {
+  const tideDoor = run.ruleset.revision === "tide-doors-v1"
+    ? openShortcutAcrossWall(run.tideDoors, run.explorer, directTarget)
+    : undefined;
+  if (!isPassage(run.labyrinth, directTarget) && !echoBridge && !tideDoor) {
     return {
       ...run,
       event: { type: "blocked", message: "Wall. Choose another direction." }
@@ -543,7 +587,10 @@ function resolveMove(run, directionName) {
     };
   }
   const destination =
-    echoBridge?.destination ?? windway?.destination ?? directTarget;
+    echoBridge?.destination ??
+    tideDoor?.destination ??
+    windway?.destination ??
+    directTarget;
   const nextMoves = run.moves + 1;
   if (
     samePosition(destination, run.gate) &&
@@ -583,6 +630,11 @@ function resolveMove(run, directionName) {
           type: "echo-bridge-travel",
           message: "Echo Bridge carried you across the sealed wall."
         }
+      : tideDoor
+        ? {
+            type: "tide-door-travel",
+            message: "The open Tide Door carried you across the wall."
+          }
       : windway
         ? {
           type: "windway-travel",
@@ -742,6 +794,7 @@ function collectEcho(run) {
  * @returns {GameRun}
  */
 function moveWardens(run) {
+  const shortcuts = [...run.echoBridges, ...run.tideDoors];
   const reserved = new Set([
     positionKey(run.gate),
     ...run.echoes
@@ -751,7 +804,7 @@ function moveWardens(run) {
   const explorerDistances = distancesFrom(
     run.labyrinth,
     run.explorer,
-    run.echoBridges
+    shortcuts
   );
   const originalWardenPositions = new Set(run.wardens.map(positionKey));
   /** @type {Warden[]} */
@@ -767,7 +820,7 @@ function moveWardens(run) {
     const candidates = passageNeighbors(
       run.labyrinth,
       warden,
-      run.echoBridges
+      shortcuts
     ).filter(
       (position) =>
         !reserved.has(positionKey(position)) &&
@@ -796,7 +849,7 @@ function moveWardens(run) {
     const targetDistances = distancesFrom(
       run.labyrinth,
       target,
-      run.echoBridges
+      shortcuts
     );
     /** @type {Position[]} */
     const ordered = [...legal].sort((left, right) => {
@@ -899,7 +952,7 @@ function patrolTarget(run, warden) {
   const distances = distancesFrom(
     run.labyrinth,
     warden,
-    run.echoBridges
+    [...run.echoBridges, ...run.tideDoors]
   );
   return [...targets].sort(
     (left, right) =>
@@ -930,6 +983,12 @@ function cloneRun(run) {
       from: { ...bridge.from },
       to: { ...bridge.to },
       open: bridge.open
+    })),
+    tideDoors: run.tideDoors.map((door) => ({
+      id: door.id,
+      from: { ...door.from },
+      to: { ...door.to },
+      open: door.open
     })),
     ...(run.gateWarden
       ? { gateWarden: { ...run.gateWarden } }
@@ -1074,9 +1133,9 @@ function generateLabyrinth(size, random) {
 /**
  * @param {number[][]} labyrinth
  * @param {Position} start
- * @param {EchoBridge[]} [echoBridges]
+ * @param {(EchoBridge | TideDoor)[]} [shortcuts]
  */
-function distancesFrom(labyrinth, start, echoBridges = []) {
+function distancesFrom(labyrinth, start, shortcuts = []) {
   const distances = new Map([[positionKey(start), 0]]);
   const queue = [start];
 
@@ -1086,7 +1145,7 @@ function distancesFrom(labyrinth, start, echoBridges = []) {
     for (const neighbor of passageNeighbors(
       labyrinth,
       current,
-      echoBridges
+      shortcuts
     )) {
       const key = positionKey(neighbor);
       if (distances.has(key)) {
@@ -1102,25 +1161,25 @@ function distancesFrom(labyrinth, start, echoBridges = []) {
 /**
  * @param {number[][]} labyrinth
  * @param {Position} position
- * @param {EchoBridge[]} [echoBridges]
+ * @param {(EchoBridge | TideDoor)[]} [shortcuts]
  */
-function passageNeighbors(labyrinth, position, echoBridges = []) {
+function passageNeighbors(labyrinth, position, shortcuts = []) {
   const direct = DIRECTIONS.map((direction) => ({
     row: position.row + direction.row,
     col: position.col + direction.col
   })).filter((candidate) => isPassage(labyrinth, candidate));
-  const bridgeNeighbors = echoBridges
-    .filter((bridge) => bridge.open)
-    .flatMap((bridge) => {
-      if (samePosition(bridge.from, position)) {
-        return [{ ...bridge.to }];
+  const shortcutNeighbors = shortcuts
+    .filter((shortcut) => shortcut.open)
+    .flatMap((shortcut) => {
+      if (samePosition(shortcut.from, position)) {
+        return [{ ...shortcut.to }];
       }
-      if (samePosition(bridge.to, position)) {
-        return [{ ...bridge.from }];
+      if (samePosition(shortcut.to, position)) {
+        return [{ ...shortcut.from }];
       }
       return [];
     });
-  return [...direct, ...bridgeNeighbors].filter(
+  return [...direct, ...shortcutNeighbors].filter(
     (candidate, index, positions) =>
       positions.findIndex((position) => samePosition(position, candidate)) ===
       index
@@ -1280,6 +1339,40 @@ function createWindways(
  * @returns {EchoBridge[]}
  */
 function createEchoBridges(labyrinth, protectedTiles, count, random) {
+  return selectShortcutEdges(labyrinth, protectedTiles, count, random)
+    .map((bridge, echoIndex) => ({
+      echoIndex,
+      from: { ...bridge.from },
+      to: { ...bridge.to },
+      open: false
+    }));
+}
+
+/**
+ * @param {number[][]} labyrinth
+ * @param {Set<string>} protectedTiles
+ * @param {number} count
+ * @param {() => number} random
+ * @returns {TideDoor[]}
+ */
+function createTideDoors(labyrinth, protectedTiles, count, random) {
+  return selectShortcutEdges(labyrinth, protectedTiles, count, random)
+    .map((door, id) => ({
+      id,
+      from: { ...door.from },
+      to: { ...door.to },
+      open: true
+    }));
+}
+
+/**
+ * @param {number[][]} labyrinth
+ * @param {Set<string>} protectedTiles
+ * @param {number} count
+ * @param {() => number} random
+ * @returns {{ from: Position, to: Position }[]}
+ */
+function selectShortcutEdges(labyrinth, protectedTiles, count, random) {
   const candidates = [];
   for (let row = 1; row < labyrinth.length - 1; row += 1) {
     for (let col = 1; col < labyrinth[row].length - 1; col += 1) {
@@ -1342,36 +1435,31 @@ function createEchoBridges(labyrinth, protectedTiles, count, random) {
       }
     }
   }
-  return selected.map((bridge, echoIndex) => ({
-    echoIndex,
-    from: { ...bridge.from },
-    to: { ...bridge.to },
-    open: false
-  }));
+  return selected;
 }
 
 /**
- * @param {EchoBridge[]} bridges
+ * @param {(EchoBridge | TideDoor)[]} shortcuts
  * @param {Position} position
  * @param {Position} wall
  */
-function openBridgeAcrossWall(bridges, position, wall) {
-  for (const bridge of bridges) {
-    if (!bridge.open) {
+function openShortcutAcrossWall(shortcuts, position, wall) {
+  for (const shortcut of shortcuts) {
+    if (!shortcut.open) {
       continue;
     }
     const midpoint = {
-      row: (bridge.from.row + bridge.to.row) / 2,
-      col: (bridge.from.col + bridge.to.col) / 2
+      row: (shortcut.from.row + shortcut.to.row) / 2,
+      col: (shortcut.from.col + shortcut.to.col) / 2
     };
     if (!samePosition(midpoint, wall)) {
       continue;
     }
-    if (samePosition(bridge.from, position)) {
-      return { bridge, destination: bridge.to };
+    if (samePosition(shortcut.from, position)) {
+      return { shortcut, destination: shortcut.to };
     }
-    if (samePosition(bridge.to, position)) {
-      return { bridge, destination: bridge.from };
+    if (samePosition(shortcut.to, position)) {
+      return { shortcut, destination: shortcut.from };
     }
   }
   return undefined;

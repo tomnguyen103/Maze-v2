@@ -46,12 +46,12 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   advanced: Object.freeze({
-    motif: "Tide marks",
+    motif: "Sea-glass channels and alternating tide marks",
     fieldNotes: Object.freeze([
-      "Tide marks trace the safest known passage.",
-      "The route asks for calm choices under pressure.",
-      "Each landmark records another hard-won crossing.",
-      "A coral diamond marks the fourth Gate Warden."
+      "Visible Tide Doors begin open, then alternate together after each successful Move or Pulse.",
+      "Explorer and Warden share the same Tide Door phase for the whole action.",
+      "Blocked paths, Questions, Hints, and pauses leave the tide unchanged.",
+      "The Turning Tide Sigil waits beyond the Gate Warden."
     ])
   }),
   mastery: Object.freeze({

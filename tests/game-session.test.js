@@ -459,6 +459,165 @@ describe("GameSession", () => {
     ]);
   });
 
+  it("creates two deterministic visible Tide Doors without changing the sealed base maze", () => {
+    const config = {
+      ...getLabyrinthConfig("trail-scout", 13),
+      ruleset: getQuestRunRuleset(13)
+    };
+    const first = createRun("TIDE-DOORS-13", config);
+    const second = createRun("TIDE-DOORS-13", config);
+    const protectedTiles = new Set([
+      tileKey(first.explorer),
+      tileKey(first.gate),
+      ...first.echoes.map(tileKey),
+      ...first.wardens.map(tileKey)
+    ]);
+
+    expect(first.tideDoors).toEqual(second.tideDoors);
+    expect(first.tideDoors).toHaveLength(2);
+    expect(first.tideDoors.every((door) => door.open)).toBe(true);
+    expect(first.labyrinth).toEqual(second.labyrinth);
+    for (const door of first.tideDoors) {
+      const midpoint = {
+        row: (door.from.row + door.to.row) / 2,
+        col: (door.from.col + door.to.col) / 2
+      };
+      expect(protectedTiles.has(tileKey(door.from))).toBe(false);
+      expect(protectedTiles.has(tileKey(door.to))).toBe(false);
+      expect(first.labyrinth[door.from.row][door.from.col]).toBe(1);
+      expect(first.labyrinth[door.to.row][door.to.col]).toBe(1);
+      expect(first.labyrinth[midpoint.row][midpoint.col]).toBe(0);
+    }
+
+    expect(createRun("TIDE-DOORS-13").tideDoors).toEqual([]);
+  });
+
+  it("creates both Tide Doors across 2,000 Region 4 seeds", () => {
+    const levels = ["bright-start", "trail-scout", "maze-master"];
+    for (let index = 0; index < 2_000; index += 1) {
+      const labyrinthNumber = 13 + (index % 4);
+      const run = createRun(`TIDE-STRESS-${index}`, {
+        ...getLabyrinthConfig(levels[index % levels.length], labyrinthNumber),
+        ruleset: getQuestRunRuleset(labyrinthNumber)
+      });
+      expect(run.tideDoors, `seed ${index}`).toHaveLength(2);
+    }
+  });
+
+  it("crosses an open Tide Door, resolves Wardens in that phase, then seals every Door", () => {
+    const run = createRun("TIDE-SHARED-PHASE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(13)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    openLabyrinth[4][4] = 0;
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 6, id: 0, mode: /** @type {const} */ ("patrol") }],
+      tideDoors: [
+        {
+          id: 0,
+          from: { row: 4, col: 3 },
+          to: { row: 4, col: 5 },
+          open: true
+        },
+        {
+          id: 1,
+          from: { row: 2, col: 3 },
+          to: { row: 2, col: 5 },
+          open: true
+        }
+      ]
+    };
+
+    const next = applyAction(staged, { type: "move", direction: "right" });
+
+    expect(next.explorer).toMatchObject({ row: 4, col: 5 });
+    expect(next.wardens[0]).toMatchObject({ row: 4, col: 5 });
+    expect(next.status).toBe("challenge");
+    expect(next.tideDoors.every((door) => !door.open)).toBe(true);
+    expect(next.moves).toBe(staged.moves + 1);
+    expect(staged.tideDoors.every((door) => door.open)).toBe(true);
+  });
+
+  it("toggles Tide Doors only after successful Moves and Pulses", () => {
+    const run = createRun("TIDE-TOGGLE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 0,
+      pulses: 1,
+      ruleset: getQuestRunRuleset(13)
+    });
+    const door = run.tideDoors[0];
+    const blockedDirection = MOVES.find(({ row, col }) =>
+      run.labyrinth[run.explorer.row + row]?.[run.explorer.col + col] !== 1
+    );
+    expect(blockedDirection).toBeDefined();
+
+    const blocked = applyAction(run, {
+      type: "move",
+      direction: blockedDirection?.name ?? "up"
+    });
+    expect(blocked.tideDoors).toEqual(run.tideDoors);
+
+    const paused = applyAction(run, { type: "pause" });
+    expect(paused.tideDoors).toEqual(run.tideDoors);
+    expect(applyAction(paused, { type: "pause" }).tideDoors).toEqual(run.tideDoors);
+
+    const pulsed = applyAction(run, { type: "pulse" });
+    expect(pulsed.tideDoors).toEqual(
+      run.tideDoors.map((candidate) => ({ ...candidate, open: !candidate.open }))
+    );
+    const emptyPulse = applyAction(
+      { ...pulsed, pulses: 0 },
+      { type: "pulse" }
+    );
+    expect(emptyPulse.tideDoors).toEqual(pulsed.tideDoors);
+    expect(door).toBeDefined();
+  });
+
+  it("keeps Tide Door phase fixed throughout a Question exchange", () => {
+    const run = createRun("TIDE-QUESTION", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(13)
+    });
+    const challenge = {
+      ...run,
+      status: /** @type {const} */ ("challenge"),
+      challenge: {
+        wardenId: run.wardens[0].id,
+        question: null,
+        attempt: 0,
+        feedback: null,
+        hintRevealed: false
+      }
+    };
+    const questioned = applyAction(challenge, {
+      type: "provide-question",
+      question: QUESTION
+    });
+    const hinted = applyAction(questioned, { type: "reveal-hint" });
+    const answered = applyAction(hinted, {
+      type: "answer-question",
+      answerId: QUESTION.answerId
+    });
+
+    expect(questioned.tideDoors).toEqual(run.tideDoors);
+    expect(hinted.tideDoors).toEqual(run.tideDoors);
+    expect(answered.tideDoors).toEqual(run.tideDoors);
+  });
+
   it("places every entity on a unique reachable passage", () => {
     const run = createRun("REACHABLE-31");
     const reachable = new Set(

@@ -262,6 +262,30 @@ async function recordRegion3Screenshot(page, testInfo, state) {
 
 /**
  * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"open-phase" | "sealed-phase"} state
+ */
+async function recordRegion4Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-4-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-4-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
  * @param {string} seed
  * @param {ReturnType<typeof milestoneWinningPlan>} plan
  * @param {{ checkGateStaging?: boolean }} [options]
@@ -2220,6 +2244,164 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await atlas.getByRole("button", { name: "List view" }).click();
   await atlas.locator("[data-atlas-landmark='capable-9']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 4 identity and shared Tide phase through play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const retainedPlan = milestoneWinningPlan("TIDE-TRAIL-13", 13);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 4 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "TIDE-TRAIL-13",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_tide_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 13,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_tide_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 14,
+      completedLabyrinths: 13,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    "/?seed=TIDE-VIEW-13&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Advanced"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Tide Doors"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Currentwatch Guild"
+  );
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Tideglass shell chorus is optional"
+  );
+  await expect(page.locator("#tide-door-legend")).toBeVisible();
+  const maze = page.getByLabel(/Interactive maze/);
+  await expect(maze).toHaveAttribute("aria-label", /currently open/);
+  await expect(maze).toHaveAttribute("aria-label", /Explorer and Wardens share/);
+  for (const action of await page
+    .locator(".command-bar__actions > :visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `Region 4 command must remain readable: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const advancedRegion = atlas.locator("[data-atlas-region='advanced']");
+  await expect(advancedRegion).toContainText("Tideglass Reach");
+  await expect(advancedRegion).toContainText(
+    "Sea-glass channels and alternating tide marks"
+  );
+  await expect(advancedRegion).toContainText("Turning Tide Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "Atlas", exact: true }))
+    .toBeFocused();
+
+  await recordRegion4Screenshot(page, testInfo, "open-phase");
+  await page.getByRole("button", { name: /Pulse/ }).click();
+  await expect(maze).toHaveAttribute("aria-label", /currently sealed/);
+  await expect(page.locator("#field-note")).toContainText(
+    "Tide Doors are now sealed"
+  );
+  await recordRegion4Screenshot(page, testInfo, "sealed-phase");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("advanced");
+  expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Advanced");
+  await expect(records).toContainText("Trail Twist: Tide Doors");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed TIDE-TRAIL-13"
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=TIDE-SHELL-14&level=trail-scout&labyrinth=14&region=advanced&rules=tide-doors-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await atlas.locator("[data-atlas-landmark='advanced-13']").click();
   await expect(atlas.getByRole("button", { name: "Watch Trail" }))
     .toBeVisible();
   await atlas.getByRole("button", { name: "Watch Trail" }).click();

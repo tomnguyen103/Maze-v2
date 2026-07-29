@@ -1130,6 +1130,12 @@ body[data-run-mode="first-light"] .play-workbench {
   border-block-start: 0.18rem dashed var(--color-gate);
 }
 
+.legend-mark--tide-door::before {
+  content: "≈";
+  color: var(--color-signal);
+  font: 800 1rem/1 var(--font-body);
+}
+
 body[data-region-theme="mosslight-grove"] .canvas-frame {
   border-color: var(--color-gate);
   box-shadow:
@@ -1162,6 +1168,17 @@ body[data-region-theme="sunspan-crossing"] .canvas-frame {
 body[data-region-theme="sunspan-crossing"] .warden-readout {
   border-inline-start: 0.3rem solid var(--color-explorer);
   box-shadow: inset 0 -0.2rem 0 var(--color-echo-soft);
+}
+
+body[data-region-theme="tideglass-reach"] .canvas-frame {
+  border-color: var(--color-playground-sea-glass);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-playground-sea-glass) 34%, transparent),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="tideglass-reach"] .warden-readout {
+  border-color: var(--color-playground-sea-glass);
 }
 
 .journal-status {

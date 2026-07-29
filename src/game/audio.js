@@ -6,7 +6,8 @@
 const AMBIENT_FREQUENCIES = Object.freeze({
   foundation: 82,
   developing: 110,
-  capable: 147
+  capable: 147,
+  advanced: 196
 });
 
 export class EchoAudio {

@@ -213,6 +213,7 @@ const elements = {
   wardenGuild: requiredElement("warden-guild", HTMLElement),
   wardenState: requiredElement("warden-state", HTMLElement),
   echoBridgeLegend: requiredElement("echo-bridge-legend", HTMLLIElement),
+  tideDoorLegend: requiredElement("tide-door-legend", HTMLLIElement),
   windwayLegend: requiredElement("windway-legend", HTMLLIElement)
 };
 
@@ -3175,6 +3176,10 @@ function updateInterface() {
     "aria-label",
     activeFirstLight
       ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
+      : run.tideDoors.length > 0
+        ? `Interactive maze with visible Tide Doors currently ${
+          run.tideDoors[0]?.open ? "open" : "sealed"
+        }. Explorer and Wardens share this phase for the action; each successful Move or Pulse changes the next phase. Tide Doors remain visible through Fog. Use arrow keys or WASD to move. Press Q or Space to use Pulse.`
       : run.echoBridges.length > 0
         ? `Interactive maze with matching numbered Echo and Echo Bridge marks. ${
           run.echoBridges
@@ -3262,6 +3267,7 @@ function updateInterface() {
     ? `${regionTheme.wardenGuild} · ${regionTheme.ambientLabel} is optional.`
     : "Universal Warden marks";
   elements.echoBridgeLegend.hidden = run.echoBridges.length === 0;
+  elements.tideDoorLegend.hidden = run.tideDoors.length === 0;
   elements.windwayLegend.hidden = run.windways.length === 0;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");

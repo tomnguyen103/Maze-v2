@@ -16,6 +16,12 @@
  *   to: Position,
  *   open: boolean
  * }} EchoBridge
+ * @typedef {{
+ *   id: number,
+ *   from: Position,
+ *   to: Position,
+ *   open: boolean
+ * }} TideDoor
  */
 
 /**
@@ -82,6 +88,9 @@ export function createCanvasRenderer(canvas) {
     }
     for (const bridge of run.echoBridges) {
       drawEchoBridge(bridge, tile);
+    }
+    for (const door of run.tideDoors) {
+      drawTideDoor(door, tile);
     }
     for (const [echoIndex, echo] of run.echoes.entries()) {
       if (!echo.collected && revealed.has(`${echo.row},${echo.col}`)) {
@@ -385,6 +394,53 @@ export function createCanvasRenderer(canvas) {
       String(bridge.echoIndex + 1),
       midpoint.x,
       midpoint.y - tile * 0.24 * scale
+    );
+    context.restore();
+  }
+
+  /** @param {TideDoor} door @param {number} tile */
+  function drawTideDoor(door, tile) {
+    const from = centerOf(door.from, tile);
+    const to = centerOf(door.to, tile);
+    const midpoint = {
+      x: (from.x + to.x) / 2,
+      y: (from.y + to.y) / 2
+    };
+    const horizontal = from.y === to.y;
+    const offset = tile * 0.08 * palette.markScale;
+    const offsetX = horizontal ? 0 : offset;
+    const offsetY = horizontal ? offset : 0;
+    context.save();
+    context.strokeStyle = door.open ? palette.signal : palette.gate;
+    context.lineWidth = Math.max(2, tile * 0.065 * palette.markScale);
+    context.lineCap = "round";
+    context.setLineDash(door.open ? [] : [tile * 0.11, tile * 0.09]);
+    for (const direction of [-1, 1]) {
+      context.beginPath();
+      context.moveTo(
+        from.x + offsetX * direction,
+        from.y + offsetY * direction
+      );
+      context.lineTo(to.x + offsetX * direction, to.y + offsetY * direction);
+      context.stroke();
+    }
+    context.setLineDash([]);
+    context.fillStyle = palette.night;
+    context.fillRect(
+      midpoint.x - tile * 0.27,
+      midpoint.y - tile * 0.16,
+      tile * 0.54,
+      tile * 0.22
+    );
+    context.fillStyle = palette.paper;
+    context.font =
+      `700 ${Math.max(7, tile * 0.14 * palette.markScale)}px ${palette.fontBody}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(
+      door.open ? "OPEN" : "SEALED",
+      midpoint.x,
+      midpoint.y - tile * 0.05
     );
     context.restore();
   }
