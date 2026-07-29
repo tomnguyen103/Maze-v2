@@ -38,6 +38,14 @@ const REGION_THEMES = Object.freeze({
     wardenGuild: "Currentwatch Guild",
     ambientLabel: "Tideglass shell chorus",
     sigilName: "Turning Tide Sigil"
+  }),
+  mastery: Object.freeze({
+    id: "bellroot-summit",
+    name: "Bellroot Summit",
+    motif: "Beacon bells and resonant stone",
+    wardenGuild: "Chimewatch Guild",
+    ambientLabel: "Bellroot dusk chorus",
+    sigilName: "Last Light Sigil"
   })
 });
 

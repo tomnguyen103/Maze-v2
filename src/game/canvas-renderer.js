@@ -4,7 +4,7 @@
  * @typedef {Position & { vitality: number, maxVitality: number }} Explorer
  * @typedef {Position & { collected: boolean }} Echo
  * @typedef {Position & { open: boolean, sealed?: boolean }} Gate
- * @typedef {Position & { id: number, mode: "patrol" | "hunt" | "intercept" }} Warden
+ * @typedef {Position & { id: number, mode: "patrol" | "hunt" | "intercept" | "lured" }} Warden
  * @typedef {{
  *   source: Position,
  *   destination: Position,
@@ -22,6 +22,10 @@
  *   to: Position,
  *   open: boolean
  * }} TideDoor
+ * @typedef {Position & {
+ *   id: number,
+ *   spent: boolean
+ * }} SignalBell
  */
 
 /**
@@ -91,6 +95,9 @@ export function createCanvasRenderer(canvas) {
     }
     for (const door of run.tideDoors) {
       drawTideDoor(door, tile);
+    }
+    for (const bell of run.signalBells) {
+      drawSignalBell(bell, tile);
     }
     for (const [echoIndex, echo] of run.echoes.entries()) {
       if (!echo.collected && revealed.has(`${echo.row},${echo.col}`)) {
@@ -445,6 +452,54 @@ export function createCanvasRenderer(canvas) {
     context.restore();
   }
 
+  /** @param {SignalBell} bell @param {number} tile */
+  function drawSignalBell(bell, tile) {
+    const { x, y } = centerOf(bell, tile);
+    const scale = palette.markScale;
+    context.save();
+    context.strokeStyle = bell.spent ? palette.gate : palette.signal;
+    context.fillStyle = palette.night;
+    context.lineWidth = Math.max(2, tile * 0.07 * scale);
+    context.beginPath();
+    context.arc(
+      x,
+      y - tile * 0.02,
+      tile * 0.2 * scale,
+      Math.PI,
+      0
+    );
+    context.lineTo(x + tile * 0.23 * scale, y + tile * 0.2 * scale);
+    context.lineTo(x - tile * 0.23 * scale, y + tile * 0.2 * scale);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(
+      x,
+      y + tile * 0.25 * scale,
+      tile * 0.055 * scale,
+      0,
+      Math.PI * 2
+    );
+    context.fillStyle = bell.spent ? palette.gate : palette.signal;
+    context.fill();
+    if (bell.spent) {
+      context.beginPath();
+      context.moveTo(x - tile * 0.22, y - tile * 0.22);
+      context.lineTo(x + tile * 0.22, y + tile * 0.24);
+      context.moveTo(x + tile * 0.22, y - tile * 0.22);
+      context.lineTo(x - tile * 0.22, y + tile * 0.24);
+      context.stroke();
+    }
+    context.fillStyle = palette.paper;
+    context.font =
+      `700 ${Math.max(7, tile * 0.12 * scale)}px ${palette.fontBody}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04);
+    context.restore();
+  }
+
   /** @param {Warden} warden @param {number} tile */
   function drawWarden(warden, tile) {
     const { x, y } = centerOf(warden, tile);
@@ -457,6 +512,23 @@ export function createCanvasRenderer(canvas) {
     context.fillStyle = palette.warden;
     context.fill();
     context.fillStyle = palette.night;
+
+    if (warden.mode === "lured") {
+      context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
+      context.strokeStyle = palette.paper;
+      for (const direction of [-1, 1]) {
+        context.beginPath();
+        context.arc(
+          x,
+          y,
+          tile * 0.1 * scale,
+          direction < 0 ? Math.PI * 0.55 : -Math.PI * 0.45,
+          direction < 0 ? Math.PI * 1.45 : Math.PI * 0.45
+        );
+        context.stroke();
+      }
+      return;
+    }
 
     if (warden.mode === "hunt") {
       for (const offset of [-0.09, 0.09]) {

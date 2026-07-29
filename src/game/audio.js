@@ -7,7 +7,8 @@ const AMBIENT_FREQUENCIES = Object.freeze({
   foundation: 82,
   developing: 110,
   capable: 147,
-  advanced: 196
+  advanced: 196,
+  mastery: 247
 });
 
 export class EchoAudio {
@@ -54,7 +55,7 @@ export class EchoAudio {
   }
 
   /**
-   * @param {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} cue
+   * @param {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} cue
    */
   play(cue) {
     if (!this.#enabled || !this.#context) {
@@ -67,6 +68,7 @@ export class EchoAudio {
       blocked: [78, 0.07, "square"],
       echo: [440, 0.24, "sine"],
       pulse: [220, 0.34, "sine"],
+      bell: [494, 0.4, "sine"],
       challenge: [185, 0.22, "triangle"],
       correct: [610, 0.3, "sine"],
       wrong: [96, 0.2, "sawtooth"],
@@ -81,7 +83,12 @@ export class EchoAudio {
 
     oscillator.type = wave;
     oscillator.frequency.setValueAtTime(frequency, now);
-    if (cue === "echo" || cue === "correct" || cue === "won") {
+    if (
+      cue === "echo" ||
+      cue === "bell" ||
+      cue === "correct" ||
+      cue === "won"
+    ) {
       oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.5, now + duration);
     }
     gain.gain.setValueAtTime(0.0001, now);

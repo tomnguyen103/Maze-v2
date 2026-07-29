@@ -24,7 +24,11 @@ import {
  *   to: Position,
  *   open: boolean
  * }} TideDoor
- * @typedef {"patrol" | "hunt" | "intercept"} WardenMode
+ * @typedef {Position & {
+ *   id: number,
+ *   spent: boolean
+ * }} SignalBell
+ * @typedef {"patrol" | "hunt" | "intercept" | "lured"} WardenMode
  * @typedef {Position & { id: number, mode: WardenMode }} Warden
  * @typedef {{
  *   id: string,
@@ -94,6 +98,7 @@ import {
  *   windways: Windway[],
  *   echoBridges: EchoBridge[],
  *   tideDoors: TideDoor[],
+ *   signalBells: SignalBell[],
  *   gateWarden?: { id: number, defeated: boolean },
  *   challenge: WardenChallenge | null,
  *   revealed: string[],
@@ -114,6 +119,8 @@ import {
  *   direction: Direction
  * } | {
  *   type: "pulse"
+ * } | {
+ *   type: "ring-bell"
  * } | {
  *   type: "pause"
  * } | {
@@ -228,6 +235,9 @@ export function createRun(requestedSeed, input = {}) {
   const tideDoors = config.ruleset.revision === "tide-doors-v1"
     ? createTideDoors(labyrinth, occupied, 2, random)
     : [];
+  const signalBells = config.ruleset.revision === "warden-bells-v1"
+    ? createSignalBells(openTiles, distances, occupied, 2, random)
+    : [];
 
   const explorer = {
     ...explorerPosition,
@@ -250,6 +260,7 @@ export function createRun(requestedSeed, input = {}) {
     windways,
     echoBridges,
     tideDoors,
+    signalBells,
     ...(gateWarden
       ? { gateWarden: { id: gateWarden.id, defeated: false } }
       : {}),
@@ -506,6 +517,10 @@ export function applyAction(run, action) {
     return resolveTidePhase(run, resolvePulse(run));
   }
 
+  if (action.type === "ring-bell") {
+    return resolveRingBell(run);
+  }
+
   if (action.type !== "move") {
     return run;
   }
@@ -720,6 +735,90 @@ function resolvePulse(run) {
   };
   next = moveWardens(next);
   return resolveWardenContact(next);
+}
+
+/**
+ * @param {GameRun} run
+ * @returns {GameRun}
+ */
+function resolveRingBell(run) {
+  if (run.ruleset.revision !== "warden-bells-v1") {
+    return run;
+  }
+  const bell = run.signalBells.find(
+    (candidate) =>
+      !candidate.spent &&
+      Math.abs(candidate.row - run.explorer.row) +
+        Math.abs(candidate.col - run.explorer.col) === 1
+  );
+  if (!bell) {
+    return run;
+  }
+  /** @type {GameRun} */
+  let next = {
+    ...cloneRun(run),
+    signalBells: run.signalBells.map((candidate) =>
+      candidate.id === bell.id
+        ? { ...candidate, spent: true }
+        : { ...candidate }
+    ),
+    moves: run.moves + 1,
+    event: {
+      type: "signal-bell-rung",
+      message: "Signal Bell rung. Revealed ordinary Wardens are Lured for this action."
+    }
+  };
+  next = moveLuredWardens(next, bell);
+  next = expirePulse(next);
+  return resolveWardenContact(next);
+}
+
+/**
+ * @param {GameRun} run
+ * @param {SignalBell} bell
+ * @returns {GameRun}
+ */
+function moveLuredWardens(run, bell) {
+  const visible = new Set([...run.revealed, ...run.pulseVisible]);
+  const reserved = new Set([
+    positionKey(run.gate),
+    ...run.echoes
+      .filter((echo) => !echo.collected)
+      .map((echo) => positionKey(echo))
+  ]);
+  const targetDistances = distancesFrom(run.labyrinth, bell);
+  const originalWardenPositions = new Set(run.wardens.map(positionKey));
+  /** @type {Warden[]} */
+  const wardens = [];
+  for (const warden of run.wardens) {
+    if (!visible.has(positionKey(warden))) {
+      wardens.push({ ...warden });
+      continue;
+    }
+    const occupied = new Set([
+      ...originalWardenPositions,
+      ...wardens.map(positionKey)
+    ]);
+    const currentDistance =
+      targetDistances.get(positionKey(warden)) ?? Infinity;
+    const candidates = passageNeighbors(run.labyrinth, warden)
+      .filter(
+        (position) =>
+          !reserved.has(positionKey(position)) &&
+          !occupied.has(positionKey(position)) &&
+          (targetDistances.get(positionKey(position)) ?? Infinity) <
+            currentDistance
+      )
+      .sort((left, right) => {
+        const distance =
+          (targetDistances.get(positionKey(left)) ?? Infinity) -
+          (targetDistances.get(positionKey(right)) ?? Infinity);
+        return distance || positionKey(left).localeCompare(positionKey(right));
+      });
+    const chosen = candidates[0] ?? warden;
+    wardens.push({ ...chosen, id: warden.id, mode: "lured" });
+  }
+  return { ...run, wardens };
 }
 
 /**
@@ -990,6 +1089,7 @@ function cloneRun(run) {
       to: { ...door.to },
       open: door.open
     })),
+    signalBells: run.signalBells.map((bell) => ({ ...bell })),
     ...(run.gateWarden
       ? { gateWarden: { ...run.gateWarden } }
       : {}),
@@ -1267,6 +1367,35 @@ function pickEntities(
     occupied.add(positionKey(position));
   }
   return selected;
+}
+
+/**
+ * @param {Position[]} positions
+ * @param {Map<string, number>} distances
+ * @param {Set<string>} occupied
+ * @param {number} count
+ * @param {() => number} random
+ * @returns {SignalBell[]}
+ */
+function createSignalBells(
+  positions,
+  distances,
+  occupied,
+  count,
+  random
+) {
+  return pickEntities(
+    positions,
+    distances,
+    occupied,
+    count,
+    random,
+    2
+  ).map((position, id) => ({
+    ...position,
+    id,
+    spent: false
+  }));
 }
 
 /**

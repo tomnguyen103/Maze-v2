@@ -618,6 +618,193 @@ describe("GameSession", () => {
     expect(answered.tideDoors).toEqual(run.tideDoors);
   });
 
+  it("places two deterministic, bounded, one-use Signal Bells in Region 5", () => {
+    const config = {
+      ...getLabyrinthConfig("trail-scout", 17),
+      ruleset: getQuestRunRuleset(17)
+    };
+    const first = createRun("WARDEN-BELLS-17", config);
+    const second = createRun("WARDEN-BELLS-17", config);
+    const protectedTiles = new Set([
+      tileKey(first.explorer),
+      tileKey(first.gate),
+      ...first.echoes.map(tileKey),
+      ...first.wardens.map(tileKey)
+    ]);
+
+    expect(first.signalBells).toEqual(second.signalBells);
+    expect(first.signalBells).toHaveLength(2);
+    expect(first.signalBells.every((bell) => !bell.spent)).toBe(true);
+    for (const bell of first.signalBells) {
+      expect(first.labyrinth[bell.row][bell.col]).toBe(1);
+      expect(protectedTiles.has(tileKey(bell))).toBe(false);
+    }
+    expect(createRun("WARDEN-BELLS-17").signalBells).toEqual([]);
+  });
+
+  it("creates both Signal Bells across 2,000 Region 5 seeds", () => {
+    const levels = ["bright-start", "trail-scout", "maze-master"];
+    for (let index = 0; index < 2_000; index += 1) {
+      const labyrinthNumber = 17 + (index % 4);
+      const run = createRun(`BELL-STRESS-${index}`, {
+        ...getLabyrinthConfig(levels[index % levels.length], labyrinthNumber),
+        ruleset: getQuestRunRuleset(labyrinthNumber)
+      });
+      expect(run.signalBells, `seed ${index}`).toHaveLength(2);
+    }
+  });
+
+  it("rings only an adjacent unspent Bell for exactly one action and Move", () => {
+    const run = createRun("BELL-RING", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 0,
+      ruleset: getQuestRunRuleset(17)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const distant = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 2, col: 2 },
+      signalBells: [
+        { id: 0, row: 4, col: 4, spent: false },
+        { id: 1, row: 6, col: 6, spent: false }
+      ]
+    };
+    expect(applyAction(distant, { type: "ring-bell" })).toEqual(distant);
+
+    const adjacent = {
+      ...distant,
+      explorer: { ...distant.explorer, row: 4, col: 3 }
+    };
+    const rung = applyAction(adjacent, { type: "ring-bell" });
+
+    expect(rung.explorer).toEqual(adjacent.explorer);
+    expect(rung.moves).toBe(adjacent.moves + 1);
+    expect(rung.signalBells).toEqual([
+      { id: 0, row: 4, col: 4, spent: true },
+      { id: 1, row: 6, col: 6, spent: false }
+    ]);
+    expect(rung.event).toMatchObject({
+      type: "signal-bell-rung",
+      message: expect.stringContaining("Signal Bell")
+    });
+    expect(applyAction(rung, { type: "ring-bell" })).toEqual(rung);
+  });
+
+  it("lures only revealed ordinary Wardens toward the Bell for one action", () => {
+    const run = createRun("BELL-LURE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 2,
+      ruleset: getQuestRunRuleset(17)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [
+        { row: 4, col: 7, id: 0, mode: /** @type {const} */ ("patrol") },
+        { row: 6, col: 7, id: 1, mode: /** @type {const} */ ("patrol") }
+      ],
+      signalBells: [{ id: 0, row: 4, col: 4, spent: false }],
+      revealed: ["4,7"],
+      pulseVisible: []
+    };
+
+    const rung = applyAction(staged, { type: "ring-bell" });
+
+    expect(rung.wardens).toEqual([
+      { row: 4, col: 6, id: 0, mode: "lured" },
+      { row: 6, col: 7, id: 1, mode: "patrol" }
+    ]);
+    expect(rung.gateWarden).toEqual(staged.gateWarden);
+    expect(rung.revealed).toEqual(staged.revealed);
+    const restored = applyAction(rung, { type: "move", direction: "up" });
+    expect(restored.wardens.every((warden) => warden.mode !== "lured")).toBe(
+      true
+    );
+  });
+
+  it("keeps a blocked revealed Warden stationary instead of moving it away from the Bell", () => {
+    const run = createRun("BELL-BLOCKED-LURE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 2,
+      ruleset: getQuestRunRuleset(17)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [
+        { row: 4, col: 6, id: 0, mode: /** @type {const} */ ("patrol") },
+        { row: 4, col: 5, id: 1, mode: /** @type {const} */ ("patrol") }
+      ],
+      signalBells: [{ id: 0, row: 4, col: 4, spent: false }],
+      revealed: ["4,6", "4,5"],
+      pulseVisible: []
+    };
+
+    const rung = applyAction(staged, { type: "ring-bell" });
+
+    expect(rung.wardens).toEqual([
+      { row: 4, col: 6, id: 0, mode: "lured" },
+      { row: 4, col: 4, id: 1, mode: "lured" }
+    ]);
+  });
+
+  it("lures a Pulse-visible Warden before the Ring action expires Pulse", () => {
+    const run = createRun("BELL-PULSE-LURE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(17)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [
+        { row: 4, col: 7, id: 0, mode: /** @type {const} */ ("patrol") }
+      ],
+      signalBells: [{ id: 0, row: 4, col: 4, spent: false }],
+      revealed: [],
+      pulseVisible: ["4,7"],
+      pulseExpiresAt: run.moves + 1
+    };
+
+    const rung = applyAction(staged, { type: "ring-bell" });
+
+    expect(rung.wardens).toEqual([
+      { row: 4, col: 6, id: 0, mode: "lured" }
+    ]);
+    expect(rung.pulseVisible).toEqual([]);
+    expect(rung.pulseExpiresAt).toBeNull();
+  });
+
   it("places every entity on a unique reachable passage", () => {
     const run = createRun("REACHABLE-31");
     const reachable = new Set(

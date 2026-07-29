@@ -55,12 +55,12 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   mastery: Object.freeze({
-    motif: "Signal bells",
+    motif: "Beacon bells and resonant stone",
     fieldNotes: Object.freeze([
-      "Bell marks carry across the final region.",
-      "The longest passages bring every skill together.",
-      "Only one landmark remains beyond this signal.",
-      "The final diamond crest closes the Quest."
+      "One-use Signal Bells wait on visible passages across Bellroot Summit.",
+      "Ring an adjacent Bell to lure only revealed ordinary Wardens for one action.",
+      "Hidden Wardens and Gate Wardens ignore the signal; normal modes return next action.",
+      "The Last Light Sigil waits beyond the final Gate Warden."
     ])
   })
 });

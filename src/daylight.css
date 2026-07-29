@@ -508,6 +508,12 @@ a:active {
   font-size: 0.78em;
 }
 
+.warden-readout[data-mode="lured"] strong::before {
+  content: "))) ";
+  font-family: var(--font-utility);
+  font-size: 0.78em;
+}
+
 .warden-readout p {
   margin: var(--space-2) 0 0;
   color: var(--color-ink-muted);
@@ -624,6 +630,12 @@ a:active {
   justify-content: flex-end;
 }
 
+.trail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .touch-controls {
   display: none;
 }
@@ -638,6 +650,14 @@ a:active {
   background: var(--color-echo-soft);
   text-align: left;
   white-space: normal;
+}
+
+.bell-button {
+  background: var(--color-signal-bright);
+}
+
+.bell-button[hidden] {
+  display: none;
 }
 
 .pulse-button > span:first-child {
@@ -703,6 +723,10 @@ kbd {
   gap: var(--space-2);
   color: var(--color-ink-muted);
   font-size: 0.78rem;
+}
+
+.legend li[hidden] {
+  display: none;
 }
 
 .legend-mark {
@@ -1136,6 +1160,12 @@ body[data-run-mode="first-light"] .play-workbench {
   font: 800 1rem/1 var(--font-body);
 }
 
+.legend-mark--signal-bell::before {
+  content: ")))";
+  color: var(--color-signal-deep);
+  font: 800 0.72rem/1 var(--font-utility);
+}
+
 body[data-region-theme="mosslight-grove"] .canvas-frame {
   border-color: var(--color-gate);
   box-shadow:
@@ -1179,6 +1209,17 @@ body[data-region-theme="tideglass-reach"] .canvas-frame {
 
 body[data-region-theme="tideglass-reach"] .warden-readout {
   border-color: var(--color-playground-sea-glass);
+}
+
+body[data-region-theme="bellroot-summit"] .canvas-frame {
+  border-color: var(--color-signal-deep);
+  box-shadow:
+    0 0 0 3px var(--color-signal-glow),
+    var(--shadow-panel);
+}
+
+body[data-region-theme="bellroot-summit"] .warden-readout {
+  border-inline-start: 0.3rem solid var(--color-signal-deep);
 }
 
 .journal-status {
@@ -2531,6 +2572,11 @@ body[data-region-theme="tideglass-reach"] .warden-readout {
 
   .pulse-button {
     width: 100%;
+  }
+
+  .trail-actions {
+    min-width: 0;
+    flex-direction: column;
   }
 
   .intel-deck {

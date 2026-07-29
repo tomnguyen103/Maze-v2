@@ -100,4 +100,56 @@ describe("Canvas renderer", () => {
       run.tideDoors.length
     );
   });
+
+  it("draws one-use Signal Bells through Fog with explicit state labels", () => {
+    /** @type {string[]} */
+    const labels = [];
+    const gradient = { addColorStop: vi.fn() };
+    const context = {
+      arc: vi.fn(),
+      beginPath: vi.fn(),
+      clearRect: vi.fn(),
+      closePath: vi.fn(),
+      createRadialGradient: vi.fn(() => gradient),
+      fill: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn((text) => labels.push(text)),
+      lineTo: vi.fn(),
+      moveTo: vi.fn(),
+      restore: vi.fn(),
+      rotate: vi.fn(),
+      save: vi.fn(),
+      setLineDash: vi.fn(),
+      stroke: vi.fn(),
+      strokeRect: vi.fn(),
+      translate: vi.fn()
+    };
+    const canvas = {
+      getBoundingClientRect: () => ({ width: 640, height: 640 }),
+      getContext: () => context,
+      height: 640,
+      width: 640
+    };
+    const run = createRun("VISIBLE-SIGNAL-BELLS", {
+      ...getLabyrinthConfig("trail-scout", 17),
+      ruleset: getQuestRunRuleset(17)
+    });
+
+    createCanvasRenderer(
+      /** @type {HTMLCanvasElement} */ (
+        /** @type {unknown} */ (canvas)
+      )
+    ).render({
+      ...run,
+      signalBells: [
+        { ...run.signalBells[0], spent: false },
+        { ...run.signalBells[1], spent: true }
+      ],
+      pulseVisible: [],
+      revealed: []
+    });
+
+    expect(labels).toContain("RING");
+    expect(labels).toContain("SPENT");
+  });
 });

@@ -167,14 +167,23 @@
               </button>
             </div>
 
-            <button class="pulse-button" id="pulse-action" type="button">
-              <span>
-                <strong>Pulse</strong>
-                <small>Reveal nearby tiles</small>
-              </span>
-              <kbd>Q</kbd>
-              <span class="pulse-button__count" id="pulse-count">2</span>
-            </button>
+            <div class="trail-actions">
+              <button class="pulse-button bell-button" id="bell-action" type="button" hidden>
+                <span>
+                  <strong>Ring Bell</strong>
+                  <small>Lure revealed Wardens</small>
+                </span>
+                <kbd>B</kbd>
+              </button>
+              <button class="pulse-button" id="pulse-action" type="button">
+                <span>
+                  <strong>Pulse</strong>
+                  <small>Reveal nearby tiles</small>
+                </span>
+                <kbd>Q</kbd>
+                <span class="pulse-button__count" id="pulse-count">2</span>
+              </button>
+            </div>
           </div>
 
           <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
@@ -207,6 +216,7 @@
               <li><span class="legend-mark legend-mark--warden"></span>Warden</li>
               <li id="echo-bridge-legend" hidden><span class="legend-mark legend-mark--echo-bridge"></span>Echo Bridge: dashed sealed, solid open</li>
               <li id="tide-door-legend" hidden><span class="legend-mark legend-mark--tide-door"></span>Tide Doors: OPEN or SEALED together</li>
+              <li id="signal-bell-legend" hidden><span class="legend-mark legend-mark--signal-bell"></span>Signal Bell: RING once while adjacent</li>
               <li id="windway-legend" hidden><span class="legend-mark legend-mark--windway"></span>Windway source → destination</li>
             </ul>
           </div>

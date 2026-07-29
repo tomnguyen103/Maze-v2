@@ -100,7 +100,7 @@ let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
-/** @typedef {"move" | "blocked" | "echo" | "pulse" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
+/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
@@ -113,6 +113,7 @@ const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
+  bell: requiredElement("bell-action", HTMLButtonElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
   challengeDialog: requiredElement("challenge-dialog", HTMLDialogElement),
@@ -214,6 +215,7 @@ const elements = {
   wardenState: requiredElement("warden-state", HTMLElement),
   echoBridgeLegend: requiredElement("echo-bridge-legend", HTMLLIElement),
   tideDoorLegend: requiredElement("tide-door-legend", HTMLLIElement),
+  signalBellLegend: requiredElement("signal-bell-legend", HTMLLIElement),
   windwayLegend: requiredElement("windway-legend", HTMLLIElement)
 };
 
@@ -472,6 +474,9 @@ document.addEventListener("keydown", (event) => {
   } else if (event.key === "q" || event.key === "Q" || event.code === "Space") {
     event.preventDefault();
     usePulse();
+  } else if (event.key === "b" || event.key === "B") {
+    event.preventDefault();
+    ringBell();
   } else if (event.key === "Escape" || event.key === "p" || event.key === "P") {
     event.preventDefault();
     togglePause();
@@ -487,6 +492,7 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 });
 
 elements.pulse.addEventListener("click", usePulse);
+elements.bell.addEventListener("click", ringBell);
 elements.pause.addEventListener("click", togglePause);
 elements.newRun.addEventListener("click", () => {
   if (activeDaily) {
@@ -2781,6 +2787,22 @@ function usePulse() {
   transition({ type: "pulse" });
 }
 
+function ringBell() {
+  if (
+    activeFirstLight ||
+    isDemoBlocked() ||
+    completedQuestIdle ||
+    run.status !== "active"
+  ) {
+    return;
+  }
+  const shouldRestoreFocus = document.activeElement === elements.bell;
+  transition({ type: "ring-bell" });
+  if (shouldRestoreFocus && run.status === "active") {
+    canvas.focus();
+  }
+}
+
 function togglePause() {
   if (
     isDemoBlocked() ||
@@ -2827,6 +2849,7 @@ function transition(action) {
     if (
       [
         "echo-collected",
+        "signal-bell-rung",
         "gate-locked",
         "gate-warden-challenge",
         "gate-warden-defeated",
@@ -3176,6 +3199,10 @@ function updateInterface() {
     "aria-label",
     activeFirstLight
       ? "First Light maze. Use arrow keys, WASD, or the touch movement controls to move."
+      : run.signalBells.length > 0
+        ? `Interactive maze with ${
+          run.signalBells.filter((bell) => !bell.spent).length
+        } unspent visible Signal Bells. Ring Bell appears only while adjacent and Lures revealed ordinary Wardens for one action. Hidden and Gate Wardens are unaffected. Use arrow keys or WASD to move.`
       : run.tideDoors.length > 0
         ? `Interactive maze with visible Tide Doors currently ${
           run.tideDoors[0]?.open ? "open" : "sealed"
@@ -3226,6 +3253,14 @@ function updateInterface() {
   elements.pulseCount.textContent = String(run.pulses);
   playerController.updateScore(activeFirstLight ? 0 : run.score);
   elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
+  const adjacentBell = run.signalBells.find(
+    (bell) =>
+      !bell.spent &&
+      Math.abs(bell.row - run.explorer.row) +
+        Math.abs(bell.col - run.explorer.col) === 1
+  );
+  elements.bell.hidden = !adjacentBell;
+  elements.bell.disabled = run.status !== "active";
   elements.dailyButton.disabled =
     run.status === "challenge" || activeFirstLight;
   elements.atlasButton.disabled =
@@ -3268,6 +3303,7 @@ function updateInterface() {
     : "Universal Warden marks";
   elements.echoBridgeLegend.hidden = run.echoBridges.length === 0;
   elements.tideDoorLegend.hidden = run.tideDoors.length === 0;
+  elements.signalBellLegend.hidden = run.signalBells.length === 0;
   elements.windwayLegend.hidden = run.windways.length === 0;
   elements.fieldNote.textContent = run.event.message;
   renderPips(elements.echoMeter, run.echoes.length, collected, "echo-pip");
@@ -3683,6 +3719,7 @@ function playEventSound(type) {
     "gate-warden-defeated": "correct",
     "echo-collected": "echo",
     pulse: "pulse",
+    "signal-bell-rung": "bell",
     "challenge-started": "challenge",
     "question-skipped-free": "pulse",
     "question-skipped-paid": "wrong",
@@ -3897,6 +3934,9 @@ function summarizeWardenMode(gameRun = run) {
   if (gameRun.wardens.length === 0) {
     return "cleared";
   }
+  if (gameRun.wardens.some((warden) => warden.mode === "lured")) {
+    return "lured";
+  }
   if (gameRun.wardens.some((warden) => warden.mode === "intercept")) {
     return "intercept";
   }
@@ -3906,10 +3946,11 @@ function summarizeWardenMode(gameRun = run) {
   return "patrol";
 }
 
-/** @param {"patrol" | "hunt" | "intercept" | "cleared"} mode */
+/** @param {"patrol" | "hunt" | "intercept" | "lured" | "cleared"} mode */
 function wardenModeLabel(mode) {
   return {
     cleared: "Path clear",
+    lured: "Lured to Bell",
     intercept: "Intercept active",
     hunt: "Hunt active",
     patrol: "Patrol"

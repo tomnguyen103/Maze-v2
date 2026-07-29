@@ -17,6 +17,7 @@ const TERMINAL_KEYS = [
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
  *   | { type: "pulse", elapsedMs: number }
+ *   | { type: "ring-bell", elapsedMs: number }
  *   | { type: "hint", elapsedMs: number }
  *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", elapsedMs: number }
  * } RunReplayAction
@@ -185,10 +186,10 @@ function normalizeAction(value) {
     };
   }
   if (
-    candidate.type === "pulse" &&
+    (candidate.type === "pulse" || candidate.type === "ring-bell") &&
     hasOnlyKeys(value, ["type", "elapsedMs"])
   ) {
-    return { type: "pulse", elapsedMs };
+    return { type: candidate.type, elapsedMs };
   }
   if (
     candidate.type === "hint" &&

@@ -237,6 +237,113 @@ function echoBridgeTravelPlan(seed) {
 }
 
 /**
+ * @param {string} seed
+ * @returns {{
+ *   actions: ({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[],
+ *   adjacentRun: ReturnType<typeof createRun>,
+ *   rungRun: ReturnType<typeof createRun>
+ * }}
+ */
+function signalBellRingPlan(seed) {
+  let run = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 17),
+    ruleset: getQuestRunRuleset(17)
+  });
+  const bell = run.signalBells[0];
+  const adjacent = [
+    { row: bell.row - 1, col: bell.col },
+    { row: bell.row, col: bell.col + 1 },
+    { row: bell.row + 1, col: bell.col },
+    { row: bell.row, col: bell.col - 1 }
+  ].filter((position) => run.labyrinth[position.row]?.[position.col] === 1)
+    .sort((left, right) =>
+      pathTo(run, left).length - pathTo(run, right).length
+    )[0];
+  /** @type {({ type: "move", direction: string } | { type: "answer", kind?: "gate-warden", wardenId: number })[]} */
+  const actions = [];
+  for (
+    let step = 0;
+    step < 800 &&
+      (run.explorer.row !== adjacent.row ||
+        run.explorer.col !== adjacent.col);
+    step += 1
+  ) {
+    if (run.status === "challenge") {
+      const kind = run.challenge?.kind;
+      actions.push({
+        type: "answer",
+        ...(kind ? { kind } : {}),
+        wardenId: run.challenge?.wardenId ?? 0
+      });
+      run = applyAction(run, {
+        type: "provide-question",
+        question: TEST_QUESTION
+      });
+      run = applyAction(run, {
+        type: "answer-question",
+        answerId: TEST_QUESTION.answerId
+      });
+      continue;
+    }
+    const direction = pathTo(run, adjacent)[0];
+    if (!direction) {
+      throw new Error("Expected a move toward the Signal Bell fixture.");
+    }
+    actions.push({ type: "move", direction });
+    run = applyAction(run, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+  }
+  const adjacentRun = run;
+  const rungRun = applyAction(run, { type: "ring-bell" });
+  if (rungRun.moves !== run.moves + 1) {
+    throw new Error("Signal Bell fixture did not ring.");
+  }
+  return { actions, adjacentRun, rungRun };
+}
+
+/**
+ * @param {string} seed
+ */
+function wardenBellWinningPlan(seed) {
+  const ringPlan = signalBellRingPlan(seed);
+  let run = ringPlan.rungRun;
+  /** @type {({ type: "move", direction: string } | { type: "ring-bell" } | { type: "answer", kind?: "gate-warden" })[]} */
+  const actions = [...ringPlan.actions, { type: "ring-bell" }];
+  for (let step = 0; step < 800 && run.status !== "won"; step += 1) {
+    if (run.status === "challenge") {
+      const kind = run.challenge?.kind;
+      actions.push({ type: "answer", ...(kind ? { kind } : {}) });
+      run = applyAction(run, {
+        type: "provide-question",
+        question: TEST_QUESTION
+      });
+      run = applyAction(run, {
+        type: "answer-question",
+        answerId: TEST_QUESTION.answerId
+      });
+      continue;
+    }
+    const target =
+      run.echoes.find((echo) => !echo.collected) ?? run.gate;
+    const direction = pathTo(run, target)[0];
+    if (!direction) {
+      throw new Error("Expected a move toward the Region 5 objective.");
+    }
+    actions.push({ type: "move", direction });
+    run = applyAction(run, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+  }
+  if (run.status !== "won") {
+    throw new Error("Warden Bell plan did not reach the Gate.");
+  }
+  return { actions, finalRun: run };
+}
+
+/**
  * @param {import("@playwright/test").Page} page
  * @param {import("@playwright/test").TestInfo} testInfo
  * @param {"shell" | "opened-bridge"} state
@@ -278,6 +385,30 @@ async function recordRegion4Screenshot(page, testInfo, state) {
         "playtests",
         "screenshots",
         `milestone-2-region-4-${state}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {"bell-ready" | "bell-rung"} state
+ */
+async function recordRegion5Screenshot(page, testInfo, state) {
+  const body = await page.screenshot();
+  await testInfo.attach(`region-5-${state}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-2-region-5-${state}-${testInfo.project.name}.png`
       ),
       body
     );
@@ -2402,6 +2533,230 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await atlas.getByRole("button", { name: "List view" }).click();
   await atlas.locator("[data-atlas-landmark='advanced-13']").click();
+  await expect(atlas.getByRole("button", { name: "Watch Trail" }))
+    .toBeVisible();
+  await atlas.getByRole("button", { name: "Watch Trail" }).click();
+  await expect(viewer).toBeVisible();
+});
+
+test("carries Region 5 identity and one-use Signal Bell through play and Watch Trail", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 }
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const seed = "BELL-LURE-REPLAY-1";
+  const ringPlan = signalBellRingPlan(seed);
+  const retainedPlan = wardenBellWinningPlan(seed);
+  const retainedReplay = createTerminalRunReplay(
+    retainedPlan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : action.type === "ring-bell"
+          ? { type: "ring-bell", elapsedMs: 0 }
+          : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    retainedPlan.finalRun
+  );
+  if (!retainedReplay) {
+    throw new Error("Expected a retained Region 5 Trail fixture.");
+  }
+  await page.addInitScript(({ replay }) => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: replay.terminal.elapsedMs,
+      moves: replay.terminal.moves,
+      seed: "BELL-LURE-REPLAY-1",
+      outcome: "escaped",
+      echoesCollected: replay.terminal.echoesCollected,
+      echoTotal: replay.terminal.echoTotal,
+      questId: "quest_bells_e2e_123",
+      questLevelId: "trail-scout",
+      labyrinthNumber: 17,
+      atlasRegionId: "mastery",
+      rulesetRevision: "warden-bells-v1",
+      replay
+    }]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_bells_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 18,
+      completedLabyrinths: 17,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { replay: retainedReplay });
+
+  await page.goto(
+    `/?seed=${seed}&level=trail-scout&labyrinth=17&region=mastery&rules=warden-bells-v1`
+  );
+  await expectGameReady(page);
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Atlas Region: Mastery"
+  );
+  await expect(page.locator("#quest-stage")).toContainText(
+    "Trail Twist: Warden Bells"
+  );
+  await expect(page.locator("#warden-guild")).toContainText("Chimewatch Guild");
+  await expect(page.locator("#warden-guild")).toContainText(
+    "Bellroot dusk chorus is optional"
+  );
+  await expect(page.locator("#signal-bell-legend")).toBeVisible();
+  await expect(page.locator("#windway-legend")).toBeHidden();
+  await expect(page.locator("#echo-bridge-legend")).toBeHidden();
+  await expect(page.locator("#tide-door-legend")).toBeHidden();
+  const maze = page.getByLabel(/Interactive maze/);
+  await expect(maze).toHaveAttribute("aria-label", /2 unspent visible Signal Bells/);
+  await expect(page.getByRole("button", { name: /Ring Bell/ })).toBeHidden();
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  const masteryRegion = atlas.locator("[data-atlas-region='mastery']");
+  await expect(masteryRegion).toContainText("Bellroot Summit");
+  await expect(masteryRegion).toContainText(
+    "Beacon bells and resonant stone"
+  );
+  await expect(masteryRegion).toContainText("Last Light Sigil");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(
+    page.getByRole("button", { name: "Atlas", exact: true })
+  ).toBeFocused();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+
+  const challenge = page.locator("#challenge-dialog");
+  let expectedMoves = 0;
+  let questionOrdinal = 0;
+  for (const [actionIndex, action] of ringPlan.actions.entries()) {
+    if (action.type === "move") {
+      await page.evaluate((key) => {
+        document.dispatchEvent(new KeyboardEvent("keydown", {
+          key,
+          bubbles: true,
+          cancelable: true
+        }));
+      }, KEY_BY_DIRECTION[action.direction]);
+      expectedMoves += 1;
+      await expect.poll(async () => {
+        const state = await page.evaluate(() => ({
+          challengeVisible: document
+            .querySelector("#challenge-dialog")
+            ?.matches(":modal") ?? false,
+          moves: Number(document.querySelector("#moves-value")?.textContent ?? -1)
+        }));
+        return state.moves === expectedMoves || state.challengeVisible;
+      }, {
+        message:
+          `Region 5 action ${actionIndex} (${action.direction}) was not acknowledged`
+      }).toBe(true);
+      continue;
+    }
+    await expect(challenge).toBeVisible();
+    const bundled = getBundledQuestion({
+      levelId: "trail-scout",
+      labyrinthNumber: 17,
+      questionOrdinal,
+      seed,
+      wardenId: action.wardenId,
+      challengeKind: action.kind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    questionOrdinal += 1;
+    await page.locator(`[data-answer="${bundled.answerId}"]`).click();
+    await expect(challenge).not.toBeVisible();
+  }
+
+  const ringButton = page.getByRole("button", { name: /Ring Bell/ });
+  await expect(ringButton).toBeVisible();
+  await expect(ringButton).toBeEnabled();
+  for (const action of await page
+    .locator(".arena-actions button:visible")
+    .all()) {
+    const fit = await action.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        boxHeight: bounds.height,
+        boxWidth: bounds.width,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth
+      };
+    });
+    expect(
+      fit.scrollWidth <= fit.boxWidth &&
+        fit.scrollHeight <= fit.boxHeight &&
+        fit.boxWidth >= 44 &&
+        fit.boxHeight >= 44,
+      `Region 5 action must remain readable: ${JSON.stringify(fit)}`
+    ).toBe(true);
+  }
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  )).toBeLessThanOrEqual(1);
+  await recordRegion5Screenshot(page, testInfo, "bell-ready");
+
+  await ringButton.focus();
+  await expect(ringButton).toBeFocused();
+  await ringButton.press("Enter");
+  expectedMoves += 1;
+  await expect(page.locator("#moves-value")).toHaveText(
+    String(expectedMoves).padStart(3, "0")
+  );
+  await expect(ringButton).toBeHidden();
+  await expect(maze).toBeFocused();
+  await expect(page.locator("#warden-state")).toHaveText("Lured to Bell");
+  await expect(page.locator("#field-note")).toContainText("Signal Bell rung");
+  await expect(maze).toHaveAttribute("aria-label", /1 unspent visible Signal Bells/);
+  await recordRegion5Screenshot(page, testInfo, "bell-rung");
+
+  await page.locator("#seed-copy").click();
+  const copied = new URL(
+    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+  );
+  expect(copied.searchParams.get("region")).toBe("mastery");
+  expect(copied.searchParams.get("rules")).toBe("warden-bells-v1");
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toContainText("Atlas Region: Mastery");
+  await expect(records).toContainText("Trail Twist: Warden Bells");
+  await records.getByRole("button", {
+    name: `Watch retained Trail for seed ${seed}`
+  }).click();
+  const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(viewer.locator("[data-run-replay-status]")).toContainText(
+    `Step ${retainedReplay.actions.length} of`
+  );
+  await viewer.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(
+    "/?seed=BELL-SHELL-18&level=trail-scout&labyrinth=18&region=mastery&rules=warden-bells-v1"
+  );
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  const retainedLandmark = atlas.locator(
+    "[data-atlas-landmark='mastery-17']"
+  );
+  await retainedLandmark.focus();
+  await retainedLandmark.press("Enter");
   await expect(atlas.getByRole("button", { name: "Watch Trail" }))
     .toBeVisible();
   await atlas.getByRole("button", { name: "Watch Trail" }).click();

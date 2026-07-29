@@ -54,6 +54,14 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[3].nodes[0].fieldNote).toContain(
       "Visible Tide Doors"
     );
+    expect(atlas.regions[4]).toMatchObject({
+      id: "mastery",
+      themeName: "Bellroot Summit",
+      wardenGuild: "Chimewatch Guild",
+      motif: "Beacon bells and resonant stone",
+      sigilLabel: "Last Light Sigil restores at Labyrinth 20"
+    });
+    expect(atlas.regions[4].nodes[0].fieldNote).toContain("Signal Bells");
     expect(atlas.regions[0].nodes).toEqual([
       expect.objectContaining({
         id: "foundation-1",

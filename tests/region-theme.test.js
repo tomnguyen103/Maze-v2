@@ -65,6 +65,25 @@ describe("Region Theme", () => {
       ambientLabel: "Tideglass shell chorus",
       sigilName: "Turning Tide Sigil"
     });
-    expect(getRegionTheme("mastery")).toBeNull();
+  });
+
+  it("authors Region 5 presentation without changing Run rules", () => {
+    const ruleset = {
+      atlasRegionId: "mastery",
+      revision: "warden-bells-v1",
+      label: "Warden Bells"
+    };
+    const before = structuredClone(ruleset);
+
+    expect(getRegionTheme("mastery")).toEqual({
+      id: "bellroot-summit",
+      name: "Bellroot Summit",
+      motif: "Beacon bells and resonant stone",
+      wardenGuild: "Chimewatch Guild",
+      ambientLabel: "Bellroot dusk chorus",
+      sigilName: "Last Light Sigil"
+    });
+    expect(ruleset).toEqual(before);
+    expect(getRegionTheme("unknown")).toBeNull();
   });
 });

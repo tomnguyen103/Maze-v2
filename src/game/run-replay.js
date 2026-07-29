@@ -86,7 +86,9 @@ export function buildRunReplayTimeline(record) {
         run,
         entry.type === "move"
           ? { type: "move", direction: entry.direction }
-          : { type: "pulse" }
+          : entry.type === "ring-bell"
+            ? { type: "ring-bell" }
+            : { type: "pulse" }
       );
     }
     if (!changedAsExpected(previous, run, entry.type)) {
@@ -204,10 +206,10 @@ function provideReplayQuestion(run) {
 /**
  * @param {ReturnType<typeof createRun>} previous
  * @param {ReturnType<typeof createRun>} next
- * @param {"move" | "pulse" | "hint" | "challenge-outcome"} type
+ * @param {"move" | "pulse" | "ring-bell" | "hint" | "challenge-outcome"} type
  */
 function changedAsExpected(previous, next, type) {
-  if (type === "move" || type === "pulse") {
+  if (type === "move" || type === "pulse" || type === "ring-bell") {
     return next.moves === previous.moves + 1;
   }
   return next !== previous;
@@ -215,7 +217,7 @@ function changedAsExpected(previous, next, type) {
 
 /**
  * @param {ReturnType<typeof createRun>} run
- * @param {"move" | "pulse" | "hint" | "challenge-outcome"} actionType
+ * @param {"move" | "pulse" | "ring-bell" | "hint" | "challenge-outcome"} actionType
  */
 function replayEventType(run, actionType) {
   return run.event.type === "none" || run.event.type === "move"
@@ -246,5 +248,7 @@ function replayEventLabel(run, entry) {
   }
   return entry.type === "pulse"
     ? "Pulse revealed nearby passages."
+    : entry.type === "ring-bell"
+      ? "Signal Bell rang and revealed Wardens were Lured."
     : `Moved ${entry.direction}.`;
 }

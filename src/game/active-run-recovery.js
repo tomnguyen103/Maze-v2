@@ -30,7 +30,7 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  * }} RecoveryIdentity
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
- *   | { type: "pulse" | "reveal-hint", elapsedMs: number }
+ *   | { type: "pulse" | "ring-bell" | "reveal-hint", elapsedMs: number }
  *   | { type: "provide-question", question: ReturnType<typeof normalizeQuestion>, elapsedMs: number }
  *   | { type: "challenge-outcome", outcome: "correct" | "wrong" | "skip", explanation: string, hintUsed: boolean, elapsedMs: number }
  * } RecoveryAction
@@ -401,6 +401,12 @@ function recoveryEntry(previous, action, next) {
     return { type: "pulse", elapsedMs };
   }
   if (
+    action.type === "ring-bell" &&
+    next.moves === previous.moves + 1
+  ) {
+    return { type: "ring-bell", elapsedMs };
+  }
+  if (
     action.type === "provide-question" &&
     previous.status === "challenge" &&
     previous.challenge?.question === null &&
@@ -601,6 +607,9 @@ function actionFromEntry(entry) {
   if (entry.type === "pulse") {
     return { type: "pulse" };
   }
+  if (entry.type === "ring-bell") {
+    return { type: "ring-bell" };
+  }
   if (entry.type === "provide-question") {
     return {
       type: "provide-question",
@@ -681,11 +690,11 @@ function normalizeAction(value) {
   }
   if (
     typeof candidate.type === "string" &&
-    ["pulse", "reveal-hint"].includes(candidate.type) &&
+    ["pulse", "ring-bell", "reveal-hint"].includes(candidate.type) &&
     hasOnlyKeys(value, ["type", "elapsedMs"])
   ) {
     return {
-      type: /** @type {"pulse" | "reveal-hint"} */ (
+      type: /** @type {"pulse" | "ring-bell" | "reveal-hint"} */ (
         candidate.type
       ),
       elapsedMs

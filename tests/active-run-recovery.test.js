@@ -64,6 +64,16 @@ const TIDE_LOCATOR = Object.freeze({
   atlasRegionId: "advanced",
   rulesetRevision: "tide-doors-v1"
 });
+const BELL_LOCATOR = Object.freeze({
+  version: 3,
+  runId: "run_recovery_bell_123",
+  pending: false,
+  seed: "BELL-LURE-REPLAY-1",
+  levelId: "trail-scout",
+  labyrinthNumber: 17,
+  atlasRegionId: "mastery",
+  rulesetRevision: "warden-bells-v1"
+});
 
 /** @returns {StorageLike & { readonly writes: number, readonly removals: number }} */
 function createMemoryStorage() {
@@ -161,6 +171,7 @@ function comparableState(run) {
     windways: run.windways,
     echoBridges: run.echoBridges,
     tideDoors: run.tideDoors,
+    signalBells: run.signalBells,
     challenge: run.challenge,
     revealed: run.revealed,
     pulseVisible: run.pulseVisible,
@@ -238,6 +249,7 @@ function pathTo(run, goal) {
  * @param {RecoveryController} controller
  * @param {{
  *   revealFirstHint?: boolean,
+ *   ringFirstBell?: boolean,
  *   locator?: RecoveryLocator
  * }} [options]
  */
@@ -245,10 +257,13 @@ function finishWinningRun(
   controller,
   {
     revealFirstHint = false,
+    ringFirstBell = false,
     locator = LOCATOR
   } = {}
 ) {
-  let run = initialRun(locator);
+  let run = ringFirstBell
+    ? reachFirstBellAndRing(controller, locator)
+    : initialRun(locator);
   const pulseTransition = durableTransition(controller, run, { type: "pulse" });
   run = pulseTransition.run;
   let terminalResult = pulseTransition.result;
@@ -298,6 +313,68 @@ function finishWinningRun(
     throw new Error("Expected the recovery fixture to escape.");
   }
   return { run, terminalResult };
+}
+
+/**
+ * @param {RecoveryController} controller
+ * @param {RecoveryLocator} locator
+ */
+function reachFirstBellAndRing(controller, locator) {
+  let run = initialRun(locator);
+  const bell = run.signalBells[0];
+  const adjacent = [
+    { row: bell.row - 1, col: bell.col },
+    { row: bell.row, col: bell.col + 1 },
+    { row: bell.row + 1, col: bell.col },
+    { row: bell.row, col: bell.col - 1 }
+  ].filter((position) => run.labyrinth[position.row]?.[position.col] === 1)
+    .sort((left, right) =>
+      pathTo(run, left).length - pathTo(run, right).length
+    )[0];
+  let questionOrdinal = 0;
+  for (
+    let step = 0;
+    step < 800 &&
+      (run.explorer.row !== adjacent.row ||
+        run.explorer.col !== adjacent.col);
+    step += 1
+  ) {
+    if (run.status === "challenge") {
+      const question = getBundledQuestion({
+        levelId: locator.levelId,
+        seed: locator.seed,
+        wardenId: run.challenge?.wardenId ?? 0,
+        attempt: run.challenge?.attempt ?? 0,
+        labyrinthNumber: locator.labyrinthNumber,
+        questionOrdinal
+      });
+      questionOrdinal += 1;
+      ({ run } = durableTransition(controller, run, {
+        type: "provide-question",
+        question
+      }));
+      ({ run } = durableTransition(controller, run, {
+        type: "answer-question",
+        answerId: question.answerId
+      }));
+      continue;
+    }
+    const direction = pathTo(run, adjacent)[0];
+    if (!direction) {
+      throw new Error("Expected a route beside the first Signal Bell.");
+    }
+    ({ run } = durableTransition(controller, run, {
+      type: "move",
+      direction
+    }));
+  }
+  const transition = durableTransition(controller, run, {
+    type: "ring-bell"
+  });
+  if (transition.run.moves !== run.moves + 1) {
+    throw new Error("Expected the adjacent Signal Bell to ring.");
+  }
+  return transition.run;
 }
 
 /**
@@ -478,6 +555,26 @@ describe("Active Run Recovery", () => {
       throw new Error("Expected a recovered Tide Door Run.");
     }
     expect(recovered.run.tideDoors).toEqual(run.tideDoors);
+    expect(comparableState(recovered.run)).toEqual(comparableState(run));
+  });
+
+  it("recovers exact spent Bell and one-action Lured Warden state", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(BELL_LOCATOR);
+    const run = reachFirstBellAndRing(controller, BELL_LOCATOR);
+
+    expect(run.signalBells[0].spent).toBe(true);
+    expect(run.wardens.some((warden) => warden.mode === "lured")).toBe(true);
+    const recovered = createActiveRunRecoveryController({
+      storage
+    }).load(BELL_LOCATOR);
+    expect(recovered.status).toBe("recovered");
+    if (!recovered.run) {
+      throw new Error("Expected a recovered Warden Bell Run.");
+    }
+    expect(recovered.run.signalBells).toEqual(run.signalBells);
+    expect(recovered.run.wardens).toEqual(run.wardens);
     expect(comparableState(recovered.run)).toEqual(comparableState(run));
   });
 
@@ -884,6 +981,55 @@ describe("Active Run Recovery", () => {
       }
     }
     expect(timeline.states.at(-1)?.tideDoors).toEqual(run.tideDoors);
+  });
+
+  it("retains Ring Bell, spent state, and Lured outcome in Watch Trail", () => {
+    const storage = createMemoryStorage();
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(BELL_LOCATOR);
+    const { run, terminalResult } = finishWinningRun(controller, {
+      locator: BELL_LOCATOR,
+      ringFirstBell: true
+    });
+    const replay =
+      terminalResult && "replay" in terminalResult
+        ? terminalResult.replay
+        : null;
+    expect(replay?.actions).toContainEqual(
+      expect.objectContaining({ type: "ring-bell" })
+    );
+    const timeline = buildRunReplayTimeline({
+      seed: run.seed,
+      questLevelId: BELL_LOCATOR.levelId,
+      labyrinthNumber: BELL_LOCATOR.labyrinthNumber,
+      atlasRegionId: run.ruleset.atlasRegionId,
+      rulesetRevision: run.ruleset.revision,
+      replay
+    });
+    const rungState = timeline.states.find(
+      (state) =>
+        state.signalBells[0]?.spent &&
+        state.event.type === "signal-bell-rung"
+    );
+
+    expect(rungState?.signalBells[0].spent).toBe(true);
+    expect(rungState?.wardens.some(
+      (warden) => warden.mode === "lured"
+    )).toBe(true);
+    if (!rungState) {
+      throw new Error("Expected a retained Ring Bell state.");
+    }
+    const rungIndex = timeline.states.indexOf(rungState);
+    expect(timeline.states[rungIndex + 1].wardens.every(
+      (warden) => warden.mode !== "lured"
+    )).toBe(true);
+    expect(timeline.events).toContainEqual(
+      expect.objectContaining({
+        type: "signal-bell-rung",
+        label: expect.stringContaining("Signal Bell")
+      })
+    );
+    expect(timeline.states.at(-1)?.signalBells).toEqual(run.signalBells);
   });
 
   it("clears terminal recovery and selected answer identifiers", () => {
