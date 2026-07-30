@@ -2,6 +2,8 @@ import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
+import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
+import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-identity.js";
 
 /** @type {Set<string>} */
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
@@ -22,6 +24,53 @@ function boundedInteger(value, name, minimum, maximum) {
     );
   }
   return parsed;
+}
+
+const QUESTION_ID_PATTERN = /^[a-z0-9][a-z0-9:-]{0,79}$/i;
+const MAX_USED_QUESTION_IDS = 5000;
+
+/**
+ * The Quest's own uniqueness ledger. It is the only way the server can know
+ * which of a focused Region's finite reviewed pool this Quest has spent, and
+ * it carries no answer history — Question identifiers only.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function parseUsedQuestionIds(value) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value) || value.length > MAX_USED_QUESTION_IDS) {
+    throw new Error("Used Question identifiers are not valid.");
+  }
+  for (const id of value) {
+    if (typeof id !== "string" || !QUESTION_ID_PATTERN.test(id)) {
+      throw new Error("Used Question identifiers are not valid.");
+    }
+  }
+  return /** @type {string[]} */ (value);
+}
+
+/**
+ * @param {string | null | undefined} deckId
+ * @param {string | null | undefined} deckRevision
+ */
+function parseLearningDeck(deckId, deckRevision) {
+  if (!deckId && !deckRevision) {
+    return { learningDeckId: null, learningDeckRevision: null };
+  }
+  // Validated against the published roster, not merely against a shape, so
+  // this boundary behaves like the Quest Level and challenge-kind checks
+  // above it. An unpublished revision is rejected rather than silently
+  // serving Mixed content under the Deck's name.
+  if (!deckId || !getPublishedLearningDeckOption(deckId)) {
+    throw new Error("Learning Deck is not supported.");
+  }
+  if (!isPublishedLearningDeckRevision(deckId, deckRevision)) {
+    throw new Error("Learning Deck revision is not supported.");
+  }
+  return { learningDeckId: deckId, learningDeckRevision: deckRevision };
 }
 
 /** @param {URL} url */
@@ -57,8 +106,65 @@ export function parseQuestionRequest(url) {
       0,
       5000
     ),
-    challengeKind
+    challengeKind,
+    ...parseLearningDeck(
+      url.searchParams.get("deck"),
+      url.searchParams.get("deckRevision")
+    ),
+    usedQuestionIds: []
   };
+}
+
+/**
+ * The focused path posts the Quest's used-Question ledger, which does not fit
+ * a query string. Every other field matches the GET contract exactly, so
+ * recovery, Replay, Classroom, and legacy callers keep working unchanged.
+ *
+ * @param {Record<string, unknown>} body
+ */
+export function parseQuestionBody(body) {
+  if (!body || typeof body !== "object") {
+    throw new Error("Question request must be an object.");
+  }
+  const url = new URL("http://local/api/question");
+  for (const [key, parameter] of [
+    ["levelId", "level"],
+    ["seed", "seed"],
+    ["wardenId", "warden"],
+    ["attempt", "attempt"],
+    ["labyrinthNumber", "labyrinth"],
+    ["questionOrdinal", "question"],
+    ["challengeKind", "challenge"],
+    ["learningDeckId", "deck"],
+    ["learningDeckRevision", "deckRevision"]
+  ]) {
+    const value = body[key];
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(parameter, String(value));
+    }
+  }
+  return {
+    ...parseQuestionRequest(url),
+    usedQuestionIds: parseUsedQuestionIds(body.usedQuestionIds)
+  };
+}
+
+const MAX_BODY_BYTES = 256 * 1024;
+
+/** @param {import("node:http").IncomingMessage} request */
+async function readJsonBody(request) {
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      throw new Error("Question request body is too large.");
+    }
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error("Request body must be valid JSON.");
+  }
 }
 
 /**
@@ -134,10 +240,12 @@ export function createQuestionHandler(questionService, options = {}) {
       next?.();
       return;
     }
-    if (request.method !== "GET") {
+    if (request.method !== "GET" && request.method !== "POST") {
       response.statusCode = 405;
-      response.setHeader("allow", "GET");
-      response.end(JSON.stringify({ error: "Use GET for Question requests." }));
+      response.setHeader("allow", "GET, POST");
+      response.end(
+        JSON.stringify({ error: "Use GET or POST for Question requests." })
+      );
       return;
     }
     if (!instanceThrottle.allow()) {
@@ -166,7 +274,9 @@ export function createQuestionHandler(questionService, options = {}) {
     }
 
     try {
-      const questionRequest = parseQuestionRequest(url);
+      const questionRequest = request.method === "POST"
+        ? parseQuestionBody(await readJsonBody(request))
+        : parseQuestionRequest(url);
       const result = await questionService.getQuestion(questionRequest);
       response.statusCode = 200;
       response.setHeader("content-type", "application/json; charset=utf-8");

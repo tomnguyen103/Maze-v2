@@ -56,7 +56,10 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
-import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
+import {
+  isSameQuestIdentity,
+  selectDeferredQuestProgress
+} from "./game/quest-continuity.js";
 import {
   hasRunReplayOwnerMismatch,
   loadRunRecords,
@@ -66,6 +69,11 @@ import {
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
+import {
+  getDefaultLearningDeckOption,
+  getPublishedLearningDeckOption,
+  getPublishedLearningDeckOptions
+} from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
@@ -93,6 +101,14 @@ import {
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
+/** @type {Promise<ReturnType<typeof import("./learning/lantern-trail-view.js").createLanternTrailView>> | null} */
+let lanternTrailViewPromise = null;
+let lanternTrailViewRetry = false;
+let lanternTrailViewFailedTwice = false;
+/** @type {Promise<typeof import("./learning/echo-lens-view.js") | null> | null} */
+let echoLensViewPromise = null;
+let echoLensRequestId = 0;
+let deferChallengeQuestionForLens = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
@@ -183,18 +199,33 @@ function activeRegionTheme() {
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
+  workshopButton: requiredElement("workshop-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   bell: requiredElement("bell-action", HTMLButtonElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
   challengeDialog: requiredElement("challenge-dialog", HTMLDialogElement),
+  challengeEchoLens: requiredElement(
+    "challenge-echo-lens",
+    HTMLDetailsElement
+  ),
+  challengeEchoLensContent: requiredElement(
+    "challenge-echo-lens-content",
+    HTMLElement
+  ),
+  challengeEchoLensContinue: requiredElement(
+    "challenge-echo-lens-continue",
+    HTMLButtonElement
+  ),
   challengeFeedback: requiredElement("challenge-feedback", HTMLElement),
   challengeKicker: requiredElement("challenge-kicker", HTMLElement),
   challengePromise: requiredElement("challenge-promise", HTMLElement),
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
+  challengeNotice: requiredElement("challenge-notice", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
+  challengeLensPanel: requiredElement("challenge-lens-panel", HTMLElement),
   gateStagingSkip: requiredElement(
     "gate-staging-skip",
     HTMLButtonElement
@@ -215,6 +246,8 @@ const elements = {
   dailyStart: requiredElement("daily-start", HTMLButtonElement),
   dailyTitle: requiredElement("daily-title", HTMLElement),
   echoCount: requiredElement("echo-count", HTMLElement),
+  echoLens: requiredElement("echo-lens", HTMLDetailsElement),
+  echoLensContent: requiredElement("echo-lens-content", HTMLElement),
   echoMeter: requiredElement("echo-meter", HTMLElement),
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
   fieldNote: requiredElement("field-note", HTMLElement),
@@ -235,6 +268,7 @@ const elements = {
   journalDialog: requiredElement("journal-dialog", HTMLDialogElement),
   journalStatus: requiredElement("journal-status", HTMLElement),
   liveRegion: requiredElement("live-region", HTMLElement),
+  learningDeckOptions: requiredElement("learning-deck-options", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
   moves: requiredElement("moves-value", HTMLElement),
@@ -242,11 +276,7 @@ const elements = {
   pause: requiredElement("pause-run", HTMLButtonElement),
   pulse: requiredElement("pulse-action", HTMLButtonElement),
   pulseCount: requiredElement("pulse-count", HTMLElement),
-  practiceChoices: requiredElement("practice-choices", HTMLElement),
-  practiceClose: requiredElement("practice-close", HTMLButtonElement),
   practiceDialog: requiredElement("practice-dialog", HTMLDialogElement),
-  practiceFeedback: requiredElement("practice-feedback", HTMLElement),
-  practiceQuestion: requiredElement("practice-question", HTMLElement),
   recordsButton: requiredElement("records-button", HTMLButtonElement),
   recordsClose: requiredElement("records-close", HTMLButtonElement),
   recordsDialog: requiredElement("records-dialog", HTMLDialogElement),
@@ -351,7 +381,9 @@ let questProgress =
     ? storedQuestProgress
     : createQuestProgress(
         locationLevel.id,
-        locationLabyrinthNumber
+        locationLabyrinthNumber,
+        undefined,
+        learningDeckForNewQuest(storedQuestProgress)
       );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
@@ -438,8 +470,8 @@ let resumeAfterDaily = false;
 let resumeAfterRecords = false;
 let reopenJournalAfterPractice = false;
 let journalOpenPending = false;
-/** @type {ReturnType<typeof import("./learning/lantern-journal-ui.js").selectPracticeQuestion> | null} */
-let activePracticeQuestion = null;
+let resumeAfterWorkshop = false;
+let workshopOpenPending = false;
 let resumeAfterAccessSettings = false;
 let resumeAfterQuestConflict = false;
 /** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
@@ -625,7 +657,13 @@ elements.levelCards.addEventListener("click", async (event) => {
     return;
   }
 
-  if (await startNewQuest(button.dataset.level)) {
+  if (
+    await startNewQuest(
+      button.dataset.level,
+      undefined,
+      selectedLearningDeckOption()
+    )
+  ) {
     mustChooseLevel = false;
     elements.levelDialog.close();
     canvas.focus({ preventScroll: true });
@@ -652,16 +690,45 @@ elements.challengeChoices.addEventListener("click", (event) => {
   }
 
   const question = run.challenge?.question;
+  const correct = button.dataset.answer === question?.answerId;
   if (question && !activeFirstLight) {
     playerController.recordLearningOutcome(
       question,
-      button.dataset.answer === question.answerId ? "correct" : "wrong"
+      correct ? "correct" : "wrong"
     );
   }
+  clearPostAnswerEchoLens();
+  let hasReviewedEchoLens = false;
+  if (question) {
+    try {
+      const reviewedQuestion = normalizeQuestion(question);
+      hasReviewedEchoLens = Boolean(
+        reviewedQuestion.reviewedRevisionId && reviewedQuestion.echoLens
+      );
+    } catch {
+      hasReviewedEchoLens = false;
+    }
+  }
+  deferChallengeQuestionForLens =
+    hasReviewedEchoLens && !correct && !activeFirstLight;
   transition({
     type: "answer-question",
     answerId: button.dataset.answer
   });
+  if (question && !activeFirstLight) {
+    void showPostAnswerEchoLens(
+      question,
+      deferChallengeQuestionForLens ? "challenge" : "trail"
+    );
+  }
+});
+elements.challengeEchoLensContinue.addEventListener("click", () => {
+  deferChallengeQuestionForLens = false;
+  clearPostAnswerEchoLens();
+  elements.challengeQuestion.textContent = "Preparing your next question…";
+  elements.challengeSource.textContent =
+    "Opening the next reviewed question scroll…";
+  void loadChallengeQuestion();
 });
 elements.hintButton.addEventListener("click", () => {
   if (run.challenge?.hintRevealed) {
@@ -707,14 +774,18 @@ elements.gateStagingSkip.addEventListener("click", () => {
   syncChallengeDialog();
 });
 
-/** @param {HTMLElement} trigger */
-async function showQuestAtlas(trigger) {
+/**
+ * @param {HTMLElement} trigger
+ * @param {{ resumePausedRun?: boolean }} [options]
+ */
+async function showQuestAtlas(trigger, { resumePausedRun = false } = {}) {
   if (atlasOpening) {
     return;
   }
   atlasOpening = true;
-  resumeAfterAtlas = run.status === "active";
-  if (resumeAfterAtlas) {
+  const pauseForAtlas = run.status === "active";
+  resumeAfterAtlas = pauseForAtlas || resumePausedRun;
+  if (pauseForAtlas) {
     togglePause();
   }
   const retrying = atlasViewRetry;
@@ -738,6 +809,16 @@ async function showQuestAtlas(trigger) {
           }
           resumeAfterRunReplay = false;
           void openRunReplay(record, returnTarget);
+        },
+        onWorkshop: (selection, returnTarget) => {
+          const resumePausedRun = resumeAfterAtlas;
+          resumeAfterAtlas = false;
+          void openWorkshop({
+            ...selection,
+            origin: "atlas",
+            trigger: returnTarget,
+            resumePausedRun
+          });
         },
         onClose: () => {
           if (resumeAfterAtlas && run.status === "paused") {
@@ -952,6 +1033,14 @@ elements.recordsDialog.addEventListener("close", () => {
   }
   resumeAfterRecords = false;
 });
+elements.workshopButton.addEventListener("click", () => {
+  void openWorkshop({
+    levelId: currentLevel.id,
+    difficultyBand: getDifficultyBand(currentLabyrinthNumber).id,
+    origin: "play",
+    trigger: elements.workshopButton
+  });
+});
 elements.journalButton.addEventListener("click", () => {
   void openLanternJournal();
 });
@@ -977,15 +1066,14 @@ elements.journalBands.addEventListener("click", (event) => {
       ? event.target.closest("button[data-practice-question]")
       : null;
   if (!(button instanceof HTMLButtonElement)) return;
-  void openPractice(
-    {
-      id: button.dataset.practiceQuestion ?? "",
-      topicId: button.dataset.topic ?? "",
-      learningObjectiveId: button.dataset.objective ?? "",
-      difficultyBand: button.dataset.band ?? ""
-    },
-    true
-  );
+  const learningObjectiveId = button.dataset.objective ?? "";
+  void openWorkshop({
+    levelId: levelIdForLearningObjective(learningObjectiveId),
+    difficultyBand: button.dataset.band ?? "",
+    learningObjectiveId,
+    origin: "journal",
+    trigger: button
+  });
 });
 elements.journalClear.addEventListener("click", () => {
   elements.journalClearWarning.hidden = false;
@@ -1001,79 +1089,22 @@ elements.journalClearConfirm.addEventListener("click", () => {
   void renderLanternJournal().catch(reportLanternJournalUnavailable);
   elements.journalClose.focus();
 });
-elements.practiceChoices.addEventListener("click", async (event) => {
-  const button =
-    event.target instanceof Element
-      ? event.target.closest("button[data-practice-answer]")
-      : null;
-  if (
-    !(button instanceof HTMLButtonElement) ||
-    !button.dataset.practiceAnswer ||
-    !activePracticeQuestion
-  ) {
-    return;
-  }
-  const practiceQuestion = activePracticeQuestion;
-  for (const choice of elements.practiceChoices.querySelectorAll("button")) {
-    if (choice instanceof HTMLButtonElement) {
-      choice.disabled = true;
-    }
-  }
-  try {
-    const { evaluatePracticeAnswer } = await loadLanternJournalUi();
-    const result = evaluatePracticeAnswer(
-      practiceQuestion,
-      button.dataset.practiceAnswer
-    );
-    playerController.recordLearningOutcome(
-      practiceQuestion,
-      result.correct ? "correct" : "wrong"
-    );
-    elements.practiceFeedback.dataset.state = result.correct
-      ? "correct"
-      : "wrong";
-    elements.practiceFeedback.textContent =
-      `${result.message} ${result.explanation}`;
-    elements.practiceClose.focus();
-  } catch {
-    for (const choice of elements.practiceChoices.querySelectorAll("button")) {
-      if (choice instanceof HTMLButtonElement) {
-        choice.disabled = false;
-      }
-    }
-    reportLanternJournalUnavailable();
-  }
-});
-elements.practiceClose.addEventListener("click", () => {
-  elements.practiceDialog.close();
-});
-elements.practiceDialog.addEventListener("close", async () => {
-  activePracticeQuestion = null;
-  if (reopenJournalAfterPractice && !elements.journalDialog.open) {
-    reopenJournalAfterPractice = false;
-    try {
-      await renderLanternJournal();
-      if (!elements.journalDialog.open) {
-        elements.journalDialog.showModal();
-      }
-    } catch {
-      reportLanternJournalUnavailable();
-    }
-  }
-});
 elements.resultPractice.addEventListener("click", () => {
   void openFirstPractice();
 });
 
-async function openLanternJournal() {
+/** @param {{ resumePausedRun?: boolean }} [options] */
+async function openLanternJournal({ resumePausedRun = false } = {}) {
   if (journalOpenPending) {
     return;
   }
   journalOpenPending = true;
   try {
     const pauseForJournal = run.status === "active";
-    if (pauseForJournal) {
+    if (pauseForJournal || resumePausedRun) {
       elements.journalDialog.dataset.resumeRun = "true";
+    }
+    if (pauseForJournal) {
       togglePause();
     }
     await renderLanternJournal();
@@ -1171,45 +1202,113 @@ function countItem(label, count) {
 }
 
 /**
- * @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} triggeringQuestion
- * @param {boolean} returnToJournal
+ * @param {{
+ *   levelId: string,
+ *   difficultyBand: string,
+ *   learningObjectiveId?: string,
+ *   origin: "play" | "journal" | "atlas",
+ *   trigger: HTMLElement,
+ *   resumePausedRun?: boolean
+ * }} selection
  */
-async function openPractice(triggeringQuestion, returnToJournal) {
+async function openWorkshop(selection) {
+  if (workshopOpenPending || elements.practiceDialog.open) return;
+  workshopOpenPending = true;
   try {
-    const { selectPracticeQuestion } = await loadLanternJournalUi();
-    activePracticeQuestion = selectPracticeQuestion(triggeringQuestion);
+    if (selection.origin === "journal") {
+      resumeAfterWorkshop =
+        elements.journalDialog.dataset.resumeRun === "true";
+      reopenJournalAfterPractice = true;
+      delete elements.journalDialog.dataset.resumeRun;
+      if (elements.journalDialog.open) {
+        elements.journalDialog.close();
+      }
+    } else {
+      const pauseForWorkshop = run.status === "active";
+      resumeAfterWorkshop =
+        pauseForWorkshop || Boolean(selection.resumePausedRun);
+      if (pauseForWorkshop) {
+        togglePause();
+      }
+    }
+    const view = await loadLanternTrailView();
+    view.show(selection);
   } catch {
-    elements.journalStatus.textContent =
-      "A different reviewed Practice Question is unavailable.";
+    announce(
+      lanternTrailViewFailedTwice
+        ? "Lantern Trail Workshop is unavailable. Reload to try again."
+        : "Lantern Trail Workshop is unavailable. Try again."
+    );
+    await navigateAfterWorkshop(selection.origin, selection.trigger);
+  } finally {
+    workshopOpenPending = false;
+  }
+}
+
+function loadLanternTrailView() {
+  if (!lanternTrailViewPromise) {
+    const retrying = lanternTrailViewRetry;
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./learning/lantern-trail-view.js?retry=1")
+      : import("./learning/lantern-trail-view.js");
+    lanternTrailViewRetry = true;
+    lanternTrailViewPromise = viewModule
+      .then(({ createLanternTrailView }) =>
+        createLanternTrailView({
+          onNavigate: (
+            /** @type {"play" | "journal" | "atlas"} */ destination,
+            /** @type {HTMLElement | null} */ returnTarget
+          ) => {
+            void navigateAfterWorkshop(destination, returnTarget);
+          },
+          onRecord: (
+            /** @type {ReturnType<typeof getBundledQuestion>} */ question,
+            /** @type {"correct" | "wrong" | "hint" | "skip"} */ outcome
+          ) => {
+            playerController.recordLearningOutcome(question, outcome);
+          }
+        })
+      )
+      .catch((error) => {
+        lanternTrailViewPromise = null;
+        lanternTrailViewFailedTwice ||= retrying;
+        throw error;
+      });
+  }
+  return lanternTrailViewPromise;
+}
+
+/**
+ * @param {"play" | "journal" | "atlas"} destination
+ * @param {HTMLElement | null} returnTarget
+ */
+async function navigateAfterWorkshop(destination, returnTarget) {
+  const resumeRun = resumeAfterWorkshop;
+  resumeAfterWorkshop = false;
+  reopenJournalAfterPractice = false;
+  if (destination === "journal") {
+    await openLanternJournal({ resumePausedRun: resumeRun });
     return;
   }
-  reopenJournalAfterPractice = returnToJournal;
-  elements.practiceClose.textContent = returnToJournal
-    ? "Back to Journal"
-    : "Close Practice";
-  elements.practiceQuestion.textContent = activePracticeQuestion.prompt;
-  elements.practiceFeedback.dataset.state = "";
-  elements.practiceFeedback.textContent =
-    "Take your time. This answer changes only the Journal.";
-  elements.practiceChoices.replaceChildren(
-    ...activePracticeQuestion.choices.map((choice) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "practice-choice";
-      button.dataset.practiceAnswer = choice.id;
-      button.textContent = choice.label;
-      return button;
-    })
-  );
-  if (elements.journalDialog.open) {
-    elements.journalDialog.close();
+  if (destination === "atlas") {
+    await showQuestAtlas(elements.workshopButton, {
+      resumePausedRun: resumeRun
+    });
+    return;
   }
-  if (!elements.practiceDialog.open) {
-    elements.practiceDialog.showModal();
+  if (resumeRun && run.status === "paused") {
+    togglePause();
   }
-  requestAnimationFrame(() => {
-    elements.practiceQuestion.focus({ preventScroll: true });
-  });
+  returnTarget?.focus({ preventScroll: true });
+}
+
+/** @param {string} learningObjectiveId */
+function levelIdForLearningObjective(learningObjectiveId) {
+  if (learningObjectiveId.startsWith("bright-")) return "bright-start";
+  if (learningObjectiveId.startsWith("scout-")) return "trail-scout";
+  if (learningObjectiveId.startsWith("master-")) return "maze-master";
+  return "";
 }
 
 async function openFirstPractice() {
@@ -1218,15 +1317,13 @@ async function openFirstPractice() {
     .flatMap((band) => band.objectives)
     .find((entry) => entry.status === "practice-ready");
   if (!objective) return;
-  await openPractice(
-    {
-      id: objective.practiceQuestionId,
-      topicId: objective.topicId,
-      learningObjectiveId: objective.learningObjectiveId,
-      difficultyBand: objective.difficultyBand
-    },
-    false
-  );
+  await openWorkshop({
+    levelId: levelIdForLearningObjective(objective.learningObjectiveId),
+    difficultyBand: objective.difficultyBand,
+    learningObjectiveId: objective.learningObjectiveId,
+    origin: "play",
+    trigger: elements.resultPractice
+  });
 }
 
 async function syncPracticeOffer() {
@@ -1566,6 +1663,7 @@ async function openCampfireResume() {
   });
   campfireResumeView.show(run, {
     levelName: currentLevel.name,
+    learningDeckName: currentLearningDeckOption().label,
     labyrinthNumber: currentLabyrinthNumber
   });
 }
@@ -2106,9 +2204,130 @@ function createFreshLocator(levelId, labyrinthNumber) {
   throw new Error("Could not create a fresh Labyrinth for this Quest.");
 }
 
-/** @param {string} levelId @param {string} [seed] */
-async function startNewQuest(levelId, seed) {
-  const nextProgress = createQuestProgress(levelId);
+function renderLearningDeckOptions() {
+  const defaultDeck = getDefaultLearningDeckOption();
+  // Reopening the picker shows the Deck this Quest is on, not Mixed Trail.
+  const activeDeckId =
+    getPublishedLearningDeckOption(questProgress?.learningDeckId)?.deckId ??
+    defaultDeck.deckId;
+  elements.learningDeckOptions.replaceChildren(
+    ...getPublishedLearningDeckOptions().map((deck) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      const name = document.createElement("strong");
+      const description = document.createElement("span");
+      label.className = "learning-deck-option";
+      input.type = "radio";
+      input.name = "learning-deck";
+      input.value = deck.deckId;
+      input.dataset.revision = deck.revisionId;
+      input.checked = deck.deckId === activeDeckId;
+      name.id = `learning-deck-name-${deck.deckId}`;
+      name.textContent = deck.label;
+      description.id = `learning-deck-description-${deck.deckId}`;
+      description.textContent = deck.description;
+      // The Deck name alone is the accessible name; the description follows it
+      // as a separate announcement rather than becoming part of the name.
+      input.setAttribute("aria-labelledby", name.id);
+      input.setAttribute("aria-describedby", description.id);
+      label.append(input, name, description);
+      return label;
+    })
+  );
+}
+
+function selectedLearningDeckOption() {
+  const selected = elements.learningDeckOptions.querySelector(
+    "input[name='learning-deck']:checked"
+  );
+  if (!(selected instanceof HTMLInputElement)) {
+    return getDefaultLearningDeckOption();
+  }
+  const learningDeck = getPublishedLearningDeckOption(
+    selected.value,
+    selected.dataset.revision
+  );
+  if (!learningDeck) {
+    throw new Error("Selected Learning Deck is unavailable.");
+  }
+  return learningDeck;
+}
+
+const MIXED_FALLBACK_KEY = "echo-maze:quest-mixed-fallback:v1";
+
+/**
+ * The notice element is written on every exit path, so a previous Quest's
+ * banner can never survive into an unrelated Challenge.
+ *
+ * @param {string} notice
+ */
+function renderMixedTrailNotice(notice) {
+  elements.challengeNotice.textContent = notice;
+  elements.challengeNotice.hidden = !notice;
+}
+
+/**
+ * A focused Deck publishes a finite reviewed pool per Region, so a Quest
+ * always outruns it and continues on Mixed Trail content. The Explorer hears
+ * that once per Quest — the Deck they chose does not change.
+ *
+ * Claiming is a side effect: the first call for a Quest records the marker and
+ * returns the notice, every later call returns "". Call it only for the
+ * response actually shown, never speculatively inside the retry loop.
+ */
+function claimMixedTrailNotice() {
+  try {
+    if (localStorage.getItem(MIXED_FALLBACK_KEY) === questProgress.questId) {
+      return "";
+    }
+    localStorage.setItem(MIXED_FALLBACK_KEY, questProgress.questId);
+  } catch {
+    // Storage refusal must not silence the notice, only its memory.
+  }
+  return `${currentLearningDeckOption().label} is out of reviewed Questions here. Mixed Trail continues this Quest.`;
+}
+
+/**
+ * A Quest replaced without the picker keeps the Explorer's standing Deck
+ * choice, pinned to that Deck's current published revision.
+ *
+ * @param {{ learningDeckId?: string } | null | undefined} source
+ */
+function learningDeckForNewQuest(source) {
+  return (
+    getPublishedLearningDeckOption(source?.learningDeckId) ??
+    getDefaultLearningDeckOption()
+  );
+}
+
+function currentLearningDeckOption() {
+  // Resolved by Deck, not by revision: a Quest keeps the revision it pinned,
+  // so a republished Deck must still name itself truthfully while rendering.
+  const learningDeck = getPublishedLearningDeckOption(
+    questProgress.learningDeckId
+  );
+  if (!learningDeck) {
+    throw new Error("Current Quest Learning Deck is unavailable.");
+  }
+  return learningDeck;
+}
+
+/**
+ * @param {string} levelId
+ * @param {string} [seed]
+ * @param {{ deckId: string, label: string, revisionId: string }} [learningDeck]
+ */
+async function startNewQuest(
+  levelId,
+  seed,
+  learningDeck = getDefaultLearningDeckOption()
+) {
+  const nextProgress = createQuestProgress(
+    levelId,
+    1,
+    undefined,
+    learningDeck
+  );
   const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
   const locator = seed
     ? withRunAccessId({
@@ -2173,7 +2392,12 @@ async function startRecordedLabyrinth(
     return false;
   }
   questProgress = saveQuestProgress(
-    createQuestProgress(levelId, labyrinthNumber)
+    createQuestProgress(
+      levelId,
+      labyrinthNumber,
+      undefined,
+      learningDeckForNewQuest(questProgress)
+    )
   );
   void loadQuestContinuityController("new-quest").then((controller) =>
     controller?.queueBoundary(questProgress) ?? false
@@ -2199,6 +2423,7 @@ async function openLevelPicker(requireChoice = false) {
     }
   }
   mustChooseLevel = requireChoice;
+  renderLearningDeckOptions();
   if (elements.firstLightDialog.open) {
     elements.firstLightDialog.close();
   }
@@ -2740,6 +2965,10 @@ function resolveQuestConflictChoice(choice) {
     if (resolved) {
       resumeAfterQuestConflict = false;
     }
+  }).catch(() => {
+    // The choice failed to install, so the conflict stays open and the run
+    // stays paused rather than stranding the Explorer on a dead dialog.
+    announce("Cloud Quest choice is unavailable. Your device Quest is safe.");
   });
 }
 
@@ -2776,9 +3005,23 @@ function applyDeferredCloudQuest() {
     return;
   }
   const deferred = deferredCloudQuest.progress;
-  const nextProgress = selectDeferredQuestProgress(questProgress, deferred);
   deferredCloudQuest = null;
-  installCloudQuestProgress(nextProgress, false);
+  if (
+    deferred.questId === questProgress.questId &&
+    !isSameQuestIdentity(questProgress, deferred)
+  ) {
+    // Never merge two Learning Deck identities behind the Explorer's back.
+    // The next sync reconciles this pair and opens the Quest conflict choice.
+    announce(
+      "Cloud Quest uses a different Learning Deck. Your device Quest is safe."
+    );
+    installCloudQuestProgress(questProgress, false);
+    return;
+  }
+  installCloudQuestProgress(
+    selectDeferredQuestProgress(questProgress, deferred),
+    false
+  );
 }
 
 /**
@@ -3043,6 +3286,18 @@ function syncChallengeDialog() {
     elements.skipQuestion.disabled = true;
     elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
+    if (
+      deferChallengeQuestionForLens &&
+      feedback?.kind === "wrong"
+    ) {
+      elements.challengeQuestion.textContent =
+        "Review the explanation, then continue when you are ready.";
+      elements.challengeSource.textContent =
+        "Your timer stays paused. Reviewing does not change this Run.";
+      elements.gateStagingSkip.hidden = true;
+      return;
+    }
+    clearPostAnswerEchoLens();
     if (isGateWarden && !gateStagingComplete) {
       const theme = activeRegionTheme();
       elements.challengeKicker.textContent =
@@ -3063,6 +3318,8 @@ function syncChallengeDialog() {
     return;
   }
 
+  deferChallengeQuestionForLens = false;
+  clearPostAnswerEchoLens();
   elements.challengeQuestion.textContent = question.prompt;
   elements.hintButton.disabled = false;
   elements.hintButton.textContent =
@@ -3106,6 +3363,94 @@ function syncChallengeDialog() {
   });
 }
 
+/**
+ * @param {HTMLDetailsElement} details
+ * @param {HTMLElement} content
+ */
+function hideEchoLens(details, content) {
+  details.open = false;
+  details.hidden = true;
+  content.replaceChildren();
+  delete content.dataset.presentation;
+}
+
+function clearPostAnswerEchoLens() {
+  echoLensRequestId += 1;
+  hideEchoLens(elements.echoLens, elements.echoLensContent);
+  hideEchoLens(
+    elements.challengeEchoLens,
+    elements.challengeEchoLensContent
+  );
+  elements.challengeLensPanel.hidden = true;
+}
+
+/**
+ * @param {unknown} rawQuestion
+ * @param {"trail" | "challenge"} placement
+ */
+async function showPostAnswerEchoLens(rawQuestion, placement) {
+  let question;
+  try {
+    question = normalizeQuestion(rawQuestion);
+  } catch {
+    return;
+  }
+  if (!question.reviewedRevisionId || !question.echoLens) {
+    return;
+  }
+  const requestId = ++echoLensRequestId;
+  if (!echoLensViewPromise) {
+    echoLensViewPromise = import("./learning/echo-lens-view.js").catch(() => null);
+  }
+  const view = await echoLensViewPromise;
+  if (requestId !== echoLensRequestId) {
+    return;
+  }
+  const details =
+    placement === "challenge"
+      ? elements.challengeEchoLens
+      : elements.echoLens;
+  const content =
+    placement === "challenge"
+      ? elements.challengeEchoLensContent
+      : elements.echoLensContent;
+  delete content.dataset.presentation;
+  if (view) {
+    view.renderEchoLensContent(content, question.echoLens);
+  } else {
+    const title = document.createElement("h3");
+    title.className = "echo-lens__title";
+    title.textContent = question.echoLens.title;
+    const reasoning = document.createElement("p");
+    reasoning.className = "echo-lens__reasoning";
+    reasoning.textContent = question.echoLens.reasoning;
+    const steps = document.createElement("ol");
+    steps.className = "echo-lens__steps";
+    for (const step of question.echoLens.steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      steps.append(item);
+    }
+    content.replaceChildren(title, reasoning, steps);
+    content.dataset.presentation = "text-only";
+  }
+  if (placement === "challenge") {
+    elements.challengeLensPanel.hidden = false;
+  }
+  details.hidden = false;
+  details.open = true;
+  announce(
+    view
+      ? "Echo Lens opened with a reviewed explanation."
+      : "Echo Lens opened in text-only mode."
+  );
+  if (placement === "challenge") {
+    requestAnimationFrame(() =>
+      details.querySelector("summary")?.focus({ preventScroll: true })
+    );
+  }
+}
+
 function showSkipWarning() {
   if (run.status !== "challenge" || !run.challenge?.question) {
     return;
@@ -3123,6 +3468,9 @@ function hideSkipWarning() {
 }
 
 async function loadChallengeQuestion() {
+  // Scoped to this Question: re-rendering the dialog must not drop the notice,
+  // and the next Question must not repeat it.
+  renderMixedTrailNotice("");
   if (run.status !== "challenge" || !run.challenge) {
     return;
   }
@@ -3172,6 +3520,7 @@ async function loadChallengeQuestion() {
   let acceptedQuestion = null;
   let acceptedOrdinal = challengeSnapshot.questionOrdinal;
   let acceptedSource = "bundled";
+  let acceptedDeckSource = "mixed";
   for (let offset = 0; offset < 20; offset += 1) {
     const request = {
       ...challengeSnapshot,
@@ -3186,31 +3535,50 @@ async function loadChallengeQuestion() {
     };
     let question;
     let source = "bundled";
+    let deckSource;
     try {
-      const parameters = new URLSearchParams({
-        level: request.levelId,
-        seed: request.seed,
-        warden: String(request.wardenId),
-        attempt: String(request.attempt),
-        labyrinth: String(request.labyrinthNumber),
-        question: String(request.questionOrdinal),
-        challenge: request.challengeKind
+      // The Quest's used-Question ledger travels with the request: it is the
+      // only way the service knows which of a focused Region's finite
+      // reviewed pool this Quest has already spent. It carries Question
+      // identifiers only, never answers.
+      const response = await fetch("/api/question", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          levelId: request.levelId,
+          seed: request.seed,
+          wardenId: request.wardenId,
+          attempt: request.attempt,
+          labyrinthNumber: request.labyrinthNumber,
+          questionOrdinal: request.questionOrdinal,
+          challengeKind: request.challengeKind,
+          learningDeckId: questProgress.learningDeckId,
+          learningDeckRevision: questProgress.learningDeckRevision,
+          usedQuestionIds: questProgress.usedQuestionIds
+        })
       });
-      const response = await fetch(`/api/question?${parameters}`);
       if (!response.ok) {
         throw new Error("Question service unavailable.");
       }
       const payload = await response.json();
       question = normalizeQuestion(payload.question);
       source = payload.source;
+      deckSource = payload.learningDeckSource ?? "mixed";
     } catch {
       question = getBundledQuestion(request);
+      // The service could not answer, so this card is ordinary Mixed content
+      // whatever Deck the Quest is on. Saying so keeps the Deck label honest.
+      deckSource =
+        questProgress.learningDeckId === getDefaultLearningDeckOption().deckId
+          ? "mixed"
+          : "mixed-fallback";
     }
 
     if (!questProgress.usedQuestionIds.includes(question.id)) {
       acceptedQuestion = question;
       acceptedOrdinal = request.questionOrdinal;
       acceptedSource = source;
+      acceptedDeckSource = deckSource ?? "mixed";
       break;
     }
   }
@@ -3242,6 +3610,9 @@ async function loadChallengeQuestion() {
     gemini: "A fresh quest question is ready.",
     bundled: "A trusty question card is ready."
   }[acceptedSource] ?? "Your question is ready.";
+  renderMixedTrailNotice(
+    acceptedDeckSource === "mixed-fallback" ? claimMixedTrailNotice() : ""
+  );
   transition({ type: "provide-question", question: acceptedQuestion });
 }
 
@@ -3304,11 +3675,24 @@ function updateInterface() {
   );
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
-  elements.questLevelName.textContent = activeDaily
-    ? `Daily · ${activeDaily.date} UTC`
-    : activeFirstLight
-      ? "First Light"
-      : `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
+  if (activeDaily || activeFirstLight) {
+    elements.questLevelName.textContent = activeDaily
+      ? `Daily · ${activeDaily.date} UTC`
+      : "First Light";
+  } else {
+    // The Quest Level prefix is the part narrow screens drop. Keeping it in
+    // its own element hides it visually there while the announced name stays
+    // the whole Quest identity.
+    const questLevelPrefix = document.createElement("span");
+    questLevelPrefix.dataset.questLabelPrefix = "";
+    questLevelPrefix.textContent = `Quest Level ${currentLevel.number} · `;
+    elements.questLevelName.replaceChildren(
+      questLevelPrefix,
+      document.createTextNode(
+        `${currentLevel.name} · ${currentLearningDeckOption().label}`
+      )
+    );
+  }
   elements.questStage.textContent = activeDaily
     ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
     : activeFirstLight

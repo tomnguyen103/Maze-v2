@@ -27,6 +27,31 @@ test("keeps root as a non-running Echo Maze introduction", async ({ page }) => {
   expect(gameEntrypointRequests).toEqual([]);
 });
 
+test("offers Continue Quest once stored progress validates", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_landing_resume",
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      completedLabyrinths: 3,
+      usedMapFingerprints: ["map-a"],
+      usedQuestionIds: ["question-a"],
+      nextQuestionOrdinal: 1,
+      complete: false
+    }));
+  });
+
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("link", { name: "Continue Quest" })
+  ).toBeEnabled();
+  await expect(page.locator("#maze-canvas")).toHaveCount(0);
+});
+
 test("keeps guest entry available beside sign in", async ({ page }) => {
   await page.goto("/");
 

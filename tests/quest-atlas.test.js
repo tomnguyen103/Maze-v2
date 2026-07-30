@@ -4,6 +4,11 @@ import {
   advanceQuest,
   createQuestProgress
 } from "../src/game/quest-progress.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+
+const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
+  ({ deckId }) => deckId === "number-trail"
+);
 
 describe("Echo Atlas projection", () => {
   it("projects five regions and twenty non-color-only node states", () => {
@@ -11,6 +16,10 @@ describe("Echo Atlas projection", () => {
     const atlas = projectQuestAtlas(progress);
 
     expect(atlas.regions).toHaveLength(5);
+    expect(atlas).toMatchObject({
+      learningDeckId: "mixed-trail",
+      learningDeckLabel: "Mixed Trail"
+    });
     expect(atlas.regions.flatMap((region) => region.nodes)).toHaveLength(20);
     expect(atlas.regions.map((region) => region.label)).toEqual([
       "Foundation",
@@ -118,6 +127,28 @@ describe("Echo Atlas projection", () => {
       atlas.regions.flatMap((region) => region.nodes)
         .every((node) => node.fieldNote.length > 0)
     ).toBe(true);
+  });
+
+  it("projects the selected immutable Learning Deck without changing Region rules", () => {
+    if (!NUMBER_TRAIL) {
+      throw new Error("Published Number Trail fixture is missing.");
+    }
+    const atlas = projectQuestAtlas(
+      createQuestProgress(
+        "trail-scout",
+        9,
+        "quest_number_atlas",
+        NUMBER_TRAIL
+      )
+    );
+
+    expect(atlas).toMatchObject({
+      learningDeckId: "number-trail",
+      learningDeckRevision: NUMBER_TRAIL.revisionId,
+      learningDeckLabel: "Number Trail",
+      currentLabyrinthNumber: 9
+    });
+    expect(atlas.regions[2].id).toBe("capable");
   });
 
   it("derives restored sigils and current milestones without mutating progress", () => {

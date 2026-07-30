@@ -12,13 +12,18 @@ export { renderQuestAtlasSummary } from "./quest-atlas-summary.js";
  *   onWatchTrail?: (
  *     landmarkId: string,
  *     returnTarget: HTMLElement
+ *   ) => void,
+ *   onWorkshop?: (
+ *     selection: { levelId: string, difficultyBand: string },
+ *     returnTarget: HTMLElement
  *   ) => void
  * }} [options]
  */
 export function createQuestAtlasView({
   onClose = () => {},
   onContinue = () => {},
-  onWatchTrail = () => {}
+  onWatchTrail = () => {},
+  onWorkshop = () => {}
 } = {}) {
   const elements = {
     close: requiredElement("atlas-close", HTMLButtonElement),
@@ -53,7 +58,11 @@ export function createQuestAtlasView({
      */
     show(atlas, trigger) {
       returnFocus = trigger;
-      renderAtlas(elements, atlas, { onContinue, onWatchTrail });
+      renderAtlas(elements, atlas, {
+        onContinue,
+        onWatchTrail,
+        onWorkshop
+      });
       if (!elements.dialog.open) {
         elements.dialog.showModal();
       }
@@ -79,10 +88,18 @@ export function createQuestAtlasView({
  *   onWatchTrail: (
  *     landmarkId: string,
  *     returnTarget: HTMLElement
+ *   ) => void,
+ *   onWorkshop: (
+ *     selection: { levelId: string, difficultyBand: string },
+ *     returnTarget: HTMLElement
  *   ) => void
  * }} options
  */
-function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
+function renderAtlas(
+  elements,
+  atlas,
+  { onContinue, onWatchTrail, onWorkshop }
+) {
   const milestoneGuidance = atlas.complete
     ? "All five Sigils restored. Quest complete."
     : atlas.labyrinthsToNextMilestone === 0
@@ -90,6 +107,7 @@ function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
       : `Gate Warden in ${atlas.labyrinthsToNextMilestone} Labyrinths at ` +
         `Labyrinth ${atlas.nextMilestoneNumber}.`;
   elements.progress.textContent =
+    `${atlas.learningDeckLabel}. ` +
     `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped. ` +
     `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored. ` +
     milestoneGuidance;
@@ -261,6 +279,8 @@ function renderAtlas(elements, atlas, { onContinue, onWatchTrail }) {
     renderDetail(detail, node, {
       onContinue,
       onWatchTrail: (landmarkId) => onWatchTrail(landmarkId, button),
+      onWorkshop: (selection) => onWorkshop(selection, button),
+      levelId: atlas.levelId,
       close: elements.dialog.close.bind(elements.dialog)
     });
     if (updateUrl) {
@@ -423,10 +443,18 @@ function createAtlasIllustration() {
  * @param {{
  *   onContinue: () => void,
  *   onWatchTrail: (landmarkId: string) => void,
+ *   onWorkshop: (
+ *     selection: { levelId: string, difficultyBand: string }
+ *   ) => void,
+ *   levelId: string,
  *   close: () => void
  * }} options
  */
-function renderDetail(detail, node, { onContinue, onWatchTrail, close }) {
+function renderDetail(
+  detail,
+  node,
+  { onContinue, onWatchTrail, onWorkshop, levelId, close }
+) {
   const kicker = document.createElement("span");
   kicker.className = "section-label";
   kicker.textContent = node.difficultyBand;
@@ -469,6 +497,16 @@ function renderDetail(detail, node, { onContinue, onWatchTrail, close }) {
       : "Preview only. Continue the current Labyrinth to reach this landmark.";
     detail.append(preview);
   }
+  const workshop = controlButton("Open Workshop");
+  workshop.dataset.atlasWorkshop = "";
+  workshop.addEventListener("click", () => {
+    onWorkshop({
+      levelId,
+      difficultyBand: node.difficultyBandId
+    });
+    close();
+  });
+  detail.append(workshop);
 }
 
 /**

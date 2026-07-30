@@ -702,6 +702,176 @@ kbd {
   font-size: 0.88rem;
 }
 
+.echo-lens {
+  margin-top: var(--space-5);
+  border-block: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.echo-lens summary {
+  min-height: 2.8125rem;
+  padding: var(--space-3);
+  color: var(--color-ink);
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.echo-lens summary:hover {
+  background: var(--color-stone-raised);
+}
+
+.echo-lens summary:active {
+  background: var(--color-signal-glow);
+}
+
+.echo-lens summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.echo-lens__content {
+  padding: 0 var(--space-3) var(--space-4);
+}
+
+.echo-lens__title {
+  margin: var(--space-1) 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  line-height: 1.1;
+}
+
+.echo-lens__reasoning,
+.echo-lens__steps {
+  margin-block: var(--space-2);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.echo-lens__steps {
+  padding-left: var(--space-5);
+}
+
+.echo-lens__visual {
+  min-width: 0;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  background: var(--color-echo-soft);
+}
+
+.echo-lens__number-line {
+  position: relative;
+  min-height: 4.75rem;
+  margin: var(--space-3) var(--space-4);
+  border-top: 3px solid var(--color-line);
+}
+
+.echo-lens__number-marker {
+  position: absolute;
+  top: -0.5rem;
+  left: var(--lens-position);
+  display: grid;
+  min-width: 2.5rem;
+  justify-items: center;
+  transform: translateX(-50%);
+}
+
+.echo-lens__number-marker::before {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--color-line);
+  border-radius: 50%;
+  background: var(--color-signal);
+  content: "";
+}
+
+.echo-lens__number-marker strong,
+.echo-lens__number-marker small {
+  font-family: var(--font-utility);
+  font-size: 1rem;
+}
+
+.echo-lens__array,
+.echo-lens__fraction {
+  display: grid;
+  grid-template-columns: repeat(var(--lens-columns), minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.echo-lens__array-cell,
+.echo-lens__fraction-part {
+  min-height: 1.5rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.echo-lens__array-cell.is-filled,
+.echo-lens__fraction-part.is-filled {
+  background: var(--color-signal);
+}
+
+.echo-lens__quoted-text {
+  margin: 0 0 var(--space-2);
+  font-weight: 650;
+}
+
+.echo-lens__highlight-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 1rem;
+}
+
+.echo-lens__highlight-list mark {
+  color: var(--color-ink);
+  background: var(--color-signal);
+}
+
+.echo-lens__pattern,
+.echo-lens__diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.echo-lens__pattern span,
+.echo-lens__pattern strong,
+.echo-lens__diagram-node {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  font-family: var(--font-utility);
+}
+
+.echo-lens__pattern strong {
+  background: var(--color-signal);
+}
+
+.echo-lens__diagram-edge {
+  color: var(--color-ink-muted);
+  font-size: 1rem;
+  text-align: center;
+}
+
+.challenge-lens-panel {
+  display: grid;
+  margin-top: var(--space-3);
+  gap: var(--space-3);
+}
+
+.challenge-lens-panel[hidden] {
+  display: none;
+}
+
+.challenge-lens-panel .echo-lens {
+  margin-top: 0;
+}
+
+.challenge-lens-panel > button {
+  justify-self: start;
+}
+
 .legend {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
@@ -1113,6 +1283,7 @@ body[data-run-mode="first-light"] :is(
   #classroom-link,
   #daily-button,
   #atlas-button,
+  #workshop-button,
   #journal-button,
   #records-button,
   #pulse-action,
@@ -2086,6 +2257,97 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink-muted);
 }
 
+.learning-deck-picker {
+  min-width: 0;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.learning-deck-picker legend {
+  padding: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.learning-deck-picker > p {
+  max-width: 68ch;
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.learning-deck-options {
+  display: grid;
+  margin-top: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.learning-deck-option {
+  display: grid;
+  min-width: 0;
+  min-height: 5.75rem;
+  padding: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-1) var(--space-2);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-press) var(--ease-out),
+    box-shadow var(--duration-press) var(--ease-out);
+}
+
+.learning-deck-option:has(input:checked) {
+  background: var(--color-signal-glow);
+  box-shadow: inset 0 -0.25rem 0 var(--color-signal);
+}
+
+.learning-deck-option:hover:not(:has(input:checked)) {
+  background: var(--color-stone-raised);
+}
+
+.learning-deck-option:active {
+  box-shadow: inset 0 -0.15rem 0 var(--color-line);
+}
+
+.learning-deck-option:has(input:focus-visible) {
+  outline: 0.2rem solid var(--color-focus);
+  outline-offset: 0.2rem;
+}
+
+.learning-deck-option input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: var(--space-1) 0 0;
+  accent-color: var(--color-ink);
+}
+
+.learning-deck-option strong {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.learning-deck-option span {
+  min-width: 0;
+  grid-column: 2;
+  color: var(--color-ink-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .level-cards {
   display: grid;
   margin-top: var(--space-6);
@@ -2309,6 +2571,19 @@ body[data-run-mode="first-light"] .play-workbench {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* Sits above the Question so a Deck notice is readable without scrolling at
+   390 by 844, where the source line below the choices falls past the fold. */
+.challenge-notice {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 2px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-ink);
+  font-size: 1rem;
+  line-height: 1.45;
 }
 
 .challenge-source {
@@ -2544,6 +2819,10 @@ body[data-run-mode="first-light"] .play-workbench {
     grid-template-columns: 1fr;
   }
 
+  .learning-deck-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .level-card {
     min-height: 0;
   }
@@ -2564,27 +2843,25 @@ body[data-run-mode="first-light"] .play-workbench {
     display: flex;
     width: 100%;
     min-width: 0;
-    justify-content: stretch;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
     gap: var(--space-1);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
   }
 
-  .command-bar button {
-    min-width: 0;
+  .command-bar__actions > * {
+    min-width: max-content;
+    min-height: 2.75rem;
     padding-block: var(--space-1);
-    padding-inline: 0;
-    flex: 1 1 0;
+    padding-inline: var(--space-2);
+    flex: 0 0 auto;
     font-size: var(--text-compact);
     line-height: 1.05;
     overflow-wrap: normal;
+    scroll-snap-align: start;
     white-space: nowrap;
-  }
-
-  #sound-toggle {
-    flex-grow: 1.15;
-  }
-
-  #new-run {
-    flex-grow: 1.3;
   }
 
   .play-grid {
@@ -2594,6 +2871,19 @@ body[data-run-mode="first-light"] .play-workbench {
   .section-label,
   .run-metrics dt {
     font-size: 0.64rem;
+  }
+
+  #quest-level-name [data-quest-label-prefix] {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    margin: -1px;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .status-deck__heading {
@@ -2672,6 +2962,10 @@ body[data-run-mode="first-light"] .play-workbench {
   .level-dialog__first-light {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .learning-deck-options {
+    grid-template-columns: 1fr;
   }
 
   .first-light-route {

@@ -4,6 +4,11 @@ import {
 } from "./quest-levels.js";
 import { getLearningMetadata } from "./learning-objectives.js";
 import { normalizeQuestion } from "./question-contract.js";
+import { getReviewedEchoLens } from "./reviewed-echo-lenses.js";
+import {
+  createReviewedQuestionRevisionId,
+  reviewedQuestionContentDigest
+} from "./reviewed-question-revision.js";
 
 /**
  * @typedef {{
@@ -16,7 +21,9 @@ import { normalizeQuestion } from "./question-contract.js";
  *   difficultyBand: string,
  *   difficultyRank: number,
  *   topicId: string,
- *   learningObjectiveId: string
+ *   learningObjectiveId: string,
+ *   reviewedRevisionId?: string,
+ *   echoLens?: import("./question-contract.js").WardenQuestion["echoLens"]
  * }} WardenQuestion
  * @typedef {Omit<WardenQuestion, "topicId" | "learningObjectiveId">} BaseWardenQuestion
  * @typedef {{
@@ -136,7 +143,7 @@ const CURRICULUM_QUESTIONS = Object.freeze({
   scout: Object.freeze([
     Object.freeze([
       ["A character packs a map before a hike. Why?", ["to find the route", "to make lunch", "to predict a score"], 0, "Connect the object to travel.", "A map helps a hiker find the route."],
-      ["Which body part pumps blood?", ["heart", "lungs", "stomach"], 0, "Think about the organ with a steady beat.", "The heart pumps blood."],
+      ["Which body part beats to move oxygen and nutrients around the body?", ["heart", "lungs", "stomach"], 0, "Think about the organ with a steady beat.", "The heart beats to move oxygen and nutrients around the body."],
       ["Lee is ahead of Jo, and Jo is ahead of Sam. Who is last?", ["Sam", "Jo", "Lee"], 0, "Follow the order from front to back.", "Sam is behind both Jo and Lee."],
       ["In 'The trail was steep,' steep means the trail had a ___ slope.", ["sharp", "flat", "silent"], 0, "Picture a path that climbs quickly.", "A steep trail has a sharp slope."]
     ]),
@@ -594,12 +601,23 @@ function createMasterQuestion(bandIndex, ordinal, bandId, rank) {
   );
 }
 
-/** @param {WardenQuestion} question @returns {WardenQuestion} */
-function cloneQuestion(question) {
-  return {
-    ...question,
-    choices: question.choices.map((choice) => ({ ...choice }))
-  };
+/** @param {unknown} question @returns {WardenQuestion} */
+function bindBundledReviewedRevision(question) {
+  const normalized = normalizeQuestion(question);
+  const contentKey =
+    `bundled-content:${normalized.id}:` +
+    reviewedQuestionContentDigest(normalized, null);
+  const echoLens = getReviewedEchoLens(contentKey);
+  const reviewedRevisionId = createReviewedQuestionRevisionId(
+    normalized,
+    "bundled",
+    echoLens
+  );
+  return normalizeQuestion({
+    ...normalized,
+    reviewedRevisionId,
+    ...(echoLens ? { echoLens } : {})
+  });
 }
 
 /**
@@ -625,7 +643,7 @@ export function getBundledQuestion({
     const card = Array.isArray(deck) ? deck[band.index] : undefined;
     if (card) {
       try {
-        return normalizeQuestion({
+        return bindBundledReviewedRevision({
           ...createCurriculumQuestion(
             `capstone-${level.id}-${band.id}`,
             scenarioFor(level.number * 100 + band.index),
@@ -667,7 +685,7 @@ export function getBundledQuestion({
     throw new Error(`Unsupported Quest Level: ${level.id}`);
   }
 
-  return cloneQuestion({
+  return bindBundledReviewedRevision({
     ...question,
     ...getLearningMetadata(level.id, ordinal)
   });

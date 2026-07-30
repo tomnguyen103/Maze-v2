@@ -9,6 +9,11 @@ import {
   rememberMap,
   rememberQuestion
 } from "../src/game/quest-progress.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+
+const DECKS = Object.fromEntries(
+  getPublishedLearningDeckOptions().map((deck) => [deck.deckId, deck])
+);
 
 /** @param {number} number @param {string} [questId] */
 function progressAt(number, questId = "quest_shared_123") {
@@ -115,6 +120,35 @@ describe("Quest Continuity", () => {
         createQuestProgress("maze-master", 4, "quest_shared_123")
       )
     ).toThrow(/Quest Level/i);
+  });
+
+  it("surfaces one Quest ID with incompatible Deck identities as a conflict", () => {
+    const local = createQuestProgress(
+      "trail-scout",
+      3,
+      "quest_shared_123",
+      DECKS["number-trail"]
+    );
+    const cloudProgress = createQuestProgress(
+      "trail-scout",
+      3,
+      "quest_shared_123",
+      DECKS["nature-trail"]
+    );
+    const cloud = {
+      progress: cloudProgress,
+      revision: 4,
+      updatedAt: "2026-07-29T00:00:00.000Z"
+    };
+
+    expect(() =>
+      mergeSameQuestProgress(local, cloudProgress)
+    ).toThrow(/Learning Deck/i);
+    expect(reconcileQuestProgress(local, cloud)).toEqual({
+      kind: "conflict",
+      local,
+      cloud
+    });
   });
 
   it("keeps the finished local boundary when a deferred same-Quest merge fails", () => {

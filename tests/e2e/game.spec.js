@@ -6,8 +6,12 @@ import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
+import { getPublishedLearningDeckOptions } from "../../src/questions/learning-deck-catalog.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
-import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
+import {
+  createLanternTrail,
+  listLanternTrailObjectives
+} from "../../src/learning/lantern-trail.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
 import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 
@@ -21,6 +25,9 @@ const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
 const DEFEAT_SEED = "DEFEAT-RECORD";
 const DEFEAT_PATH = "down,down,right,right,up,up,right".split(",");
+const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
+  ({ deckId }) => deckId === "number-trail"
+);
 const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   up: "ArrowUp",
   right: "ArrowRight",
@@ -44,6 +51,26 @@ const TEST_QUESTION = {
   learningObjectiveId: "scout-equal-groups",
   explanation: "Four plus three equals seven."
 };
+const LENS_QUESTION = normalizeQuestion({
+  ...TEST_QUESTION,
+  reviewedRevisionId: "database:scout-foundation-0:v1",
+  echoLens: {
+    version: 1,
+    kind: "array",
+    title: "See two groups",
+    reasoning: "Four and three combine to make seven altogether.",
+    steps: [
+      "Count the first four.",
+      "Count three more.",
+      "Count all seven."
+    ],
+    visual: {
+      rows: 2,
+      columns: 4,
+      filled: 7
+    }
+  }
+});
 
 /** @param {number} ordinal */
 function reviewedQuestionForRequest(ordinal) {
@@ -392,51 +419,34 @@ async function recordRegion4Screenshot(page, testInfo, state) {
 }
 
 /**
+ * Attaches the shot to the run, and writes it into the playtest evidence
+ * folder when RECORD_MILESTONE_<n>_SCREENSHOTS=true.
+ *
  * @param {import("@playwright/test").Page} page
  * @param {import("@playwright/test").TestInfo} testInfo
- * @param {"bell-ready" | "bell-rung"} state
- */
-async function recordRegion5Screenshot(page, testInfo, state) {
-  const body = await page.screenshot();
-  await testInfo.attach(`region-5-${state}-${testInfo.project.name}`, {
-    body,
-    contentType: "image/png"
-  });
-  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
-    await writeFile(
-      resolve(
-        "docs",
-        "playtests",
-        "screenshots",
-        `milestone-2-region-5-${state}-${testInfo.project.name}.png`
-      ),
-      body
-    );
-  }
-}
-
-/**
- * @param {import("@playwright/test").Page} page
- * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {2 | 3} milestone
  * @param {string} slug
  */
-async function recordMilestone2EvidenceScreenshot(page, testInfo, slug) {
+async function recordEvidenceScreenshot(page, testInfo, milestone, slug) {
   const body = await page.screenshot();
   await testInfo.attach(`${slug}-${testInfo.project.name}`, {
     body,
     contentType: "image/png"
   });
-  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
-    await writeFile(
-      resolve(
-        "docs",
-        "playtests",
-        "screenshots",
-        `milestone-2-${slug}-${testInfo.project.name}.png`
-      ),
-      body
-    );
+  if (
+    process.env[`RECORD_MILESTONE_${milestone}_SCREENSHOTS`] !== "true"
+  ) {
+    return;
   }
+  await writeFile(
+    resolve(
+      "docs",
+      "playtests",
+      "screenshots",
+      `milestone-${milestone}-${slug}-${testInfo.project.name}.png`
+    ),
+    body
+  );
 }
 
 /**
@@ -507,14 +517,32 @@ async function completeMilestonePlan(
   return { gateChallenges, questionOrdinal };
 }
 
+/**
+ * The Question route takes a POST body so the Quest's used-Question ledger can
+ * travel with the request. Fixtures read the request the same way the service
+ * does rather than from a query string.
+ *
+ * @param {import("@playwright/test").Request} request
+ */
+function questionRequestOf(request) {
+  try {
+    return JSON.parse(request.postData() ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** @param {import("@playwright/test").Request} request */
+function questionOrdinalOf(request) {
+  return Number(questionRequestOf(request).questionOrdinal ?? 0);
+}
+
 /** @param {import("@playwright/test").Page} page */
 async function mockQuestionApi(page) {
   /** @type {ReturnType<typeof getBundledQuestion>[]} */
   const servedQuestions = [];
-  await page.route("**/api/question?**", async (route) => {
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+  await page.route("**/api/question**", async (route) => {
+    const ordinal = questionOrdinalOf(route.request());
     const reviewedQuestion = reviewedQuestionForRequest(ordinal);
     servedQuestions.push(reviewedQuestion);
     await route.fulfill({
@@ -607,6 +635,160 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
+test("locks one published Learning Deck into a new Quest", async ({
+  page
+}, testInfo) => {
+  if (!NUMBER_TRAIL) {
+    throw new Error("Published Number Trail fixture is missing.");
+  }
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 }
+  );
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  const deckGroup = page.getByRole("group", {
+    name: "Choose a Learning Deck"
+  });
+  await expect(deckGroup).toBeVisible();
+  // One entry per published Deck: Mixed Trail and Number Trail. Word Trail
+  // and Nature Trail are withheld until authored content exists for them.
+  await expect(deckGroup.getByRole("radio")).toHaveCount(2);
+  await expect(
+    deckGroup.getByRole("radio", { name: /Mixed Trail/ })
+  ).toBeChecked();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "learning-deck-picker"
+  );
+
+  await deckGroup.getByRole("radio", { name: /Number Trail/ }).check();
+  await chooseTrailScout(page);
+
+  await expect(page.locator("#quest-level-name")).toHaveText(
+    "Quest Level 2 · Trail Scout · Number Trail"
+  );
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored) : null;
+    })
+  ).toMatchObject({
+    version: 2,
+    levelId: "trail-scout",
+    learningDeckId: "number-trail",
+    learningDeckRevision: NUMBER_TRAIL.revisionId
+  });
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Echo Atlas" })
+      .getByText("Number Trail", { exact: false })
+      .first()
+  ).toBeVisible();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "learning-deck-atlas"
+  );
+});
+
+test("announces the Mixed Trail continuation once per Quest", async ({
+  page
+}, testInfo) => {
+  if (!NUMBER_TRAIL) {
+    throw new Error("Published Number Trail fixture is missing.");
+  }
+  /** @type {Record<string, unknown>[]} */
+  const questionRequests = [];
+  /** @type {ReturnType<typeof getBundledQuestion>[]} */
+  const served = [];
+  await page.route("**/api/question**", async (route) => {
+    const request = questionRequestOf(route.request());
+    questionRequests.push(request);
+    const question = reviewedQuestionForRequest(
+      Number(request.questionOrdinal ?? 0)
+    );
+    served.push(question);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question,
+        source: "bundled",
+        // The focused Region is spent, so the service continues the Quest on
+        // Mixed Trail content without changing the chosen Deck.
+        learningDeckSource: "mixed-fallback"
+      })
+    });
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page
+    .getByRole("group", { name: "Choose a Learning Deck" })
+    .getByRole("radio", { name: /Number Trail/ })
+    .check();
+  await chooseTrailScout(page);
+  await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
+
+  await expect
+    .poll(async () =>
+      (await page.locator("#seed-value").textContent())?.trim() ?? ""
+    )
+    .not.toBe("");
+  const seed = (await page.locator("#seed-value").textContent())?.trim() ?? "";
+  await page.getByLabel(/Interactive maze/).focus();
+  const plan = milestoneWinningPlan(seed, 1);
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    }
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-notice")).toContainText(
+    "Number Trail is out of reviewed Questions here"
+  );
+  await recordEvidenceScreenshot(page, testInfo, 3, "mixed-trail-fallback");
+  // The Quest carries its Deck identity and uniqueness ledger on every ask.
+  expect(questionRequests[0]).toMatchObject({
+    learningDeckId: "number-trail",
+    learningDeckRevision: NUMBER_TRAIL.revisionId
+  });
+  expect(Array.isArray(questionRequests[0]?.usedQuestionIds)).toBe(true);
+  // Announced once, and the Deck the Explorer chose has not changed.
+  // Announced once: a second fallback Question in the same Quest is silent,
+  // and the Deck the Explorer chose has not changed.
+  await answerCorrectlyIfChallenged(page, () => {
+    const card = served.at(-1);
+    if (!card) {
+      throw new Error("The reviewed Question fixture has not served a card.");
+    }
+    return card;
+  });
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    }
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-notice")).toBeHidden();
+  await expect(page.locator("#quest-level-name")).toHaveText(
+    "Quest Level 2 · Trail Scout · Number Trail"
+  );
+});
+
 test("starts a playable maze and responds to keyboard actions", async ({
   page
 }, testInfo) => {
@@ -685,7 +867,7 @@ test("starts a playable maze and responds to keyboard actions", async ({
     })
   ).toBeVisible();
   await expect(page.locator("#quest-level-name")).toHaveText(
-    "Quest Level 2 · Trail Scout"
+    "Quest Level 2 · Trail Scout · Mixed Trail"
   );
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 1 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
@@ -714,9 +896,10 @@ test("starts a playable maze and responds to keyboard actions", async ({
   await expect(page.locator("#field-note")).toContainText(
     "Echo Hush keeps ordinary Wardens still for this action"
   );
-  await recordMilestone2EvidenceScreenshot(
+  await recordEvidenceScreenshot(
     page,
     testInfo,
+    2,
     "region-1-echo-hush"
   );
   await page.getByRole("button", { name: "Sound off" }).click();
@@ -1097,9 +1280,10 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
-      await recordMilestone2EvidenceScreenshot(
+      await recordEvidenceScreenshot(
         page,
         testInfo,
+        2,
         "atlas-200pct-reduced"
       );
     }
@@ -1277,9 +1461,10 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
       });
       await expect.poll(() => viewer.evaluate((dialog) => dialog.scrollTop))
         .toBe(0);
-      await recordMilestone2EvidenceScreenshot(
+      await recordEvidenceScreenshot(
         page,
         testInfo,
+        2,
         "watch-trail-200pct-reduced"
       );
     }
@@ -2308,9 +2493,10 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
   await expect(page.locator("#field-note")).toHaveText(
     "Windway carried you down."
   );
-  await recordMilestone2EvidenceScreenshot(
+  await recordEvidenceScreenshot(
     page,
     testInfo,
+    2,
     "region-2-windway"
   );
 
@@ -2889,7 +3075,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
     () => document.documentElement.scrollWidth -
       document.documentElement.clientWidth
   )).toBeLessThanOrEqual(1);
-  await recordRegion5Screenshot(page, testInfo, "bell-ready");
+  await recordEvidenceScreenshot(page, testInfo, 2, "region-5-bell-ready");
 
   await ringButton.focus();
   await expect(ringButton).toBeFocused();
@@ -2903,7 +3089,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
   await expect(page.locator("#warden-state")).toHaveText("Lured to Bell");
   await expect(page.locator("#field-note")).toContainText("Signal Bell rung");
   await expect(maze).toHaveAttribute("aria-label", /1 unspent visible Signal Bells/);
-  await recordRegion5Screenshot(page, testInfo, "bell-rung");
+  await recordEvidenceScreenshot(page, testInfo, 2, "region-5-bell-rung");
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
@@ -3201,9 +3387,149 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   ).toBeVisible();
 });
 
-test("reviews coarse Journal outcomes and keeps Practice outside the Run", async ({
+test("shows an inert reviewed Echo Lens only after an answer is committed", async ({
+  page
+}, testInfo) => {
+  await page.route("**/api/question**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question: LENS_QUESTION,
+        source: "database"
+      })
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#echo-lens")).toBeHidden();
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#echo-lens")).toBeHidden();
+
+  await page.locator(`[data-answer="${LENS_QUESTION.answerId}"]`).click();
+  const lens = page.locator("#echo-lens");
+  await expect(page.locator("#challenge-dialog")).not.toBeVisible();
+  await expect(lens).toBeVisible();
+  await expect(lens).toHaveAttribute("open", "");
+  await expect(lens).toContainText(LENS_QUESTION.echoLens?.reasoning ?? "");
+  await recordEvidenceScreenshot(page, testInfo, 3, "echo-lens-after-answer");
+  await expect(lens.locator("[role='img']")).toHaveAttribute(
+    "aria-label",
+    /2 rows by 4 columns; 7 filled/
+  );
+
+  const snapshot = async () =>
+    page.evaluate(() => ({
+      score: document.querySelector("#player-score")?.textContent,
+      moves: document.querySelector("#moves-value")?.textContent,
+      vitality: document.querySelector("#vitality-count")?.textContent,
+      echoes: document.querySelector("#echo-count")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }));
+  const beforeToggle = await snapshot();
+  const summary = lens.getByText("Why this works", { exact: true });
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(lens).not.toHaveAttribute("open", "");
+  await page.keyboard.press("Enter");
+  await expect(lens).toHaveAttribute("open", "");
+  expect(await snapshot()).toEqual(beforeToggle);
+  const resumedTime = await page.locator("#time-value").textContent();
+  await expect
+    .poll(() => page.locator("#time-value").textContent(), {
+      timeout: 2_500
+    })
+    .not.toBe(resumedTime);
+  expect(JSON.stringify(beforeToggle.storage)).not.toMatch(
+    /See two groups|Four and three combine|echoLens|answeredAt/i
+  );
+});
+
+test("holds a wrong-answer Echo Lens for review before loading a fresh Question", async ({
   page
 }) => {
+  await page.route("**/api/question**", async (route) => {
+    const ordinal = questionOrdinalOf(route.request());
+    const question =
+      ordinal === 0
+        ? LENS_QUESTION
+        : normalizeQuestion({
+            ...TEST_QUESTION,
+            id: `scout-foundation-${ordinal}`,
+            prompt: `Fresh reviewed Question ${ordinal}: What is 4 + 3?`
+          });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ question, source: "database" })
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  const wrongAnswer = LENS_QUESTION.choices.find(
+    (choice) => choice.id !== LENS_QUESTION.answerId
+  );
+  if (!wrongAnswer) {
+    throw new Error("Reviewed fixture needs one wrong answer.");
+  }
+  await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+
+  const panel = page.locator("#challenge-lens-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText(LENS_QUESTION.echoLens?.reasoning ?? "");
+  await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+  const beforeToggle = await page.evaluate(() => ({
+    score: document.querySelector("#player-score")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    time: document.querySelector("#time-value")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    storage: Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  }));
+  const details = page.locator("#challenge-echo-lens");
+  const summary = details.getByText("Why this works", { exact: true });
+  await summary.press("Enter");
+  await expect(details).not.toHaveAttribute("open", "");
+  await summary.press("Enter");
+  await expect(details).toHaveAttribute("open", "");
+  expect(
+    await page.evaluate(() => ({
+      score: document.querySelector("#player-score")?.textContent,
+      moves: document.querySelector("#moves-value")?.textContent,
+      time: document.querySelector("#time-value")?.textContent,
+      vitality: document.querySelector("#vitality-count")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }))
+  ).toEqual(beforeToggle);
+
+  await page.getByRole("button", { name: "Next question" }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.locator("#challenge-question")).toContainText(
+    "Fresh reviewed Question 1"
+  );
+});
+
+test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
+  page
+}, testInfo) => {
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -3265,29 +3591,146 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
       (await practiceButton.getAttribute("data-objective")) ?? "",
     difficultyBand: (await practiceButton.getAttribute("data-band")) ?? ""
   };
-  const expectedPractice = selectPracticeQuestion(triggeringQuestion);
+  // A suggested objective is only started directly when it can supply three
+  // genuinely distinct required Lanterns; otherwise the Workshop opens its
+  // catalog and the Explorer chooses a Trail that can.
+  const suggestedObjectiveId = listLanternTrailObjectives({
+    levelId: "trail-scout",
+    difficultyBand: triggeringQuestion.difficultyBand
+  }).some(
+    (objective) =>
+      objective.learningObjectiveId === triggeringQuestion.learningObjectiveId
+  )
+    ? triggeringQuestion.learningObjectiveId
+    : listLanternTrailObjectives({
+        levelId: "trail-scout",
+        difficultyBand: triggeringQuestion.difficultyBand
+      })[0].learningObjectiveId;
+  const expectedTrail = createLanternTrail({
+    levelId: "trail-scout",
+    difficultyBand: triggeringQuestion.difficultyBand,
+    learningObjectiveId: suggestedObjectiveId
+  });
   const runBeforePractice = await page.evaluate(() => ({
     score: document.getElementById("player-score")?.textContent,
     vitality: document.getElementById("vitality-count")?.textContent,
     moves: document.getElementById("moves-value")?.textContent,
     stage: document.getElementById("quest-stage")?.textContent,
-    time: document.getElementById("time-value")?.textContent
+    time: document.getElementById("time-value")?.textContent,
+    nonJournalStorage: Object.fromEntries(
+      Object.keys(localStorage)
+        .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
   }));
 
   await practiceButton.click();
   const practice = page.getByRole("dialog", {
-    name: "Try a different Question"
+    name: "Lantern Trail Workshop"
   });
   await expect(practice).toBeVisible();
-  await expect(page.locator("#practice-question")).toHaveText(
-    expectedPractice.prompt
+  if (suggestedObjectiveId !== triggeringQuestion.learningObjectiveId) {
+    await practice
+      .getByRole("button", { name: expectedTrail.objectiveLabel })
+      .click();
+  }
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 1 of 3 required"
   );
-  const correctLabel = expectedPractice.choices.find(
-    (choice) => choice.id === expectedPractice.answerId
-  )?.label;
-  if (!correctLabel) throw new Error("Practice answer label was missing.");
-  await practice.getByRole("button", { name: correctLabel, exact: true }).click();
+  await expect(page.locator("#practice-question")).toHaveText(
+    expectedTrail.questions[0].prompt
+  );
+
+  await practice.getByRole("button", { name: "Show Hint" }).click();
+  await expect(page.locator("#practice-hint")).toContainText(
+    expectedTrail.questions[0].hint
+  );
+  await expect(practice.getByRole("button", { name: "Show Hint" })).toBeDisabled();
+
+  /**
+   * @param {number} questionIndex
+   * @param {"correct" | "wrong" | "skip"} outcome
+   */
+  const answer = async (questionIndex, outcome) => {
+    const question = expectedTrail.questions[questionIndex];
+    if (outcome === "skip") {
+      await practice.getByRole("button", { name: "Skip Lantern" }).click();
+      return;
+    }
+    const answerId =
+      outcome === "correct"
+        ? question.answerId
+        : question.choices.find((choice) => choice.id !== question.answerId)?.id;
+    const label = question.choices.find((choice) => choice.id === answerId)?.label;
+    if (!label) throw new Error("Practice answer label was missing.");
+    await practice.getByRole("button", { name: label, exact: true }).click();
+  };
+
+  await answer(0, "correct");
   await expect(page.locator("#practice-feedback")).toContainText("Nice work");
+  /** @type {string[]} */
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await practice
+    .getByRole("button", { name: "Next Lantern" })
+    .evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Expected the Lantern Trail advance button.");
+      }
+      button.click();
+      button.click();
+    });
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 2 of 3 required"
+  );
+  expect(pageErrors).toEqual([]);
+
+  await answer(1, "wrong");
+  await expect(page.locator("#practice-feedback")).toContainText("Good try");
+  await practice.getByRole("button", { name: "Next Lantern" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 3 of 3 required"
+  );
+
+  await answer(2, "skip");
+  await expect(page.locator("#practice-feedback")).toContainText(
+    expectedTrail.questions[2].explanation
+  );
+  await expect(page.locator("#practice-feedback")).toContainText(
+    "Required Trail complete"
+  );
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "workshop-required-boundary"
+  );
+  await practice.getByRole("button", { name: "Keep Practicing" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Extra Lantern 1 of 2"
+  );
+
+  await answer(3, "correct");
+  await practice.getByRole("button", { name: "Keep Practicing" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Extra Lantern 2 of 2"
+  );
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "workshop-optional-boundary"
+  );
+  await answer(4, "correct");
+  await practice.getByRole("button", { name: "Finish Trail" }).click();
+  await expect(practice).toContainText("Lantern Trail complete");
+  await practice
+    .getByRole("button", { name: "Choose another Trail" })
+    .click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("#practice-question")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).toHaveText("");
 
   expect(
     await page.evaluate(() => ({
@@ -3295,13 +3738,31 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
       vitality: document.getElementById("vitality-count")?.textContent,
       moves: document.getElementById("moves-value")?.textContent,
       stage: document.getElementById("quest-stage")?.textContent,
-      time: document.getElementById("time-value")?.textContent
+      time: document.getElementById("time-value")?.textContent,
+      nonJournalStorage: Object.fromEntries(
+        Object.keys(localStorage)
+          .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
     }))
   ).toEqual(runBeforePractice);
 
   await page.getByRole("button", { name: "Back to Journal" }).click();
   await expect(journal).toBeVisible();
-  await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(0);
+  // The practiced objective no longer needs Practice. When the Workshop fell
+  // back to its catalog, the originally suggested objective still does.
+  await expect(
+    journal.locator(
+      `button.journal-practice[data-objective="${suggestedObjectiveId}"]:not([hidden])`
+    )
+  ).toHaveCount(0);
+  if (suggestedObjectiveId === triggeringQuestion.learningObjectiveId) {
+    await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(
+      0
+    );
+  }
+  await expect(journal).toContainText("Hints 1");
 
   const storedJournal = await page.evaluate(() => {
     const key = Object.keys(localStorage).find((entry) =>
@@ -3312,12 +3773,141 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
   expect(typeof storedJournal).toBe("string");
   expect(storedJournal).not.toContain("\"prompt\"");
   expect(storedJournal).not.toContain("answerId");
+  expect(storedJournal).not.toMatch(/answeredAt|timestamp|selectedOption/i);
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).some((key) => key.includes("lantern-trail"))
+    )
+  ).toBe(false);
 
   await page.getByRole("button", { name: "Clear Journal" }).click();
   await expect(page.locator("#journal-clear-warning")).toBeVisible();
   await page.getByRole("button", { name: "Clear now" }).click();
   await expect(journal).toContainText("Your lantern is ready.");
   await expect(page.getByRole("button", { name: "Clear Journal" })).toBeDisabled();
+});
+
+test("opens Workshop catalog and transfers paused play to Journal or Atlas", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  const workshopButton = page.getByRole("button", {
+    name: "Workshop",
+    exact: true
+  });
+  await workshopButton.click();
+
+  const workshop = page.getByRole("dialog", {
+    name: "Lantern Trail Workshop"
+  });
+  await expect(workshop).toBeVisible();
+  await expect(page.locator("#practice-title")).toBeFocused();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  // Only objectives with three genuinely distinct required Lanterns are
+  // offered, so the catalog is smaller than the objective list and its size
+  // depends on the Level and Band the Explorer is on.
+  const offeredObjectives = page.locator("[data-practice-objective]");
+  expect(await offeredObjectives.count()).toBeGreaterThan(0);
+  await expect(page.locator(".practice-objective span").first()).toHaveCSS(
+    "font-size",
+    "16px"
+  );
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(async () => {
+    document.documentElement.style.fontSize = "32px";
+    await document.fonts.ready;
+  });
+  const dialogOverflow = await workshop.evaluate((dialog) => ({
+    pixels: dialog.scrollWidth - dialog.clientWidth,
+    sources: [...dialog.querySelectorAll("*")]
+      .filter(
+        (element) =>
+          element.getBoundingClientRect().right >
+          dialog.getBoundingClientRect().right + 1
+      )
+      .slice(0, 5)
+      .map((element) => element.id || element.className || element.tagName)
+  }));
+  expect(
+    dialogOverflow.pixels,
+    `Workshop overflow sources: ${dialogOverflow.sources.join(", ")}`
+  ).toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    )
+  ).toBeLessThanOrEqual(1);
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("font-size");
+  });
+
+  // Whichever Trails this Level and Band can actually offer: the catalog is
+  // filtered to objectives with three genuinely distinct required Lanterns.
+  await offeredObjectives.first().click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 1 of 3 required"
+  );
+  await expect(
+    workshop.getByRole("button", { name: "Open Journal" })
+  ).toBeHidden();
+  await expect(
+    workshop.getByRole("button", { name: "Open Atlas" })
+  ).toBeHidden();
+  const discardedQuestion = await page.locator("#practice-question").textContent();
+  await workshop.getByRole("button", { name: "Skip Lantern" }).click();
+  await workshop.getByRole("button", { name: "Return to Play" }).click();
+  await expect(workshop).toBeHidden();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+  await expect(workshopButton).toBeFocused();
+
+  await workshopButton.click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("#practice-trail")).toBeHidden();
+  if (!discardedQuestion) {
+    throw new Error("Expected a Lantern Trail Question before closing.");
+  }
+  await expect(workshop).not.toContainText(discardedQuestion);
+  await expect(page.locator("#practice-question")).toHaveText("");
+  await expect(page.locator("#practice-choices")).toBeEmpty();
+  await expect(page.locator("#practice-hint")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).not.toHaveAttribute(
+    "data-state"
+  );
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).some((key) => key.includes("lantern-trail"))
+    )
+  ).toBe(false);
+
+  await workshop.getByRole("button", { name: "Open Journal" }).click();
+  const journal = page.getByRole("dialog", {
+    name: "What you have practiced"
+  });
+  await expect(journal).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await journal.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+
+  await workshopButton.click();
+  await workshop.getByRole("button", { name: "Open Atlas" }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "Open Workshop" }).click();
+  await expect(workshop).toBeVisible();
+  await workshop.getByRole("button", { name: "Back to Atlas" }).click();
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
 });
 
 test("keeps an active Run operable when the Journal chunk is unavailable", async ({
@@ -3706,9 +4296,9 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     await atlasChunkGate;
     await route.continue();
   });
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     requestedChallengeKinds.push(
-      new URL(route.request().url()).searchParams.get("challenge")
+      questionRequestOf(route.request()).challengeKind ?? null
     );
     await route.fulfill({
       contentType: "application/json",
@@ -3890,7 +4480,7 @@ test("uses a compact result after the Region Sigil ceremony was seen", async ({
       })
     );
   }, { activeQuestId: questId });
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       status: 503,
@@ -4224,7 +4814,7 @@ test("scrubs a checkpoint when Campfire deletion is denied", async ({
 test("waits for Campfire Continue before resolving a loading Challenge", async ({
   page
 }) => {
-  const questionRoute = "**/api/question?**";
+  const questionRoute = "**/api/question**";
   let initialRequestCount = 0;
   let continuedRequestCount = 0;
   let releaseInitialQuestion = () => {};
@@ -4295,9 +4885,7 @@ test("waits for Campfire Continue before resolving a loading Challenge", async (
   );
   await recoveredPage.route(questionRoute, async (route) => {
     continuedRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -4334,7 +4922,7 @@ test("waits for Campfire Continue before resolving a loading Challenge", async (
 test("restores wrong-answer feedback and replacement loading without duplicate learning writes", async ({
   page
 }) => {
-  const questionRoute = "**/api/question?**";
+  const questionRoute = "**/api/question**";
   let initialRequestCount = 0;
   let continuedRequestCount = 0;
   let releaseReplacement = () => {};
@@ -4352,9 +4940,7 @@ test("restores wrong-answer feedback and replacement loading without duplicate l
   const firstQuestion = reviewedQuestionForRequest(0);
   await page.route(questionRoute, async (route) => {
     initialRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     if (initialRequestCount === 2) {
       await replacementReleased;
       try {
@@ -4457,9 +5043,7 @@ test("restores wrong-answer feedback and replacement loading without duplicate l
   );
   await recoveredPage.route(questionRoute, async (route) => {
     continuedRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -4526,11 +5110,9 @@ test("recovers the exact reviewed Question revision and revealed Hint without an
   let requestCount = 0;
   let servedQuestion =
     /** @type {ReturnType<typeof getBundledQuestion> | null} */ (null);
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     requestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     const reviewedQuestion = reviewedQuestionForRequest(ordinal);
     servedQuestion = normalizeQuestion({
       ...reviewedQuestion,
@@ -4669,7 +5251,7 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
     }]));
   });
   const question = reviewedQuestionForRequest(0);
-  await page.route("**/api/question?**", (route) =>
+  await page.route("**/api/question**", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({

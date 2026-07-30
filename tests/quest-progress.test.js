@@ -3,10 +3,16 @@ import {
   advanceQuest,
   createQuestProgress,
   loadQuestProgress,
+  normalizeQuestProgress,
   rememberMap,
   rememberQuestion,
   saveQuestProgress
 } from "../src/game/quest-progress.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+
+const DECKS = Object.fromEntries(
+  getPublishedLearningDeckOptions().map((deck) => [deck.deckId, deck])
+);
 
 function createStorage() {
   /** @type {Map<string, string>} */
@@ -24,15 +30,41 @@ function createStorage() {
 describe("Quest Progress", () => {
   it("starts a twenty-Labyrinth Quest at the selected Quest Level", () => {
     expect(createQuestProgress("maze-master", 1, "quest_test_master")).toEqual({
-      version: 1,
+      version: 2,
       questId: "quest_test_master",
       levelId: "maze-master",
+      learningDeckId: "mixed-trail",
+      learningDeckRevision: DECKS["mixed-trail"].revisionId,
       labyrinthNumber: 1,
       completedLabyrinths: 0,
       usedMapFingerprints: [],
       usedQuestionIds: [],
       nextQuestionOrdinal: 0,
       complete: false
+    });
+  });
+
+  it("locks one exact published Learning Deck into a new Quest", () => {
+    const numberTrail = DECKS["number-trail"];
+    const progress = createQuestProgress(
+      "trail-scout",
+      1,
+      "quest_number_trail",
+      numberTrail
+    );
+    const advanced = rememberQuestion(
+      advanceQuest(progress),
+      "scout-developing-8"
+    );
+
+    expect(progress).toMatchObject({
+      version: 2,
+      learningDeckId: "number-trail",
+      learningDeckRevision: numberTrail.revisionId
+    });
+    expect(advanced).toMatchObject({
+      learningDeckId: progress.learningDeckId,
+      learningDeckRevision: progress.learningDeckRevision
     });
   });
 
@@ -153,6 +185,33 @@ describe("Quest Progress", () => {
 
     expect(first?.questId).toMatch(/^legacy_[a-z0-9]+$/);
     expect(second?.questId).toBe(first?.questId);
+    expect(first).toMatchObject({
+      version: 2,
+      learningDeckId: "mixed-trail",
+      learningDeckRevision: DECKS["mixed-trail"].revisionId,
+      labyrinthNumber: 3,
+      completedLabyrinths: 2,
+      usedMapFingerprints: ["legacy-map"],
+      usedQuestionIds: ["legacy-question"],
+      nextQuestionOrdinal: 1
+    });
+  });
+
+  it("rejects unpublished or mismatched version-2 Deck identities", () => {
+    const valid = createQuestProgress(
+      "bright-start",
+      2,
+      "quest_exact_deck"
+    );
+
+    expect(normalizeQuestProgress({
+      ...valid,
+      learningDeckId: "draft-trail"
+    })).toBeNull();
+    expect(normalizeQuestProgress({
+      ...valid,
+      learningDeckRevision: DECKS["number-trail"].revisionId
+    })).toBeNull();
   });
 
   it("restores completed Quest Progress until a new Quest is started", () => {

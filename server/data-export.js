@@ -94,12 +94,14 @@ const SECTION_QUERIES = {
       created_at, updated_at
     FROM classroom_memberships
     WHERE clerk_user_id = $1 ORDER BY created_at, classroom_id`,
-  quest_progress: `SELECT quest_id, level_id, labyrinth_number,
+  quest_progress: `SELECT quest_id, level_id, learning_deck_id,
+      learning_deck_revision, labyrinth_number,
       completed_labyrinths, used_map_fingerprints, used_question_ids,
       next_question_ordinal, complete, revision, created_at, updated_at
     FROM cloud_quest_progress
     WHERE clerk_user_id = $1 AND classroom_id IS NULL`,
   class_quest_progress: `SELECT classroom_id, quest_id, level_id,
+      learning_deck_id, learning_deck_revision,
       labyrinth_number, completed_labyrinths, used_map_fingerprints,
       used_question_ids, next_question_ordinal, complete, revision,
       created_at, updated_at

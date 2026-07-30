@@ -56,9 +56,12 @@ For Vercel, connect the Neon project and apply the migrations in order:
 15. `db/migrations/0015_classroom_authority_and_writes.sql`
 16. `db/migrations/0016_classroom_teacher_progress.sql`
 17. `db/migrations/0017_verified_classroom_domains.sql`
+18. `db/migrations/0018_verified_daily_entries.sql`
+19. `db/migrations/0019_score_entry_ruleset_partitions.sql`
+20. `db/migrations/0020_learning_deck_quest_identity.sql`
 
-Migrations 0012 through 0017 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all six.
+Migrations 0012 through 0020 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all nine.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.

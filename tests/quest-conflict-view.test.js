@@ -6,6 +6,11 @@ import {
   advanceQuest,
   createQuestProgress
 } from "../src/game/quest-progress.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+
+const DECKS = Object.fromEntries(
+  getPublishedLearningDeckOptions().map((deck) => [deck.deckId, deck])
+);
 
 describe("Quest conflict dialog", () => {
   beforeEach(() => {
@@ -49,6 +54,31 @@ describe("Quest conflict dialog", () => {
       .toContain("7 of 20 complete");
     expect(onChoose).not.toHaveBeenCalled();
     expect(document.activeElement?.id).toBe("quest-conflict-title");
+  });
+
+  it("names both incompatible Learning Decks before an explicit choice", () => {
+    const local = createQuestProgress(
+      "trail-scout",
+      5,
+      "quest_same_identity",
+      DECKS["number-trail"]
+    );
+    const cloud = {
+      progress: createQuestProgress(
+        "trail-scout",
+        5,
+        "quest_same_identity",
+        DECKS["mixed-trail"]
+      ),
+      revision: 3
+    };
+
+    createQuestConflictView().show({ local, cloud });
+
+    expect(document.getElementById("quest-conflict-local")?.textContent)
+      .toContain("Number Trail");
+    expect(document.getElementById("quest-conflict-cloud")?.textContent)
+      .toContain("Mixed Trail");
   });
 
   it.each([

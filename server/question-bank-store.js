@@ -38,7 +38,7 @@ export function createQuestionBankStore(pool) {
      */
     async publishedQuestion({ levelId, difficultyBand, questionOrdinal }) {
       const result = await pool.query(
-        `SELECT v.content
+        `SELECT q.id, v.version, v.content
          FROM questions q
          JOIN question_versions v
            ON v.question_id = q.id AND v.status = 'published'
@@ -60,7 +60,31 @@ export function createQuestionBankStore(pool) {
       // band it is filed under lives in `questions`, so no CHECK can hold them
       // together. A mismatch means a Warden Question is miscategorized, which
       // would serve a foundation prompt at mastery.
-      const question = normalizeQuestion(row.content);
+      const reviewedRevisionId = databaseRevisionId(
+        String(row.id),
+        Number(row.version)
+      );
+      const content =
+        row.content && typeof row.content === "object"
+          ? /** @type {Record<string, unknown>} */ (row.content)
+          : {};
+      if (
+        content.echoLens !== undefined &&
+        content.reviewedRevisionId !== reviewedRevisionId
+      ) {
+        throw new Error(
+          "Published Echo Lens does not match its Reviewed Question Revision."
+        );
+      }
+      const question = normalizeQuestion({
+        ...content,
+        reviewedRevisionId
+      });
+      if (question.id !== String(row.id)) {
+        throw new Error(
+          "Published Warden Question content does not match its id."
+        );
+      }
       if (question.difficultyBand !== difficultyBand) {
         throw new Error(
           "Published Warden Question does not match its difficulty band."
@@ -161,12 +185,16 @@ export function createQuestionBankStore(pool) {
           [input.id]
         );
         const version = Number(next.rows[0]?.version ?? 1);
+        const versionedContent = normalizeQuestion({
+          ...normalized,
+          reviewedRevisionId: databaseRevisionId(input.id, version)
+        });
         const inserted = await client.query(
            `INSERT INTO question_versions (
               question_id, version, status, content, edited_by
             ) VALUES ($1, $2, 'draft', $3, $4)
             RETURNING question_id AS id, version`,
-          [input.id, version, normalized, editedBy]
+          [input.id, version, versionedContent, editedBy]
         );
         await client.query("COMMIT");
         return {
@@ -198,7 +226,26 @@ export function createQuestionBankStore(pool) {
             "That Warden Question version does not exist."
           );
         }
-        const normalized = normalizeQuestion(target.rows[0].content);
+        const content =
+          target.rows[0].content &&
+          typeof target.rows[0].content === "object"
+            ? /** @type {Record<string, unknown>} */ (
+                target.rows[0].content
+              )
+            : {};
+        const reviewedRevisionId = databaseRevisionId(questionId, version);
+        if (
+          content.reviewedRevisionId !== undefined &&
+          content.reviewedRevisionId !== reviewedRevisionId
+        ) {
+          throw new QuestionBankInputError(
+            "Echo Lens does not match its Reviewed Question Revision."
+          );
+        }
+        const normalized = normalizeQuestion({
+          ...content,
+          reviewedRevisionId
+        });
         if (normalized.id !== questionId) {
           throw new QuestionBankInputError(
             "Warden Question content does not match its id."
@@ -274,9 +321,23 @@ function validateDraft(input) {
       "Warden Question metadata is not valid."
     );
   }
+  const content =
+    input.content && typeof input.content === "object"
+      ? /** @type {Record<string, unknown>} */ (input.content)
+      : {};
+  if (content.reviewedRevisionId !== undefined) {
+    throw new QuestionBankInputError(
+      "A new draft cannot claim an existing Reviewed Question Revision."
+    );
+  }
   let normalized;
   try {
-    normalized = normalizeQuestion(input.content);
+    normalized = normalizeQuestion({
+      ...content,
+      ...(content.echoLens === undefined
+        ? {}
+        : { reviewedRevisionId: "database:draft:v0" })
+    });
   } catch {
     throw new QuestionBankInputError(
       "Warden Question content is not valid."
@@ -292,7 +353,9 @@ function validateDraft(input) {
       "Warden Question content does not match its difficulty band."
     );
   }
-  return normalized;
+  const draftContent = { ...normalized };
+  delete draftContent.reviewedRevisionId;
+  return draftContent;
 }
 
 /** @param {unknown} error */
@@ -347,4 +410,9 @@ function asIso(value) {
     return null;
   }
   return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/** @param {string} questionId @param {number} version */
+function databaseRevisionId(questionId, version) {
+  return `database:${questionId}:v${version}`;
 }

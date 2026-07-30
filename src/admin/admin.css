@@ -344,6 +344,36 @@
   font-weight: 620;
 }
 
+.admin-lens-preview {
+  padding: var(--space-3);
+  border-inline-start: 3px solid var(--color-signal);
+  background: var(--color-stone-raised);
+}
+
+.admin-lens-preview summary {
+  min-height: 2.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-lens-preview summary:hover {
+  background: var(--color-panel);
+}
+
+.admin-lens-preview summary:active {
+  background: var(--color-signal-glow);
+}
+
+.admin-lens-preview strong {
+  display: block;
+  margin-block: var(--space-2);
+}
+
+.admin-lens-preview p,
+.admin-lens-preview ol {
+  margin-block: var(--space-2);
+}
+
 .admin-record__actions {
   padding-block-start: var(--space-2);
 }

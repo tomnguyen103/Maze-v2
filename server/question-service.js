@@ -1,4 +1,4 @@
-import { getBundledQuestion } from "../src/questions/question-bank.js";
+import { selectReviewedDeckQuestion } from "../src/questions/learning-deck-selection.js";
 import {
   LEARNING_OBJECTIVE_IDS,
   LEARNING_TOPIC_IDS
@@ -16,7 +16,10 @@ export { normalizeQuestion };
  *   attempt: number,
  *   labyrinthNumber: number,
  *   questionOrdinal: number,
- *   challengeKind?: "warden" | "gate-warden"
+ *   challengeKind?: "warden" | "gate-warden",
+ *   learningDeckId?: string | null,
+ *   learningDeckRevision?: string | null,
+ *   usedQuestionIds?: readonly string[]
  * }} QuestionRequest
  * @typedef {{
  *   id: string,
@@ -28,11 +31,14 @@ export { normalizeQuestion };
  *   difficultyBand: string,
  *   difficultyRank: number,
  *   topicId: string,
- *   learningObjectiveId: string
+ *   learningObjectiveId: string,
+ *   reviewedRevisionId?: string,
+ *   echoLens?: ReturnType<typeof normalizeQuestion>["echoLens"]
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
- *   source: "ollama" | "gemini" | "database" | "bundled"
+ *   source: "ollama" | "gemini" | "database" | "bundled",
+ *   learningDeckSource?: "focused" | "capstone" | "mixed-fallback" | "mixed"
  * }} QuestionResult
  * @typedef {{
  *   publishedQuestion: (lookup: {
@@ -316,12 +322,30 @@ export function createQuestionService(options = {}) {
    * edit reaches players through every path at once.
    *
    * @param {QuestionRequest} request
-   * @returns {Promise<{ question: WardenQuestion, fromDatabase: boolean }>}
+   * @returns {Promise<{
+   *   question: WardenQuestion,
+   *   fromDatabase: boolean,
+   *   deckSource: "focused" | "capstone" | "mixed-fallback" | "mixed"
+   * }>}
    */
   async function resolveReviewedQuestion(request) {
-    const bundled = getBundledQuestion(request);
-    if (!questionBank || request.challengeKind === "gate-warden") {
-      return { question: bundled, fromDatabase: false };
+    const selection = selectReviewedDeckQuestion(request);
+    const bundled = selection.question;
+    // A focused Deck revision is itself the publishing authority for its own
+    // content, so the bank never overrides it. Mixed content — including the
+    // announced fallback — still reads the bank, or a published edit would
+    // reach Mixed Trail Quests and not fallen-back focused ones.
+    if (
+      !questionBank ||
+      request.challengeKind === "gate-warden" ||
+      selection.source === "focused" ||
+      selection.source === "capstone"
+    ) {
+      return {
+        question: bundled,
+        fromDatabase: false,
+        deckSource: selection.source
+      };
     }
     try {
       const published = await questionBank.publishedQuestion({
@@ -330,14 +354,22 @@ export function createQuestionService(options = {}) {
         questionOrdinal: request.questionOrdinal
       });
       if (published) {
-        return { question: published, fromDatabase: true };
+        return {
+          question: published,
+          fromDatabase: true,
+          deckSource: selection.source
+        };
       }
     } catch (error) {
       // A database outage degrades to yesterday's content, never to no
       // content: the bundled bank ships in the deployment itself.
       onQuestionBankError(error);
     }
-    return { question: bundled, fromDatabase: false };
+    return {
+      question: bundled,
+      fromDatabase: false,
+      deckSource: selection.source
+    };
   }
 
   /** @param {QuestionRequest} request @returns {Promise<QuestionResult>} */
@@ -351,7 +383,8 @@ export function createQuestionService(options = {}) {
     if (request.challengeKind === "gate-warden") {
       const result = {
         question: reviewedQuestion,
-        source: /** @type {"bundled"} */ ("bundled")
+        source: /** @type {"bundled"} */ ("bundled"),
+        learningDeckSource: reviewed.deckSource
       };
       rememberPreviousQuestion(encounterKey, result.question);
       return result;
@@ -359,17 +392,22 @@ export function createQuestionService(options = {}) {
 
     try {
       if (now() >= providerRetryAt && provider === "ollama") {
-        const question = await requestOllama(
+        const generatedQuestion = await requestOllama(
           request,
           { env, fetchImpl },
           previousQuestion,
           reviewedQuestion
         );
-        assertReviewedTemplate(question, reviewedQuestion);
+        assertReviewedTemplate(generatedQuestion, reviewedQuestion);
+        const question = bindReviewedAuthority(
+          generatedQuestion,
+          reviewedQuestion
+        );
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
-          source: "ollama"
+          source: "ollama",
+          learningDeckSource: reviewed.deckSource
         });
       }
       if (
@@ -377,17 +415,22 @@ export function createQuestionService(options = {}) {
         provider === "gemini" &&
         env.GEMINI_API_KEY
       ) {
-        const question = await requestGemini(
+        const generatedQuestion = await requestGemini(
           request,
           { env, fetchImpl },
           previousQuestion,
           reviewedQuestion
         );
-        assertReviewedTemplate(question, reviewedQuestion);
+        assertReviewedTemplate(generatedQuestion, reviewedQuestion);
+        const question = bindReviewedAuthority(
+          generatedQuestion,
+          reviewedQuestion
+        );
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
-          source: "gemini"
+          source: "gemini",
+          learningDeckSource: reviewed.deckSource
         });
       }
     } catch (error) {
@@ -399,7 +442,8 @@ export function createQuestionService(options = {}) {
       question: reviewedQuestion,
       source: /** @type {"database" | "bundled"} */ (
         reviewed.fromDatabase ? "database" : "bundled"
-      )
+      ),
+      learningDeckSource: reviewed.deckSource
     };
     rememberPreviousQuestion(encounterKey, result.question);
     return result;
@@ -449,7 +493,9 @@ export function createQuestionService(options = {}) {
 
 /** @param {QuestionRequest} request */
 function questionKey(request) {
-  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}`;
+  // Deck identity is part of the key: two Decks at the same Run coordinates
+  // ask different reviewed Questions and must never share a cache entry.
+  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}:${request.learningDeckId ?? "mixed-trail"}:${request.learningDeckRevision ?? ""}`;
 }
 
 /**
@@ -464,6 +510,27 @@ function assertFreshQuestion(question, previousQuestion) {
   ) {
     throw new Error("Generated Question repeated the previous prompt.");
   }
+}
+
+/**
+ * Providers may reproduce only the reviewed core. Revision identity and Lens
+ * content always come from the database or bundled review authority.
+ * @param {WardenQuestion} generatedQuestion
+ * @param {WardenQuestion} reviewedQuestion
+ */
+function bindReviewedAuthority(generatedQuestion, reviewedQuestion) {
+  const generatedCore = { ...generatedQuestion };
+  delete generatedCore.reviewedRevisionId;
+  delete generatedCore.echoLens;
+  return normalizeQuestion({
+    ...generatedCore,
+    ...(reviewedQuestion.reviewedRevisionId
+      ? { reviewedRevisionId: reviewedQuestion.reviewedRevisionId }
+      : {}),
+    ...(reviewedQuestion.echoLens
+      ? { echoLens: reviewedQuestion.echoLens }
+      : {})
+  });
 }
 
 /**

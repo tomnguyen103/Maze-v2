@@ -87,6 +87,8 @@ export function createQuestProgressHandler({
         after: {
           duplicate: result.duplicate,
           labyrinthNumber: progress.labyrinthNumber,
+          learningDeckId: progress.learningDeckId,
+          learningDeckRevision: progress.learningDeckRevision,
           levelId: progress.levelId,
           questId: progress.questId
         }

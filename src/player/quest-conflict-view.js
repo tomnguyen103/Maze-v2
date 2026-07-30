@@ -1,4 +1,5 @@
 import { getQuestLevel } from "../questions/quest-levels.js";
+import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 
 /**
  * @param {{
@@ -65,19 +66,32 @@ export function createQuestConflictView({ onChoose = () => {} } = {}) {
 /**
  * @param {HTMLElement} container
  * @param {string} label
- * @param {{ levelId: string, completedLabyrinths: number, labyrinthNumber: number, complete: boolean }} progress
+ * @param {{
+ *   levelId: string,
+ *   learningDeckId: string,
+ *   learningDeckRevision: string,
+ *   completedLabyrinths: number,
+ *   labyrinthNumber: number,
+ *   complete: boolean
+ * }} progress
  */
 function renderChoice(container, label, progress) {
   const eyebrow = document.createElement("span");
   const title = document.createElement("strong");
+  const deck = document.createElement("span");
   const summary = document.createElement("span");
   eyebrow.className = "section-label";
   eyebrow.textContent = label;
   title.textContent = getQuestLevel(progress.levelId).name;
+  deck.textContent =
+    getPublishedLearningDeckOption(
+      progress.learningDeckId,
+      progress.learningDeckRevision
+    )?.label ?? "Unavailable Learning Deck";
   summary.textContent = progress.complete
     ? "20 of 20 complete"
     : `${progress.completedLabyrinths} of 20 complete · Next: Labyrinth ${progress.labyrinthNumber}`;
-  container.replaceChildren(eyebrow, title, summary);
+  container.replaceChildren(eyebrow, title, deck, summary);
 }
 
 /**

@@ -1,4 +1,5 @@
 import {
+  isSameQuestIdentity,
   mergeSameQuestProgress,
   reconcileQuestProgress
 } from "../game/quest-continuity.js";
@@ -78,7 +79,14 @@ export function createQuestContinuityController({
       if (choice === "cloud") {
         clearPending(storage);
         clearLocalChoice(storage);
-        onProgress(selectedConflict.cloud.progress, "cloud");
+        try {
+          onProgress(selectedConflict.cloud.progress, "cloud");
+        } catch (error) {
+          // Keep the conflict open so the Explorer can still choose their
+          // device Quest instead of being left with a dead dialog.
+          conflict = selectedConflict;
+          throw error;
+        }
         onStatus("saved");
         return true;
       }
@@ -285,6 +293,15 @@ export function createQuestContinuityController({
           }
           return replaced.record;
         }
+        clearLocalChoice(storage);
+        conflict = { local: progress, cloud: latest };
+        onConflict(conflict);
+        onStatus("conflict");
+        return null;
+      }
+      if (!isSameQuestIdentity(progress, latest.progress)) {
+        // Same Quest ID, different Quest Level or Learning Deck revision: the
+        // merge cannot decide this, so the Explorer chooses.
         clearLocalChoice(storage);
         conflict = { local: progress, cloud: latest };
         onConflict(conflict);

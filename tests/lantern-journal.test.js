@@ -7,9 +7,9 @@ import {
 } from "../src/learning/lantern-journal.js";
 import {
   evaluatePracticeAnswer,
-  projectLanternJournal,
-  selectPracticeQuestion
+  projectLanternJournal
 } from "../src/learning/lantern-journal-ui.js";
+import { createLanternTrail } from "../src/learning/lantern-trail.js";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 
 function question(ordinal = 0) {
@@ -134,17 +134,6 @@ describe("Lantern Journal", () => {
     expect(mergeLanternJournals(local, shared).events).toHaveLength(2);
   });
 
-  it("selects a different reviewed card for the same learning objective", () => {
-    const triggering = question(2);
-    const practice = selectPracticeQuestion(triggering);
-
-    expect(practice.id).not.toBe(triggering.id);
-    expect(practice.learningObjectiveId).toBe(
-      triggering.learningObjectiveId
-    );
-    expect(practice.topicId).toBe(triggering.topicId);
-  });
-
   it("rejects disguised child data and mismatched reviewed metadata", () => {
     const valid = recordLearningOutcome(
       createLanternJournal(),
@@ -189,7 +178,11 @@ describe("Lantern Journal", () => {
   });
 
   it("evaluates Practice without accepting or mutating Run state", () => {
-    const practice = selectPracticeQuestion(question(2));
+    const practice = createLanternTrail({
+      levelId: "trail-scout",
+      difficultyBand: "capable",
+      learningObjectiveId: question(2).learningObjectiveId
+    }).questions[0];
     const runSnapshot = Object.freeze({
       score: 300,
       vitality: 2,

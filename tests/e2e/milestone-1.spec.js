@@ -144,7 +144,8 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   const firstLight = page.getByRole("dialog", {
     name: "Your First Light"
   });
-  await expect(firstLight).toBeVisible();
+  // Also a lazy chunk: give it the same budget as the other dialogs here.
+  await expect(firstLight).toBeVisible({ timeout: 15000 });
   await expect(page.locator("#first-light-title")).toBeFocused();
   const skipToQuest = page.getByRole("button", {
     name: "Skip to Quest"
@@ -252,7 +253,10 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   const campfire = page.getByRole("dialog", {
     name: "Continue from the Campfire?"
   });
-  await expect(campfire).toBeVisible();
+  // Campfire Resume is a lazy chunk fetched after a reload, so it needs the
+  // same budget as the Quest handoff above rather than the 5s default: under
+  // four parallel workers the default is not enough to load it.
+  await expect(campfire).toBeVisible({ timeout: 15000 });
   await expect(page.locator("#campfire-resume-title")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
@@ -363,7 +367,8 @@ test("keeps First Light and Campfire choices accessible at exact release viewpor
   const firstLight = page.getByRole("dialog", {
     name: "Your First Light"
   });
-  await expect(firstLight).toBeVisible();
+  // Also a lazy chunk: give it the same budget as the other dialogs here.
+  await expect(firstLight).toBeVisible({ timeout: 15000 });
   await recordReleaseScreenshot(page, testInfo, "first-light");
   if (testInfo.project.name === "desktop") {
     for (const dialogViewport of [
@@ -423,7 +428,10 @@ test("keeps First Light and Campfire choices accessible at exact release viewpor
   const campfire = page.getByRole("dialog", {
     name: "Continue from the Campfire?"
   });
-  await expect(campfire).toBeVisible();
+  // Campfire Resume is a lazy chunk fetched after a reload, so it needs the
+  // same budget as the Quest handoff above rather than the 5s default: under
+  // four parallel workers the default is not enough to load it.
+  await expect(campfire).toBeVisible({ timeout: 15000 });
   await recordReleaseScreenshot(page, testInfo, "campfire");
   if (testInfo.project.name === "desktop") {
     for (const dialogViewport of [

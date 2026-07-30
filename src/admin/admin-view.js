@@ -1,4 +1,6 @@
 import { can } from "../player/can.js";
+import { describeEchoLensVisual } from "../questions/echo-lens-presentation.js";
+import { normalizeQuestion } from "../questions/question-contract.js";
 
 /**
  * @typedef {{
@@ -269,10 +271,15 @@ function renderQuestions(panel, value, access) {
     ]
       .filter(Boolean)
       .join(" · ");
+    const content = asRecord(latest.content);
     const prompt = document.createElement("p");
     prompt.className = "admin-record__prompt";
-    prompt.textContent = String(asRecord(latest.content).prompt ?? "");
+    prompt.textContent = String(content.prompt ?? "");
     card.append(header, detail, prompt);
+    const echoLensPreview = renderEchoLensPreview(content);
+    if (echoLensPreview) {
+      card.append(echoLensPreview);
+    }
     const actions = element("div", "admin-record__actions");
     if (can(access, "questions:publish") && latest.version) {
       const publish = document.createElement("button");
@@ -298,6 +305,40 @@ function renderQuestions(panel, value, access) {
     stack.append(card);
   }
   panel.append(stack);
+}
+
+/** @param {Record<string, unknown>} content */
+function renderEchoLensPreview(content) {
+  if (!content.echoLens || !content.reviewedRevisionId) {
+    return null;
+  }
+  try {
+    const question = normalizeQuestion(content);
+    if (!question.echoLens) {
+      return null;
+    }
+    const details = element("details", "admin-lens-preview");
+    details.dataset.echoLensPreview = "";
+    const summary = document.createElement("summary");
+    summary.textContent = "Preview Echo Lens";
+    const title = document.createElement("strong");
+    title.textContent = question.echoLens.title;
+    const reasoning = document.createElement("p");
+    reasoning.textContent = question.echoLens.reasoning;
+    const steps = document.createElement("ol");
+    for (const step of question.echoLens.steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      steps.append(item);
+    }
+    const visual = document.createElement("p");
+    visual.className = "admin-helper";
+    visual.textContent = describeEchoLensVisual(question.echoLens);
+    details.append(summary, title, reasoning, steps, visual);
+    return details;
+  } catch {
+    return null;
+  }
 }
 
 function questionEditor() {
@@ -337,7 +378,7 @@ function questionEditor() {
     '{"id":"math-bright-01","prompt":"...","choices":[...]}';
   const helper = element("p", "admin-helper");
   helper.textContent =
-    "Use the same reviewed shape as the bundled Warden Question bank.";
+    "Use the bundled Warden Question shape. Omit reviewedRevisionId; the server assigns the new immutable revision.";
   contentField.append(label, textarea, helper);
   const submit = document.createElement("button");
   submit.type = "submit";

@@ -32,6 +32,9 @@
         <button class="control-button" id="atlas-button" type="button">
           Atlas
         </button>
+        <button class="control-button" id="workshop-button" type="button">
+          Workshop
+        </button>
         <button class="control-button" id="journal-button" type="button">
           Journal
         </button>
@@ -189,6 +192,11 @@
           <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
             Run ready.
           </div>
+
+          <details class="echo-lens" id="echo-lens" hidden>
+            <summary>Why this works</summary>
+            <div class="echo-lens__content" id="echo-lens-content"></div>
+          </details>
         </article>
 
         <aside class="intel-deck" aria-label="How to play">
@@ -376,8 +384,19 @@
       <div class="level-dialog__intro">
         <span class="section-label">Start an adventure</span>
         <h2 id="level-title" tabindex="-1">Choose your Quest Level</h2>
-        <p>Every path has a different maze and learning challenge. You can change levels whenever you start a new quest.</p>
+        <p>Every path has a different maze and learning challenge. Choose a Learning Deck below, then pick a level to start the Quest. You can change both whenever you start a new quest.</p>
       </div>
+      <fieldset
+        class="learning-deck-picker"
+        aria-describedby="learning-deck-guidance"
+      >
+        <legend>Choose a Learning Deck</legend>
+        <p id="learning-deck-guidance">
+          Pick the reviewed Question mix for this Quest. It never changes maze
+          difficulty, access, score, or Warden rules.
+        </p>
+        <div class="learning-deck-options" id="learning-deck-options"></div>
+      </fieldset>
       <div class="level-cards" id="level-cards">
         <button class="level-card" type="button" data-level="bright-start">
           <span class="level-card__badge">Quest Level 1</span>
@@ -523,7 +542,7 @@
       class="challenge-dialog"
       id="challenge-dialog"
       aria-labelledby="challenge-title"
-      aria-describedby="challenge-promise challenge-feedback challenge-question"
+      aria-describedby="challenge-promise challenge-feedback challenge-notice challenge-question"
     >
       <div class="challenge-dialog__crest" aria-hidden="true">?</div>
       <span class="section-label" id="challenge-kicker">Warden challenge</span>
@@ -540,6 +559,7 @@
       <div class="challenge-feedback" id="challenge-feedback" role="status">
         Think carefully. Your timer is paused.
       </div>
+      <p class="challenge-notice" id="challenge-notice" role="status" hidden></p>
       <p
         class="challenge-question"
         id="challenge-question"
@@ -578,6 +598,22 @@
         </div>
       </div>
       <p class="challenge-source" id="challenge-source">Opening the question scroll…</p>
+      <section class="challenge-lens-panel" id="challenge-lens-panel" hidden>
+        <details class="echo-lens" id="challenge-echo-lens">
+          <summary>Why this works</summary>
+          <div
+            class="echo-lens__content"
+            id="challenge-echo-lens-content"
+          ></div>
+        </details>
+        <button
+          class="primary-button"
+          id="challenge-echo-lens-continue"
+          type="button"
+        >
+          Next question
+        </button>
+      </section>
     </dialog>
 
     <dialog
@@ -624,15 +660,74 @@
       aria-labelledby="practice-title"
       aria-describedby="practice-promise practice-feedback"
     >
-      <span class="section-label">Optional Practice</span>
-      <h2 id="practice-title">Try a different Question</h2>
+      <span class="section-label">Optional · unscored</span>
+      <h2 id="practice-title" tabindex="-1">Lantern Trail Workshop</h2>
       <p class="dialog-intro" id="practice-promise">
         No timer, score, Vitality, access, or Quest progress changes here.
       </p>
-      <p class="practice-question" id="practice-question" tabindex="-1"></p>
-      <div class="practice-choices" id="practice-choices"></div>
-      <p class="practice-feedback" id="practice-feedback" role="status" aria-live="polite"></p>
-      <button class="control-button" id="practice-close" type="button">Back to Journal</button>
+      <section class="practice-catalog" id="practice-catalog">
+        <div class="practice-catalog__heading">
+          <h3>Choose a learning goal</h3>
+          <p id="practice-catalog-summary"></p>
+        </div>
+        <div class="practice-objectives" id="practice-objectives"></div>
+      </section>
+      <section class="practice-trail" id="practice-trail" hidden>
+        <div class="practice-trail__heading">
+          <p class="section-label" id="practice-progress"></p>
+          <h3 id="practice-objective-label"></h3>
+        </div>
+        <p class="practice-question" id="practice-question" tabindex="-1"></p>
+        <div class="practice-support">
+          <button
+            class="control-button"
+            id="practice-hint-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="practice-hint"
+          >
+            Show Hint
+          </button>
+          <p id="practice-hint" aria-live="polite" hidden></p>
+        </div>
+        <div class="practice-choices" id="practice-choices"></div>
+        <p
+          class="practice-feedback"
+          id="practice-feedback"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="practice-trail__actions">
+          <button class="control-button" id="practice-skip" type="button">
+            Skip Lantern
+          </button>
+          <button class="primary-button" id="practice-next" type="button" hidden>
+            Next Lantern
+          </button>
+          <button class="control-button" id="practice-keep" type="button" hidden>
+            Keep Practicing
+          </button>
+        </div>
+      </section>
+      <section class="practice-completion" id="practice-completion" hidden>
+        <p class="section-label">Trail complete</p>
+        <h3>Lantern Trail complete</h3>
+        <p id="practice-completion-copy"></p>
+        <button class="control-button" id="practice-choose" type="button">
+          Choose another Trail
+        </button>
+      </section>
+      <div class="practice-dialog__destinations">
+        <button class="control-button" id="practice-journal" type="button">
+          Open Journal
+        </button>
+        <button class="control-button" id="practice-atlas" type="button">
+          Open Atlas
+        </button>
+        <button class="control-button" id="practice-close" type="button">
+          Return to Play
+        </button>
+      </div>
     </dialog>
 
     <dialog class="records-dialog" id="records-dialog" aria-labelledby="records-title">

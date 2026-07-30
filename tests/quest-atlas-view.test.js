@@ -11,6 +11,11 @@ import {
   advanceQuest,
   createQuestProgress
 } from "../src/game/quest-progress.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+
+const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
+  ({ deckId }) => deckId === "number-trail"
+);
 
 describe("Echo Atlas view", () => {
   beforeEach(() => {
@@ -68,6 +73,36 @@ describe("Echo Atlas view", () => {
       "Gate Warden here at Labyrinth 4"
     );
     expect(document.activeElement?.id).toBe("atlas-title");
+  });
+
+  it("names the selected Learning Deck in Atlas and result summaries", () => {
+    if (!NUMBER_TRAIL) {
+      throw new Error("Published Number Trail fixture is missing.");
+    }
+    const progress = createQuestProgress(
+      "trail-scout",
+      4,
+      "quest_number_summary",
+      NUMBER_TRAIL
+    );
+    const atlas = projectQuestAtlas(progress);
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    createQuestAtlasView().show(atlas, trigger);
+    expect(document.getElementById("atlas-progress")?.textContent)
+      .toContain("Number Trail");
+
+    renderQuestAtlasSummary(
+      /** @type {HTMLElement} */ (
+        document.getElementById("result-atlas")
+      ),
+      atlas,
+      { finishedLabyrinthNumber: 4, won: true }
+    );
+    expect(document.getElementById("result-atlas")?.textContent)
+      .toContain("Number Trail");
   });
 
   it("removes landmark press movement when reduced motion is requested", () => {

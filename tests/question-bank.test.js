@@ -131,6 +131,55 @@ describe("reviewed Question progression", () => {
     expect(getBundledQuestion(request).choices[0].label).not.toBe("changed");
   });
 
+  it("binds every bundled Question to a stable reviewed revision", () => {
+    for (const levelId of LEVELS) {
+      for (let questionOrdinal = 0; questionOrdinal < 200; questionOrdinal += 1) {
+        const request = {
+          levelId,
+          seed: "REVIEWED-LENS",
+          wardenId: questionOrdinal % 6,
+          labyrinthNumber: Math.floor(questionOrdinal / 10) + 1,
+          questionOrdinal
+        };
+        const first = getBundledQuestion(request);
+        const second = getBundledQuestion(request);
+
+        expect(first.reviewedRevisionId).toMatch(
+          /^bundled:[a-z0-9-]+:[a-f0-9]{32}$/
+        );
+        expect(normalizeQuestion(first)).toEqual(first);
+        expect(second.reviewedRevisionId).toBe(first.reviewedRevisionId);
+      }
+    }
+  });
+
+  it("attaches authored Echo Lens content only to its exact reviewed revision", () => {
+    const reviewed = getBundledQuestion({
+      levelId: "bright-start",
+      seed: "REVIEWED-LENS",
+      wardenId: 0,
+      labyrinthNumber: 1,
+      questionOrdinal: 0
+    });
+    const unsupported = getBundledQuestion({
+      levelId: "bright-start",
+      seed: "REVIEWED-LENS",
+      wardenId: 0,
+      labyrinthNumber: 1,
+      questionOrdinal: 1
+    });
+
+    expect(reviewed.reviewedRevisionId).toMatch(
+      /^bundled:bright-foundation-0:[a-f0-9]{32}$/
+    );
+    expect(reviewed.echoLens).toMatchObject({
+      version: 1,
+      kind: "number-line",
+      title: "See one more"
+    });
+    expect(unsupported.echoLens).toBeUndefined();
+  });
+
   it("ships one validated Gate Warden capstone per Level and Band", () => {
     const labyrinths = [1, 5, 9, 13, 17];
     const capstones = LEVELS.flatMap((levelId) =>
