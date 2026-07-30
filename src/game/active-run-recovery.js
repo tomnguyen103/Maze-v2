@@ -322,12 +322,16 @@ export function createCampfireResumeView({
   return {
     /**
      * @param {ReturnType<typeof createRun>} run
-     * @param {{ levelName: string, labyrinthNumber: number }} context
+     * @param {{
+     *   levelName: string,
+     *   learningDeckName: string,
+     *   labyrinthNumber: number
+     * }} context
      */
-    show(run, { levelName, labyrinthNumber }) {
+    show(run, { levelName, learningDeckName, labyrinthNumber }) {
       const echoes = run.echoes.filter((echo) => echo.collected).length;
       summary.textContent =
-        `${levelName} · Labyrinth ${labyrinthNumber} · ` +
+        `${levelName} · ${learningDeckName} · Labyrinth ${labyrinthNumber} · ` +
         `${run.moves} ${run.moves === 1 ? "move" : "moves"} · ` +
         `${echoes}/${run.echoes.length} Echoes · ${formatElapsed(run.elapsedMs)}`;
       if (!dialog.open) {

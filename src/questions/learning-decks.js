@@ -1,4 +1,8 @@
 import { getLearningMetadata } from "./learning-objectives.js";
+import {
+  getPublishedLearningDeckOption,
+  getPublishedLearningDeckOptions as getPublishedLearningDeckOptionsFromCatalog
+} from "./learning-deck-catalog.js";
 import { getBundledQuestion } from "./question-bank.js";
 import { normalizeQuestion } from "./question-contract.js";
 import {
@@ -57,41 +61,25 @@ import {
 
 const REGION_STARTS = Object.freeze([1, 5, 9, 13, 17]);
 
-const DECK_DEFINITIONS = Object.freeze([
-  Object.freeze({
-    deckId: "mixed-trail",
-    label: "Mixed Trail",
-    kind: /** @type {"mixed"} */ ("mixed"),
-    focusTopics: Object.freeze([]),
-    revisionId: "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92"
-  }),
-  Object.freeze({
-    deckId: "number-trail",
-    label: "Number Trail",
-    kind: /** @type {"focused"} */ ("focused"),
-    focusTopics: Object.freeze([
-      "arithmetic",
-      "fractions",
-      "geometry",
-      "patterns"
-    ]),
-    revisionId: "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
-  }),
-  Object.freeze({
-    deckId: "word-trail",
-    label: "Word Trail",
-    kind: /** @type {"focused"} */ ("focused"),
-    focusTopics: Object.freeze(["inference", "language", "logic"]),
-    revisionId: "deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19"
-  }),
-  Object.freeze({
-    deckId: "nature-trail",
-    label: "Nature Trail",
-    kind: /** @type {"focused"} */ ("focused"),
-    focusTopics: Object.freeze(["earth-science", "life-science"]),
-    revisionId: "deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7"
-  })
-]);
+/** @type {Readonly<Record<string, readonly string[]>>} */
+const FOCUSED_TOPICS_BY_DECK = Object.freeze({
+  "number-trail": Object.freeze([
+    "arithmetic",
+    "fractions",
+    "geometry",
+    "patterns"
+  ]),
+  "word-trail": Object.freeze(["inference", "language", "logic"]),
+  "nature-trail": Object.freeze(["earth-science", "life-science"])
+});
+const DECK_DEFINITIONS = Object.freeze(
+  getPublishedLearningDeckOptionsFromCatalog().map((option) =>
+    Object.freeze({
+      ...option,
+      focusTopics: FOCUSED_TOPICS_BY_DECK[option.deckId] ?? Object.freeze([])
+    })
+  )
+);
 
 /**
  * Freeze the authored publication graph so callers cannot mutate a published
@@ -588,14 +576,6 @@ function getOrBuildPublishedRevision(definition) {
   return published;
 }
 
-const PUBLISHED_OPTIONS = deepFreeze(
-  DECK_DEFINITIONS.map((definition) => ({
-    deckId: definition.deckId,
-    label: definition.label,
-    revisionId: definition.revisionId
-  }))
-);
-
 export function getCorrectFirstDemandReport() {
   return CORRECT_FIRST_DEMAND;
 }
@@ -608,16 +588,13 @@ export function getPublishedLearningDeckRevisions() {
   );
 }
 
-export function getPublishedLearningDeckOptions() {
-  return PUBLISHED_OPTIONS;
-}
-
 /**
  * @param {string} deckId
  * @param {string} [revisionId]
  */
 export function getPublishedLearningDeckRevision(deckId, revisionId) {
-  const definition = getDeckDefinition(deckId);
+  const option = getPublishedLearningDeckOption(deckId, revisionId);
+  const definition = option ? getDeckDefinition(option.deckId) : undefined;
   if (
     !definition ||
     (revisionId !== undefined && revisionId !== definition.revisionId)

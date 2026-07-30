@@ -3,11 +3,11 @@ import { normalizeQuestion } from "../src/questions/question-contract.js";
 import {
   getCorrectFirstDemandReport,
   getLearningDeckCoverageReport,
-  getPublishedLearningDeckOptions,
   getPublishedLearningDeckRevision,
   getPublishedLearningDeckRevisions,
   validateLearningDeckRevision
 } from "../src/questions/learning-decks.js";
+import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
 import {
   createReviewedQuestionRevisionId,
   reviewedQuestionPresentationDigest
@@ -54,7 +54,13 @@ describe("published Learning Deck revisions", () => {
       ["word-trail", "Word Trail"],
       ["nature-trail", "Nature Trail"]
     ]);
-    expect(options).toEqual(
+    expect(
+      options.map(({ deckId, label, revisionId }) => ({
+        deckId,
+        label,
+        revisionId
+      }))
+    ).toEqual(
       revisions.map(({ deckId, label, revisionId }) => ({
         deckId,
         label,

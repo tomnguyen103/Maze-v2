@@ -2,6 +2,12 @@ import {
   QUEST_LABYRINTH_COUNT,
   getQuestLevel
 } from "../questions/quest-levels.js";
+import {
+  DEFAULT_LEARNING_DECK_ID,
+  DEFAULT_LEARNING_DECK_REVISION,
+  getPublishedLearningDeckRevisionId,
+  isPublishedLearningDeckRevision
+} from "../questions/learning-deck-identity.js";
 
 const QUEST_PROGRESS_KEY = "echo-maze:quest-progress:v1";
 const MAX_QUESTION_HISTORY = 5000;
@@ -10,9 +16,11 @@ const MAX_MAP_HISTORY = 1000;
 /**
  * @typedef {"bright-start" | "trail-scout" | "maze-master"} QuestLevelId
  * @typedef {{
- *   version: 1,
+ *   version: 2,
  *   questId: string,
  *   levelId: QuestLevelId,
+ *   learningDeckId: string,
+ *   learningDeckRevision: string,
  *   labyrinthNumber: number,
  *   completedLabyrinths: number,
  *   usedMapFingerprints: string[],
@@ -20,6 +28,19 @@ const MAX_MAP_HISTORY = 1000;
  *   nextQuestionOrdinal: number,
  *   complete: boolean
  * }} QuestProgress
+ * @typedef {{
+ *   version: 1 | 2,
+ *   questId?: string,
+ *   levelId?: QuestLevelId,
+ *   learningDeckId?: string,
+ *   learningDeckRevision?: string,
+ *   labyrinthNumber?: number,
+ *   completedLabyrinths?: number,
+ *   usedMapFingerprints?: string[],
+ *   usedQuestionIds?: string[],
+ *   nextQuestionOrdinal?: number,
+ *   complete?: boolean
+ * }} QuestProgressCandidate
  * @typedef {{
  *   getItem: (key: string) => string | null,
  *   setItem: (key: string, value: string) => unknown
@@ -30,12 +51,17 @@ const MAX_MAP_HISTORY = 1000;
  * @param {string} levelId
  * @param {number} [labyrinthNumber]
  * @param {string} [questId]
+ * @param {{ deckId: string, revisionId: string }} [learningDeck]
  * @returns {QuestProgress}
  */
 export function createQuestProgress(
   levelId,
   labyrinthNumber = 1,
-  questId = createQuestId()
+  questId = createQuestId(),
+  learningDeck = {
+    deckId: DEFAULT_LEARNING_DECK_ID,
+    revisionId: DEFAULT_LEARNING_DECK_REVISION
+  }
 ) {
   const level = getQuestLevel(levelId);
   if (level.id !== levelId) {
@@ -51,10 +77,18 @@ export function createQuestProgress(
   if (!isQuestId(questId)) {
     throw new Error("Choose a valid Quest ID.");
   }
+  const publishedRevision = getPublishedLearningDeckRevisionId(
+    learningDeck.deckId
+  );
+  if (publishedRevision !== learningDeck.revisionId) {
+    throw new Error("Choose a published Learning Deck revision.");
+  }
   return {
-    version: 1,
+    version: 2,
     questId,
     levelId: level.id,
+    learningDeckId: learningDeck.deckId,
+    learningDeckRevision: publishedRevision,
     labyrinthNumber,
     completedLabyrinths: labyrinthNumber - 1,
     usedMapFingerprints: [],
@@ -186,14 +220,25 @@ export function normalizeQuestProgress(value) {
   if (!value || typeof value !== "object") {
     return null;
   }
-  const candidate = /** @type {Partial<QuestProgress>} */ (value);
+  const candidate = /** @type {QuestProgressCandidate} */ (value);
   const usedMapFingerprints = candidate.usedMapFingerprints ?? [];
   const questId = isQuestId(candidate.questId)
     ? candidate.questId
     : deriveLegacyQuestId(candidate);
+  // A version-1 record predates Deck identity, so it normalizes onto the
+  // published Mixed Trail revision. A version-2 record keeps the exact
+  // revision it pinned, which stays valid after that Deck republishes.
+  const learningDeckId = candidate.version === 1
+    ? DEFAULT_LEARNING_DECK_ID
+    : candidate.learningDeckId;
+  const learningDeckRevision = candidate.version === 1
+    ? DEFAULT_LEARNING_DECK_REVISION
+    : candidate.learningDeckRevision;
   if (
-    candidate.version !== 1 ||
+    (candidate.version !== 1 && candidate.version !== 2) ||
     !questId ||
+    typeof learningDeckId !== "string" ||
+    !isPublishedLearningDeckRevision(learningDeckId, learningDeckRevision) ||
     (candidate.levelId !== "bright-start" &&
       candidate.levelId !== "trail-scout" &&
       candidate.levelId !== "maze-master") ||
@@ -232,9 +277,11 @@ export function normalizeQuestProgress(value) {
     return null;
   }
   return {
-    version: 1,
+    version: 2,
     questId,
     levelId: candidate.levelId,
+    learningDeckId,
+    learningDeckRevision,
     labyrinthNumber: Number(candidate.labyrinthNumber),
     completedLabyrinths: Number(candidate.completedLabyrinths),
     usedMapFingerprints: [...usedMapFingerprints],
@@ -260,7 +307,7 @@ function isQuestId(value) {
   );
 }
 
-/** @param {Partial<QuestProgress>} candidate */
+/** @param {QuestProgressCandidate} candidate */
 function deriveLegacyQuestId(candidate) {
   if (
     candidate.version !== 1 ||

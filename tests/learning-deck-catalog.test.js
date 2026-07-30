@@ -20,14 +20,47 @@ describe("Learning Deck catalog loading", () => {
     const questionBank = await import(
       "../src/questions/question-bank.js"
     );
-    const decks = await import("../src/questions/learning-decks.js");
+    const catalog = await import(
+      "../src/questions/learning-deck-catalog.js"
+    );
 
-    expect(decks.getPublishedLearningDeckOptions()).toHaveLength(4);
+    expect(catalog.getPublishedLearningDeckOptions()).toHaveLength(4);
     expect(questionBank.getBundledQuestion).not.toHaveBeenCalled();
 
+    const decks = await import("../src/questions/learning-decks.js");
     expect(
       decks.getPublishedLearningDeckRevision("mixed-trail")?.deckId
     ).toBe("mixed-trail");
     expect(questionBank.getBundledQuestion).toHaveBeenCalledTimes(15);
+  });
+
+  it("keeps child-visible options aligned with the lightweight Quest identities", async () => {
+    const [{ getPublishedLearningDeckOptions }, identity] = await Promise.all([
+      import("../src/questions/learning-deck-catalog.js"),
+      import("../src/questions/learning-deck-identity.js")
+    ]);
+
+    for (const option of getPublishedLearningDeckOptions()) {
+      expect(
+        identity.getPublishedLearningDeckRevisionId(option.deckId)
+      ).toBe(option.revisionId);
+      // A new Quest pins the newest published revision, and every revision
+      // this Deck has published stays readable for Quests that pinned it.
+      expect(option.publishedRevisionIds.at(-1)).toBe(option.revisionId);
+      for (const revisionId of option.publishedRevisionIds) {
+        expect(
+          identity.isPublishedLearningDeckRevision(option.deckId, revisionId)
+        ).toBe(true);
+      }
+      expect(
+        identity.isPublishedLearningDeckRevision(
+          option.deckId,
+          `${option.revisionId}-draft`
+        )
+      ).toBe(false);
+    }
+    expect(
+      identity.isPublishedLearningDeckRevision("constructor", "anything")
+    ).toBe(false);
   });
 });

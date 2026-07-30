@@ -107,6 +107,7 @@ function renderAtlas(
       : `Gate Warden in ${atlas.labyrinthsToNextMilestone} Labyrinths at ` +
         `Labyrinth ${atlas.nextMilestoneNumber}.`;
   elements.progress.textContent =
+    `${atlas.learningDeckLabel}. ` +
     `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped. ` +
     `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored. ` +
     milestoneGuidance;

@@ -11,6 +11,8 @@ const COLUMNS = `
   schema_version,
   quest_id,
   level_id,
+  learning_deck_id,
+  learning_deck_revision,
   labyrinth_number,
   completed_labyrinths,
   used_map_fingerprints,
@@ -84,6 +86,8 @@ export function createQuestProgressStore(pool) {
             progress.version,
             progress.questId,
             progress.levelId,
+            progress.learningDeckId,
+            progress.learningDeckRevision,
             progress.labyrinthNumber,
             progress.completedLabyrinths,
             JSON.stringify(progress.usedMapFingerprints),
@@ -94,7 +98,7 @@ export function createQuestProgressStore(pool) {
           ];
           const result = expectedRevision === 0
             ? await database.query(
-            `WITH ${activeUserGuardCtes("$12")},
+            `WITH ${activeUserGuardCtes("$14")},
              ensured_access AS (
                INSERT INTO player_access (clerk_user_id)
                SELECT $1
@@ -115,6 +119,8 @@ export function createQuestProgressStore(pool) {
                schema_version,
                quest_id,
                level_id,
+               learning_deck_id,
+               learning_deck_revision,
                labyrinth_number,
                completed_labyrinths,
                used_map_fingerprints,
@@ -124,7 +130,8 @@ export function createQuestProgressStore(pool) {
                classroom_id
              )
              SELECT
-               $1, $2, $3, $4, $5, $6, $7::JSONB, $8::JSONB, $9, $10, $11
+               $1, $2, $3, $4, $5, $6, $7, $8, $9::JSONB,
+               $10::JSONB, $11, $12, $13
              FROM available_access
              LIMIT 1
              ON CONFLICT DO NOTHING
@@ -134,6 +141,8 @@ export function createQuestProgressStore(pool) {
               progress.version,
               progress.questId,
               progress.levelId,
+              progress.learningDeckId,
+              progress.learningDeckRevision,
               progress.labyrinthNumber,
               progress.completedLabyrinths,
               JSON.stringify(progress.usedMapFingerprints),
@@ -144,23 +153,36 @@ export function createQuestProgressStore(pool) {
               deletedUserHash(userId)
             ]
               )
+            // The Deck identity of a Quest is immutable until that Quest ends
+            // or is replaced, so the write only lands when the Quest ID
+            // changes or the stored Deck still matches. A stale client that
+            // omits Deck identity reports a conflict instead of rewriting it.
             : await database.query(
             `UPDATE cloud_quest_progress
              SET
                schema_version = $3,
                quest_id = $4,
                level_id = $5,
-               labyrinth_number = $6,
-               completed_labyrinths = $7,
-               used_map_fingerprints = $8::JSONB,
-               used_question_ids = $9::JSONB,
-               next_question_ordinal = $10,
-               complete = $11,
+               learning_deck_id = $6,
+               learning_deck_revision = $7,
+               labyrinth_number = $8,
+               completed_labyrinths = $9,
+               used_map_fingerprints = $10::JSONB,
+               used_question_ids = $11::JSONB,
+               next_question_ordinal = $12,
+               complete = $13,
                revision = revision + 1,
                updated_at = NOW()
              WHERE clerk_user_id = $1
-               AND classroom_id IS NOT DISTINCT FROM $12
+               AND classroom_id IS NOT DISTINCT FROM $14
                AND revision = $2
+               AND (
+                 quest_id <> $4
+                 OR (
+                   learning_deck_id = $6
+                   AND learning_deck_revision = $7
+                 )
+               )
              RETURNING ${COLUMNS}`,
             writeValues
               );
@@ -201,6 +223,8 @@ function mapRecord(row) {
     version: Number(row.schema_version),
     questId: row.quest_id,
     levelId: row.level_id,
+    learningDeckId: row.learning_deck_id,
+    learningDeckRevision: row.learning_deck_revision,
     labyrinthNumber: Number(row.labyrinth_number),
     completedLabyrinths: Number(row.completed_labyrinths),
     usedMapFingerprints: row.used_map_fingerprints,

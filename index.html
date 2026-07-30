@@ -384,8 +384,19 @@
       <div class="level-dialog__intro">
         <span class="section-label">Start an adventure</span>
         <h2 id="level-title" tabindex="-1">Choose your Quest Level</h2>
-        <p>Every path has a different maze and learning challenge. You can change levels whenever you start a new quest.</p>
+        <p>Every path has a different maze and learning challenge. Choose a Learning Deck below, then pick a level to start the Quest. You can change both whenever you start a new quest.</p>
       </div>
+      <fieldset
+        class="learning-deck-picker"
+        aria-describedby="learning-deck-guidance"
+      >
+        <legend>Choose a Learning Deck</legend>
+        <p id="learning-deck-guidance">
+          Pick the reviewed Question mix for this Quest. It never changes maze
+          difficulty, access, score, or Warden rules.
+        </p>
+        <div class="learning-deck-options" id="learning-deck-options"></div>
+      </fieldset>
       <div class="level-cards" id="level-cards">
         <button class="level-card" type="button" data-level="bright-start">
           <span class="level-card__badge">Quest Level 1</span>

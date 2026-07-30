@@ -6,6 +6,7 @@ import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
+import { getPublishedLearningDeckOptions } from "../../src/questions/learning-deck-catalog.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 import { createLanternTrail } from "../../src/learning/lantern-trail.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
@@ -21,6 +22,9 @@ const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
 const DEFEAT_SEED = "DEFEAT-RECORD";
 const DEFEAT_PATH = "down,down,right,right,up,up,right".split(",");
+const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
+  ({ deckId }) => deckId === "number-trail"
+);
 const KEY_BY_DIRECTION = /** @type {Record<string, string>} */ ({
   up: "ArrowUp",
   right: "ArrowRight",
@@ -412,51 +416,34 @@ async function recordRegion4Screenshot(page, testInfo, state) {
 }
 
 /**
+ * Attaches the shot to the run, and writes it into the playtest evidence
+ * folder when RECORD_MILESTONE_<n>_SCREENSHOTS=true.
+ *
  * @param {import("@playwright/test").Page} page
  * @param {import("@playwright/test").TestInfo} testInfo
- * @param {"bell-ready" | "bell-rung"} state
- */
-async function recordRegion5Screenshot(page, testInfo, state) {
-  const body = await page.screenshot();
-  await testInfo.attach(`region-5-${state}-${testInfo.project.name}`, {
-    body,
-    contentType: "image/png"
-  });
-  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
-    await writeFile(
-      resolve(
-        "docs",
-        "playtests",
-        "screenshots",
-        `milestone-2-region-5-${state}-${testInfo.project.name}.png`
-      ),
-      body
-    );
-  }
-}
-
-/**
- * @param {import("@playwright/test").Page} page
- * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {2 | 3} milestone
  * @param {string} slug
  */
-async function recordMilestone2EvidenceScreenshot(page, testInfo, slug) {
+async function recordEvidenceScreenshot(page, testInfo, milestone, slug) {
   const body = await page.screenshot();
   await testInfo.attach(`${slug}-${testInfo.project.name}`, {
     body,
     contentType: "image/png"
   });
-  if (process.env.RECORD_MILESTONE_2_SCREENSHOTS === "true") {
-    await writeFile(
-      resolve(
-        "docs",
-        "playtests",
-        "screenshots",
-        `milestone-2-${slug}-${testInfo.project.name}.png`
-      ),
-      body
-    );
+  if (
+    process.env[`RECORD_MILESTONE_${milestone}_SCREENSHOTS`] !== "true"
+  ) {
+    return;
   }
+  await writeFile(
+    resolve(
+      "docs",
+      "playtests",
+      "screenshots",
+      `milestone-${milestone}-${slug}-${testInfo.project.name}.png`
+    ),
+    body
+  );
 }
 
 /**
@@ -627,6 +614,67 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
+test("locks one published Learning Deck into a new Quest", async ({
+  page
+}, testInfo) => {
+  if (!NUMBER_TRAIL) {
+    throw new Error("Published Number Trail fixture is missing.");
+  }
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 }
+  );
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  const deckGroup = page.getByRole("group", {
+    name: "Choose a Learning Deck"
+  });
+  await expect(deckGroup).toBeVisible();
+  await expect(deckGroup.getByRole("radio")).toHaveCount(4);
+  await expect(
+    deckGroup.getByRole("radio", { name: /Mixed Trail/ })
+  ).toBeChecked();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "learning-deck-picker"
+  );
+
+  await deckGroup.getByRole("radio", { name: /Number Trail/ }).check();
+  await chooseTrailScout(page);
+
+  await expect(page.locator("#quest-level-name")).toHaveText(
+    "Quest Level 2 · Trail Scout · Number Trail"
+  );
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored) : null;
+    })
+  ).toMatchObject({
+    version: 2,
+    levelId: "trail-scout",
+    learningDeckId: "number-trail",
+    learningDeckRevision: NUMBER_TRAIL.revisionId
+  });
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Echo Atlas" })
+      .getByText("Number Trail", { exact: false })
+      .first()
+  ).toBeVisible();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "learning-deck-atlas"
+  );
+});
+
 test("starts a playable maze and responds to keyboard actions", async ({
   page
 }, testInfo) => {
@@ -705,7 +753,7 @@ test("starts a playable maze and responds to keyboard actions", async ({
     })
   ).toBeVisible();
   await expect(page.locator("#quest-level-name")).toHaveText(
-    "Quest Level 2 · Trail Scout"
+    "Quest Level 2 · Trail Scout · Mixed Trail"
   );
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 1 of 20 · Atlas Region: Foundation · Trail Twist: Echo Hush"
@@ -734,9 +782,10 @@ test("starts a playable maze and responds to keyboard actions", async ({
   await expect(page.locator("#field-note")).toContainText(
     "Echo Hush keeps ordinary Wardens still for this action"
   );
-  await recordMilestone2EvidenceScreenshot(
+  await recordEvidenceScreenshot(
     page,
     testInfo,
+    2,
     "region-1-echo-hush"
   );
   await page.getByRole("button", { name: "Sound off" }).click();
@@ -1117,9 +1166,10 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
-      await recordMilestone2EvidenceScreenshot(
+      await recordEvidenceScreenshot(
         page,
         testInfo,
+        2,
         "atlas-200pct-reduced"
       );
     }
@@ -1297,9 +1347,10 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
       });
       await expect.poll(() => viewer.evaluate((dialog) => dialog.scrollTop))
         .toBe(0);
-      await recordMilestone2EvidenceScreenshot(
+      await recordEvidenceScreenshot(
         page,
         testInfo,
+        2,
         "watch-trail-200pct-reduced"
       );
     }
@@ -2328,9 +2379,10 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
   await expect(page.locator("#field-note")).toHaveText(
     "Windway carried you down."
   );
-  await recordMilestone2EvidenceScreenshot(
+  await recordEvidenceScreenshot(
     page,
     testInfo,
+    2,
     "region-2-windway"
   );
 
@@ -2909,7 +2961,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
     () => document.documentElement.scrollWidth -
       document.documentElement.clientWidth
   )).toBeLessThanOrEqual(1);
-  await recordRegion5Screenshot(page, testInfo, "bell-ready");
+  await recordEvidenceScreenshot(page, testInfo, 2, "region-5-bell-ready");
 
   await ringButton.focus();
   await expect(ringButton).toBeFocused();
@@ -2923,7 +2975,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
   await expect(page.locator("#warden-state")).toHaveText("Lured to Bell");
   await expect(page.locator("#field-note")).toContainText("Signal Bell rung");
   await expect(maze).toHaveAttribute("aria-label", /1 unspent visible Signal Bells/);
-  await recordRegion5Screenshot(page, testInfo, "bell-rung");
+  await recordEvidenceScreenshot(page, testInfo, 2, "region-5-bell-rung");
 
   await page.locator("#seed-copy").click();
   const copied = new URL(

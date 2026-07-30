@@ -5,12 +5,15 @@ import {
   getQuestLevel,
   isGateWardenMilestone
 } from "../questions/quest-levels.js";
+import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
 
 /** @typedef {"completed" | "current" | "ahead" | "milestone" | "completed-milestone"} AtlasNodeState */
 /** @typedef {{
- *   version: 1,
+ *   version: 2,
  *   levelId: string,
+ *   learningDeckId: string,
+ *   learningDeckRevision: string,
  *   labyrinthNumber: number,
  *   completedLabyrinths: number,
  *   complete: boolean
@@ -76,6 +79,12 @@ export function projectQuestAtlas(
   { watchTrailLandmarkIds = new Set() } = {}
 ) {
   const level = getQuestLevel(progress.levelId);
+  // Resolved by Deck, not by revision: a Quest keeps the revision it pinned,
+  // so a republished Deck must still project a truthful Atlas.
+  const learningDeck = getPublishedLearningDeckOption(progress.learningDeckId);
+  if (!learningDeck) {
+    throw new Error("Quest Progress has an unavailable Learning Deck.");
+  }
   const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
   const regions = DIFFICULTY_BANDS.map((_, regionIndex) => {
     const start = regionIndex * 4 + 1;
@@ -114,8 +123,12 @@ export function projectQuestAtlas(
     : Math.ceil(progress.labyrinthNumber / 4) * 4;
 
   return {
-    version: 1,
+    version: 2,
     levelId: progress.levelId,
+    learningDeckId: learningDeck.deckId,
+    // The revision this Quest pinned, not whatever the Deck publishes now.
+    learningDeckRevision: progress.learningDeckRevision,
+    learningDeckLabel: learningDeck.label,
     complete: progress.complete,
     currentLabyrinthNumber: progress.complete
       ? null

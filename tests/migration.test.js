@@ -127,6 +127,109 @@ describe("Run Access migration", () => {
     expect(sql).not.toContain("question_text");
   });
 
+  it("adds exact Learning Deck identity without replacing Cloud Quest rows", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0020_learning_deck_quest_identity.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS learning_deck_id");
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS learning_deck_revision");
+    expect(sql).toContain("UPDATE cloud_quest_progress");
+    expect(sql).toContain("learning_deck_id = 'mixed-trail'");
+    expect(sql).toContain(
+      "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92"
+    );
+    expect(sql).toContain(
+      "learning_deck_id = 'number-trail'"
+    );
+    expect(sql).toContain(
+      "learning_deck_id = 'word-trail'"
+    );
+    expect(sql).toContain(
+      "learning_deck_id = 'nature-trail'"
+    );
+    expect(sql).toContain("schema_version IN (1, 2)");
+    expect(sql).toContain("SET NOT NULL");
+    expect(sql).not.toMatch(/\bDELETE\b/);
+    expect(sql).not.toContain("DROP TABLE");
+  });
+
+  it("clears the version-1 Cloud Quest check before backfilling version 2", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0020_learning_deck_quest_identity.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    // Migration 0004 pins CHECK (schema_version = 1) inline, so backfilling
+    // schema_version = 2 before dropping it aborts on any non-empty table.
+    const dropsOldCheck = sql.indexOf(
+      "DROP CONSTRAINT IF EXISTS cloud_quest_progress_schema_version_check"
+    );
+    const backfills = sql.indexOf("schema_version = 2");
+
+    expect(dropsOldCheck).toBeGreaterThan(-1);
+    expect(backfills).toBeGreaterThan(-1);
+    expect(dropsOldCheck).toBeLessThan(backfills);
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+  });
+
+  it("backfills Learning Deck identity only where it is missing", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0020_learning_deck_quest_identity.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    // An unguarded re-run would reset every chosen Deck to Mixed Trail.
+    expect(sql).toMatch(
+      /WHERE learning_deck_id IS NULL\s+OR learning_deck_revision IS NULL/
+    );
+    expect(sql).toContain(
+      "Apply with DATABASE_ADMIN_URL after migration 0019"
+    );
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS learning_deck_id");
+  });
+
+  it("accepts exactly the Deck revisions the authored roster publishes", async () => {
+    const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
+      readFile(
+        new URL(
+          "../db/migrations/0020_learning_deck_quest_identity.sql",
+          import.meta.url
+        ),
+        "utf8"
+      ),
+      import("../src/questions/learning-deck-catalog.js")
+    ]);
+
+    // The CHECK constraint and the roster drift apart silently otherwise: the
+    // app keeps serving a revision the database has started rejecting.
+    const constrained = [
+      ...sql.matchAll(
+        /learning_deck_id = '([a-z-]+)'\s+AND learning_deck_revision =\s+'([^']+)'/g
+      )
+    ].map(([, deckId, revisionId]) => ({ deckId, revisionId }));
+
+    expect(constrained).toEqual(
+      getPublishedLearningDeckOptions().flatMap((option) =>
+        option.publishedRevisionIds.map((revisionId) => ({
+          deckId: option.deckId,
+          revisionId
+        }))
+      )
+    );
+  });
+
   it("creates an append-only hash-chained audit log without raw addresses", async () => {
     const sql = await readFile(
       new URL("../db/migrations/0006_audit_events.sql", import.meta.url),

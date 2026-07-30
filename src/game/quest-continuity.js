@@ -7,6 +7,23 @@ import { normalizeQuestProgress } from "./quest-progress.js";
  */
 
 /**
+ * Two records describe the same Quest only when the Quest ID, Quest Level, and
+ * exact Learning Deck revision all match. Every path that merges or reconciles
+ * asks this one question, so the identity fields cannot drift apart.
+ *
+ * @param {QuestProgress} a
+ * @param {QuestProgress} b
+ */
+export function isSameQuestIdentity(a, b) {
+  return (
+    a.questId === b.questId &&
+    a.levelId === b.levelId &&
+    a.learningDeckId === b.learningDeckId &&
+    a.learningDeckRevision === b.learningDeckRevision
+  );
+}
+
+/**
  * @param {QuestProgress} local
  * @param {QuestProgress} cloud
  * @returns {QuestProgress}
@@ -17,6 +34,12 @@ export function mergeSameQuestProgress(local, cloud) {
   }
   if (local.levelId !== cloud.levelId) {
     throw new Error("One Quest ID cannot use two Quest Levels.");
+  }
+  if (
+    local.learningDeckId !== cloud.learningDeckId ||
+    local.learningDeckRevision !== cloud.learningDeckRevision
+  ) {
+    throw new Error("One Quest ID cannot use two Learning Deck revisions.");
   }
   const complete = local.complete || cloud.complete;
   const completedLabyrinths = complete
@@ -35,9 +58,11 @@ export function mergeSameQuestProgress(local, cloud) {
     ])
   ].sort();
   const merged = normalizeQuestProgress({
-    version: 1,
+    version: 2,
     questId: local.questId,
     levelId: local.levelId,
+    learningDeckId: local.learningDeckId,
+    learningDeckRevision: local.learningDeckRevision,
     labyrinthNumber: complete ? 20 : completedLabyrinths + 1,
     completedLabyrinths,
     usedMapFingerprints,
@@ -97,7 +122,7 @@ export function reconcileQuestProgress(local, cloud) {
   if (!local || !cloud) {
     throw new Error("Quest reconciliation state is invalid.");
   }
-  if (local.questId !== cloud.progress.questId) {
+  if (!isSameQuestIdentity(local, cloud.progress)) {
     return { kind: "conflict", local, cloud };
   }
   const progress = mergeSameQuestProgress(local, cloud.progress);

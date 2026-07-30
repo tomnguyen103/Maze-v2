@@ -23,7 +23,8 @@ export function renderQuestAtlasSummary(
   );
   const progress = document.createElement("strong");
   progress.textContent =
-    `Atlas ${atlas.completedLabyrinths} / ${atlas.totalLabyrinths}`;
+    `Atlas ${atlas.completedLabyrinths} / ${atlas.totalLabyrinths} · ` +
+    atlas.learningDeckLabel;
   const state = document.createElement("span");
   state.dataset.atlasSummaryState = "";
   state.textContent = node?.stateLabel ?? "Quest position saved";

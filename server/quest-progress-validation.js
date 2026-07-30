@@ -7,6 +7,8 @@ const PROGRESS_FIELDS = new Set([
   "version",
   "questId",
   "levelId",
+  "learningDeckId",
+  "learningDeckRevision",
   "labyrinthNumber",
   "completedLabyrinths",
   "usedMapFingerprints",

@@ -22,6 +22,11 @@ it is not fetched by the landing page, First Light, or Verified Daily. The
 existing landing, game, style, Clerk, admin, and Sentry ceilings above remain
 unchanged.
 
+Quest Progress validation ships as a lazy import from the landing route, so
+Learning Deck identity stays out of the landing bundle. It counts against the
+landing ceiling only when fetched; the measured landing figure above already
+excludes it, and a failed fetch leaves the call to action at "Enter the Maze".
+
 The Clerk and Sentry budgets are tracked separately because they are optional,
 dynamically loaded dependencies. A Clerk outage must degrade to Guest play and
 cannot block the landing or deterministic Run bundle. With no Sentry DSN, the

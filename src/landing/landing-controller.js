@@ -1,10 +1,8 @@
-import { loadQuestProgress } from "../game/quest-progress.js";
 import { createPlayerApiClient } from "../player/player-client.js";
 import { createClerkBrowser } from "../player/clerk-browser.js";
 
 /** @param {HTMLElement} root */
 export function renderLanding(root) {
-  const hasQuestProgress = Boolean(loadQuestProgress());
   root.innerHTML = `
     <a class="skip-link" href="#landing-main">Skip to the introduction</a>
     <header class="landing-header">
@@ -18,7 +16,7 @@ export function renderLanding(root) {
           <h1 id="landing-title">Echo Maze</h1>
           <p>Recover every Echo, outsmart Wardens with knowledge, then find the Gate.</p>
           <div class="landing-hero__actions">
-            <a class="primary-button" href="/play">${hasQuestProgress ? "Continue Quest" : "Enter the Maze"}</a>
+            <a class="primary-button" href="/play" id="landing-primary-action">Enter the Maze</a>
             <button class="control-button" id="landing-sign-in-hero" type="button">Sign in</button>
           </div>
           <p class="landing-auth-status" id="landing-auth-status" role="status" hidden></p>
@@ -74,6 +72,10 @@ export function renderLanding(root) {
     HTMLButtonElement
   );
   const authStatus = requiredElement("landing-auth-status", HTMLElement);
+  const primaryAction = requiredElement(
+    "landing-primary-action",
+    HTMLAnchorElement
+  );
   const clerkBrowser = createClerkBrowser({ onChange: syncAccount });
   const playerClient = createPlayerApiClient({
     getToken: clerkBrowser.getToken
@@ -85,6 +87,16 @@ export function renderLanding(root) {
   heroSignIn.setAttribute("aria-busy", "true");
   headerSignIn.addEventListener("click", openAccount);
   heroSignIn.addEventListener("click", openAccount);
+  // Quest validation loads lazily so Deck identity stays out of the landing
+  // bundle. If the chunk never arrives the call to action stays "Enter the
+  // Maze", which still reaches the game route and resumes the stored Quest.
+  void import("../game/quest-progress.js")
+    .then(({ loadQuestProgress }) => {
+      if (loadQuestProgress()) {
+        primaryAction.textContent = "Continue Quest";
+      }
+    })
+    .catch(() => {});
   void syncAccount();
 
   async function openAccount() {

@@ -56,7 +56,10 @@ import {
   rememberQuestion,
   saveQuestProgress
 } from "./game/quest-progress.js";
-import { selectDeferredQuestProgress } from "./game/quest-continuity.js";
+import {
+  isSameQuestIdentity,
+  selectDeferredQuestProgress
+} from "./game/quest-continuity.js";
 import {
   hasRunReplayOwnerMismatch,
   loadRunRecords,
@@ -66,6 +69,11 @@ import {
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
+import {
+  getDefaultLearningDeckOption,
+  getPublishedLearningDeckOption,
+  getPublishedLearningDeckOptions
+} from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
   getDifficultyBand,
@@ -259,6 +267,7 @@ const elements = {
   journalDialog: requiredElement("journal-dialog", HTMLDialogElement),
   journalStatus: requiredElement("journal-status", HTMLElement),
   liveRegion: requiredElement("live-region", HTMLElement),
+  learningDeckOptions: requiredElement("learning-deck-options", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
   moves: requiredElement("moves-value", HTMLElement),
@@ -371,7 +380,9 @@ let questProgress =
     ? storedQuestProgress
     : createQuestProgress(
         locationLevel.id,
-        locationLabyrinthNumber
+        locationLabyrinthNumber,
+        undefined,
+        learningDeckForNewQuest(storedQuestProgress)
       );
 let currentLevel = getQuestLevel(questProgress.levelId);
 let currentLabyrinthNumber = questProgress.labyrinthNumber;
@@ -645,7 +656,13 @@ elements.levelCards.addEventListener("click", async (event) => {
     return;
   }
 
-  if (await startNewQuest(button.dataset.level)) {
+  if (
+    await startNewQuest(
+      button.dataset.level,
+      undefined,
+      selectedLearningDeckOption()
+    )
+  ) {
     mustChooseLevel = false;
     elements.levelDialog.close();
     canvas.focus({ preventScroll: true });
@@ -1645,6 +1662,7 @@ async function openCampfireResume() {
   });
   campfireResumeView.show(run, {
     levelName: currentLevel.name,
+    learningDeckName: currentLearningDeckOption().label,
     labyrinthNumber: currentLabyrinthNumber
   });
 }
@@ -2185,9 +2203,90 @@ function createFreshLocator(levelId, labyrinthNumber) {
   throw new Error("Could not create a fresh Labyrinth for this Quest.");
 }
 
-/** @param {string} levelId @param {string} [seed] */
-async function startNewQuest(levelId, seed) {
-  const nextProgress = createQuestProgress(levelId);
+function renderLearningDeckOptions() {
+  const defaultDeck = getDefaultLearningDeckOption();
+  // Reopening the picker shows the Deck this Quest is on, not Mixed Trail.
+  const activeDeckId =
+    getPublishedLearningDeckOption(questProgress?.learningDeckId)?.deckId ??
+    defaultDeck.deckId;
+  elements.learningDeckOptions.replaceChildren(
+    ...getPublishedLearningDeckOptions().map((deck) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      const name = document.createElement("strong");
+      const description = document.createElement("span");
+      label.className = "learning-deck-option";
+      input.type = "radio";
+      input.name = "learning-deck";
+      input.value = deck.deckId;
+      input.dataset.revision = deck.revisionId;
+      input.checked = deck.deckId === activeDeckId;
+      name.textContent = deck.label;
+      description.textContent = deck.description;
+      label.append(input, name, description);
+      return label;
+    })
+  );
+}
+
+function selectedLearningDeckOption() {
+  const selected = elements.learningDeckOptions.querySelector(
+    "input[name='learning-deck']:checked"
+  );
+  if (!(selected instanceof HTMLInputElement)) {
+    return getDefaultLearningDeckOption();
+  }
+  const learningDeck = getPublishedLearningDeckOption(
+    selected.value,
+    selected.dataset.revision
+  );
+  if (!learningDeck) {
+    throw new Error("Selected Learning Deck is unavailable.");
+  }
+  return learningDeck;
+}
+
+/**
+ * A Quest replaced without the picker keeps the Explorer's standing Deck
+ * choice, pinned to that Deck's current published revision.
+ *
+ * @param {{ learningDeckId?: string } | null | undefined} source
+ */
+function learningDeckForNewQuest(source) {
+  return (
+    getPublishedLearningDeckOption(source?.learningDeckId) ??
+    getDefaultLearningDeckOption()
+  );
+}
+
+function currentLearningDeckOption() {
+  // Resolved by Deck, not by revision: a Quest keeps the revision it pinned,
+  // so a republished Deck must still name itself truthfully while rendering.
+  const learningDeck = getPublishedLearningDeckOption(
+    questProgress.learningDeckId
+  );
+  if (!learningDeck) {
+    throw new Error("Current Quest Learning Deck is unavailable.");
+  }
+  return learningDeck;
+}
+
+/**
+ * @param {string} levelId
+ * @param {string} [seed]
+ * @param {{ deckId: string, label: string, revisionId: string }} [learningDeck]
+ */
+async function startNewQuest(
+  levelId,
+  seed,
+  learningDeck = getDefaultLearningDeckOption()
+) {
+  const nextProgress = createQuestProgress(
+    levelId,
+    1,
+    undefined,
+    learningDeck
+  );
   const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
   const locator = seed
     ? withRunAccessId({
@@ -2252,7 +2351,12 @@ async function startRecordedLabyrinth(
     return false;
   }
   questProgress = saveQuestProgress(
-    createQuestProgress(levelId, labyrinthNumber)
+    createQuestProgress(
+      levelId,
+      labyrinthNumber,
+      undefined,
+      learningDeckForNewQuest(questProgress)
+    )
   );
   void loadQuestContinuityController("new-quest").then((controller) =>
     controller?.queueBoundary(questProgress) ?? false
@@ -2278,6 +2382,7 @@ async function openLevelPicker(requireChoice = false) {
     }
   }
   mustChooseLevel = requireChoice;
+  renderLearningDeckOptions();
   if (elements.firstLightDialog.open) {
     elements.firstLightDialog.close();
   }
@@ -2819,6 +2924,10 @@ function resolveQuestConflictChoice(choice) {
     if (resolved) {
       resumeAfterQuestConflict = false;
     }
+  }).catch(() => {
+    // The choice failed to install, so the conflict stays open and the run
+    // stays paused rather than stranding the Explorer on a dead dialog.
+    announce("Cloud Quest choice is unavailable. Your device Quest is safe.");
   });
 }
 
@@ -2855,9 +2964,23 @@ function applyDeferredCloudQuest() {
     return;
   }
   const deferred = deferredCloudQuest.progress;
-  const nextProgress = selectDeferredQuestProgress(questProgress, deferred);
   deferredCloudQuest = null;
-  installCloudQuestProgress(nextProgress, false);
+  if (
+    deferred.questId === questProgress.questId &&
+    !isSameQuestIdentity(questProgress, deferred)
+  ) {
+    // Never merge two Learning Deck identities behind the Explorer's back.
+    // The next sync reconciles this pair and opens the Quest conflict choice.
+    announce(
+      "Cloud Quest uses a different Learning Deck. Your device Quest is safe."
+    );
+    installCloudQuestProgress(questProgress, false);
+    return;
+  }
+  installCloudQuestProgress(
+    selectDeferredQuestProgress(questProgress, deferred),
+    false
+  );
 }
 
 /**
@@ -3485,11 +3608,24 @@ function updateInterface() {
   );
   const collected = run.echoes.filter((echo) => echo.collected).length;
   const difficultyBand = getDifficultyBand(currentLabyrinthNumber);
-  elements.questLevelName.textContent = activeDaily
-    ? `Daily · ${activeDaily.date} UTC`
-    : activeFirstLight
-      ? "First Light"
-      : `Quest Level ${currentLevel.number} · ${currentLevel.name}`;
+  if (activeDaily || activeFirstLight) {
+    elements.questLevelName.textContent = activeDaily
+      ? `Daily · ${activeDaily.date} UTC`
+      : "First Light";
+  } else {
+    // The Quest Level prefix is the part narrow screens drop. Keeping it in
+    // its own element hides it visually there while the announced name stays
+    // the whole Quest identity.
+    const questLevelPrefix = document.createElement("span");
+    questLevelPrefix.dataset.questLabelPrefix = "";
+    questLevelPrefix.textContent = `Quest Level ${currentLevel.number} · `;
+    elements.questLevelName.replaceChildren(
+      questLevelPrefix,
+      document.createTextNode(
+        `${currentLevel.name} · ${currentLearningDeckOption().label}`
+      )
+    );
+  }
   elements.questStage.textContent = activeDaily
     ? `${currentLevel.name} · Labyrinth ${currentLabyrinthNumber} · ${difficultyBand.label}`
     : activeFirstLight
