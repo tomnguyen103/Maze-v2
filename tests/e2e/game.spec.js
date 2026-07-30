@@ -562,6 +562,41 @@ async function mockQuestionApi(page) {
   };
 }
 
+// createSeed() names a Quest seed from three random Uint16 values, and starting
+// a Quest redraws until the Labyrinth is one the Explorer has not mapped.
+// Serving that draw from a counter keeps the redraw loop terminating — a
+// constant draw would starve it — while making the seed, and so the Labyrinth's
+// challenge layout, the same on every run. Only createSeed() reads a
+// three-value Uint16 draw in this application's own code.
+//
+// PINNED_QUEST_SEED is the seed the Quest settles on, not the first draw: the
+// boot Run consumes draws before the Quest's own. It therefore depends on how
+// many times the page calls createSeed() before the Quest starts, which no test
+// can see — so the seed is asserted on screen, and any drift in that count
+// fails loudly there instead of quietly restoring the flake.
+const PINNED_QUEST_SEED_DRAW_ORIGIN = 11;
+const PINNED_QUEST_SEED = "ASH-HOLLOW-77";
+
+/** @param {import("@playwright/test").Page} page */
+async function pinQuestSeed(page) {
+  await page.addInitScript((origin) => {
+    const original = crypto.getRandomValues.bind(crypto);
+    let draw = origin;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true,
+      /** @param {ArrayBufferView<ArrayBuffer>} array */
+      value: (array) => {
+        if (array instanceof Uint16Array && array.length === 3) {
+          draw += 1;
+          array.set([draw * 7, draw * 13, draw * 29]);
+          return array;
+        }
+        return original(array);
+      }
+    });
+  }, PINNED_QUEST_SEED_DRAW_ORIGIN);
+}
+
 /** @param {import("@playwright/test").Page} page */
 async function chooseTrailScout(page) {
   await page.getByRole("button", { name: /Trail Scout/ }).click();
@@ -727,6 +762,13 @@ test("announces the Mixed Trail continuation once per Quest", async ({
     });
   });
 
+  // The announcement is asserted across two challenges, so the Labyrinth has to
+  // hold two. A Quest otherwise draws its seed at random, and 22.4 percent of
+  // the 4200 seeds createSeed() can name lay out a Labyrinth holding fewer than
+  // two challenges (832 hold one, 107 hold none) — which left this case passing
+  // on seed luck. Pin the draw the Quest makes rather than the URL: a shared
+  // seed needs level and labyrinth alongside it and would skip the Deck picker.
+  await pinQuestSeed(page);
   await page.goto("/play");
   await expectGameReady(page);
   await page
@@ -736,23 +778,44 @@ test("announces the Mixed Trail continuation once per Quest", async ({
   await chooseTrailScout(page);
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
 
-  await expect
-    .poll(async () =>
-      (await page.locator("#seed-value").textContent())?.trim() ?? ""
-    )
-    .not.toBe("");
-  const seed = (await page.locator("#seed-value").textContent())?.trim() ?? "";
+  await expect(page.locator("#seed-value")).toHaveText(PINNED_QUEST_SEED);
   await page.getByLabel(/Interactive maze/).focus();
-  const plan = milestoneWinningPlan(seed, 1);
-  for (const action of plan.actions) {
-    if (action.type === "move") {
+  const plan = milestoneWinningPlan(PINNED_QUEST_SEED, 1);
+  // The pin exists to guarantee the two challenges this case reads, so it says
+  // so: a Labyrinth generation change that costs the second one fails here
+  // rather than as an unexplained missing dialog further down.
+  expect(
+    plan.actions.filter((action) => action.type === "answer").length
+  ).toBeGreaterThanOrEqual(2);
+  // The plan marks the exact move each challenge follows, so walking it with a
+  // single cursor keeps the Explorer's position and the plan in step; replaying
+  // it from the start after a challenge would spend moves the Run already made.
+  let cursor = 0;
+  const pressUntilChallenge = async () => {
+    while (cursor < plan.actions.length) {
+      const action = plan.actions[cursor];
+      if (action.type === "answer") {
+        return;
+      }
       await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      cursor += 1;
     }
-    if (await page.locator("#challenge-dialog").isVisible()) {
-      break;
-    }
-  }
+    throw new Error("The winning plan holds no further challenge.");
+  };
+  // The walker stops on the answer marker without spending it, so answering has
+  // to step past it or the next walk stops on the same challenge forever.
+  const answerChallenge = async () => {
+    await answerCorrectlyIfChallenged(page, () => {
+      const card = served.at(-1);
+      if (!card) {
+        throw new Error("The reviewed Question fixture has not served a card.");
+      }
+      return card;
+    });
+    cursor += 1;
+  };
 
+  await pressUntilChallenge();
   await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toContainText(
     "Number Trail is out of reviewed Questions here"
@@ -764,24 +827,10 @@ test("announces the Mixed Trail continuation once per Quest", async ({
     learningDeckRevision: NUMBER_TRAIL.revisionId
   });
   expect(Array.isArray(questionRequests[0]?.usedQuestionIds)).toBe(true);
-  // Announced once, and the Deck the Explorer chose has not changed.
   // Announced once: a second fallback Question in the same Quest is silent,
   // and the Deck the Explorer chose has not changed.
-  await answerCorrectlyIfChallenged(page, () => {
-    const card = served.at(-1);
-    if (!card) {
-      throw new Error("The reviewed Question fixture has not served a card.");
-    }
-    return card;
-  });
-  for (const action of plan.actions) {
-    if (action.type === "move") {
-      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
-    }
-    if (await page.locator("#challenge-dialog").isVisible()) {
-      break;
-    }
-  }
+  await answerChallenge();
+  await pressUntilChallenge();
   await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toBeHidden();
   await expect(page.locator("#quest-level-name")).toHaveText(
