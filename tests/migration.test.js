@@ -772,6 +772,25 @@ describe("Class Expedition migration", () => {
     expect(sql).toContain("role = 'teacher'");
   });
 
+  it("lets a started Labyrinth recover after explicit closure", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // Closure blocks NEW Grants and defeat retries, never the idempotent
+    // recovery of an already-issued Run: the existing-Grant lookup must
+    // come before any closed-status rejection inside the issue function.
+    const issueFunction = sql.slice(
+      sql.indexOf("CREATE FUNCTION issue_classroom_run_grant"),
+      sql.indexOf("CREATE FUNCTION record_classroom_run_outcome")
+    );
+    const lookup = issueFunction.indexOf("FROM public.classroom_run_grants");
+    const closedCheck = issueFunction.indexOf(
+      "'Class Expedition is closed.'"
+    );
+    expect(lookup).toBeGreaterThan(-1);
+    expect(closedCheck).toBeGreaterThan(-1);
+    expect(lookup).toBeLessThan(closedCheck);
+  });
+
   it("accepts exactly the published Deck revisions the roster publishes", async () => {
     const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
       readFile(migrationUrl, "utf8"),

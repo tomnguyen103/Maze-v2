@@ -464,26 +464,15 @@ BEGIN
     RAISE EXCEPTION 'Class Expedition access denied.';
   END IF;
 
-  IF v_expedition.status <> 'open' THEN
-    RAISE EXCEPTION 'Class Expedition is closed.';
-  END IF;
-
   IF p_labyrinth_number
        NOT BETWEEN (v_expedition.atlas_region - 1) * 4 + 1
        AND v_expedition.atlas_region * 4 THEN
     RAISE EXCEPTION 'Labyrinth is outside the assigned Atlas Region.';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.class_expedition_licenses
-    WHERE expedition_id = p_expedition_id
-      AND kind = 'base'
-      AND status = 'paid'
-  ) THEN
-    RAISE EXCEPTION 'Class Expedition has no paid base License.';
-  END IF;
-
+  -- The idempotent lookup comes before the open check: an already-issued
+  -- Grant may finish or recover its started Labyrinth after explicit
+  -- closure. Only NEW Grants and defeat retries require an open assignment.
   SELECT * INTO v_grant
   FROM public.classroom_run_grants
   WHERE expedition_id = p_expedition_id
@@ -503,6 +492,9 @@ BEGIN
     END IF;
 
     IF v_grant.status = 'defeated' THEN
+      IF v_expedition.status <> 'open' THEN
+        RAISE EXCEPTION 'Class Expedition is closed.';
+      END IF;
       UPDATE public.classroom_run_grants
       SET run_id = p_run_id, status = 'issued', updated_at = NOW()
       WHERE expedition_id = p_expedition_id
@@ -513,6 +505,20 @@ BEGIN
     END IF;
 
     RAISE EXCEPTION 'Classroom Run Grant conflict.';
+  END IF;
+
+  IF v_expedition.status <> 'open' THEN
+    RAISE EXCEPTION 'Class Expedition is closed.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.class_expedition_licenses
+    WHERE expedition_id = p_expedition_id
+      AND kind = 'base'
+      AND status = 'paid'
+  ) THEN
+    RAISE EXCEPTION 'Class Expedition has no paid base License.';
   END IF;
 
   -- Serialize seat assignment per Expedition so declared capacity cannot be

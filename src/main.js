@@ -1569,6 +1569,43 @@ async function loadActiveRunRecoveryModule() {
   return module;
 }
 
+/** @type {Promise<Record<string, any> | null> | null} */
+let classExpeditionPlayPromise = null;
+
+function classPlayActive() {
+  try {
+    return (
+      globalThis.localStorage?.getItem(
+        "echo-maze:class-expedition-active:v1"
+      ) === "true"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function loadClassExpeditionPlay() {
+  if (!classExpeditionPlayPromise) {
+    classExpeditionPlayPromise = import(
+      "./classroom/class-expedition-play.js"
+    )
+      .then((module) =>
+        module.createClassExpeditionPlay({
+          client: playerController.getApiClient(),
+          getUserId: () => playerController.getAuthenticatedUserId(),
+          announce,
+          onFailClose: async () => {
+            activeRunLocator = null;
+            clearActiveRunLocator();
+            await clearActiveRunRecoveryForIdentityChange();
+          }
+        })
+      )
+      .catch(() => null);
+  }
+  return classExpeditionPlayPromise;
+}
+
 /** @param {boolean} [force] */
 function reportActiveRunRecoveryUnavailable(force = false) {
   if (activeRunRecoveryUnavailableReported && !force) {
@@ -2484,6 +2521,16 @@ async function canOpenStartChoice() {
  * @param {boolean} [resumingAdmittedRun]
  */
 async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
+  if (classPlayActive()) {
+    // Class Runs are Classroom-sponsored and never offline: every start and
+    // resume rechecks Membership and assignment through the Grant request.
+    const classPlay = await loadClassExpeditionPlay();
+    if (classPlay) {
+      return classPlay.authorizeClassRun(locator);
+    }
+    announce("Class Play needs a connection. Try again.");
+    return false;
+  }
   let config;
   try {
     config = await playerController.getRunAccessConfig();
@@ -3836,6 +3883,20 @@ async function finishRun() {
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
+  if (classPlayActive() && activeRunLocator) {
+    const classPlay = await loadClassExpeditionPlay();
+    const verdict = await classPlay?.recordClassRunOutcome(
+      { runId: activeRunLocator.runId, labyrinthNumber: finishedLabyrinthNumber },
+      won
+    );
+    if (verdict === "removed") {
+      // Authoritative Membership removal: stop here and persist no Class
+      // result. Personal Play remains untouched.
+      pendingRunReplay = null;
+      updateInterface();
+      return;
+    }
+  }
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,

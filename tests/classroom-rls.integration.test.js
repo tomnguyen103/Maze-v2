@@ -1173,6 +1173,18 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
           )
         )
       ).rejects.toThrow(/closed/);
+      // A started Labyrinth still recovers idempotently while closed.
+      await withTenantContext(
+        runtimePool,
+        { explorerId: studentId, classroomId: classroomA },
+        async (client) => {
+          const recovered = await client.query(
+            "SELECT * FROM issue_classroom_run_grant($1, $2, $3::SMALLINT)",
+            [expeditionId, runA, 1]
+          );
+          expect(recovered.rows[0]).toMatchObject({ out_duplicate: true });
+        }
+      );
       await withTenantContext(
         runtimePool,
         { explorerId: teacherId, classroomId: classroomA },

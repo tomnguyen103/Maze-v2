@@ -72,6 +72,10 @@ function workspaceClient() {
       /** @type {Record<string, unknown>[]} */
       expeditions: []
     })),
+    listClassExpeditionGrants: vi.fn(async () => ({
+      /** @type {Record<string, unknown>[]} */
+      grants: []
+    })),
     createClassExpedition: vi.fn(async (_classroomId, input) => ({
       expedition: {
         id: "exped_created_1",

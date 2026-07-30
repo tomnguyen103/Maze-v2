@@ -2,6 +2,7 @@ import {
   ClassroomAccessDeniedError,
   ClassroomContextError
 } from "./classroom-context.js";
+import { ClassExpeditionStateError } from "./class-expedition-store.js";
 import {
   ClassroomDomainConflictError,
   ClassroomDomainInputError,
@@ -20,7 +21,8 @@ const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPEDITION_SUBPATH_PATTERN =
-  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity)$/;
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|grants|grants\/outcome)$/;
+const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** @param {string} pathname */
@@ -136,6 +138,26 @@ function publishedLearningDeck(deckId, revisionId) {
   return { deckId, revisionId };
 }
 
+/** @param {Record<string, unknown>} body */
+function runGrantInput(body) {
+  if (typeof body.runId !== "string" || !RUN_ID_PATTERN.test(body.runId)) {
+    throw new InputError("Classroom Run Grant needs a valid Run identifier.");
+  }
+  if (
+    !Number.isInteger(body.labyrinthNumber) ||
+    Number(body.labyrinthNumber) < 1 ||
+    Number(body.labyrinthNumber) > 20
+  ) {
+    throw new InputError(
+      "Classroom Run Grant needs a Labyrinth Number from 1 to 20."
+    );
+  }
+  return {
+    runId: body.runId,
+    labyrinthNumber: Number(body.labyrinthNumber)
+  };
+}
+
 /** @param {unknown} value */
 function advisoryCompletionDate(value) {
   if (value === undefined || value === null || value === "") {
@@ -210,7 +232,28 @@ function advisoryCompletionDate(value) {
  *       userId: string,
  *       classroomId: string,
  *       expeditionId: string
- *     ) => Promise<Record<string, unknown>>
+ *     ) => Promise<Record<string, unknown>>,
+ *     issueRunGrant: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       input: { runId: string, labyrinthNumber: number }
+ *     ) => Promise<Record<string, unknown>>,
+ *     recordRunOutcome: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       input: {
+ *         runId: string,
+ *         labyrinthNumber: number,
+ *         outcome: "escaped" | "defeated"
+ *       }
+ *     ) => Promise<unknown>,
+ *     listOwnGrants: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>[]>
  *   },
  *   billing?: {
  *     createLicenseCheckout: (purchase: {
@@ -477,6 +520,109 @@ export function createClassroomHandler({
       if (expeditionMatch) {
         const expeditionId = expeditionMatch[1];
         const subResource = expeditionMatch[2];
+        if (subResource === "grants") {
+          if (request.method === "GET") {
+            sendJson(response, 200, {
+              grants: await store.listOwnGrants(
+                userId,
+                selectedClassroomId,
+                expeditionId
+              )
+            });
+            return;
+          }
+          if (request.method !== "POST") {
+            response.setHeader("allow", "GET, POST");
+            sendJson(response, 405, {
+              error: "Use GET or POST for Classroom Run Grants."
+            });
+            return;
+          }
+          const decision = await rateLimit(
+            "classroom.grant",
+            request,
+            userId
+          );
+          if (!decision.allowed) {
+            sendRateLimited(
+              response,
+              decision,
+              "Too many Classroom Run Grant requests. Try again shortly."
+            );
+            return;
+          }
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          const grantInput = runGrantInput(body);
+          const grant = await store.issueRunGrant(
+            userId,
+            selectedClassroomId,
+            expeditionId,
+            grantInput
+          );
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.grant",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              labyrinthNumber: grantInput.labyrinthNumber,
+              duplicate: grant.duplicate === true
+            }
+          });
+          sendJson(response, 201, { grant });
+          return;
+        }
+        if (subResource === "grants/outcome") {
+          if (request.method !== "POST") {
+            response.setHeader("allow", "POST");
+            sendJson(response, 405, {
+              error: "Use POST for Classroom Run outcomes."
+            });
+            return;
+          }
+          const decision = await rateLimit(
+            "classroom.grant",
+            request,
+            userId
+          );
+          if (!decision.allowed) {
+            sendRateLimited(
+              response,
+              decision,
+              "Too many Classroom Run Grant requests. Try again shortly."
+            );
+            return;
+          }
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          const grantInput = runGrantInput(body);
+          if (body.outcome !== "escaped" && body.outcome !== "defeated") {
+            throw new InputError(
+              "Classroom Run outcome must be escaped or defeated."
+            );
+          }
+          await store.recordRunOutcome(
+            userId,
+            selectedClassroomId,
+            expeditionId,
+            { ...grantInput, outcome: body.outcome }
+          );
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.outcome",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              labyrinthNumber: grantInput.labyrinthNumber,
+              outcome: body.outcome
+            }
+          });
+          sendJson(response, 200, { recorded: true });
+          return;
+        }
         if (subResource === "capacity") {
           if (request.method !== "GET") {
             response.setHeader("allow", "GET");
@@ -628,7 +774,10 @@ export function createClassroomHandler({
         sendJson(response, 400, { error: error.message });
         return;
       }
-      if (error instanceof ClassroomDomainConflictError) {
+      if (
+        error instanceof ClassroomDomainConflictError ||
+        error instanceof ClassExpeditionStateError
+      ) {
         sendJson(response, 409, { error: error.message });
         return;
       }

@@ -3,6 +3,11 @@ import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
 import { getPublishedLearningDeckOptions } from "../questions/learning-deck-catalog.js";
 import {
+  createQuestProgress,
+  saveQuestProgress
+} from "../game/quest-progress.js";
+import { saveClassExpeditionSelection } from "./class-expedition-selection.js";
+import {
   clearSelectedClassroom,
   loadSelectedClassroom,
   saveSelectedClassroom
@@ -78,6 +83,10 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
  *       classroomId: string,
  *       expeditionId: string
  *     ) => Promise<{ capacity?: Record<string, unknown> }>,
+ *     listClassExpeditionGrants: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ grants?: unknown }>,
  *     purchaseClassExpeditionLicense: (
  *       classroomId: string,
  *       expeditionId: string,
@@ -378,6 +387,135 @@ export async function renderClassroom(root, dependencies = {}) {
         "This browser could not save the Class Play choice. Personal Play remains active.";
     });
     card.append(label, heading, copy, play);
+    if (entry.role === "student") {
+      card.append(studentExpeditionSection(entry));
+    }
+    return card;
+  }
+
+  /** @param {Classroom} entry */
+  function studentExpeditionSection(entry) {
+    const section = document.createElement("div");
+    section.className = "classroom-student-expeditions";
+    section.innerHTML = `
+      <p class="section-label">Class Expeditions</p>
+      <div class="classroom-student-expeditions__list" aria-busy="true">
+        ${loadingMarkup()}
+      </div>
+    `;
+    const list = /** @type {HTMLElement} */ (
+      section.querySelector(".classroom-student-expeditions__list")
+    );
+    void (async () => {
+      try {
+        const result = await client.listClassExpeditions(entry.id);
+        const expeditions = Array.isArray(result.expeditions)
+          ? /** @type {Record<string, unknown>[]} */ (result.expeditions)
+          : [];
+        list.removeAttribute("aria-busy");
+        list.replaceChildren();
+        if (expeditions.length === 0) {
+          const note = document.createElement("p");
+          note.textContent =
+            "No Class Expedition is assigned yet. Class Play above still works.";
+          list.append(note);
+          return;
+        }
+        for (const record of expeditions) {
+          list.append(await studentExpeditionCard(entry, record));
+        }
+      } catch {
+        list.removeAttribute("aria-busy");
+        list.innerHTML = `
+          <p class="classroom-inline-error" role="alert">
+            Class Expeditions are unavailable right now.
+          </p>
+        `;
+      }
+    })();
+    return section;
+  }
+
+  /**
+   * @param {Classroom} entry
+   * @param {Record<string, unknown>} record
+   */
+  async function studentExpeditionCard(entry, record) {
+    const card = document.createElement("article");
+    card.className = "classroom-expedition-card";
+    card.dataset.studentExpedition = String(record.id);
+    /** @type {Record<string, unknown>[]} */
+    let grants = [];
+    try {
+      const result = await client.listClassExpeditionGrants(
+        entry.id,
+        String(record.id)
+      );
+      grants = Array.isArray(result.grants)
+        ? /** @type {Record<string, unknown>[]} */ (result.grants)
+        : [];
+    } catch {
+      grants = [];
+    }
+    const escaped = grants.filter(
+      (grant) => grant.status === "escaped"
+    ).length;
+    const heading = document.createElement("h4");
+    heading.textContent = `Region ${Number(record.atlasRegion)}`;
+    const facts = document.createElement("p");
+    facts.textContent = `${escaped} of 4 Labyrinths escaped · ${
+      record.status === "open" ? "Open" : "Closed"
+    }${
+      record.completionDate
+        ? ` · finish by ${String(record.completionDate)} (advisory)`
+        : ""
+    }`;
+    const start = document.createElement("button");
+    start.className = "primary-button";
+    start.type = "button";
+    start.dataset.action = "start-class-expedition";
+    start.textContent =
+      grants.length > 0 ? "Continue Class Expedition" : "Start Class Expedition";
+    if (record.status !== "open" && grants.length === 0) {
+      start.disabled = true;
+    }
+    if (escaped >= 4) {
+      start.disabled = true;
+      start.textContent = "Class Expedition complete";
+    }
+    start.addEventListener("click", () => {
+      const userId = clerk.user?.id;
+      if (!saveSelectedClassroom(entry.id, storage, userId)) {
+        status.textContent =
+          "This browser could not save the Class Play choice. Personal Play remains active.";
+        return;
+      }
+      const atlasRegion = Number(record.atlasRegion);
+      if (grants.length === 0) {
+        saveQuestProgress(
+          createQuestProgress(
+            String(record.levelId),
+            (atlasRegion - 1) * 4 + 1,
+            undefined,
+            {
+              deckId: String(record.learningDeckId),
+              revisionId: String(record.learningDeckRevision)
+            }
+          ),
+          storage
+        );
+      }
+      saveClassExpeditionSelection(storage, userId, {
+        classroomId: entry.id,
+        expeditionId: String(record.id),
+        atlasRegion,
+        levelId: String(record.levelId),
+        learningDeckId: String(record.learningDeckId),
+        learningDeckRevision: String(record.learningDeckRevision)
+      });
+      navigate("/play");
+    });
+    card.append(heading, facts, start);
     return card;
   }
 

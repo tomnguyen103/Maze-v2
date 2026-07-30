@@ -161,6 +161,50 @@ export function createPlayerApiClient({
         }
       );
     },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{ runId: string, labyrinthNumber: number }} input
+     */
+    async issueClassRunGrant(classroomId, expeditionId, input) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants`,
+        {
+          method: "POST",
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{
+     *   runId: string,
+     *   labyrinthNumber: number,
+     *   outcome: "escaped" | "defeated"
+     * }} input
+     */
+    async recordClassRunOutcome(classroomId, expeditionId, input) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants/outcome`,
+        {
+          method: "POST",
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    /** @param {string} classroomId @param {string} expeditionId */
+    async listClassExpeditionGrants(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants`
+      );
+    },
     /** @param {string} classroomId @param {string} expeditionId */
     async getClassExpeditionCapacity(classroomId, expeditionId) {
       return request(

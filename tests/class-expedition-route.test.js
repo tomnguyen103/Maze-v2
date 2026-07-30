@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createClassroomHandler } from "../server/classroom-route.js";
 import { ClassroomAccessDeniedError } from "../server/classroom-context.js";
+import { ClassExpeditionStateError } from "../server/class-expedition-store.js";
 import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
 
 const MIXED_REVISION = "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92";
@@ -68,7 +69,21 @@ function expeditionStore() {
       extensionPaidCount: 0,
       baseRefundEligible: false,
       extensionRefundEligibleCount: 0
-    }))
+    })),
+    issueRunGrant: vi.fn(async (_userId, _classroomId, _expeditionId, input) => ({
+      runId: input.runId,
+      status: "issued",
+      seatNumber: 1,
+      duplicate: false
+    })),
+    recordRunOutcome: vi.fn(async () => true),
+    listOwnGrants: vi.fn(async () => [
+      {
+        labyrinthNumber: 1,
+        runId: "class_run_aaaa0001",
+        status: "escaped"
+      }
+    ])
   };
 }
 
@@ -387,6 +402,168 @@ describe("Class Expedition API", () => {
         }
       );
       expect(response.status).toBe(503);
+    });
+  });
+
+  it("issues an idempotent Classroom Run Grant for an assigned Labyrinth", async () => {
+    const { handler, store, audits } = createHandler();
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            runId: "class_run_aaaa0001",
+            labyrinthNumber: 2
+          })
+        }
+      );
+      expect(response.status).toBe(201);
+      const body = await response.json();
+      expect(body.grant).toMatchObject({
+        runId: "class_run_aaaa0001",
+        status: "issued",
+        seatNumber: 1,
+        duplicate: false
+      });
+      expect(store.issueRunGrant).toHaveBeenCalledWith(
+        "user_teacher_1",
+        "org_class_1",
+        "exped_abc123",
+        { runId: "class_run_aaaa0001", labyrinthNumber: 2 }
+      );
+      expect(audits).toContainEqual(
+        expect.objectContaining({ action: "classroom.expedition.grant" })
+      );
+
+      for (const invalid of [
+        { runId: "short", labyrinthNumber: 2 },
+        { runId: "class_run_aaaa0001", labyrinthNumber: 0 },
+        { runId: "class_run_aaaa0001", labyrinthNumber: 21 },
+        { runId: "class_run_aaaa0001", labyrinthNumber: "two" }
+      ]) {
+        const bad = await fetch(
+          `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(invalid)
+          }
+        );
+        expect(bad.status).toBe(400);
+      }
+    });
+  });
+
+  it("maps closed, capacity, conflict, and funding denials to 409", async () => {
+    const { handler, store } = createHandler();
+    store.issueRunGrant.mockRejectedValue(
+      new ClassExpeditionStateError("Class Expedition is closed.")
+    );
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            runId: "class_run_aaaa0001",
+            labyrinthNumber: 2
+          })
+        }
+      );
+      expect(response.status).toBe(409);
+      const body = await response.json();
+      expect(body.error).toContain("closed");
+    });
+  });
+
+  it("fail-closes Grant issuance and outcomes on lost Membership", async () => {
+    const { handler, store } = createHandler();
+    store.issueRunGrant.mockRejectedValue(new ClassroomAccessDeniedError());
+    store.recordRunOutcome.mockRejectedValue(new ClassroomAccessDeniedError());
+    await withServer(handler, async (origin) => {
+      for (const [path, body] of [
+        [
+          "/api/classrooms/org_class_1/expeditions/exped_abc123/grants",
+          { runId: "class_run_aaaa0001", labyrinthNumber: 2 }
+        ],
+        [
+          "/api/classrooms/org_class_1/expeditions/exped_abc123/grants/outcome",
+          {
+            runId: "class_run_aaaa0001",
+            labyrinthNumber: 2,
+            outcome: "escaped"
+          }
+        ]
+      ]) {
+        const response = await fetch(`${origin}${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        expect(response.status).toBe(403);
+      }
+    });
+  });
+
+  it("records terminal Class Run outcomes and lists own Grants", async () => {
+    const { handler, store, audits } = createHandler();
+    await withServer(handler, async (origin) => {
+      const outcome = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants/outcome`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            runId: "class_run_aaaa0001",
+            labyrinthNumber: 2,
+            outcome: "defeated"
+          })
+        }
+      );
+      expect(outcome.status).toBe(200);
+      expect(store.recordRunOutcome).toHaveBeenCalledWith(
+        "user_teacher_1",
+        "org_class_1",
+        "exped_abc123",
+        {
+          runId: "class_run_aaaa0001",
+          labyrinthNumber: 2,
+          outcome: "defeated"
+        }
+      );
+      expect(audits).toContainEqual(
+        expect.objectContaining({ action: "classroom.expedition.outcome" })
+      );
+
+      const invalid = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants/outcome`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            runId: "class_run_aaaa0001",
+            labyrinthNumber: 2,
+            outcome: "vanished"
+          })
+        }
+      );
+      expect(invalid.status).toBe(400);
+
+      const list = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/grants`
+      );
+      expect(list.status).toBe(200);
+      const listBody = await list.json();
+      expect(listBody.grants).toEqual([
+        {
+          labyrinthNumber: 1,
+          runId: "class_run_aaaa0001",
+          status: "escaped"
+        }
+      ]);
     });
   });
 

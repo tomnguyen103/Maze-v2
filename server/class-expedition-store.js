@@ -1,5 +1,28 @@
 import { ClassroomAccessDeniedError } from "./classroom-context.js";
+import { InputError } from "./player-validation.js";
 import { withTenantContext } from "./tenant-context.js";
+
+/**
+ * A Grant request that is well-formed and authorized but conflicts with the
+ * assignment's current state: closed assignment, exhausted capacity, missing
+ * paid License, or a different non-terminal Run already holding the Grant.
+ */
+export class ClassExpeditionStateError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(message);
+    this.name = "ClassExpeditionStateError";
+  }
+}
+
+const STATE_MESSAGES = [
+  "Class Expedition is closed.",
+  "Class Expedition capacity is fully assigned.",
+  "Class Expedition has no paid base License.",
+  "Classroom Run Grant conflict.",
+  "Classroom Run Grant not found.",
+  "Classroom Run outcome already recorded."
+];
 
 /** @param {Record<string, unknown>} row */
 function expedition(row) {
@@ -38,6 +61,13 @@ function mapDatabaseError(error) {
   const message = error instanceof Error ? error.message : "";
   if (code === "42501" || message.includes("access denied")) {
     return new ClassroomAccessDeniedError();
+  }
+  const state = STATE_MESSAGES.find((known) => message.includes(known));
+  if (state) {
+    return new ClassExpeditionStateError(state);
+  }
+  if (message.includes("outside the assigned Atlas Region")) {
+    return new InputError("Labyrinth is outside the assigned Atlas Region.");
   }
   return error;
 }
@@ -138,6 +168,95 @@ export function createClassExpeditionStore(pool) {
       } catch (error) {
         throw mapDatabaseError(error);
       }
+    },
+
+    /**
+     * @param {string} userId
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{ runId: string, labyrinthNumber: number }} input
+     */
+    async issueRunGrant(userId, classroomId, expeditionId, input) {
+      try {
+        return await withTenantContext(
+          pool,
+          { explorerId: userId, classroomId },
+          async (database) => {
+            const result = await database.query(
+              "SELECT * FROM issue_classroom_run_grant($1, $2, $3::SMALLINT)",
+              [expeditionId, input.runId, input.labyrinthNumber]
+            );
+            const row = result.rows[0] ?? {};
+            return {
+              runId: String(row.out_run_id),
+              status: String(row.out_status),
+              seatNumber: Number(row.out_seat_number),
+              duplicate: row.out_duplicate === true
+            };
+          }
+        );
+      } catch (error) {
+        throw mapDatabaseError(error);
+      }
+    },
+
+    /**
+     * @param {string} userId
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{
+     *   runId: string,
+     *   labyrinthNumber: number,
+     *   outcome: "escaped" | "defeated"
+     * }} input
+     */
+    async recordRunOutcome(userId, classroomId, expeditionId, input) {
+      try {
+        return await withTenantContext(
+          pool,
+          { explorerId: userId, classroomId },
+          async (database) => {
+            const result = await database.query(
+              "SELECT record_classroom_run_outcome($1, $2::SMALLINT, $3, $4) AS ok",
+              [
+                expeditionId,
+                input.labyrinthNumber,
+                input.runId,
+                input.outcome
+              ]
+            );
+            return result.rows[0]?.ok === true;
+          }
+        );
+      } catch (error) {
+        throw mapDatabaseError(error);
+      }
+    },
+
+    /**
+     * @param {string} userId
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     */
+    listOwnGrants(userId, classroomId, expeditionId) {
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId },
+        async (database) => {
+          const result = await database.query(
+            `SELECT labyrinth_number, run_id, status
+             FROM classroom_run_grants
+             WHERE expedition_id = $1
+             ORDER BY labyrinth_number`,
+            [expeditionId]
+          );
+          return result.rows.map((row) => ({
+            labyrinthNumber: Number(row.labyrinth_number),
+            runId: String(row.run_id),
+            status: String(row.status)
+          }));
+        }
+      );
     },
 
     /**
