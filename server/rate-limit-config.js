@@ -19,6 +19,7 @@ export const RATE_LIMIT_BUDGETS = {
   "export.self": { limit: 2, windowMs: 3_600_000 },
   "classroom.create": { limit: 3, windowMs: 3_600_000 },
   "classroom.domain": { limit: 5, windowMs: 3_600_000 },
+  "classroom.expedition": { limit: 20, windowMs: 3_600_000 },
   "classroom.invite": { limit: 20, windowMs: 3_600_000 }
 };
 

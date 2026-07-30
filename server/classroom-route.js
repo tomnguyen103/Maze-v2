@@ -12,19 +12,25 @@ import { InputError } from "./player-validation.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-identity.js";
+import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EXPEDITION_STATUS_PATTERN =
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/status$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** @param {string} pathname */
 export function isClassroomPath(pathname) {
   return (
     pathname === "/api/classrooms" ||
-    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress)$/.test(
+    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress|expeditions)$/.test(
       pathname
-    )
+    ) ||
+    EXPEDITION_STATUS_PATTERN.test(pathname)
   );
 }
 
@@ -98,6 +104,56 @@ function classroomId(pathname) {
   return id;
 }
 
+/** @param {unknown} value */
+function atlasRegion(value) {
+  if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 5) {
+    throw new InputError("Choose an Atlas Region from 1 to 5.");
+  }
+  return Number(value);
+}
+
+/** @param {unknown} value */
+function questLevelId(value) {
+  if (
+    value !== "bright-start" &&
+    value !== "trail-scout" &&
+    value !== "maze-master"
+  ) {
+    throw new InputError("Choose a Quest Level for the Class Expedition.");
+  }
+  return value;
+}
+
+/** @param {unknown} deckId @param {unknown} revisionId */
+function publishedLearningDeck(deckId, revisionId) {
+  if (
+    typeof deckId !== "string" ||
+    typeof revisionId !== "string" ||
+    !isPublishedLearningDeckRevision(deckId, revisionId)
+  ) {
+    throw new InputError("Choose a published Learning Deck revision.");
+  }
+  return { deckId, revisionId };
+}
+
+/** @param {unknown} value */
+function advisoryCompletionDate(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string" || !ISO_DATE_PATTERN.test(value)) {
+    throw new InputError("Completion date must look like 2026-09-15.");
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw new InputError("Completion date must be a real calendar date.");
+  }
+  return value;
+}
+
 /**
  * @param {{
  *   store: {
@@ -127,7 +183,29 @@ function classroomId(pathname) {
      *     ) => Promise<{
      *       progress: Record<string, unknown>[],
      *       truncated: boolean
-     *     }>
+     *     }>,
+ *     listExpeditions: (
+ *       userId: string,
+ *       classroomId: string
+ *     ) => Promise<Record<string, unknown>[]>,
+ *     createExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       input: {
+ *         expeditionId: string,
+ *         atlasRegion: number,
+ *         levelId: string,
+ *         learningDeckId: string,
+ *         learningDeckRevision: string,
+ *         completionDate: string | null
+ *       }
+ *     ) => Promise<Record<string, unknown>>,
+ *     setExpeditionStatus: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       status: "open" | "closed"
+ *     ) => Promise<Record<string, unknown>>
  *   },
  *   provider: {
  *     createClassroom: (
@@ -312,6 +390,121 @@ export function createClassroomHandler({
           classroomId: selectedClassroomId,
           ...progress
         });
+        return;
+      }
+
+      if (pathname.endsWith("/expeditions")) {
+        if (request.method === "GET") {
+          sendJson(response, 200, {
+            expeditions: await store.listExpeditions(
+              userId,
+              selectedClassroomId
+            )
+          });
+          return;
+        }
+        if (request.method !== "POST") {
+          response.setHeader("allow", "GET, POST");
+          sendJson(response, 405, {
+            error: "Use GET or POST for Class Expeditions."
+          });
+          return;
+        }
+        const decision = await rateLimit(
+          "classroom.expedition",
+          request,
+          userId
+        );
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Class Expedition changes. Try again shortly."
+          );
+          return;
+        }
+        const body = /** @type {Record<string, unknown>} */ (
+          await readJsonBody(request)
+        );
+        const deck = publishedLearningDeck(
+          body.learningDeckId,
+          body.learningDeckRevision
+        );
+        const expedition = await store.createExpedition(
+          userId,
+          selectedClassroomId,
+          {
+            expeditionId: `exped_${randomUUID().replaceAll("-", "")}`,
+            atlasRegion: atlasRegion(body.atlasRegion),
+            levelId: questLevelId(body.levelId),
+            learningDeckId: deck.deckId,
+            learningDeckRevision: deck.revisionId,
+            completionDate: advisoryCompletionDate(body.completionDate)
+          }
+        );
+        await recordAudit(request, {
+          actorId: userId,
+          action: "classroom.expedition.create",
+          resource: { type: "classroom", id: selectedClassroomId },
+          after: {
+            expeditionId: expedition.id,
+            atlasRegion: expedition.atlasRegion,
+            levelId: expedition.levelId,
+            learningDeckId: expedition.learningDeckId,
+            learningDeckRevision: expedition.learningDeckRevision,
+            status: expedition.status
+          }
+        });
+        sendJson(response, 201, { expedition });
+        return;
+      }
+
+      const expeditionStatusMatch = pathname.match(EXPEDITION_STATUS_PATTERN);
+      if (expeditionStatusMatch) {
+        if (request.method !== "POST") {
+          response.setHeader("allow", "POST");
+          sendJson(response, 405, {
+            error: "Use POST for the Class Expedition status."
+          });
+          return;
+        }
+        const decision = await rateLimit(
+          "classroom.expedition",
+          request,
+          userId
+        );
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Class Expedition changes. Try again shortly."
+          );
+          return;
+        }
+        const body = /** @type {Record<string, unknown>} */ (
+          await readJsonBody(request)
+        );
+        if (body.status !== "open" && body.status !== "closed") {
+          throw new InputError(
+            "Class Expedition status must be open or closed."
+          );
+        }
+        const expedition = await store.setExpeditionStatus(
+          userId,
+          selectedClassroomId,
+          expeditionStatusMatch[1],
+          body.status
+        );
+        await recordAudit(request, {
+          actorId: userId,
+          action: "classroom.expedition.status",
+          resource: { type: "classroom", id: selectedClassroomId },
+          after: {
+            expeditionId: expeditionStatusMatch[1],
+            status: body.status
+          }
+        });
+        sendJson(response, 200, { expedition });
         return;
       }
 

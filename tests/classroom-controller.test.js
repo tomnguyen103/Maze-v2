@@ -67,6 +67,20 @@ function workspaceClient() {
         status: "pending",
         url: "https://accounts.example.test/invitations/default"
       }
+    })),
+    listClassExpeditions: vi.fn(async () => ({
+      /** @type {Record<string, unknown>[]} */
+      expeditions: []
+    })),
+    createClassExpedition: vi.fn(async (_classroomId, input) => ({
+      expedition: {
+        id: "exped_created_1",
+        status: "open",
+        ...input
+      }
+    })),
+    setClassExpeditionStatus: vi.fn(async (_classroomId, id, status) => ({
+      expedition: { id, status }
     }))
   };
 }
@@ -272,6 +286,83 @@ describe("Classroom workspace", () => {
     );
     expect(root.textContent).toContain(
       "learn.school.example is ready for verified student accounts"
+    );
+  });
+
+  it("lets a Teacher assign, close, and reopen a Class Expedition", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 2,
+          levelId: "trail-scout",
+          learningDeckId: "number-trail",
+          learningDeckRevision:
+            "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+          status: "open",
+          completionDate: "2026-09-15"
+        }
+      ]
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+
+    await vi.waitFor(() => {
+      expect(client.listClassExpeditions).toHaveBeenCalledWith("org_class_1");
+      expect(root.textContent).toContain("Region 2");
+      expect(root.textContent).toContain("Number Trail");
+      expect(root.textContent).toContain("2026-09-15");
+    });
+
+    const panel = root.querySelector(
+      "[data-teacher-classroom='org_class_1']"
+    );
+    const deckSelect = panel?.querySelector("select[name='learningDeckId']");
+    expect(deckSelect).toBeInstanceOf(HTMLSelectElement);
+    if (deckSelect instanceof HTMLSelectElement) {
+      expect(
+        [...deckSelect.options].map((option) => option.value)
+      ).toEqual(["mixed-trail", "number-trail"]);
+    }
+
+    const regionSelect = panel?.querySelector("select[name='atlasRegion']");
+    if (regionSelect instanceof HTMLSelectElement) {
+      regionSelect.value = "3";
+    }
+    const levelSelect = panel?.querySelector("select[name='levelId']");
+    if (levelSelect instanceof HTMLSelectElement) {
+      levelSelect.value = "maze-master";
+    }
+    const form = panel?.querySelector("[data-classroom-expedition]");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(client.createClassExpedition).toHaveBeenCalledWith(
+        "org_class_1",
+        expect.objectContaining({
+          atlasRegion: 3,
+          levelId: "maze-master",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          completionDate: null
+        })
+      )
+    );
+
+    const toggle = panel?.querySelector("[data-action='toggle-expedition']");
+    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(client.setClassExpeditionStatus).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "closed"
+      )
     );
   });
 

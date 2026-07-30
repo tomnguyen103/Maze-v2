@@ -27,6 +27,7 @@ import {
   isClassroomPath
 } from "./classroom-route.js";
 import { createClassroomStore } from "./classroom-store.js";
+import { createClassExpeditionStore } from "./class-expedition-store.js";
 import { createAuditStore } from "./audit-store.js";
 import {
   createAuditRecorder,
@@ -283,6 +284,7 @@ export function createPlayerApi(env = process.env) {
   const classroomAuthorityStore = createClassroomAuthorityStore(queryAdapter);
   const classroomDomainStore = createClassroomDomainStore(queryAdapter);
   const classroomStore = createClassroomStore(pool);
+  const classExpeditionStore = createClassExpeditionStore(pool);
   const classroomProvider = createClassroomProvider(env);
   const healthHandler = createHealthHandler({
     version,
@@ -334,7 +336,11 @@ export function createPlayerApi(env = process.env) {
     recordAudit
   });
   const classroomHandler = createClassroomHandler({
-    store: { ...classroomStore, ...classroomDomainStore },
+    store: {
+      ...classroomStore,
+      ...classroomDomainStore,
+      ...classExpeditionStore
+    },
     provider: classroomProvider,
     getUserId,
     recordAudit,
@@ -550,7 +556,11 @@ export function createPlayerApi(env = process.env) {
       recordAudit
     });
     const unavailableClassroomHandler = createClassroomHandler({
-      store: { ...classroomStore, ...classroomDomainStore },
+      store: {
+        ...classroomStore,
+        ...classroomDomainStore,
+        ...classExpeditionStore
+      },
       provider: null,
       getUserId: () => null,
       rateLimit
