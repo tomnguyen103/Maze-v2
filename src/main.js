@@ -71,8 +71,7 @@ import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
 import {
   getDefaultLearningDeckOption,
-  getPublishedLearningDeckOption,
-  getPublishedLearningDeckOptions
+  getPublishedLearningDeckOption
 } from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
