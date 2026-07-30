@@ -8,6 +8,7 @@ import {
   resolveLanternTrailQuestion
 } from "./lantern-trail.js";
 import { evaluatePracticeAnswer } from "./lantern-journal-ui.js";
+import { ensureQuestionNarration } from "./question-narration.js";
 
 const LEVEL_LABELS = Object.freeze({
   "bright-start": "Bright Start",
@@ -38,6 +39,11 @@ export function createLanternTrailView({
   onNavigate = () => {},
   onRecord = () => {}
 } = {}) {
+  try {
+    ensureQuestionNarration();
+  } catch {
+    // Read Aloud is optional; the written Question always stays.
+  }
   const elements = {
     atlas: required("practice-atlas", HTMLButtonElement),
     catalog: required("practice-catalog", HTMLElement),

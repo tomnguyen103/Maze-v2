@@ -882,3 +882,16 @@ html[data-access-compass="trail"] .trail-compass {
   font: inherit;
   padding-inline: var(--space-2);
 }
+
+.narration-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.narration-status {
+  color: var(--color-ink-muted);
+  font-size: 0.875rem;
+}

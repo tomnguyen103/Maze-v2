@@ -3271,7 +3271,17 @@ function transition(action) {
   }
 }
 
+/** @type {Promise<unknown> | undefined} */
+let questionNarrationPromise;
+
 function syncChallengeDialog() {
+  if (run.status === "challenge") {
+    questionNarrationPromise ??= import(
+      "./learning/question-narration.js"
+    )
+      .then((module) => module.ensureQuestionNarration())
+      .catch(() => null);
+  }
   if (run.status !== "challenge" || !run.challenge) {
     stagedGateWardenId = null;
     gateStagingComplete = false;

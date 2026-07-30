@@ -27,6 +27,12 @@ const budgets = [
     suffix: ".js",
     maxKb: 5
   },
+  {
+    label: "Question Narration JavaScript",
+    prefix: "question-narration-",
+    suffix: ".js",
+    maxKb: 6
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.
