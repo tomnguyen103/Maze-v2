@@ -294,7 +294,7 @@ describe("Quest Questions", () => {
       usedQuestionIds: []
     };
     const numberTrail = getPublishedLearningDeckOption("number-trail");
-    const wordTrail = getPublishedLearningDeckOption("word-trail");
+    const mixedTrail = getPublishedLearningDeckOption("mixed-trail");
 
     const first = await service.getQuestion({
       ...coordinate,
@@ -303,16 +303,22 @@ describe("Quest Questions", () => {
     });
     const second = await service.getQuestion({
       ...coordinate,
-      learningDeckId: wordTrail?.deckId,
-      learningDeckRevision: wordTrail?.revisionId
+      learningDeckId: mixedTrail?.deckId,
+      learningDeckRevision: mixedTrail?.revisionId
     });
 
     // Same Run coordinate, different Decks: a shared cache entry would serve
     // one Deck's reviewed content under the other Deck's identity.
     expect(first.learningDeckSource).toBe("focused");
-    expect(second.learningDeckSource).toBe("focused");
-    expect(first.question.id).not.toBe(second.question.id);
-    expect(first.question.topicId).not.toBe(second.question.topicId);
+    expect(second.learningDeckSource).toBe("mixed");
+    // The focused answer comes from that Deck's own Region pool.
+    const pool = getPublishedLearningDeckRevision("number-trail")
+      ?.regions.find(
+        (region) =>
+          region.levelId === "trail-scout" && region.regionNumber === 2
+      )
+      ?.normalQuestions.map((question) => question.id) ?? [];
+    expect(pool).toContain(first.question.id);
   });
 
   it("continues an exhausted focused Region on announced Mixed Trail content", async () => {

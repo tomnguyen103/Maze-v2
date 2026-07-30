@@ -1,6 +1,12 @@
 /**
  * The authored Learning Deck roster: one entry per published Deck.
  *
+ * Word Trail and Nature Trail are withheld from the roster until authored
+ * content exists for them. Their generated pools were one reviewed card
+ * reskinned — a child on Nature Trail met the same question up to seventeen
+ * times in a single Region — which cannot honour the published promise of
+ * focused reviewed coverage. Issue #122 records the decision.
+ *
  * `revisionId` is the revision new Quests pin. `publishedRevisionIds` lists
  * every revision ever published for that Deck, newest last, so a Quest that
  * pinned an earlier revision stays readable after a republish.
@@ -26,26 +32,6 @@ const OPTIONS = Object.freeze([
       "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
     ])
   }),
-  Object.freeze({
-    deckId: "word-trail",
-    label: "Word Trail",
-    kind: /** @type {"focused"} */ ("focused"),
-    description: "Mostly Word Questions, then Mixed Trail when they run out.",
-    revisionId: "deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19",
-    publishedRevisionIds: Object.freeze([
-      "deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19"
-    ])
-  }),
-  Object.freeze({
-    deckId: "nature-trail",
-    label: "Nature Trail",
-    kind: /** @type {"focused"} */ ("focused"),
-    description: "Mostly Nature Questions, then Mixed Trail when they run out.",
-    revisionId: "deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7",
-    publishedRevisionIds: Object.freeze([
-      "deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7"
-    ])
-  })
 ]);
 
 export function getPublishedLearningDeckOptions() {

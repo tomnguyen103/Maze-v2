@@ -24,7 +24,7 @@ describe("Learning Deck catalog loading", () => {
       "../src/questions/learning-deck-catalog.js"
     );
 
-    expect(catalog.getPublishedLearningDeckOptions()).toHaveLength(4);
+    expect(catalog.getPublishedLearningDeckOptions()).toHaveLength(2);
     expect(questionBank.getBundledQuestion).not.toHaveBeenCalled();
 
     const decks = await import("../src/questions/learning-decks.js");

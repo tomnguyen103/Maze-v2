@@ -88,7 +88,7 @@ describe("Cloud Quest store", () => {
   });
 
   it("never rewrites the Learning Deck of the same stored Quest", async () => {
-    const wordTrail = DECKS["word-trail"];
+    const wordTrail = DECKS["mixed-trail"];
     const stored = {
       ...ROW,
       schema_version: 2,

@@ -653,7 +653,9 @@ test("locks one published Learning Deck into a new Quest", async ({
     name: "Choose a Learning Deck"
   });
   await expect(deckGroup).toBeVisible();
-  await expect(deckGroup.getByRole("radio")).toHaveCount(4);
+  // One entry per published Deck: Mixed Trail and Number Trail. Word Trail
+  // and Nature Trail are withheld until authored content exists for them.
+  await expect(deckGroup.getByRole("radio")).toHaveCount(2);
   await expect(
     deckGroup.getByRole("radio", { name: /Mixed Trail/ })
   ).toBeChecked();

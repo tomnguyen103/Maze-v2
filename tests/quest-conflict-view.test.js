@@ -68,7 +68,7 @@ describe("Quest conflict dialog", () => {
         "trail-scout",
         5,
         "quest_same_identity",
-        DECKS["nature-trail"]
+        DECKS["mixed-trail"]
       ),
       revision: 3
     };
@@ -78,7 +78,7 @@ describe("Quest conflict dialog", () => {
     expect(document.getElementById("quest-conflict-local")?.textContent)
       .toContain("Number Trail");
     expect(document.getElementById("quest-conflict-cloud")?.textContent)
-      .toContain("Nature Trail");
+      .toContain("Mixed Trail");
   });
 
   it.each([

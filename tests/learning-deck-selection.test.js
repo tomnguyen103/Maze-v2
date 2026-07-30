@@ -53,11 +53,11 @@ describe("focused Learning Deck selection", () => {
   });
 
   it("announces one Mixed Trail fallback once focused capacity is spent", () => {
-    const region = regionOf("word-trail", "trail-scout", 3);
+    const region = regionOf("number-trail", "trail-scout", 3);
     const used = region.normalQuestions.map((question) => question.id);
 
     const selection = selectReviewedDeckQuestion({
-      learningDeckId: "word-trail",
+      learningDeckId: "number-trail",
       levelId: "trail-scout",
       labyrinthNumber: region.labyrinthStart,
       questionOrdinal: used.length,
@@ -72,10 +72,10 @@ describe("focused Learning Deck selection", () => {
   });
 
   it("opens a Gate Warden with the Deck's matched Capstone", () => {
-    const region = regionOf("nature-trail", "maze-master", 5);
+    const region = regionOf("number-trail", "maze-master", 5);
 
     const selection = selectReviewedDeckQuestion({
-      learningDeckId: "nature-trail",
+      learningDeckId: "number-trail",
       levelId: "maze-master",
       labyrinthNumber: region.labyrinthEnd,
       questionOrdinal: 3,

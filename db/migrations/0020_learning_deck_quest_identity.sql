@@ -43,16 +43,6 @@ ALTER TABLE cloud_quest_progress
       AND learning_deck_revision =
         'deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105'
     )
-    OR (
-      learning_deck_id = 'word-trail'
-      AND learning_deck_revision =
-        'deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19'
-    )
-    OR (
-      learning_deck_id = 'nature-trail'
-      AND learning_deck_revision =
-        'deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7'
-    )
   );
 
 COMMIT;

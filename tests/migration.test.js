@@ -146,12 +146,6 @@ describe("Run Access migration", () => {
     expect(sql).toContain(
       "learning_deck_id = 'number-trail'"
     );
-    expect(sql).toContain(
-      "learning_deck_id = 'word-trail'"
-    );
-    expect(sql).toContain(
-      "learning_deck_id = 'nature-trail'"
-    );
     expect(sql).toContain("schema_version IN (1, 2)");
     expect(sql).toContain("SET NOT NULL");
     expect(sql).not.toMatch(/\bDELETE\b/);

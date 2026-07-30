@@ -51,9 +51,7 @@ describe("published Learning Deck revisions", () => {
       revisions.map(({ deckId, label }) => [deckId, label])
     ).toEqual([
       ["mixed-trail", "Mixed Trail"],
-      ["number-trail", "Number Trail"],
-      ["word-trail", "Word Trail"],
-      ["nature-trail", "Nature Trail"]
+      ["number-trail", "Number Trail"]
     ]);
     expect(
       options.map(({ deckId, label, revisionId }) => ({
@@ -95,7 +93,7 @@ describe("published Learning Deck revisions", () => {
       ({ kind }) => kind === "focused"
     );
 
-    expect(focusedRevisions).toHaveLength(3);
+    expect(focusedRevisions).toHaveLength(1);
     for (const revision of focusedRevisions) {
       expect(revision.regions).toHaveLength(15);
       expect(validateLearningDeckRevision(revision)).toBe(true);
@@ -244,9 +242,9 @@ describe("published Learning Deck revisions", () => {
   });
 
   it("rejects undeclared revision, Region, and Question fields", () => {
-    const published = getPublishedLearningDeckRevision("word-trail");
+    const published = getPublishedLearningDeckRevision("number-trail");
     if (!published) {
-      throw new Error("Published Word Trail fixture is missing.");
+      throw new Error("Published Number Trail fixture is missing.");
     }
 
     const revisionExtra = /** @type {any} */ (structuredClone(published));
@@ -272,7 +270,7 @@ describe("published Learning Deck revisions", () => {
   it("produces a publication report reusable without child content", () => {
     const report = getLearningDeckCoverageReport();
 
-    expect(report).toHaveLength(4);
+    expect(report).toHaveLength(2);
     expect(report.every(({ status }) => status === "published")).toBe(true);
     expect(
       report
@@ -310,32 +308,33 @@ describe("published Learning Deck revisions", () => {
         )
       }));
 
+    // A published focused Deck must carry real focused content, not one
+    // reviewed card reskinned. Word Trail and Nature Trail were withheld from
+    // the roster for failing exactly this; see issue #122.
     expect(measured).toEqual([
-      { deckId: "number-trail", minDistinctPerRegion: 3 },
-      // Word and Nature Trail publish pools that are largely one reviewed card
-      // reskinned. Raising these needs authored reviewed content, which is a
-      // content decision recorded on issue #122 — not a code change.
-      { deckId: "word-trail", minDistinctPerRegion: 2 },
-      { deckId: "nature-trail", minDistinctPerRegion: 1 }
+      { deckId: "number-trail", minDistinctPerRegion: 3 }
     ]);
+    for (const deck of measured) {
+      expect(deck.minDistinctPerRegion).toBeGreaterThanOrEqual(3);
+    }
   });
 
-  it("clears all 45 focused Region and Capstone coverage gates", () => {
+  it("clears every focused Region and Capstone coverage gate", () => {
     const focused = getLearningDeckCoverageReport().filter(
       ({ kind }) => kind === "focused"
     );
     const regions = focused.flatMap(({ regions: deckRegions }) => deckRegions);
 
-    // Three focused Decks, three Quest Levels, five Regions each.
-    expect(focused).toHaveLength(3);
-    expect(regions).toHaveLength(45);
+    // One published focused Deck, three Quest Levels, five Regions each.
+    expect(focused).toHaveLength(1);
+    expect(regions).toHaveLength(15);
     expect(
       regions.filter(
         ({ focusedQuestionCount, minimumFocusedQuestions }) =>
           focusedQuestionCount >= minimumFocusedQuestions
       )
-    ).toHaveLength(45);
-    expect(regions.filter(({ hasCapstone }) => hasCapstone)).toHaveLength(45);
+    ).toHaveLength(15);
+    expect(regions.filter(({ hasCapstone }) => hasCapstone)).toHaveLength(15);
     expect(
       new Set(
         regions.map(({ levelId, regionNumber }) => `${levelId}:${regionNumber}`)
