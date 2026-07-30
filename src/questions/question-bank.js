@@ -5,7 +5,10 @@ import {
 import { getLearningMetadata } from "./learning-objectives.js";
 import { normalizeQuestion } from "./question-contract.js";
 import { getReviewedEchoLens } from "./reviewed-echo-lenses.js";
-import { reviewedContentDigest } from "./reviewed-content-hash.js";
+import {
+  createReviewedQuestionRevisionId,
+  reviewedQuestionContentDigest
+} from "./reviewed-question-revision.js";
 
 /**
  * @typedef {{
@@ -598,36 +601,18 @@ function createMasterQuestion(bandIndex, ordinal, bandId, rank) {
   );
 }
 
-/**
- * @param {WardenQuestion} question
- * @param {WardenQuestion["echoLens"] | null} echoLens
- */
-function bundledContentFingerprint(question, echoLens) {
-  return reviewedContentDigest({
-    id: question.id,
-    prompt: question.prompt,
-    choices: question.choices,
-    answerId: question.answerId,
-    hint: question.hint,
-    explanation: question.explanation,
-    difficultyBand: question.difficultyBand,
-    difficultyRank: question.difficultyRank,
-    topicId: question.topicId,
-    learningObjectiveId: question.learningObjectiveId,
-    echoLens
-  });
-}
-
 /** @param {unknown} question @returns {WardenQuestion} */
 function bindBundledReviewedRevision(question) {
   const normalized = normalizeQuestion(question);
   const contentKey =
     `bundled-content:${normalized.id}:` +
-    bundledContentFingerprint(normalized, null);
+    reviewedQuestionContentDigest(normalized, null);
   const echoLens = getReviewedEchoLens(contentKey);
-  const reviewedRevisionId =
-    `bundled:${normalized.id}:` +
-    bundledContentFingerprint(normalized, echoLens);
+  const reviewedRevisionId = createReviewedQuestionRevisionId(
+    normalized,
+    "bundled",
+    echoLens
+  );
   return normalizeQuestion({
     ...normalized,
     reviewedRevisionId,
