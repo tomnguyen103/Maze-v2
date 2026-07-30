@@ -2318,9 +2318,9 @@ body[data-run-mode="first-light"] .play-workbench {
   box-shadow: inset 0 -0.15rem 0 var(--color-line);
 }
 
-.learning-deck-option:focus-within {
+.learning-deck-option:has(input:focus-visible) {
   outline: 0.2rem solid var(--color-focus);
-  outline-offset: 2px;
+  outline-offset: 0.2rem;
 }
 
 .learning-deck-option input {
@@ -2343,7 +2343,7 @@ body[data-run-mode="first-light"] .play-workbench {
   min-width: 0;
   grid-column: 2;
   color: var(--color-ink-muted);
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -2578,10 +2578,11 @@ body[data-run-mode="first-light"] .play-workbench {
 .challenge-notice {
   margin: var(--space-3) 0 0;
   padding: var(--space-2) var(--space-3);
-  border-left: 0.25rem solid var(--color-signal);
-  background: var(--color-signal-glow);
+  border: 2px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
   color: var(--color-ink);
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1.45;
 }
 

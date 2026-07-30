@@ -153,10 +153,11 @@ export function createQuestProgressStore(pool) {
               deletedUserHash(userId)
             ]
               )
-            // The Deck identity of a Quest is immutable until that Quest ends
-            // or is replaced, so the write only lands when the Quest ID
-            // changes or the stored Deck still matches. A stale client that
-            // omits Deck identity reports a conflict instead of rewriting it.
+            // Quest Level and Deck identity are immutable until that Quest
+            // ends or is replaced, so the write only lands when the Quest ID
+            // changes or the stored identity still matches. A stale client
+            // that omits Deck identity reports a conflict instead of
+            // rewriting it.
             : await database.query(
             `UPDATE cloud_quest_progress
              SET
@@ -179,7 +180,8 @@ export function createQuestProgressStore(pool) {
                AND (
                  quest_id <> $4
                  OR (
-                   learning_deck_id = $6
+                   level_id = $5
+                   AND learning_deck_id = $6
                    AND learning_deck_revision = $7
                  )
                )

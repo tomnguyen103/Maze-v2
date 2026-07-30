@@ -151,7 +151,15 @@ export function createLanternTrailView({
           : nextOrigin === "atlas"
             ? "Back to Atlas"
             : "Return to Play";
-      if (learningObjectiveId) {
+      // A suggested objective is only offered when it can supply three
+      // genuinely distinct required Lanterns; otherwise the Explorer picks
+      // from the Trails that can.
+      const offered = listLanternTrailObjectives({ levelId, difficultyBand })
+        .some(
+          (objective) =>
+            objective.learningObjectiveId === learningObjectiveId
+        );
+      if (learningObjectiveId && offered) {
         startTrail({ levelId, difficultyBand, learningObjectiveId });
       } else {
         renderCatalog();
@@ -160,9 +168,10 @@ export function createLanternTrailView({
         elements.dialog.showModal();
       }
       requestAnimationFrame(() => {
-        (learningObjectiveId ? elements.question : elements.title).focus({
-          preventScroll: true
-        });
+        (learningObjectiveId && offered
+          ? elements.question
+          : elements.title
+        ).focus({ preventScroll: true });
       });
     }
   };

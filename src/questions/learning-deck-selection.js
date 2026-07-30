@@ -102,7 +102,15 @@ export function selectReviewedDeckQuestion(request) {
 function unusedMixedQuestion(request, used) {
   const start = Math.max(0, Math.trunc(request.questionOrdinal));
   const limit = start + used.size + 256;
-  let fallback = null;
+  let fallback = getBundledQuestion({
+    levelId: request.levelId,
+    seed: "",
+    wardenId: 0,
+    attempt: 0,
+    labyrinthNumber: request.labyrinthNumber,
+    questionOrdinal: start,
+    challengeKind: "warden"
+  });
   for (let ordinal = start; ordinal <= limit; ordinal += 1) {
     const question = getBundledQuestion({
       levelId: request.levelId,
@@ -115,15 +123,12 @@ function unusedMixedQuestion(request, used) {
       // Mixed content asks an ordinary reviewed Question at the same Band.
       challengeKind: "warden"
     });
-    fallback ??= question;
     if (!used.has(question.id)) {
       return question;
     }
   }
-  if (!fallback) {
-    throw new Error("Mixed Trail fallback found no reviewed Question.");
-  }
-  // Never strand a legal demand: an exhausted walk still answers with
-  // reviewed content at the right Level and Band.
+  // Never strand a legal demand. The walk spans more ordinals than a Quest can
+  // spend, so reaching here means the ledger is corrupt rather than full; the
+  // Explorer still gets reviewed content at the right Level and Band.
   return fallback;
 }

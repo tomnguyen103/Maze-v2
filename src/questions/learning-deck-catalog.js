@@ -20,7 +20,7 @@ const OPTIONS = Object.freeze([
     deckId: "number-trail",
     label: "Number Trail",
     kind: /** @type {"focused"} */ ("focused"),
-    description: "Number Questions only.",
+    description: "Mostly Number Questions, then Mixed Trail when they run out.",
     revisionId: "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
     publishedRevisionIds: Object.freeze([
       "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
@@ -30,7 +30,7 @@ const OPTIONS = Object.freeze([
     deckId: "word-trail",
     label: "Word Trail",
     kind: /** @type {"focused"} */ ("focused"),
-    description: "Word Questions only.",
+    description: "Mostly Word Questions, then Mixed Trail when they run out.",
     revisionId: "deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19",
     publishedRevisionIds: Object.freeze([
       "deck:word-trail:v1:daa862d93131ed0af4edb0ca1f743f19"
@@ -40,7 +40,7 @@ const OPTIONS = Object.freeze([
     deckId: "nature-trail",
     label: "Nature Trail",
     kind: /** @type {"focused"} */ ("focused"),
-    description: "Nature Questions only.",
+    description: "Mostly Nature Questions, then Mixed Trail when they run out.",
     revisionId: "deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7",
     publishedRevisionIds: Object.freeze([
       "deck:nature-trail:v1:d6a6da5d0eb0aa49d4a225c30cb455d7"

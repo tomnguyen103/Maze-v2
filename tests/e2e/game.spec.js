@@ -8,7 +8,10 @@ import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getPublishedLearningDeckOptions } from "../../src/questions/learning-deck-catalog.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
-import { createLanternTrail } from "../../src/learning/lantern-trail.js";
+import {
+  createLanternTrail,
+  listLanternTrailObjectives
+} from "../../src/learning/lantern-trail.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
 import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 
@@ -514,7 +517,6 @@ async function completeMilestonePlan(
   return { gateChallenges, questionOrdinal };
 }
 
-/** @param {import("@playwright/test").Page} page */
 /**
  * The Question route takes a POST body so the Quest's used-Question ledger can
  * travel with the request. Fixtures read the request the same way the service
@@ -761,11 +763,25 @@ test("announces the Mixed Trail continuation once per Quest", async ({
   });
   expect(Array.isArray(questionRequests[0]?.usedQuestionIds)).toBe(true);
   // Announced once, and the Deck the Explorer chose has not changed.
-  const lastServed = served.at(-1);
-  if (!lastServed) {
-    throw new Error("The reviewed Question fixture has not served a card.");
+  // Announced once: a second fallback Question in the same Quest is silent,
+  // and the Deck the Explorer chose has not changed.
+  await answerCorrectlyIfChallenged(page, () => {
+    const card = served.at(-1);
+    if (!card) {
+      throw new Error("The reviewed Question fixture has not served a card.");
+    }
+    return card;
+  });
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    }
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
   }
-  await answerCorrectlyIfChallenged(page, () => lastServed);
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-notice")).toBeHidden();
   await expect(page.locator("#quest-level-name")).toHaveText(
     "Quest Level 2 · Trail Scout · Number Trail"
   );
@@ -3573,10 +3589,25 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
       (await practiceButton.getAttribute("data-objective")) ?? "",
     difficultyBand: (await practiceButton.getAttribute("data-band")) ?? ""
   };
+  // A suggested objective is only started directly when it can supply three
+  // genuinely distinct required Lanterns; otherwise the Workshop opens its
+  // catalog and the Explorer chooses a Trail that can.
+  const suggestedObjectiveId = listLanternTrailObjectives({
+    levelId: "trail-scout",
+    difficultyBand: triggeringQuestion.difficultyBand
+  }).some(
+    (objective) =>
+      objective.learningObjectiveId === triggeringQuestion.learningObjectiveId
+  )
+    ? triggeringQuestion.learningObjectiveId
+    : listLanternTrailObjectives({
+        levelId: "trail-scout",
+        difficultyBand: triggeringQuestion.difficultyBand
+      })[0].learningObjectiveId;
   const expectedTrail = createLanternTrail({
     levelId: "trail-scout",
     difficultyBand: triggeringQuestion.difficultyBand,
-    learningObjectiveId: triggeringQuestion.learningObjectiveId
+    learningObjectiveId: suggestedObjectiveId
   });
   const runBeforePractice = await page.evaluate(() => ({
     score: document.getElementById("player-score")?.textContent,
@@ -3597,6 +3628,11 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
     name: "Lantern Trail Workshop"
   });
   await expect(practice).toBeVisible();
+  if (suggestedObjectiveId !== triggeringQuestion.learningObjectiveId) {
+    await practice
+      .getByRole("button", { name: expectedTrail.objectiveLabel })
+      .click();
+  }
   await expect(page.locator("#practice-progress")).toContainText(
     "Lantern 1 of 3 required"
   );
@@ -3712,7 +3748,18 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
 
   await page.getByRole("button", { name: "Back to Journal" }).click();
   await expect(journal).toBeVisible();
-  await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(0);
+  // The practiced objective no longer needs Practice. When the Workshop fell
+  // back to its catalog, the originally suggested objective still does.
+  await expect(
+    journal.locator(
+      `button.journal-practice[data-objective="${suggestedObjectiveId}"]:not([hidden])`
+    )
+  ).toHaveCount(0);
+  if (suggestedObjectiveId === triggeringQuestion.learningObjectiveId) {
+    await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(
+      0
+    );
+  }
   await expect(journal).toContainText("Hints 1");
 
   const storedJournal = await page.evaluate(() => {
@@ -3757,7 +3804,11 @@ test("opens Workshop catalog and transfers paused play to Journal or Atlas", asy
   await expect(workshop).toBeVisible();
   await expect(page.locator("#practice-title")).toBeFocused();
   await expect(page.locator("#practice-catalog")).toBeVisible();
-  await expect(page.locator("[data-practice-objective]")).toHaveCount(8);
+  // Only objectives with three genuinely distinct required Lanterns are
+  // offered, so the catalog is smaller than the objective list and its size
+  // depends on the Level and Band the Explorer is on.
+  const offeredObjectives = page.locator("[data-practice-objective]");
+  expect(await offeredObjectives.count()).toBeGreaterThan(0);
   await expect(page.locator(".practice-objective span").first()).toHaveCSS(
     "font-size",
     "16px"
@@ -3791,9 +3842,9 @@ test("opens Workshop catalog and transfers paused play to Journal or Atlas", asy
     document.documentElement.style.removeProperty("font-size");
   });
 
-  await workshop
-    .getByRole("button", { name: /Solve two-step quantities/ })
-    .click();
+  // Whichever Trails this Level and Band can actually offer: the catalog is
+  // filtered to objectives with three genuinely distinct required Lanterns.
+  await offeredObjectives.first().click();
   await expect(page.locator("#practice-progress")).toContainText(
     "Lantern 1 of 3 required"
   );

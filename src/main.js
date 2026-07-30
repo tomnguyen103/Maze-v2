@@ -2222,8 +2222,14 @@ function renderLearningDeckOptions() {
       input.value = deck.deckId;
       input.dataset.revision = deck.revisionId;
       input.checked = deck.deckId === activeDeckId;
+      name.id = `learning-deck-name-${deck.deckId}`;
       name.textContent = deck.label;
+      description.id = `learning-deck-description-${deck.deckId}`;
       description.textContent = deck.description;
+      // The Deck name alone is the accessible name; the description follows it
+      // as a separate announcement rather than becoming part of the name.
+      input.setAttribute("aria-labelledby", name.id);
+      input.setAttribute("aria-describedby", description.id);
       label.append(input, name, description);
       return label;
     })
@@ -2248,17 +2254,28 @@ function selectedLearningDeckOption() {
 }
 
 const MIXED_FALLBACK_KEY = "echo-maze:quest-mixed-fallback:v1";
-let mixedFallbackNotice = "";
+
+/**
+ * The notice element is written on every exit path, so a previous Quest's
+ * banner can never survive into an unrelated Challenge.
+ *
+ * @param {string} notice
+ */
+function renderMixedTrailNotice(notice) {
+  elements.challengeNotice.textContent = notice;
+  elements.challengeNotice.hidden = !notice;
+}
 
 /**
  * A focused Deck publishes a finite reviewed pool per Region, so a Quest
  * always outruns it and continues on Mixed Trail content. The Explorer hears
- * that once per Quest — the Deck they chose does not change. The notice rides
- * the Question's own source line, which stays on screen and in the dialog's
- * accessible content: a live-region announcement is overwritten by the next
- * Run event before the Explorer can read it.
+ * that once per Quest — the Deck they chose does not change.
+ *
+ * Claiming is a side effect: the first call for a Quest records the marker and
+ * returns the notice, every later call returns "". Call it only for the
+ * response actually shown, never speculatively inside the retry loop.
  */
-function mixedTrailNotice() {
+function claimMixedTrailNotice() {
   try {
     if (localStorage.getItem(MIXED_FALLBACK_KEY) === questProgress.questId) {
       return "";
@@ -3453,7 +3470,7 @@ function hideSkipWarning() {
 async function loadChallengeQuestion() {
   // Scoped to this Question: re-rendering the dialog must not drop the notice,
   // and the next Question must not repeat it.
-  mixedFallbackNotice = "";
+  renderMixedTrailNotice("");
   if (run.status !== "challenge" || !run.challenge) {
     return;
   }
@@ -3503,6 +3520,7 @@ async function loadChallengeQuestion() {
   let acceptedQuestion = null;
   let acceptedOrdinal = challengeSnapshot.questionOrdinal;
   let acceptedSource = "bundled";
+  let acceptedDeckSource = "mixed";
   for (let offset = 0; offset < 20; offset += 1) {
     const request = {
       ...challengeSnapshot,
@@ -3517,6 +3535,7 @@ async function loadChallengeQuestion() {
     };
     let question;
     let source = "bundled";
+    let deckSource;
     try {
       // The Quest's used-Question ledger travels with the request: it is the
       // only way the service knows which of a focused Region's finite
@@ -3544,17 +3563,22 @@ async function loadChallengeQuestion() {
       const payload = await response.json();
       question = normalizeQuestion(payload.question);
       source = payload.source;
-      if (payload.learningDeckSource === "mixed-fallback") {
-        mixedFallbackNotice = mixedTrailNotice();
-      }
+      deckSource = payload.learningDeckSource ?? "mixed";
     } catch {
       question = getBundledQuestion(request);
+      // The service could not answer, so this card is ordinary Mixed content
+      // whatever Deck the Quest is on. Saying so keeps the Deck label honest.
+      deckSource =
+        questProgress.learningDeckId === getDefaultLearningDeckOption().deckId
+          ? "mixed"
+          : "mixed-fallback";
     }
 
     if (!questProgress.usedQuestionIds.includes(question.id)) {
       acceptedQuestion = question;
       acceptedOrdinal = request.questionOrdinal;
       acceptedSource = source;
+      acceptedDeckSource = deckSource ?? "mixed";
       break;
     }
   }
@@ -3586,8 +3610,9 @@ async function loadChallengeQuestion() {
     gemini: "A fresh quest question is ready.",
     bundled: "A trusty question card is ready."
   }[acceptedSource] ?? "Your question is ready.";
-  elements.challengeNotice.textContent = mixedFallbackNotice;
-  elements.challengeNotice.hidden = !mixedFallbackNotice;
+  renderMixedTrailNotice(
+    acceptedDeckSource === "mixed-fallback" ? claimMixedTrailNotice() : ""
+  );
   transition({ type: "provide-question", question: acceptedQuestion });
 }
 

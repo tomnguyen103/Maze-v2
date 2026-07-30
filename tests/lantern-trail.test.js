@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { reviewedQuestionCoreDigest } from "../src/questions/reviewed-question-revision.js";
 import {
   continueLanternTrail,
   createLanternTrail,
@@ -49,24 +50,38 @@ describe("Lantern Trail", () => {
     ).toBe(true);
   });
 
-  it("publishes one fixed five-Question Trail for every reviewed catalog objective", () => {
+  it("offers only objectives with three genuinely distinct required Lanterns", () => {
     for (const levelId of LEVELS) {
       for (const difficultyBand of BANDS) {
         const catalog = listLanternTrailObjectives({ levelId, difficultyBand });
-        expect(catalog).toHaveLength(8);
+        expect(catalog.length).toBeGreaterThan(0);
         for (const objective of catalog) {
           const selected = createLanternTrail({
             levelId,
             difficultyBand,
             learningObjectiveId: objective.learningObjectiveId
           });
-          expect(selected.questions).toHaveLength(5);
+
+          // Three required Lanterns, plus up to two optional ones.
+          expect(selected.questions.length).toBeGreaterThanOrEqual(3);
+          expect(selected.questions.length).toBeLessThanOrEqual(5);
+          expect(selected.requiredQuestionCount).toBe(3);
+          expect(selected.optionalQuestionCount).toBe(
+            selected.questions.length - 3
+          );
           expect(
             new Set(selected.questions.map((question) => question.id)).size
-          ).toBe(5);
+          ).toBe(selected.questions.length);
+          // Distinct by answer-bearing content, not by the narrative framing:
+          // the bundled generator renames one card many ways, and a renamed
+          // card is the same question to the child answering it.
           expect(
-            new Set(selected.questions.map((question) => question.prompt)).size
-          ).toBe(5);
+            new Set(
+              selected.questions.map((question) =>
+                reviewedQuestionCoreDigest(question)
+              )
+            ).size
+          ).toBe(selected.questions.length);
         }
       }
     }

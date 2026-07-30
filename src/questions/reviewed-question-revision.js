@@ -51,6 +51,31 @@ export function reviewedQuestionPresentationDigest(rawQuestion) {
 }
 
 /**
+ * Distinctness that a renamed scenario cannot fake.
+ *
+ * The bundled generator frames one card many ways — "Bea opens a Question
+ * scroll…", "Devi opens a Question scroll…" — varying only the prompt's
+ * narrative. Hashing the prompt therefore counts one question as many.
+ * This digest hashes the answer-bearing content instead, so two cards that
+ * ask the same thing collide however they are framed.
+ *
+ * @param {unknown} rawQuestion
+ */
+export function reviewedQuestionCoreDigest(rawQuestion) {
+  const question = normalizeQuestion(rawQuestion);
+  const correctLabel = question.choices.find(
+    (choice) => choice.id === question.answerId
+  )?.label;
+  return reviewedContentDigest({
+    choiceLabels: question.choices.map(({ label }) => label).sort(),
+    correctLabel,
+    hint: question.hint,
+    explanation: question.explanation,
+    echoLens: question.echoLens ?? null
+  });
+}
+
+/**
  * @param {unknown} rawQuestion
  * @param {"bundled" | "learning-deck"} namespace
  * @param {unknown} [echoLens]

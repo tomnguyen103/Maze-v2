@@ -2,6 +2,8 @@ import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
+import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
+import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-identity.js";
 
 /** @type {Set<string>} */
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
@@ -24,8 +26,6 @@ function boundedInteger(value, name, minimum, maximum) {
   return parsed;
 }
 
-const DECK_ID_PATTERN = /^[a-z][a-z0-9-]{1,40}$/;
-const DECK_REVISION_PATTERN = /^deck:[a-z0-9-]{1,40}:v[0-9]{1,4}:[0-9a-f]{32}$/;
 const QUESTION_ID_PATTERN = /^[a-z0-9][a-z0-9:-]{0,79}$/i;
 const MAX_USED_QUESTION_IDS = 5000;
 
@@ -60,10 +60,14 @@ function parseLearningDeck(deckId, deckRevision) {
   if (!deckId && !deckRevision) {
     return { learningDeckId: null, learningDeckRevision: null };
   }
-  if (!deckId || !DECK_ID_PATTERN.test(deckId)) {
+  // Validated against the published roster, not merely against a shape, so
+  // this boundary behaves like the Quest Level and challenge-kind checks
+  // above it. An unpublished revision is rejected rather than silently
+  // serving Mixed content under the Deck's name.
+  if (!deckId || !getPublishedLearningDeckOption(deckId)) {
     throw new Error("Learning Deck is not supported.");
   }
-  if (!deckRevision || !DECK_REVISION_PATTERN.test(deckRevision)) {
+  if (!isPublishedLearningDeckRevision(deckId, deckRevision)) {
     throw new Error("Learning Deck revision is not supported.");
   }
   return { learningDeckId: deckId, learningDeckRevision: deckRevision };
@@ -145,7 +149,7 @@ export function parseQuestionBody(body) {
   };
 }
 
-const MAX_BODY_BYTES = 262144;
+const MAX_BODY_BYTES = 256 * 1024;
 
 /** @param {import("node:http").IncomingMessage} request */
 async function readJsonBody(request) {

@@ -4,6 +4,7 @@ import {
   getLearningObjective
 } from "../questions/learning-objectives.js";
 import { reviewedQuestionForId } from "./lantern-journal.js";
+import { reviewedQuestionCoreDigest } from "../questions/reviewed-question-revision.js";
 
 const LEVEL_PREFIX = Object.freeze({
   "bright-start": "bright",
@@ -51,6 +52,56 @@ const TRAIL_QUESTION_COUNT =
  * }>} LanternTrailSession
  */
 
+// The bundled generator frames one card many ways, so walking ordinals by a
+// fixed stride can hand back the same question five times under five names.
+// A Trail collects by answer-bearing content instead, and an objective that
+// cannot supply three genuinely different required Lanterns is not offered.
+const TRAIL_SEARCH_LIMIT = 512;
+/** @type {Map<string, readonly any[]>} */
+const trailQuestionCache = new Map();
+
+/**
+ * @param {string} prefix
+ * @param {string} difficultyBand
+ * @param {string} learningObjectiveId
+ */
+function collectTrailQuestions(prefix, difficultyBand, learningObjectiveId) {
+  const cacheKey = `${prefix}:${difficultyBand}:${learningObjectiveId}`;
+  const cached = trailQuestionCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  /** @type {any[]} */
+  const questions = [];
+  const seenCores = new Set();
+  for (
+    let ordinal = 0;
+    ordinal < TRAIL_SEARCH_LIMIT && questions.length < TRAIL_QUESTION_COUNT;
+    ordinal += 1
+  ) {
+    const question = reviewedQuestionForId(
+      `${prefix}-${difficultyBand}-${ordinal}`
+    );
+    if (
+      !question ||
+      question.learningObjectiveId !== learningObjectiveId ||
+      question.difficultyBand !== difficultyBand ||
+      typeof question.reviewedRevisionId !== "string"
+    ) {
+      continue;
+    }
+    const core = reviewedQuestionCoreDigest(question);
+    if (seenCores.has(core)) {
+      continue;
+    }
+    seenCores.add(core);
+    questions.push(question);
+  }
+  const collected = Object.freeze(questions);
+  trailQuestionCache.set(cacheKey, collected);
+  return collected;
+}
+
 /**
  * @param {{ levelId: string, difficultyBand: string }} selection
  */
@@ -60,8 +111,11 @@ export function listLanternTrailObjectives({ levelId, difficultyBand }) {
   if (!prefix || !DIFFICULTY_BANDS.has(difficultyBand)) {
     throw new Error("Lantern Trail catalog selection is invalid.");
   }
-  return LEARNING_OBJECTIVE_IDS.filter((objectiveId) =>
-    objectiveId.startsWith(`${prefix}-`)
+  return LEARNING_OBJECTIVE_IDS.filter(
+    (objectiveId) =>
+      objectiveId.startsWith(`${prefix}-`) &&
+      collectTrailQuestions(prefix, difficultyBand, objectiveId).length >=
+        REQUIRED_QUESTION_COUNT
   ).map((objectiveId) => {
     const objective = getLearningObjective(objectiveId);
     if (!objective) {
@@ -94,26 +148,21 @@ export function createLanternTrail({
     throw new Error("Lantern Trail objective does not match the Quest Level.");
   }
 
-  const questions = Array.from({ length: TRAIL_QUESTION_COUNT }, (_, index) => {
-    const ordinal = objectiveIndex + (index + 1) * objectives.length;
-    const question = reviewedQuestionForId(
-      `${prefix}-${difficultyBand}-${ordinal}`
+  const questions = collectTrailQuestions(
+    prefix,
+    difficultyBand,
+    learningObjectiveId
+  );
+  if (questions.length < REQUIRED_QUESTION_COUNT) {
+    throw new Error(
+      "Lantern Trail requires three distinct reviewed Question revisions."
     );
-    if (
-      !question ||
-      question.learningObjectiveId !== learningObjectiveId ||
-      question.difficultyBand !== difficultyBand ||
-      typeof question.reviewedRevisionId !== "string"
-    ) {
-      throw new Error("Lantern Trail requires five reviewed Question revisions.");
-    }
-    return question;
-  });
+  }
   if (
     new Set(questions.map((question) => question.id)).size !==
-      TRAIL_QUESTION_COUNT ||
-    new Set(questions.map((question) => question.prompt)).size !==
-      TRAIL_QUESTION_COUNT
+      questions.length ||
+    new Set(questions.map((question) => reviewedQuestionCoreDigest(question)))
+      .size !== questions.length
   ) {
     throw new Error("Lantern Trail Questions must be distinct.");
   }
@@ -131,8 +180,8 @@ export function createLanternTrail({
     objectiveLabel: objective.label,
     revision: `bundled-lantern-trail-v1:${revision}`,
     requiredQuestionCount: REQUIRED_QUESTION_COUNT,
-    optionalQuestionCount: OPTIONAL_QUESTION_COUNT,
-    questions: Object.freeze(questions)
+    optionalQuestionCount: questions.length - REQUIRED_QUESTION_COUNT,
+    questions: Object.freeze([...questions])
   });
 }
 
@@ -143,11 +192,15 @@ export function createLanternTrail({
 export function createLanternTrailSession(trail) {
   if (
     !trail ||
-    trail.questions.length !== TRAIL_QUESTION_COUNT ||
+    trail.questions.length < REQUIRED_QUESTION_COUNT ||
+    trail.questions.length > TRAIL_QUESTION_COUNT ||
     trail.requiredQuestionCount !== REQUIRED_QUESTION_COUNT ||
-    trail.optionalQuestionCount !== OPTIONAL_QUESTION_COUNT
+    trail.optionalQuestionCount !==
+      trail.questions.length - REQUIRED_QUESTION_COUNT
   ) {
-    throw new Error("Lantern Trail session requires a reviewed five-Question Trail.");
+    throw new Error(
+      "Lantern Trail session requires three required and up to two optional reviewed Questions."
+    );
   }
   return sessionState(trail, 0);
 }

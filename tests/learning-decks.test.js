@@ -8,6 +8,7 @@ import {
   validateLearningDeckRevision
 } from "../src/questions/learning-decks.js";
 import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
+import { reviewedQuestionCoreDigest } from "../src/questions/reviewed-question-revision.js";
 import {
   createReviewedQuestionRevisionId,
   reviewedQuestionPresentationDigest
@@ -285,6 +286,38 @@ describe("published Learning Deck revisions", () => {
     ).toBe(true);
     expect(JSON.stringify(report)).not.toContain("prompt");
     expect(JSON.stringify(report)).not.toContain("answerId");
+  });
+
+  it("measures how much distinct focused content each Deck actually publishes", () => {
+    // A published pool counts renamed cards as separate Questions: the bundled
+    // generator frames one card many ways ("Bea opens…", "Devi opens…"), and
+    // the publish gate hashes the prompt, so a reskin passes as new content.
+    // This test measures the answer-bearing content instead, so the real
+    // figure is visible and cannot quietly get worse.
+    const measured = getPublishedLearningDeckRevisions()
+      .filter(({ kind }) => kind === "focused")
+      .map((revision) => ({
+        deckId: revision.deckId,
+        minDistinctPerRegion: Math.min(
+          ...revision.regions.map(
+            (region) =>
+              new Set(
+                region.normalQuestions.map((question) =>
+                  reviewedQuestionCoreDigest(question)
+                )
+              ).size
+          )
+        )
+      }));
+
+    expect(measured).toEqual([
+      { deckId: "number-trail", minDistinctPerRegion: 3 },
+      // Word and Nature Trail publish pools that are largely one reviewed card
+      // reskinned. Raising these needs authored reviewed content, which is a
+      // content decision recorded on issue #122 — not a code change.
+      { deckId: "word-trail", minDistinctPerRegion: 2 },
+      { deckId: "nature-trail", minDistinctPerRegion: 1 }
+    ]);
   });
 
   it("clears all 45 focused Region and Capstone coverage gates", () => {

@@ -331,12 +331,15 @@ export function createQuestionService(options = {}) {
   async function resolveReviewedQuestion(request) {
     const selection = selectReviewedDeckQuestion(request);
     const bundled = selection.question;
-    // A focused Deck revision is itself the publishing authority, so the
-    // published bank never overrides the Deck's own reviewed Question.
+    // A focused Deck revision is itself the publishing authority for its own
+    // content, so the bank never overrides it. Mixed content — including the
+    // announced fallback — still reads the bank, or a published edit would
+    // reach Mixed Trail Quests and not fallen-back focused ones.
     if (
       !questionBank ||
       request.challengeKind === "gate-warden" ||
-      selection.source !== "mixed"
+      selection.source === "focused" ||
+      selection.source === "capstone"
     ) {
       return {
         question: bundled,

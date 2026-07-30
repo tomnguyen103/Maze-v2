@@ -105,6 +105,23 @@ describe("focused Learning Deck selection", () => {
     expect(retry.question.reviewedRevisionId).toBeTruthy();
   });
 
+  it("treats an unpublished revision as Mixed rather than serving it", () => {
+    const selection = selectReviewedDeckQuestion({
+      learningDeckId: "number-trail",
+      learningDeckRevision: "deck:number-trail:v9:" + "0".repeat(32),
+      levelId: "bright-start",
+      labyrinthNumber: 1,
+      questionOrdinal: 0,
+      challengeKind: "warden",
+      attempt: 0,
+      usedQuestionIds: []
+    });
+
+    // The route rejects this before it can reach here; the module still must
+    // not invent focused content for a revision it cannot resolve.
+    expect(selection.source).toBe("mixed");
+  });
+
   it("leaves Mixed Trail on the unbounded reviewed sequence", () => {
     const selection = selectReviewedDeckQuestion({
       learningDeckId: "mixed-trail",
