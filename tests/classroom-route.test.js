@@ -54,7 +54,8 @@ function classroomStore() {
     })),
     listExpeditions: vi.fn(async () => []),
     createExpedition: vi.fn(async () => ({})),
-    setExpeditionStatus: vi.fn(async () => ({}))
+    setExpeditionStatus: vi.fn(async () => ({})),
+    capacityForTeacher: vi.fn(async () => ({}))
   };
 }
 

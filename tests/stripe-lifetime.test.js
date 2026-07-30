@@ -250,8 +250,35 @@ describe("lifetime configuration", () => {
       appOrigin: "https://maze.example",
       priceId: "price_echo_test",
       secretKey: "sk_test_safe-placeholder",
-      webhookSecret: "whsec_safe-placeholder"
+      webhookSecret: "whsec_safe-placeholder",
+      expedition: null
     });
+  });
+
+  it("loads Class Expedition test prices only when both are present", () => {
+    expect(
+      loadLifetimeConfig({
+        ...configured,
+        STRIPE_EXPEDITION_PRICE_ID: "price_expedition_base",
+        STRIPE_EXPEDITION_EXTENSION_PRICE_ID: "price_expedition_extension"
+      })?.expedition
+    ).toEqual({
+      basePriceId: "price_expedition_base",
+      extensionPriceId: "price_expedition_extension"
+    });
+    expect(
+      loadLifetimeConfig({
+        ...configured,
+        STRIPE_EXPEDITION_PRICE_ID: "price_expedition_base"
+      })?.expedition
+    ).toBeNull();
+    expect(
+      loadLifetimeConfig({
+        ...configured,
+        STRIPE_EXPEDITION_PRICE_ID: "expedition_base",
+        STRIPE_EXPEDITION_EXTENSION_PRICE_ID: "price_expedition_extension"
+      })?.expedition
+    ).toBeNull();
   });
 
   it.each([

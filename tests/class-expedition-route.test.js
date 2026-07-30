@@ -60,6 +60,14 @@ function expeditionStore() {
     setExpeditionStatus: vi.fn(async (_userId, _classroomId, id, status) => ({
       id,
       status
+    })),
+    capacityForTeacher: vi.fn(async () => ({
+      seatsTotal: 30,
+      seatsAssigned: 2,
+      baseStatus: "paid",
+      extensionPaidCount: 0,
+      baseRefundEligible: false,
+      extensionRefundEligibleCount: 0
     }))
   };
 }
@@ -310,6 +318,75 @@ describe("Class Expedition API", () => {
         { method: "GET" }
       );
       expect(status.status).toBe(405);
+    });
+  });
+
+  it("starts a License checkout for Teachers and reports capacity", async () => {
+    const billing = {
+      createLicenseCheckout: vi.fn(async () => ({
+        checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_1",
+        purchaseId: "9d2f8a34-0000-4000-8000-000000000001"
+      }))
+    };
+    const { handler, store, audits } = createHandler({ billing });
+    await withServer(handler, async (origin) => {
+      const purchase = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/license`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind: "base" })
+        }
+      );
+      expect(purchase.status).toBe(201);
+      const body = await purchase.json();
+      expect(body.checkoutUrl).toContain("checkout.stripe.com");
+      expect(billing.createLicenseCheckout).toHaveBeenCalledWith({
+        userId: "user_teacher_1",
+        classroomId: "org_class_1",
+        expeditionId: "exped_abc123",
+        kind: "base"
+      });
+      expect(store.requireTeacher).toHaveBeenCalled();
+      expect(audits).toContainEqual(
+        expect.objectContaining({ action: "classroom.expedition.license" })
+      );
+
+      const invalid = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/license`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind: "monthly" })
+        }
+      );
+      expect(invalid.status).toBe(400);
+
+      const capacity = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/capacity`
+      );
+      expect(capacity.status).toBe(200);
+      const capacityBody = await capacity.json();
+      expect(capacityBody.capacity).toMatchObject({
+        seatsTotal: 30,
+        seatsAssigned: 2,
+        baseStatus: "paid"
+      });
+    });
+  });
+
+  it("answers 503 for License purchases when billing is unconfigured", async () => {
+    const { handler } = createHandler();
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/license`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind: "base" })
+        }
+      );
+      expect(response.status).toBe(503);
     });
   });
 

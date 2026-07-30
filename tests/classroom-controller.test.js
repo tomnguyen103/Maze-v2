@@ -81,6 +81,20 @@ function workspaceClient() {
     })),
     setClassExpeditionStatus: vi.fn(async (_classroomId, id, status) => ({
       expedition: { id, status }
+    })),
+    getClassExpeditionCapacity: vi.fn(async () => ({
+      capacity: {
+        seatsTotal: 30,
+        seatsAssigned: 0,
+        baseStatus: null,
+        extensionPaidCount: 0,
+        baseRefundEligible: true,
+        extensionRefundEligibleCount: 0
+      }
+    })),
+    purchaseClassExpeditionLicense: vi.fn(async () => ({
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_ui_1",
+      purchaseId: "9d2f8a34-0000-4000-8000-000000000002"
     }))
   };
 }
@@ -364,6 +378,55 @@ describe("Classroom workspace", () => {
         "closed"
       )
     );
+  });
+
+  it("offers the sponsor test-mode License purchase until the License is paid", async () => {
+    const client = workspaceClient();
+    const navigate = vi.fn();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 1,
+          levelId: "bright-start",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          status: "open",
+          completionDate: null
+        }
+      ]
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client, navigate });
+
+    await vi.waitFor(() => {
+      expect(client.getClassExpeditionCapacity).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1"
+      );
+      expect(root.textContent).toContain("No paid License yet");
+    });
+
+    const buy = root.querySelector("[data-action='buy-expedition-license']");
+    expect(buy).toBeInstanceOf(HTMLButtonElement);
+    expect(buy?.textContent).toContain("Stripe test mode");
+    buy?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(client.purchaseClassExpeditionLicense).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "base"
+      );
+      expect(navigate).toHaveBeenCalledWith(
+        "https://checkout.stripe.com/c/pay/cs_test_ui_1"
+      );
+    });
   });
 
   it("renders tools and progress for every Teacher Classroom", async () => {

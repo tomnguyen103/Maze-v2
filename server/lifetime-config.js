@@ -14,7 +14,33 @@ export function loadLifetimeConfig(env) {
   ) {
     return null;
   }
-  return { appOrigin, priceId, secretKey, webhookSecret };
+  return {
+    appOrigin,
+    priceId,
+    secretKey,
+    webhookSecret,
+    expedition: loadExpeditionPrices(env)
+  };
+}
+
+/**
+ * Class Expedition License prices are optional: without both test prices the
+ * sponsor purchase surface reports itself unconfigured instead of guessing.
+ * The same sk_test_-only gate above still applies to every checkout.
+ *
+ * @param {Record<string, string | undefined>} env
+ */
+function loadExpeditionPrices(env) {
+  const basePriceId = env.STRIPE_EXPEDITION_PRICE_ID?.trim() ?? "";
+  const extensionPriceId =
+    env.STRIPE_EXPEDITION_EXTENSION_PRICE_ID?.trim() ?? "";
+  if (
+    !basePriceId.startsWith("price_") ||
+    !extensionPriceId.startsWith("price_")
+  ) {
+    return null;
+  }
+  return { basePriceId, extensionPriceId };
 }
 
 /** @param {string} value */

@@ -73,7 +73,16 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
  *       classroomId: string,
  *       expeditionId: string,
  *       status: "open" | "closed"
- *     ) => Promise<{ expedition: Record<string, unknown> }>
+ *     ) => Promise<{ expedition: Record<string, unknown> }>,
+ *     getClassExpeditionCapacity: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ capacity?: Record<string, unknown> }>,
+ *     purchaseClassExpeditionLicense: (
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       kind: "base" | "extension"
+ *     ) => Promise<{ checkoutUrl?: string, purchaseId?: string }>
  *   },
  *   navigate?: (path: string) => void,
  *   clipboard?: { writeText: (value: string) => Promise<void> },
@@ -860,7 +869,70 @@ export async function renderClassroom(root, dependencies = {}) {
           toggle.disabled = false;
         }
       });
-      card.append(heading, facts, toggle);
+      const capacityLine = document.createElement("p");
+      capacityLine.className = "classroom-expedition-card__capacity";
+      capacityLine.setAttribute("role", "status");
+      capacityLine.textContent = "Checking seats and License…";
+      const actions = document.createElement("div");
+      actions.className = "classroom-form__row";
+      actions.append(toggle);
+      card.append(heading, facts, capacityLine, actions);
+      void (async () => {
+        try {
+          const result = await client.getClassExpeditionCapacity(
+            entry.id,
+            String(record.id)
+          );
+          const capacity = /** @type {Record<string, unknown>} */ (
+            result.capacity ?? {}
+          );
+          const assigned = Number(capacity.seatsAssigned ?? 0);
+          const total = Number(capacity.seatsTotal ?? 30);
+          const basePaid = capacity.baseStatus === "paid";
+          capacityLine.textContent = basePaid
+            ? `${assigned} of ${total} seats assigned · License paid (Stripe test mode)`
+            : "No paid License yet — Students cannot start until a sponsor completes the test-mode purchase.";
+          /** @type {"base" | "extension" | null} */
+          const purchaseKind = !basePaid
+            ? "base"
+            : assigned >= total
+              ? "extension"
+              : null;
+          if (purchaseKind) {
+            const buy = document.createElement("button");
+            buy.className = "primary-button";
+            buy.type = "button";
+            buy.dataset.action = "buy-expedition-license";
+            buy.textContent =
+              purchaseKind === "base"
+                ? "Buy the License (Stripe test mode)"
+                : "Buy a 5-seat extension (Stripe test mode)";
+            buy.addEventListener("click", async () => {
+              buy.disabled = true;
+              try {
+                const purchase = await client.purchaseClassExpeditionLicense(
+                  entry.id,
+                  String(record.id),
+                  purchaseKind
+                );
+                if (typeof purchase.checkoutUrl === "string") {
+                  navigate(purchase.checkoutUrl);
+                }
+              } catch (error) {
+                expeditionStatus.textContent = readableError(
+                  error,
+                  "The test-mode checkout could not start. Try again."
+                );
+                buy.disabled = false;
+              }
+            });
+            actions.append(buy);
+          }
+        } catch {
+          capacityLine.textContent =
+            "Seat and License details are unavailable right now.";
+        }
+      })();
       return card;
     }
 

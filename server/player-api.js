@@ -28,6 +28,8 @@ import {
 } from "./classroom-route.js";
 import { createClassroomStore } from "./classroom-store.js";
 import { createClassExpeditionStore } from "./class-expedition-store.js";
+import { createClassExpeditionBilling } from "./class-expedition-billing.js";
+import { createClassExpeditionBillingStore } from "./class-expedition-billing-store.js";
 import { createAuditStore } from "./audit-store.js";
 import {
   createAuditRecorder,
@@ -335,24 +337,46 @@ export function createPlayerApi(env = process.env) {
     getUserId,
     recordAudit
   });
+  const stripeClient = lifetimeConfig
+    ? new Stripe(lifetimeConfig.secretKey)
+    : null;
+  const classExpeditionBillingStore =
+    createClassExpeditionBillingStore(pool);
+  const classExpeditionBilling =
+    lifetimeConfig?.expedition && stripeClient
+      ? createClassExpeditionBilling({
+          appOrigin: lifetimeConfig.appOrigin,
+          basePriceId: lifetimeConfig.expedition.basePriceId,
+          extensionPriceId: lifetimeConfig.expedition.extensionPriceId,
+          stripe: stripeClient,
+          store: classExpeditionBillingStore
+        })
+      : null;
   const classroomHandler = createClassroomHandler({
     store: {
       ...classroomStore,
       ...classroomDomainStore,
-      ...classExpeditionStore
+      ...classExpeditionStore,
+      capacityForTeacher: (userId, classroomId, expeditionId) =>
+        classExpeditionBillingStore.capacityForTeacher(
+          userId,
+          classroomId,
+          expeditionId
+        )
     },
     provider: classroomProvider,
+    billing: classExpeditionBilling,
     getUserId,
     recordAudit,
     rateLimit
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
-  const lifetimeProvider = lifetimeConfig
+  const lifetimeProvider = lifetimeConfig && stripeClient
     ? createStripeLifetimeProvider({
         appOrigin: lifetimeConfig.appOrigin,
         priceId: lifetimeConfig.priceId,
-        stripe: new Stripe(lifetimeConfig.secretKey),
+        stripe: stripeClient,
         webhookSecret: lifetimeConfig.webhookSecret
       })
     : null;
@@ -392,6 +416,30 @@ export function createPlayerApi(env = process.env) {
      */
     async processEvent(provider, event) {
       if (provider === "stripe") {
+        if (
+          classExpeditionBilling &&
+          (await classExpeditionBilling.ownsEvent(event.payload))
+        ) {
+          const expeditionResult = /** @type {Record<string, unknown>} */ (
+            await classExpeditionBilling.processVerifiedEvent(event.payload)
+          );
+          await auditRecorder.recordAudit(
+            { actorId: SYSTEM_ACTORS.stripe, actorRole: "system" },
+            "classroom.expedition.webhook",
+            {
+              type: "class_expedition_license",
+              id: expeditionResult?.purchaseId
+                ? String(expeditionResult.purchaseId)
+                : null
+            },
+            undefined,
+            {
+              eventType: event.eventType,
+              outcome: expeditionResult?.outcome ?? null
+            }
+          );
+          return;
+        }
         const result = /** @type {Record<string, unknown>} */ (
           await lifetimeService.processVerifiedWebhook(event.payload)
         );
@@ -559,7 +607,13 @@ export function createPlayerApi(env = process.env) {
       store: {
         ...classroomStore,
         ...classroomDomainStore,
-        ...classExpeditionStore
+        ...classExpeditionStore,
+        capacityForTeacher: (userId, classroomId, expeditionId) =>
+          classExpeditionBillingStore.capacityForTeacher(
+            userId,
+            classroomId,
+            expeditionId
+          )
       },
       provider: null,
       getUserId: () => null,

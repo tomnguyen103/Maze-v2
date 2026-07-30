@@ -19,8 +19,8 @@ import { URL } from "node:url";
 const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EXPEDITION_STATUS_PATTERN =
-  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/status$/;
+const EXPEDITION_SUBPATH_PATTERN =
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity)$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** @param {string} pathname */
@@ -30,7 +30,7 @@ export function isClassroomPath(pathname) {
     /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress|expeditions)$/.test(
       pathname
     ) ||
-    EXPEDITION_STATUS_PATTERN.test(pathname)
+    EXPEDITION_SUBPATH_PATTERN.test(pathname)
   );
 }
 
@@ -205,8 +205,21 @@ function advisoryCompletionDate(value) {
  *       classroomId: string,
  *       expeditionId: string,
  *       status: "open" | "closed"
+ *     ) => Promise<Record<string, unknown>>,
+ *     capacityForTeacher: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
  *     ) => Promise<Record<string, unknown>>
  *   },
+ *   billing?: {
+ *     createLicenseCheckout: (purchase: {
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       kind: "base" | "extension"
+ *     }) => Promise<{ checkoutUrl: string, purchaseId: string }>
+ *   } | null,
  *   provider: {
  *     createClassroom: (
  *       input: { name: string, creatorUserId: string }
@@ -236,6 +249,7 @@ function advisoryCompletionDate(value) {
 export function createClassroomHandler({
   store,
   provider,
+  billing = null,
   getUserId,
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED
@@ -459,12 +473,31 @@ export function createClassroomHandler({
         return;
       }
 
-      const expeditionStatusMatch = pathname.match(EXPEDITION_STATUS_PATTERN);
-      if (expeditionStatusMatch) {
+      const expeditionMatch = pathname.match(EXPEDITION_SUBPATH_PATTERN);
+      if (expeditionMatch) {
+        const expeditionId = expeditionMatch[1];
+        const subResource = expeditionMatch[2];
+        if (subResource === "capacity") {
+          if (request.method !== "GET") {
+            response.setHeader("allow", "GET");
+            sendJson(response, 405, {
+              error: "Use GET for Class Expedition capacity."
+            });
+            return;
+          }
+          sendJson(response, 200, {
+            capacity: await store.capacityForTeacher(
+              userId,
+              selectedClassroomId,
+              expeditionId
+            )
+          });
+          return;
+        }
         if (request.method !== "POST") {
           response.setHeader("allow", "POST");
           sendJson(response, 405, {
-            error: "Use POST for the Class Expedition status."
+            error: "Use POST for Class Expedition changes."
           });
           return;
         }
@@ -481,6 +514,42 @@ export function createClassroomHandler({
           );
           return;
         }
+        if (subResource === "license") {
+          if (!billing) {
+            sendJson(response, 503, {
+              error:
+                "Class Expedition License purchases are not configured."
+            });
+            return;
+          }
+          await store.requireTeacher(userId, selectedClassroomId);
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          if (body.kind !== "base" && body.kind !== "extension") {
+            throw new InputError(
+              "Class Expedition License kind must be base or extension."
+            );
+          }
+          const checkout = await billing.createLicenseCheckout({
+            userId,
+            classroomId: selectedClassroomId,
+            expeditionId,
+            kind: body.kind
+          });
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.license",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              kind: body.kind,
+              purchaseId: checkout.purchaseId
+            }
+          });
+          sendJson(response, 201, checkout);
+          return;
+        }
         const body = /** @type {Record<string, unknown>} */ (
           await readJsonBody(request)
         );
@@ -492,7 +561,7 @@ export function createClassroomHandler({
         const expedition = await store.setExpeditionStatus(
           userId,
           selectedClassroomId,
-          expeditionStatusMatch[1],
+          expeditionId,
           body.status
         );
         await recordAudit(request, {
@@ -500,7 +569,7 @@ export function createClassroomHandler({
           action: "classroom.expedition.status",
           resource: { type: "classroom", id: selectedClassroomId },
           after: {
-            expeditionId: expeditionStatusMatch[1],
+            expeditionId,
             status: body.status
           }
         });

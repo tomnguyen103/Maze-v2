@@ -161,6 +161,30 @@ export function createPlayerApiClient({
         }
       );
     },
+    /** @param {string} classroomId @param {string} expeditionId */
+    async getClassExpeditionCapacity(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/capacity`
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {"base" | "extension"} kind
+     */
+    async purchaseClassExpeditionLicense(classroomId, expeditionId, kind) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/license`,
+        {
+          method: "POST",
+          body: JSON.stringify({ kind })
+        }
+      );
+    },
     /**
      * @param {string} classroomId
      * @param {string} expeditionId
