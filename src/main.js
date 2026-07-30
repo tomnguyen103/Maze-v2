@@ -93,6 +93,10 @@ import {
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
+/** @type {Promise<ReturnType<typeof import("./learning/lantern-trail-view.js").createLanternTrailView>> | null} */
+let lanternTrailViewPromise = null;
+let lanternTrailViewRetry = false;
+let lanternTrailViewFailedTwice = false;
 /** @type {Promise<typeof import("./learning/echo-lens-view.js") | null> | null} */
 let echoLensViewPromise = null;
 let echoLensRequestId = 0;
@@ -187,6 +191,7 @@ function activeRegionTheme() {
 
 const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
+  workshopButton: requiredElement("workshop-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
   best: requiredElement("best-run", HTMLElement),
   bell: requiredElement("bell-action", HTMLButtonElement),
@@ -261,11 +266,7 @@ const elements = {
   pause: requiredElement("pause-run", HTMLButtonElement),
   pulse: requiredElement("pulse-action", HTMLButtonElement),
   pulseCount: requiredElement("pulse-count", HTMLElement),
-  practiceChoices: requiredElement("practice-choices", HTMLElement),
-  practiceClose: requiredElement("practice-close", HTMLButtonElement),
   practiceDialog: requiredElement("practice-dialog", HTMLDialogElement),
-  practiceFeedback: requiredElement("practice-feedback", HTMLElement),
-  practiceQuestion: requiredElement("practice-question", HTMLElement),
   recordsButton: requiredElement("records-button", HTMLButtonElement),
   recordsClose: requiredElement("records-close", HTMLButtonElement),
   recordsDialog: requiredElement("records-dialog", HTMLDialogElement),
@@ -457,8 +458,8 @@ let resumeAfterDaily = false;
 let resumeAfterRecords = false;
 let reopenJournalAfterPractice = false;
 let journalOpenPending = false;
-/** @type {ReturnType<typeof import("./learning/lantern-journal-ui.js").selectPracticeQuestion> | null} */
-let activePracticeQuestion = null;
+let resumeAfterWorkshop = false;
+let workshopOpenPending = false;
 let resumeAfterAccessSettings = false;
 let resumeAfterQuestConflict = false;
 /** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
@@ -755,14 +756,18 @@ elements.gateStagingSkip.addEventListener("click", () => {
   syncChallengeDialog();
 });
 
-/** @param {HTMLElement} trigger */
-async function showQuestAtlas(trigger) {
+/**
+ * @param {HTMLElement} trigger
+ * @param {{ resumePausedRun?: boolean }} [options]
+ */
+async function showQuestAtlas(trigger, { resumePausedRun = false } = {}) {
   if (atlasOpening) {
     return;
   }
   atlasOpening = true;
-  resumeAfterAtlas = run.status === "active";
-  if (resumeAfterAtlas) {
+  const pauseForAtlas = run.status === "active";
+  resumeAfterAtlas = pauseForAtlas || resumePausedRun;
+  if (pauseForAtlas) {
     togglePause();
   }
   const retrying = atlasViewRetry;
@@ -786,6 +791,16 @@ async function showQuestAtlas(trigger) {
           }
           resumeAfterRunReplay = false;
           void openRunReplay(record, returnTarget);
+        },
+        onWorkshop: (selection, returnTarget) => {
+          const resumePausedRun = resumeAfterAtlas;
+          resumeAfterAtlas = false;
+          void openWorkshop({
+            ...selection,
+            origin: "atlas",
+            trigger: returnTarget,
+            resumePausedRun
+          });
         },
         onClose: () => {
           if (resumeAfterAtlas && run.status === "paused") {
@@ -1000,6 +1015,14 @@ elements.recordsDialog.addEventListener("close", () => {
   }
   resumeAfterRecords = false;
 });
+elements.workshopButton.addEventListener("click", () => {
+  void openWorkshop({
+    levelId: currentLevel.id,
+    difficultyBand: getDifficultyBand(currentLabyrinthNumber).id,
+    origin: "play",
+    trigger: elements.workshopButton
+  });
+});
 elements.journalButton.addEventListener("click", () => {
   void openLanternJournal();
 });
@@ -1025,15 +1048,14 @@ elements.journalBands.addEventListener("click", (event) => {
       ? event.target.closest("button[data-practice-question]")
       : null;
   if (!(button instanceof HTMLButtonElement)) return;
-  void openPractice(
-    {
-      id: button.dataset.practiceQuestion ?? "",
-      topicId: button.dataset.topic ?? "",
-      learningObjectiveId: button.dataset.objective ?? "",
-      difficultyBand: button.dataset.band ?? ""
-    },
-    true
-  );
+  const learningObjectiveId = button.dataset.objective ?? "";
+  void openWorkshop({
+    levelId: levelIdForLearningObjective(learningObjectiveId),
+    difficultyBand: button.dataset.band ?? "",
+    learningObjectiveId,
+    origin: "journal",
+    trigger: button
+  });
 });
 elements.journalClear.addEventListener("click", () => {
   elements.journalClearWarning.hidden = false;
@@ -1049,79 +1071,22 @@ elements.journalClearConfirm.addEventListener("click", () => {
   void renderLanternJournal().catch(reportLanternJournalUnavailable);
   elements.journalClose.focus();
 });
-elements.practiceChoices.addEventListener("click", async (event) => {
-  const button =
-    event.target instanceof Element
-      ? event.target.closest("button[data-practice-answer]")
-      : null;
-  if (
-    !(button instanceof HTMLButtonElement) ||
-    !button.dataset.practiceAnswer ||
-    !activePracticeQuestion
-  ) {
-    return;
-  }
-  const practiceQuestion = activePracticeQuestion;
-  for (const choice of elements.practiceChoices.querySelectorAll("button")) {
-    if (choice instanceof HTMLButtonElement) {
-      choice.disabled = true;
-    }
-  }
-  try {
-    const { evaluatePracticeAnswer } = await loadLanternJournalUi();
-    const result = evaluatePracticeAnswer(
-      practiceQuestion,
-      button.dataset.practiceAnswer
-    );
-    playerController.recordLearningOutcome(
-      practiceQuestion,
-      result.correct ? "correct" : "wrong"
-    );
-    elements.practiceFeedback.dataset.state = result.correct
-      ? "correct"
-      : "wrong";
-    elements.practiceFeedback.textContent =
-      `${result.message} ${result.explanation}`;
-    elements.practiceClose.focus();
-  } catch {
-    for (const choice of elements.practiceChoices.querySelectorAll("button")) {
-      if (choice instanceof HTMLButtonElement) {
-        choice.disabled = false;
-      }
-    }
-    reportLanternJournalUnavailable();
-  }
-});
-elements.practiceClose.addEventListener("click", () => {
-  elements.practiceDialog.close();
-});
-elements.practiceDialog.addEventListener("close", async () => {
-  activePracticeQuestion = null;
-  if (reopenJournalAfterPractice && !elements.journalDialog.open) {
-    reopenJournalAfterPractice = false;
-    try {
-      await renderLanternJournal();
-      if (!elements.journalDialog.open) {
-        elements.journalDialog.showModal();
-      }
-    } catch {
-      reportLanternJournalUnavailable();
-    }
-  }
-});
 elements.resultPractice.addEventListener("click", () => {
   void openFirstPractice();
 });
 
-async function openLanternJournal() {
+/** @param {{ resumePausedRun?: boolean }} [options] */
+async function openLanternJournal({ resumePausedRun = false } = {}) {
   if (journalOpenPending) {
     return;
   }
   journalOpenPending = true;
   try {
     const pauseForJournal = run.status === "active";
-    if (pauseForJournal) {
+    if (pauseForJournal || resumePausedRun) {
       elements.journalDialog.dataset.resumeRun = "true";
+    }
+    if (pauseForJournal) {
       togglePause();
     }
     await renderLanternJournal();
@@ -1219,45 +1184,113 @@ function countItem(label, count) {
 }
 
 /**
- * @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} triggeringQuestion
- * @param {boolean} returnToJournal
+ * @param {{
+ *   levelId: string,
+ *   difficultyBand: string,
+ *   learningObjectiveId?: string,
+ *   origin: "play" | "journal" | "atlas",
+ *   trigger: HTMLElement,
+ *   resumePausedRun?: boolean
+ * }} selection
  */
-async function openPractice(triggeringQuestion, returnToJournal) {
+async function openWorkshop(selection) {
+  if (workshopOpenPending || elements.practiceDialog.open) return;
+  workshopOpenPending = true;
   try {
-    const { selectPracticeQuestion } = await loadLanternJournalUi();
-    activePracticeQuestion = selectPracticeQuestion(triggeringQuestion);
+    if (selection.origin === "journal") {
+      resumeAfterWorkshop =
+        elements.journalDialog.dataset.resumeRun === "true";
+      reopenJournalAfterPractice = true;
+      delete elements.journalDialog.dataset.resumeRun;
+      if (elements.journalDialog.open) {
+        elements.journalDialog.close();
+      }
+    } else {
+      const pauseForWorkshop = run.status === "active";
+      resumeAfterWorkshop =
+        pauseForWorkshop || Boolean(selection.resumePausedRun);
+      if (pauseForWorkshop) {
+        togglePause();
+      }
+    }
+    const view = await loadLanternTrailView();
+    view.show(selection);
   } catch {
-    elements.journalStatus.textContent =
-      "A different reviewed Practice Question is unavailable.";
+    announce(
+      lanternTrailViewFailedTwice
+        ? "Lantern Trail Workshop is unavailable. Reload to try again."
+        : "Lantern Trail Workshop is unavailable. Try again."
+    );
+    await navigateAfterWorkshop(selection.origin, selection.trigger);
+  } finally {
+    workshopOpenPending = false;
+  }
+}
+
+function loadLanternTrailView() {
+  if (!lanternTrailViewPromise) {
+    const retrying = lanternTrailViewRetry;
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./learning/lantern-trail-view.js?retry=1")
+      : import("./learning/lantern-trail-view.js");
+    lanternTrailViewRetry = true;
+    lanternTrailViewPromise = viewModule
+      .then(({ createLanternTrailView }) =>
+        createLanternTrailView({
+          onNavigate: (
+            /** @type {"play" | "journal" | "atlas"} */ destination,
+            /** @type {HTMLElement | null} */ returnTarget
+          ) => {
+            void navigateAfterWorkshop(destination, returnTarget);
+          },
+          onRecord: (
+            /** @type {ReturnType<typeof getBundledQuestion>} */ question,
+            /** @type {"correct" | "wrong" | "hint" | "skip"} */ outcome
+          ) => {
+            playerController.recordLearningOutcome(question, outcome);
+          }
+        })
+      )
+      .catch((error) => {
+        lanternTrailViewPromise = null;
+        lanternTrailViewFailedTwice ||= retrying;
+        throw error;
+      });
+  }
+  return lanternTrailViewPromise;
+}
+
+/**
+ * @param {"play" | "journal" | "atlas"} destination
+ * @param {HTMLElement | null} returnTarget
+ */
+async function navigateAfterWorkshop(destination, returnTarget) {
+  const resumeRun = resumeAfterWorkshop;
+  resumeAfterWorkshop = false;
+  reopenJournalAfterPractice = false;
+  if (destination === "journal") {
+    await openLanternJournal({ resumePausedRun: resumeRun });
     return;
   }
-  reopenJournalAfterPractice = returnToJournal;
-  elements.practiceClose.textContent = returnToJournal
-    ? "Back to Journal"
-    : "Close Practice";
-  elements.practiceQuestion.textContent = activePracticeQuestion.prompt;
-  elements.practiceFeedback.dataset.state = "";
-  elements.practiceFeedback.textContent =
-    "Take your time. This answer changes only the Journal.";
-  elements.practiceChoices.replaceChildren(
-    ...activePracticeQuestion.choices.map((choice) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "practice-choice";
-      button.dataset.practiceAnswer = choice.id;
-      button.textContent = choice.label;
-      return button;
-    })
-  );
-  if (elements.journalDialog.open) {
-    elements.journalDialog.close();
+  if (destination === "atlas") {
+    await showQuestAtlas(elements.workshopButton, {
+      resumePausedRun: resumeRun
+    });
+    return;
   }
-  if (!elements.practiceDialog.open) {
-    elements.practiceDialog.showModal();
+  if (resumeRun && run.status === "paused") {
+    togglePause();
   }
-  requestAnimationFrame(() => {
-    elements.practiceQuestion.focus({ preventScroll: true });
-  });
+  returnTarget?.focus({ preventScroll: true });
+}
+
+/** @param {string} learningObjectiveId */
+function levelIdForLearningObjective(learningObjectiveId) {
+  if (learningObjectiveId.startsWith("bright-")) return "bright-start";
+  if (learningObjectiveId.startsWith("scout-")) return "trail-scout";
+  if (learningObjectiveId.startsWith("master-")) return "maze-master";
+  return "";
 }
 
 async function openFirstPractice() {
@@ -1266,15 +1299,13 @@ async function openFirstPractice() {
     .flatMap((band) => band.objectives)
     .find((entry) => entry.status === "practice-ready");
   if (!objective) return;
-  await openPractice(
-    {
-      id: objective.practiceQuestionId,
-      topicId: objective.topicId,
-      learningObjectiveId: objective.learningObjectiveId,
-      difficultyBand: objective.difficultyBand
-    },
-    false
-  );
+  await openWorkshop({
+    levelId: levelIdForLearningObjective(objective.learningObjectiveId),
+    difficultyBand: objective.difficultyBand,
+    learningObjectiveId: objective.learningObjectiveId,
+    origin: "play",
+    trigger: elements.resultPractice
+  });
 }
 
 async function syncPracticeOffer() {

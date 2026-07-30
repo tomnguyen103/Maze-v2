@@ -1,0 +1,122 @@
+/* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4 */
+
+.practice-catalog__heading,
+.practice-trail__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-block: var(--space-3);
+  border-block: 2px solid var(--color-ink);
+}
+
+.practice-catalog__heading h3,
+.practice-trail__heading h3,
+.practice-completion h3 {
+  margin: 0;
+}
+
+.practice-catalog__heading p,
+.practice-trail__heading p {
+  margin: 0;
+}
+
+.practice-trail__heading {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.practice-objectives {
+  border-bottom: 2px solid var(--color-ink);
+}
+
+.practice-objective {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.practice-objective:first-child {
+  border-top: 0;
+}
+
+.practice-objective span {
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.practice-objective:hover,
+.practice-objective:active {
+  background: var(--color-echo-soft);
+}
+
+.practice-support {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.practice-support p {
+  margin: 0;
+  padding: var(--space-3);
+  border-block: 1px solid var(--color-signal);
+  background: var(--color-signal-bright);
+}
+
+.practice-trail__actions,
+.practice-dialog__destinations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.practice-trail__actions {
+  margin-bottom: var(--space-4);
+}
+
+.practice-dialog__destinations {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-ink);
+}
+
+.practice-completion {
+  margin-top: var(--space-5);
+  padding-block: var(--space-5);
+  border-block: 2px solid var(--color-ink);
+}
+
+.practice-completion p:not(.section-label) {
+  max-width: 48ch;
+}
+
+@media (max-width: 34rem) {
+  .practice-catalog__heading,
+  .practice-trail__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .practice-objective {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .practice-dialog__destinations > *,
+  .practice-trail__actions > * {
+    flex: 1 1 100%;
+  }
+}

@@ -32,6 +32,9 @@
         <button class="control-button" id="atlas-button" type="button">
           Atlas
         </button>
+        <button class="control-button" id="workshop-button" type="button">
+          Workshop
+        </button>
         <button class="control-button" id="journal-button" type="button">
           Journal
         </button>
@@ -645,15 +648,74 @@
       aria-labelledby="practice-title"
       aria-describedby="practice-promise practice-feedback"
     >
-      <span class="section-label">Optional Practice</span>
-      <h2 id="practice-title">Try a different Question</h2>
+      <span class="section-label">Optional · unscored</span>
+      <h2 id="practice-title" tabindex="-1">Lantern Trail Workshop</h2>
       <p class="dialog-intro" id="practice-promise">
         No timer, score, Vitality, access, or Quest progress changes here.
       </p>
-      <p class="practice-question" id="practice-question" tabindex="-1"></p>
-      <div class="practice-choices" id="practice-choices"></div>
-      <p class="practice-feedback" id="practice-feedback" role="status" aria-live="polite"></p>
-      <button class="control-button" id="practice-close" type="button">Back to Journal</button>
+      <section class="practice-catalog" id="practice-catalog">
+        <div class="practice-catalog__heading">
+          <h3>Choose a learning goal</h3>
+          <p id="practice-catalog-summary"></p>
+        </div>
+        <div class="practice-objectives" id="practice-objectives"></div>
+      </section>
+      <section class="practice-trail" id="practice-trail" hidden>
+        <div class="practice-trail__heading">
+          <p class="section-label" id="practice-progress"></p>
+          <h3 id="practice-objective-label"></h3>
+        </div>
+        <p class="practice-question" id="practice-question" tabindex="-1"></p>
+        <div class="practice-support">
+          <button
+            class="control-button"
+            id="practice-hint-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="practice-hint"
+          >
+            Show Hint
+          </button>
+          <p id="practice-hint" aria-live="polite" hidden></p>
+        </div>
+        <div class="practice-choices" id="practice-choices"></div>
+        <p
+          class="practice-feedback"
+          id="practice-feedback"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="practice-trail__actions">
+          <button class="control-button" id="practice-skip" type="button">
+            Skip Lantern
+          </button>
+          <button class="primary-button" id="practice-next" type="button" hidden>
+            Next Lantern
+          </button>
+          <button class="control-button" id="practice-keep" type="button" hidden>
+            Keep Practicing
+          </button>
+        </div>
+      </section>
+      <section class="practice-completion" id="practice-completion" hidden>
+        <p class="section-label">Trail complete</p>
+        <h3>Lantern Trail complete</h3>
+        <p id="practice-completion-copy"></p>
+        <button class="control-button" id="practice-choose" type="button">
+          Choose another Trail
+        </button>
+      </section>
+      <div class="practice-dialog__destinations">
+        <button class="control-button" id="practice-journal" type="button">
+          Open Journal
+        </button>
+        <button class="control-button" id="practice-atlas" type="button">
+          Open Atlas
+        </button>
+        <button class="control-button" id="practice-close" type="button">
+          Return to Play
+        </button>
+      </div>
     </dialog>
 
     <dialog class="records-dialog" id="records-dialog" aria-labelledby="records-title">

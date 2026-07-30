@@ -7,7 +7,7 @@ import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
 import { normalizeQuestion } from "../../src/questions/question-contract.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
-import { selectPracticeQuestion } from "../../src/learning/lantern-journal-ui.js";
+import { createLanternTrail } from "../../src/learning/lantern-trail.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
 import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 
@@ -3362,7 +3362,7 @@ test("holds a wrong-answer Echo Lens for review before loading a fresh Question"
   );
 });
 
-test("reviews coarse Journal outcomes and keeps Practice outside the Run", async ({
+test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
   page
 }) => {
   const getCurrentQuestion = await mockQuestionApi(page);
@@ -3426,29 +3426,114 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
       (await practiceButton.getAttribute("data-objective")) ?? "",
     difficultyBand: (await practiceButton.getAttribute("data-band")) ?? ""
   };
-  const expectedPractice = selectPracticeQuestion(triggeringQuestion);
+  const expectedTrail = createLanternTrail({
+    levelId: "trail-scout",
+    difficultyBand: triggeringQuestion.difficultyBand,
+    learningObjectiveId: triggeringQuestion.learningObjectiveId
+  });
   const runBeforePractice = await page.evaluate(() => ({
     score: document.getElementById("player-score")?.textContent,
     vitality: document.getElementById("vitality-count")?.textContent,
     moves: document.getElementById("moves-value")?.textContent,
     stage: document.getElementById("quest-stage")?.textContent,
-    time: document.getElementById("time-value")?.textContent
+    time: document.getElementById("time-value")?.textContent,
+    nonJournalStorage: Object.fromEntries(
+      Object.keys(localStorage)
+        .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
   }));
 
   await practiceButton.click();
   const practice = page.getByRole("dialog", {
-    name: "Try a different Question"
+    name: "Lantern Trail Workshop"
   });
   await expect(practice).toBeVisible();
-  await expect(page.locator("#practice-question")).toHaveText(
-    expectedPractice.prompt
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 1 of 3 required"
   );
-  const correctLabel = expectedPractice.choices.find(
-    (choice) => choice.id === expectedPractice.answerId
-  )?.label;
-  if (!correctLabel) throw new Error("Practice answer label was missing.");
-  await practice.getByRole("button", { name: correctLabel, exact: true }).click();
+  await expect(page.locator("#practice-question")).toHaveText(
+    expectedTrail.questions[0].prompt
+  );
+
+  await practice.getByRole("button", { name: "Show Hint" }).click();
+  await expect(page.locator("#practice-hint")).toContainText(
+    expectedTrail.questions[0].hint
+  );
+  await expect(practice.getByRole("button", { name: "Show Hint" })).toBeDisabled();
+
+  /**
+   * @param {number} questionIndex
+   * @param {"correct" | "wrong" | "skip"} outcome
+   */
+  const answer = async (questionIndex, outcome) => {
+    const question = expectedTrail.questions[questionIndex];
+    if (outcome === "skip") {
+      await practice.getByRole("button", { name: "Skip Lantern" }).click();
+      return;
+    }
+    const answerId =
+      outcome === "correct"
+        ? question.answerId
+        : question.choices.find((choice) => choice.id !== question.answerId)?.id;
+    const label = question.choices.find((choice) => choice.id === answerId)?.label;
+    if (!label) throw new Error("Practice answer label was missing.");
+    await practice.getByRole("button", { name: label, exact: true }).click();
+  };
+
+  await answer(0, "correct");
   await expect(page.locator("#practice-feedback")).toContainText("Nice work");
+  /** @type {string[]} */
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await practice
+    .getByRole("button", { name: "Next Lantern" })
+    .evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Expected the Lantern Trail advance button.");
+      }
+      button.click();
+      button.click();
+    });
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 2 of 3 required"
+  );
+  expect(pageErrors).toEqual([]);
+
+  await answer(1, "wrong");
+  await expect(page.locator("#practice-feedback")).toContainText("Good try");
+  await practice.getByRole("button", { name: "Next Lantern" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 3 of 3 required"
+  );
+
+  await answer(2, "skip");
+  await expect(page.locator("#practice-feedback")).toContainText(
+    expectedTrail.questions[2].explanation
+  );
+  await expect(page.locator("#practice-feedback")).toContainText(
+    "Required Trail complete"
+  );
+  await practice.getByRole("button", { name: "Keep Practicing" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Extra Lantern 1 of 2"
+  );
+
+  await answer(3, "correct");
+  await practice.getByRole("button", { name: "Keep Practicing" }).click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Extra Lantern 2 of 2"
+  );
+  await answer(4, "correct");
+  await practice.getByRole("button", { name: "Finish Trail" }).click();
+  await expect(practice).toContainText("Lantern Trail complete");
+  await practice
+    .getByRole("button", { name: "Choose another Trail" })
+    .click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("#practice-question")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).toHaveText("");
 
   expect(
     await page.evaluate(() => ({
@@ -3456,13 +3541,20 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
       vitality: document.getElementById("vitality-count")?.textContent,
       moves: document.getElementById("moves-value")?.textContent,
       stage: document.getElementById("quest-stage")?.textContent,
-      time: document.getElementById("time-value")?.textContent
+      time: document.getElementById("time-value")?.textContent,
+      nonJournalStorage: Object.fromEntries(
+        Object.keys(localStorage)
+          .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
     }))
   ).toEqual(runBeforePractice);
 
   await page.getByRole("button", { name: "Back to Journal" }).click();
   await expect(journal).toBeVisible();
   await expect(journal.getByRole("button", { name: "Practice" })).toHaveCount(0);
+  await expect(journal).toContainText("Hints 1");
 
   const storedJournal = await page.evaluate(() => {
     const key = Object.keys(localStorage).find((entry) =>
@@ -3473,12 +3565,137 @@ test("reviews coarse Journal outcomes and keeps Practice outside the Run", async
   expect(typeof storedJournal).toBe("string");
   expect(storedJournal).not.toContain("\"prompt\"");
   expect(storedJournal).not.toContain("answerId");
+  expect(storedJournal).not.toMatch(/answeredAt|timestamp|selectedOption/i);
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).some((key) => key.includes("lantern-trail"))
+    )
+  ).toBe(false);
 
   await page.getByRole("button", { name: "Clear Journal" }).click();
   await expect(page.locator("#journal-clear-warning")).toBeVisible();
   await page.getByRole("button", { name: "Clear now" }).click();
   await expect(journal).toContainText("Your lantern is ready.");
   await expect(page.getByRole("button", { name: "Clear Journal" })).toBeDisabled();
+});
+
+test("opens Workshop catalog and transfers paused play to Journal or Atlas", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  const workshopButton = page.getByRole("button", {
+    name: "Workshop",
+    exact: true
+  });
+  await workshopButton.click();
+
+  const workshop = page.getByRole("dialog", {
+    name: "Lantern Trail Workshop"
+  });
+  await expect(workshop).toBeVisible();
+  await expect(page.locator("#practice-title")).toBeFocused();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("[data-practice-objective]")).toHaveCount(8);
+  await expect(page.locator(".practice-objective span").first()).toHaveCSS(
+    "font-size",
+    "16px"
+  );
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(async () => {
+    document.documentElement.style.fontSize = "32px";
+    await document.fonts.ready;
+  });
+  const dialogOverflow = await workshop.evaluate((dialog) => ({
+    pixels: dialog.scrollWidth - dialog.clientWidth,
+    sources: [...dialog.querySelectorAll("*")]
+      .filter(
+        (element) =>
+          element.getBoundingClientRect().right >
+          dialog.getBoundingClientRect().right + 1
+      )
+      .slice(0, 5)
+      .map((element) => element.id || element.className || element.tagName)
+  }));
+  expect(
+    dialogOverflow.pixels,
+    `Workshop overflow sources: ${dialogOverflow.sources.join(", ")}`
+  ).toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    )
+  ).toBeLessThanOrEqual(1);
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("font-size");
+  });
+
+  await workshop
+    .getByRole("button", { name: /Solve two-step quantities/ })
+    .click();
+  await expect(page.locator("#practice-progress")).toContainText(
+    "Lantern 1 of 3 required"
+  );
+  await expect(
+    workshop.getByRole("button", { name: "Open Journal" })
+  ).toBeHidden();
+  await expect(
+    workshop.getByRole("button", { name: "Open Atlas" })
+  ).toBeHidden();
+  const discardedQuestion = await page.locator("#practice-question").textContent();
+  await workshop.getByRole("button", { name: "Skip Lantern" }).click();
+  await workshop.getByRole("button", { name: "Return to Play" }).click();
+  await expect(workshop).toBeHidden();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+  await expect(workshopButton).toBeFocused();
+
+  await workshopButton.click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("#practice-trail")).toBeHidden();
+  if (!discardedQuestion) {
+    throw new Error("Expected a Lantern Trail Question before closing.");
+  }
+  await expect(workshop).not.toContainText(discardedQuestion);
+  await expect(page.locator("#practice-question")).toHaveText("");
+  await expect(page.locator("#practice-choices")).toBeEmpty();
+  await expect(page.locator("#practice-hint")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).toHaveText("");
+  await expect(page.locator("#practice-feedback")).not.toHaveAttribute(
+    "data-state"
+  );
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).some((key) => key.includes("lantern-trail"))
+    )
+  ).toBe(false);
+
+  await workshop.getByRole("button", { name: "Open Journal" }).click();
+  const journal = page.getByRole("dialog", {
+    name: "What you have practiced"
+  });
+  await expect(journal).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await journal.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+
+  await workshopButton.click();
+  await workshop.getByRole("button", { name: "Open Atlas" }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await atlas.getByRole("button", { name: "Open Workshop" }).click();
+  await expect(workshop).toBeVisible();
+  await workshop.getByRole("button", { name: "Back to Atlas" }).click();
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
 });
 
 test("keeps an active Run operable when the Journal chunk is unavailable", async ({

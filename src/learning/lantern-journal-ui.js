@@ -1,7 +1,4 @@
-import {
-  normalizeLanternJournal,
-  reviewedQuestionForId
-} from "./lantern-journal.js";
+import { normalizeLanternJournal } from "./lantern-journal.js";
 import { getLearningObjective } from "../questions/learning-objectives.js";
 
 const BAND_ORDER = Object.freeze([
@@ -79,43 +76,6 @@ export function projectLanternJournal(journal) {
         }))
     })).filter((band) => band.objectives.length > 0)
   };
-}
-
-/**
- * @param {{
- *   id: string,
- *   learningObjectiveId: string,
- *   topicId: string,
- *   difficultyBand: string
- * }} triggeringQuestion
- */
-export function selectPracticeQuestion(triggeringQuestion) {
-  const match = /^(bright|scout|master)-([^-]+)-(\d+)$/.exec(
-    triggeringQuestion.id
-  );
-  const sourceOrdinal = match ? Number(match[3]) : -1;
-  if (
-    !match ||
-    match[2] !== triggeringQuestion.difficultyBand ||
-    sourceOrdinal < 0
-  ) {
-    throw new Error("Practice requires a reviewed bundled Question.");
-  }
-  for (let offset = 1; offset <= 24; offset += 1) {
-    const candidate = reviewedQuestionForId(
-      `${match[1]}-${match[2]}-${sourceOrdinal + offset}`
-    );
-    if (
-      candidate &&
-      candidate.id !== triggeringQuestion.id &&
-      candidate.learningObjectiveId ===
-        triggeringQuestion.learningObjectiveId &&
-      candidate.topicId === triggeringQuestion.topicId
-    ) {
-      return candidate;
-    }
-  }
-  throw new Error("No different reviewed Practice Question was available.");
 }
 
 /**

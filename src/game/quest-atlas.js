@@ -167,6 +167,7 @@ function projectNode(
   return {
     id,
     labyrinthNumber,
+    difficultyBandId: band.id,
     difficultyBand: band.label,
     fieldNote,
     learningFocus,
