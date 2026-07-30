@@ -1,21 +1,32 @@
 export const ACCESS_SETTINGS_STORAGE_KEY =
   "echo-maze:explorer-access-settings:v1";
 
+export const NARRATION_PACES = Object.freeze([
+  "standard",
+  "slower",
+  "faster"
+]);
+
 export const DEFAULT_ACCESS_SETTINGS = Object.freeze({
-  version: 1,
+  version: 2,
   highContrast: false,
   largeMarks: false,
   readerFriendlyQuestions: false,
-  reducedEffects: false
+  reducedEffects: false,
+  trailCompassEnabled: false,
+  narrationPace: "standard"
 });
 
 /**
+ * @typedef {"standard" | "slower" | "faster"} NarrationPace
  * @typedef {{
- *   version: 1,
+ *   version: 2,
  *   highContrast: boolean,
  *   largeMarks: boolean,
  *   readerFriendlyQuestions: boolean,
- *   reducedEffects: boolean
+ *   reducedEffects: boolean,
+ *   trailCompassEnabled: boolean,
+ *   narrationPace: NarrationPace
  * }} AccessSettings
  * @typedef {{ getItem: (key: string) => string | null, setItem: (key: string, value: string) => void }} AccessSettingsStorage
  */
@@ -69,6 +80,9 @@ export function applyAccessSettings(
   root.dataset.accessEffects = normalized.reducedEffects
     ? "reduced"
     : "system";
+  root.dataset.accessCompass = normalized.trailCompassEnabled
+    ? "trail"
+    : "off";
 }
 
 /** @param {unknown} value @returns {AccessSettings} */
@@ -80,9 +94,9 @@ function normalizeAccessSettings(value) {
     return { ...DEFAULT_ACCESS_SETTINGS };
   }
   const candidate =
-    /** @type {Partial<AccessSettings> & { version?: unknown }} */ (value);
+    /** @type {Partial<Record<keyof AccessSettings, unknown>>} */ (value);
   if (
-    candidate.version !== 1 ||
+    (candidate.version !== 1 && candidate.version !== 2) ||
     typeof candidate.highContrast !== "boolean" ||
     typeof candidate.largeMarks !== "boolean" ||
     typeof candidate.readerFriendlyQuestions !== "boolean" ||
@@ -90,11 +104,40 @@ function normalizeAccessSettings(value) {
   ) {
     return { ...DEFAULT_ACCESS_SETTINGS };
   }
+  if (candidate.version === 1) {
+    // ADR 0031: existing four-field records migrate deterministically to
+    // Trail Compass Off and Standard narration pace.
+    if (
+      "trailCompassEnabled" in candidate ||
+      "narrationPace" in candidate
+    ) {
+      return { ...DEFAULT_ACCESS_SETTINGS };
+    }
+    return {
+      version: 2,
+      highContrast: candidate.highContrast,
+      largeMarks: candidate.largeMarks,
+      readerFriendlyQuestions: candidate.readerFriendlyQuestions,
+      reducedEffects: candidate.reducedEffects,
+      trailCompassEnabled: false,
+      narrationPace: "standard"
+    };
+  }
+  if (
+    typeof candidate.trailCompassEnabled !== "boolean" ||
+    !NARRATION_PACES.includes(
+      /** @type {NarrationPace} */ (candidate.narrationPace)
+    )
+  ) {
+    return { ...DEFAULT_ACCESS_SETTINGS };
+  }
   return {
-    version: 1,
+    version: 2,
     highContrast: candidate.highContrast,
     largeMarks: candidate.largeMarks,
     readerFriendlyQuestions: candidate.readerFriendlyQuestions,
-    reducedEffects: candidate.reducedEffects
+    reducedEffects: candidate.reducedEffects,
+    trailCompassEnabled: candidate.trailCompassEnabled,
+    narrationPace: /** @type {NarrationPace} */ (candidate.narrationPace)
   };
 }

@@ -70,26 +70,32 @@ describe("Explorer Access Settings", () => {
     }
   });
 
-  it("persists only the versioned boolean presentation contract", () => {
+  it("persists only the versioned presentation contract", () => {
     const storage = createStorage();
-    const settings =
-      /** @type {Parameters<typeof saveAccessSettings>[0]} */ ({
+    const settings = /** @type {any} */ ({
       version: 1,
       highContrast: true,
       largeMarks: true,
       readerFriendlyQuestions: true,
       reducedEffects: true
-      });
+    });
+    // A version-1 save normalizes to the six-field version-2 record.
+    const upgraded = {
+      ...settings,
+      version: 2,
+      trailCompassEnabled: false,
+      narrationPace: "standard"
+    };
 
-    expect(saveAccessSettings(settings, storage)).toEqual(settings);
+    expect(saveAccessSettings(settings, storage)).toEqual(upgraded);
     expect(
       JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
-    ).toEqual(settings);
+    ).toEqual(upgraded);
 
     storage.setItem(
       ACCESS_SETTINGS_STORAGE_KEY,
       JSON.stringify({
-        ...settings,
+        ...upgraded,
         highContrast: "yes",
         unrelatedGameRule: 99
       })
@@ -99,13 +105,13 @@ describe("Explorer Access Settings", () => {
 
   it("applies presentation flags without receiving Run state", () => {
     applyAccessSettings(
-      {
+      /** @type {any} */ ({
         version: 1,
         highContrast: true,
         largeMarks: true,
         readerFriendlyQuestions: true,
         reducedEffects: true
-      },
+      }),
       document.documentElement
     );
 
@@ -123,5 +129,66 @@ describe("Explorer Access Settings", () => {
       accessMarks: "default",
       accessType: "default"
     });
+  });
+});
+
+describe("Explorer Access Settings v2", () => {
+  it("upgrades a stored four-field record to Trail Compass Off and Standard pace", () => {
+    const storage = createStorage();
+    storage.setItem(
+      ACCESS_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        highContrast: true,
+        largeMarks: false,
+        readerFriendlyQuestions: true,
+        reducedEffects: false
+      })
+    );
+    expect(loadAccessSettings(storage)).toEqual({
+      version: 2,
+      highContrast: true,
+      largeMarks: false,
+      readerFriendlyQuestions: true,
+      reducedEffects: false,
+      trailCompassEnabled: false,
+      narrationPace: "standard"
+    });
+  });
+
+  it("round-trips the six-field record and rejects unknown paces", () => {
+    const storage = createStorage();
+    const saved = saveAccessSettings(
+      {
+        version: 2,
+        highContrast: false,
+        largeMarks: true,
+        readerFriendlyQuestions: false,
+        reducedEffects: true,
+        trailCompassEnabled: true,
+        narrationPace: "slower"
+      },
+      storage
+    );
+    expect(saved.trailCompassEnabled).toBe(true);
+    expect(loadAccessSettings(storage)).toEqual(saved);
+    storage.setItem(
+      ACCESS_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ ...saved, narrationPace: "shouting" })
+    );
+    expect(loadAccessSettings(storage)).toEqual(DEFAULT_ACCESS_SETTINGS);
+  });
+
+  it("exposes Trail Compass enablement as presentation dataset state", () => {
+    applyAccessSettings(
+      {
+        ...DEFAULT_ACCESS_SETTINGS,
+        trailCompassEnabled: true
+      },
+      document.documentElement
+    );
+    expect(document.documentElement.dataset.accessCompass).toBe("trail");
+    applyAccessSettings(DEFAULT_ACCESS_SETTINGS, document.documentElement);
+    expect(document.documentElement.dataset.accessCompass).toBe("off");
   });
 });

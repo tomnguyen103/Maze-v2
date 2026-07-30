@@ -187,6 +187,15 @@
                 <span class="pulse-button__count" id="pulse-count">2</span>
               </button>
             </div>
+
+            <div class="trail-compass" id="trail-compass">
+              <button class="control-button" id="compass-describe" type="button">
+                Describe Trail
+              </button>
+              <button class="control-button" id="compass-listen" type="button">
+                Listen
+              </button>
+            </div>
           </div>
 
           <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
@@ -326,6 +335,24 @@
               <strong>Reduce visual effects</strong>
               <small>Your device reduced-motion preference is always respected.</small>
             </span>
+          </label>
+          <label class="access-setting">
+            <input id="access-trail-compass" name="trailCompassEnabled" type="checkbox" />
+            <span>
+              <strong>Use Trail Compass</strong>
+              <small>Play with described tiles, exits, and buttons instead of the maze picture. Same rules, same score.</small>
+            </span>
+          </label>
+          <label class="access-setting access-setting--select">
+            <span>
+              <strong>Read Aloud pace</strong>
+              <small>How fast Read Aloud speaks Questions on this account.</small>
+            </span>
+            <select id="access-narration-pace" name="narrationPace">
+              <option value="standard">Standard</option>
+              <option value="slower">Slower</option>
+              <option value="faster">Faster</option>
+            </select>
           </label>
         </fieldset>
         <p

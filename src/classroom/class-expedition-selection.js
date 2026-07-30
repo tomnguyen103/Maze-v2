@@ -6,7 +6,7 @@ const PENDING_OUTCOME_PREFIX = "echo-maze:class-run-outcome-pending:v1:";
  * says "a Class Expedition may be active"; the per-user selection record is
  * the authority and lives behind the lazy module.
  */
-export const CLASS_EXPEDITION_ACTIVE_KEY = "echo-maze:class-expedition-active:v1";
+export const CLASS_EXPEDITION_ACTIVE_KEY = "echo-maze:cx-on:v1";
 
 const CLASSROOM_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EXPEDITION_PATTERN = /^exped_[A-Za-z0-9_-]{3,120}$/;

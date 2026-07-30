@@ -448,6 +448,7 @@ const accessSettingsContinuity = createAccessSettingsContinuity({
   onApply: (settings) => {
     applyAccessSettings(settings);
     renderer.render(run);
+    syncTrailCompass();
   },
   onStatus: (message) => {
     if (message) {
@@ -996,6 +997,7 @@ elements.settingsButton.addEventListener("click", async () => {
           onApply: (settings) => {
             applyAccessSettings(settings);
             renderer.render(run);
+            syncTrailCompass();
           },
           onClose: () => {
             if (resumeAfterAccessSettings && run.status === "paused") {
@@ -1569,40 +1571,56 @@ async function loadActiveRunRecoveryModule() {
   return module;
 }
 
-/** @type {Promise<Record<string, any> | null> | null} */
-let classExpeditionPlayPromise = null;
+/** @type {Promise<Record<string, any> | null> | undefined} */
+let classExpeditionPlayPromise;
 
-function classPlayActive() {
-  try {
-    return (
-      globalThis.localStorage?.getItem(
-        "echo-maze:class-expedition-active:v1"
-      ) === "true"
-    );
-  } catch {
-    return false;
+/** @type {Record<string, any> | null} */
+let trailCompassController = null;
+/** @type {Promise<unknown> | undefined} */
+let trailCompassPromise;
+let trailCompassActive = false;
+
+function syncTrailCompass() {
+  trailCompassActive =
+    document.documentElement.dataset.accessCompass === "trail";
+  if (trailCompassActive) {
+    trailCompassPromise ??= import("./game/trail-compass.js")
+      .then((module) => {
+        trailCompassController = module.createTrailCompass({
+          getRun: () => run,
+          announce,
+          playCue: playAudio
+        });
+      })
+      .catch(() => null);
   }
 }
 
 function loadClassExpeditionPlay() {
-  if (!classExpeditionPlayPromise) {
-    classExpeditionPlayPromise = import(
-      "./classroom/class-expedition-play.js"
-    )
-      .then((module) =>
-        module.createClassExpeditionPlay({
-          client: playerController.getApiClient(),
-          getUserId: () => playerController.getAuthenticatedUserId(),
-          announce,
-          onFailClose: async () => {
-            activeRunLocator = null;
-            clearActiveRunLocator();
-            await clearActiveRunRecoveryForIdentityChange();
-          }
-        })
-      )
-      .catch(() => null);
+  try {
+    if (
+      localStorage.getItem("echo-maze:cx-on:v1") !== "true"
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
   }
+  classExpeditionPlayPromise ??= import(
+    "./classroom/class-expedition-play.js"
+  )
+    .then((module) =>
+      module.createClassExpeditionPlay({
+        playerController,
+        announce,
+        onFailClose: async () => {
+          activeRunLocator = null;
+          clearActiveRunLocator();
+          await clearActiveRunRecoveryForIdentityChange();
+        }
+      })
+    )
+    .catch(() => null);
   return classExpeditionPlayPromise;
 }
 
@@ -2242,35 +2260,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
 }
 
 function renderLearningDeckOptions() {
-  const defaultDeck = getDefaultLearningDeckOption();
-  // Reopening the picker shows the Deck this Quest is on, not Mixed Trail.
-  const activeDeckId =
-    getPublishedLearningDeckOption(questProgress?.learningDeckId)?.deckId ??
-    defaultDeck.deckId;
-  elements.learningDeckOptions.replaceChildren(
-    ...getPublishedLearningDeckOptions().map((deck) => {
-      const label = document.createElement("label");
-      const input = document.createElement("input");
-      const name = document.createElement("strong");
-      const description = document.createElement("span");
-      label.className = "learning-deck-option";
-      input.type = "radio";
-      input.name = "learning-deck";
-      input.value = deck.deckId;
-      input.dataset.revision = deck.revisionId;
-      input.checked = deck.deckId === activeDeckId;
-      name.id = `learning-deck-name-${deck.deckId}`;
-      name.textContent = deck.label;
-      description.id = `learning-deck-description-${deck.deckId}`;
-      description.textContent = deck.description;
-      // The Deck name alone is the accessible name; the description follows it
-      // as a separate announcement rather than becoming part of the name.
-      input.setAttribute("aria-labelledby", name.id);
-      input.setAttribute("aria-describedby", description.id);
-      label.append(input, name, description);
-      return label;
-    })
-  );
+  void import("./player/deck-picker.js")
+    .then((module) =>
+      module.renderLearningDeckOptions(
+        elements.learningDeckOptions,
+        questProgress?.learningDeckId
+      )
+    )
+    .catch(() => {});
 }
 
 function selectedLearningDeckOption() {
@@ -2521,14 +2518,15 @@ async function canOpenStartChoice() {
  * @param {boolean} [resumingAdmittedRun]
  */
 async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
-  if (classPlayActive()) {
+  const classPlayLoading = loadClassExpeditionPlay();
+  if (classPlayLoading) {
     // Class Runs are Classroom-sponsored and never offline: every start and
     // resume rechecks Membership and assignment through the Grant request.
-    const classPlay = await loadClassExpeditionPlay();
+    const classPlay = await classPlayLoading;
     if (classPlay) {
-      return classPlay.authorizeClassRun(locator);
+      return classPlay.authorize(locator);
     }
-    announce("Class Play needs a connection. Try again.");
+    announce("Run access could not be checked. Try again.");
     return false;
   }
   let config;
@@ -3236,7 +3234,10 @@ function transition(action) {
       addStory(eventMessage, eventType);
     }
   }
-  if (eventChanged || wardenMode !== previousWardenMode) {
+  if (trailCompassActive && trailCompassController) {
+    // Trail Compass owns the one polite status per player action.
+    trailCompassController.onTransition(run);
+  } else if (eventChanged || wardenMode !== previousWardenMode) {
     const modeAnnouncement =
       wardenMode !== previousWardenMode
         ? ` Warden mode: ${wardenModeLabel(wardenMode)}.`
@@ -3883,10 +3884,12 @@ async function finishRun() {
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
-  if (classPlayActive() && activeRunLocator) {
-    const classPlay = await loadClassExpeditionPlay();
-    const verdict = await classPlay?.recordClassRunOutcome(
-      { runId: activeRunLocator.runId, labyrinthNumber: finishedLabyrinthNumber },
+  const classPlayLoading = loadClassExpeditionPlay();
+  if (classPlayLoading && activeRunLocator) {
+    const classPlay = await classPlayLoading;
+    const verdict = await classPlay?.recordOutcome(
+      activeRunLocator.runId,
+      finishedLabyrinthNumber,
       won
     );
     if (verdict === "removed") {

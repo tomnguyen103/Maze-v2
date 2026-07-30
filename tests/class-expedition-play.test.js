@@ -68,7 +68,7 @@ describe("Class Expedition play", () => {
   it("authorizes an assigned Labyrinth through an idempotent Grant", async () => {
     const { module, client } = play();
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 6 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 6 })
     ).resolves.toBe(true);
     expect(client.issueClassRunGrant).toHaveBeenCalledWith(
       "org_class_play_1",
@@ -80,10 +80,10 @@ describe("Class Expedition play", () => {
   it("refuses Labyrinths outside the assigned Region and completes past it", async () => {
     const { module, client, storage } = play();
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 4 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 4 })
     ).resolves.toBe(false);
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 9 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 9 })
     ).resolves.toBe(false);
     // Advancing past the Region end retires the selection entirely.
     expect(loadClassExpeditionSelection(storage, USER)).toBeNull();
@@ -98,7 +98,7 @@ describe("Class Expedition play", () => {
       })
     });
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 5 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 5 })
     ).resolves.toBe(false);
     expect(onFailClose).toHaveBeenCalled();
     expect(loadClassExpeditionSelection(storage, USER)).toBeNull();
@@ -112,7 +112,7 @@ describe("Class Expedition play", () => {
       })
     });
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 5 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 5 })
     ).resolves.toBe(false);
     expect(announce).toHaveBeenCalledWith("Class Expedition is closed.");
     expect(onFailClose).not.toHaveBeenCalled();
@@ -125,7 +125,7 @@ describe("Class Expedition play", () => {
       })
     });
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0001", labyrinthNumber: 5 })
+      module.authorize({ runId: "class_run_p0001", labyrinthNumber: 5 })
     ).resolves.toBe(false);
     expect(String(announce.mock.calls[0][0])).toContain("connection");
   });
@@ -133,10 +133,7 @@ describe("Class Expedition play", () => {
   it("records terminal outcomes and retires the selection at the Region end", async () => {
     const { module, client, storage } = play();
     await expect(
-      module.recordClassRunOutcome(
-        { runId: "class_run_p0001", labyrinthNumber: 8 },
-        true
-      )
+      module.recordOutcome("class_run_p0001", 8, true)
     ).resolves.toBe("recorded");
     expect(client.recordClassRunOutcome).toHaveBeenCalledWith(
       "org_class_play_1",
@@ -157,10 +154,7 @@ describe("Class Expedition play", () => {
     });
     const { module, storage } = play({ recordClassRunOutcome: failing });
     await expect(
-      module.recordClassRunOutcome(
-        { runId: "class_run_p0001", labyrinthNumber: 5 },
-        false
-      )
+      module.recordOutcome("class_run_p0001", 5, false)
     ).resolves.toBe("pending");
     expect(loadPendingClassRunOutcome(storage, USER)).toMatchObject({
       runId: "class_run_p0001",
@@ -170,7 +164,7 @@ describe("Class Expedition play", () => {
 
     failing.mockImplementation(async () => ({ recorded: true }));
     await expect(
-      module.authorizeClassRun({ runId: "class_run_p0002", labyrinthNumber: 5 })
+      module.authorize({ runId: "class_run_p0002", labyrinthNumber: 5 })
     ).resolves.toBe(true);
     expect(loadPendingClassRunOutcome(storage, USER)).toBeNull();
   });
@@ -182,10 +176,7 @@ describe("Class Expedition play", () => {
       })
     });
     await expect(
-      module.recordClassRunOutcome(
-        { runId: "class_run_p0001", labyrinthNumber: 5 },
-        true
-      )
+      module.recordOutcome("class_run_p0001", 5, true)
     ).resolves.toBe("removed");
     expect(onFailClose).toHaveBeenCalled();
   });

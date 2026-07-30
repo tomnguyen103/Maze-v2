@@ -813,6 +813,39 @@ describe("Class Expedition migration", () => {
     );
   });
 
+  it("advances Explorer Access Settings to the six-field record", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0022_access_settings_v2.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain(
+      "ADD COLUMN IF NOT EXISTS trail_compass_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+    expect(sql).toContain(
+      "ADD COLUMN IF NOT EXISTS narration_pace TEXT NOT NULL DEFAULT 'standard'"
+    );
+    expect(sql).toContain(
+      "narration_pace IN ('standard', 'slower', 'faster')"
+    );
+    expect(sql).toContain("schema_version IN (1, 2)");
+    // Migration 0011 pins CHECK (schema_version = 1) inline; the drop must
+    // land before the backfill or the UPDATE aborts on any populated table.
+    const dropsOldCheck = sql.indexOf(
+      "DROP CONSTRAINT IF EXISTS explorer_access_settings_schema_version_check"
+    );
+    const backfills = sql.indexOf("SET schema_version = 2");
+    expect(dropsOldCheck).toBeGreaterThan(-1);
+    expect(backfills).toBeGreaterThan(-1);
+    expect(dropsOldCheck).toBeLessThan(backfills);
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+    expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0021");
+    expect(sql).not.toMatch(/\bDELETE\b/);
+    expect(sql).not.toContain("DROP TABLE");
+    expect(sql).not.toMatch(/voice|speech|audio_url/i);
+  });
+
   it("exposes aggregate counts only, never a named Student fact", async () => {
     const sql = await readFile(migrationUrl, "utf8");
 

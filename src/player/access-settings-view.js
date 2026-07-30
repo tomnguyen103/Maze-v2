@@ -38,6 +38,11 @@ export function createAccessSettingsView({
       "access-reduced-effects",
       HTMLInputElement
     ),
+    trailCompass: requiredElement("access-trail-compass", HTMLInputElement),
+    narrationPace: requiredElement(
+      "access-narration-pace",
+      HTMLSelectElement
+    ),
     reset: requiredElement("access-settings-reset", HTMLButtonElement),
     status: requiredElement("access-settings-status", HTMLElement),
     title: requiredElement("access-settings-title", HTMLElement)
@@ -134,17 +139,23 @@ export function createAccessSettingsView({
  *   highContrast: HTMLInputElement,
  *   largeMarks: HTMLInputElement,
  *   readerType: HTMLInputElement,
- *   reducedEffects: HTMLInputElement
+ *   reducedEffects: HTMLInputElement,
+ *   trailCompass: HTMLInputElement,
+ *   narrationPace: HTMLSelectElement
  * }} elements
  * @returns {AccessSettings}
  */
 function readControls(elements) {
   return {
-    version: 1,
+    version: 2,
     highContrast: elements.highContrast.checked,
     largeMarks: elements.largeMarks.checked,
     readerFriendlyQuestions: elements.readerType.checked,
-    reducedEffects: elements.reducedEffects.checked
+    reducedEffects: elements.reducedEffects.checked,
+    trailCompassEnabled: elements.trailCompass.checked,
+    narrationPace: /** @type {AccessSettings["narrationPace"]} */ (
+      elements.narrationPace.value
+    )
   };
 }
 
@@ -154,7 +165,9 @@ function readControls(elements) {
  *   highContrast: HTMLInputElement,
  *   largeMarks: HTMLInputElement,
  *   readerType: HTMLInputElement,
- *   reducedEffects: HTMLInputElement
+ *   reducedEffects: HTMLInputElement,
+ *   trailCompass: HTMLInputElement,
+ *   narrationPace: HTMLSelectElement
  * }} [elements]
  */
 function syncControls(
@@ -166,6 +179,11 @@ function syncControls(
     reducedEffects: requiredElement(
       "access-reduced-effects",
       HTMLInputElement
+    ),
+    trailCompass: requiredElement("access-trail-compass", HTMLInputElement),
+    narrationPace: requiredElement(
+      "access-narration-pace",
+      HTMLSelectElement
     )
   }
 ) {
@@ -173,6 +191,8 @@ function syncControls(
   elements.largeMarks.checked = settings.largeMarks;
   elements.readerType.checked = settings.readerFriendlyQuestions;
   elements.reducedEffects.checked = settings.reducedEffects;
+  elements.trailCompass.checked = settings.trailCompassEnabled;
+  elements.narrationPace.value = settings.narrationPace;
 }
 
 /**

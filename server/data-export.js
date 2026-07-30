@@ -115,7 +115,8 @@ const SECTION_QUERIES = {
     FROM learning_journals
     WHERE clerk_user_id = $1 AND classroom_id = $2`,
   access_settings: `SELECT schema_version, high_contrast, large_marks,
-      reader_friendly_questions, reduced_effects, revision, created_at,
+      reader_friendly_questions, reduced_effects, trail_compass_enabled,
+      narration_pace, revision, created_at,
       updated_at
     FROM explorer_access_settings WHERE clerk_user_id = $1`,
   verified_daily_results: `SELECT daily_date, daily_version, score,

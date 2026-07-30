@@ -2,19 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import { createAccessSettingsStore } from "../server/access-settings-store.js";
 
 const SETTINGS = /** @type {const} */ ({
-  version: 1,
+  version: 2,
   highContrast: true,
   largeMarks: false,
   readerFriendlyQuestions: true,
-  reducedEffects: false
+  reducedEffects: false,
+  trailCompassEnabled: true,
+  narrationPace: "slower"
 });
 
 const ROW = {
-  schema_version: 1,
+  schema_version: 2,
   high_contrast: true,
   large_marks: false,
   reader_friendly_questions: true,
   reduced_effects: false,
+  trail_compass_enabled: true,
+  narration_pace: "slower",
   revision: 3,
   updated_at: "2026-07-28T00:00:00.000Z"
 };

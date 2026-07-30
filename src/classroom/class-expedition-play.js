@@ -13,7 +13,7 @@ import {
  * authority: every start and resume requires the online Grant check.
  *
  * @param {{
- *   client: {
+ *   client?: {
  *     issueClassRunGrant: (
  *       classroomId: string,
  *       expeditionId: string,
@@ -29,7 +29,11 @@ import {
  *       }
  *     ) => Promise<unknown>
  *   },
- *   getUserId: () => string | null,
+ *   getUserId?: () => string | null,
+ *   playerController?: {
+ *     getApiClient: () => Record<string, any>,
+ *     getAuthenticatedUserId: () => string | null
+ *   },
  *   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
  *   announce?: (message: string) => void,
  *   onFailClose?: () => Promise<void> | void
@@ -38,16 +42,22 @@ import {
 export function createClassExpeditionPlay({
   client,
   getUserId,
+  playerController,
   storage = globalThis.localStorage,
   announce = () => {},
   onFailClose = async () => {}
 }) {
+  const api = /** @type {NonNullable<typeof client>} */ (
+    client ?? playerController?.getApiClient()
+  );
+  const resolveUserId =
+    getUserId ?? (() => playerController?.getAuthenticatedUserId() ?? null);
   function selection() {
-    return loadClassExpeditionSelection(storage, getUserId());
+    return loadClassExpeditionSelection(storage, resolveUserId());
   }
 
   function deactivate() {
-    clearClassExpeditionSelection(storage, getUserId());
+    clearClassExpeditionSelection(storage, resolveUserId());
   }
 
   /** @param {unknown} error */
@@ -65,12 +75,12 @@ export function createClassExpeditionPlay({
   }
 
   async function flushPendingOutcome() {
-    const pending = loadPendingClassRunOutcome(storage, getUserId());
+    const pending = loadPendingClassRunOutcome(storage, resolveUserId());
     if (!pending) {
       return;
     }
     try {
-      await client.recordClassRunOutcome(
+      await api.recordClassRunOutcome(
         pending.classroomId,
         pending.expeditionId,
         {
@@ -79,12 +89,12 @@ export function createClassExpeditionPlay({
           outcome: pending.outcome
         }
       );
-      savePendingClassRunOutcome(storage, getUserId(), null);
+      savePendingClassRunOutcome(storage, resolveUserId(), null);
     } catch (error) {
       // Any server verdict settles the pending entry; only transport
       // failures keep it for the next attempt.
       if (statusOf(error) > 0) {
-        savePendingClassRunOutcome(storage, getUserId(), null);
+        savePendingClassRunOutcome(storage, resolveUserId(), null);
       }
       throw error;
     }
@@ -95,7 +105,7 @@ export function createClassExpeditionPlay({
      * @param {{ runId: string, labyrinthNumber: number }} locator
      * @returns {Promise<boolean>} whether the assigned Run may start/resume
      */
-    async authorizeClassRun(locator) {
+    async authorize(locator) {
       const active = selection();
       if (!active) {
         deactivate();
@@ -119,7 +129,7 @@ export function createClassExpeditionPlay({
       }
       try {
         await flushPendingOutcome();
-        await client.issueClassRunGrant(active.classroomId, active.expeditionId, {
+        await api.issueClassRunGrant(active.classroomId, active.expeditionId, {
           runId: locator.runId,
           labyrinthNumber: locator.labyrinthNumber
         });
@@ -146,18 +156,20 @@ export function createClassExpeditionPlay({
     },
 
     /**
-     * @param {{ runId: string, labyrinthNumber: number }} locator
+     * @param {string} runId
+     * @param {number} labyrinthNumber
      * @param {boolean} won
      * @returns {Promise<"recorded" | "pending" | "removed" | "skipped">}
      */
-    async recordClassRunOutcome(locator, won) {
+    async recordOutcome(runId, labyrinthNumber, won) {
+      const locator = { runId, labyrinthNumber };
       const active = selection();
       if (!active) {
         return "skipped";
       }
       const outcome = won ? "escaped" : "defeated";
       try {
-        await client.recordClassRunOutcome(
+        await api.recordClassRunOutcome(
           active.classroomId,
           active.expeditionId,
           {
@@ -180,7 +192,7 @@ export function createClassExpeditionPlay({
           return "removed";
         }
         if (status === 0) {
-          savePendingClassRunOutcome(storage, getUserId(), {
+          savePendingClassRunOutcome(storage, resolveUserId(), {
             classroomId: active.classroomId,
             expeditionId: active.expeditionId,
             runId: locator.runId,

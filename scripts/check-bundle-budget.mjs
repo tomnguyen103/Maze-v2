@@ -15,6 +15,18 @@ const budgets = [
     maxKb: 5
   },
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 12 },
+  {
+    label: "Trail Compass JavaScript",
+    prefix: "trail-compass-",
+    suffix: ".js",
+    maxKb: 6
+  },
+  {
+    label: "Class Expedition play JavaScript",
+    prefix: "class-expedition-play-",
+    suffix: ".js",
+    maxKb: 5
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

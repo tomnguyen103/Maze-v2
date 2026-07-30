@@ -1683,11 +1683,13 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
     localStorage.getItem("echo-maze:explorer-access-settings:v1")
   );
   expect(JSON.parse(storedSettings ?? "null")).toEqual({
-    version: 1,
+    version: 2,
     highContrast: true,
     largeMarks: true,
     readerFriendlyQuestions: true,
-    reducedEffects: true
+    reducedEffects: true,
+    trailCompassEnabled: false,
+    narrationPace: "standard"
   });
   const savedRunFacts = await page.evaluate(() => ({
     seed: document.querySelector("#seed-value")?.textContent,
