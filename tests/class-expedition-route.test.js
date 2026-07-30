@@ -70,6 +70,16 @@ function expeditionStore() {
       baseRefundEligible: false,
       extensionRefundEligibleCount: 0
     })),
+    progressForExpedition: vi.fn(async () => ({
+      startedStudentCount: 2,
+      regionCompleteCount: 1,
+      labyrinths: [
+        { labyrinthNumber: 1, completedCount: 2 },
+        { labyrinthNumber: 2, completedCount: 1 },
+        { labyrinthNumber: 3, completedCount: 1 },
+        { labyrinthNumber: 4, completedCount: 1 }
+      ]
+    })),
     issueRunGrant: vi.fn(async (_userId, _classroomId, _expeditionId, input) => ({
       runId: input.runId,
       status: "issued",
@@ -564,6 +574,29 @@ describe("Class Expedition API", () => {
           status: "escaped"
         }
       ]);
+    });
+  });
+
+  it("serves aggregate-only Expedition progress with no Student fact", async () => {
+    const { handler } = createHandler();
+    await withServer(handler, async (origin) => {
+      const response = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/progress`
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(Object.keys(body.progress).sort()).toEqual([
+        "labyrinths",
+        "regionCompleteCount",
+        "startedStudentCount"
+      ]);
+      expect(body.progress.labyrinths).toHaveLength(4);
+      expect(Object.keys(body.progress.labyrinths[0]).sort()).toEqual([
+        "completedCount",
+        "labyrinthNumber"
+      ]);
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toMatch(/studentName|username|user_|rank/);
     });
   });
 

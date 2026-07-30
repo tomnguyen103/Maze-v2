@@ -206,6 +206,14 @@ export function createPlayerApiClient({
       );
     },
     /** @param {string} classroomId @param {string} expeditionId */
+    async getClassExpeditionProgress(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/progress`
+      );
+    },
+    /** @param {string} classroomId @param {string} expeditionId */
     async getClassExpeditionCapacity(classroomId, expeditionId) {
       return request(
         `/api/classrooms/${encodeURIComponent(

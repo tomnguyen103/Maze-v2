@@ -76,6 +76,14 @@ function workspaceClient() {
       /** @type {Record<string, unknown>[]} */
       grants: []
     })),
+    getClassExpeditionProgress: vi.fn(async () => ({
+      progress: {
+        startedStudentCount: 0,
+        regionCompleteCount: 0,
+        /** @type {Record<string, unknown>[]} */
+        labyrinths: []
+      }
+    })),
     createClassExpedition: vi.fn(async (_classroomId, input) => ({
       expedition: {
         id: "exped_created_1",
@@ -382,6 +390,54 @@ describe("Classroom workspace", () => {
         "closed"
       )
     );
+  });
+
+  it("shows aggregate-only Expedition progress to Teachers", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 1,
+          levelId: "bright-start",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          status: "open",
+          completionDate: null
+        }
+      ]
+    });
+    client.getClassExpeditionProgress.mockResolvedValue({
+      progress: {
+        startedStudentCount: 5,
+        regionCompleteCount: 2,
+        labyrinths: [
+          { labyrinthNumber: 1, completedCount: 5 },
+          { labyrinthNumber: 2, completedCount: 4 },
+          { labyrinthNumber: 3, completedCount: 3 },
+          { labyrinthNumber: 4, completedCount: 2 }
+        ]
+      }
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+
+    await vi.waitFor(() => {
+      expect(client.getClassExpeditionProgress).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1"
+      );
+      expect(root.textContent).toContain("5 started");
+      expect(root.textContent).toContain("2 finished the Region");
+      expect(root.textContent).toContain("L4: 2");
+    });
+    expect(root.textContent).not.toContain("Moss");
   });
 
   it("offers the sponsor test-mode License purchase until the License is paid", async () => {

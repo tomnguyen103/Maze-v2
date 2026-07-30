@@ -330,6 +330,11 @@ describe("Vercel function budget", () => {
         503
       ],
       [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/progress",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/progress",
+        503
+      ],
+      [
         "/api/profile?_classroomRoute=org_class_1/expeditions/../../secret",
         "/api/profile?_classroomRoute=org_class_1/expeditions/../../secret",
         404

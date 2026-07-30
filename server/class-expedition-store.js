@@ -234,6 +234,40 @@ export function createClassExpeditionStore(pool) {
     },
 
     /**
+     * Teacher aggregates: class counts only, straight from the definer
+     * reader. No Student name, identifier, or ordering ever reaches this
+     * shape, and a non-Teacher caller simply receives no rows.
+     *
+     * @param {string} userId
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     */
+    async progressForExpedition(userId, classroomId, expeditionId) {
+      const rows = await withTenantContext(
+        pool,
+        { explorerId: userId, classroomId },
+        async (database) => {
+          const result = await database.query(
+            "SELECT * FROM read_class_expedition_progress($1, $2)",
+            [classroomId, expeditionId]
+          );
+          return result.rows;
+        }
+      );
+      if (rows.length === 0) {
+        throw new ClassroomAccessDeniedError();
+      }
+      return {
+        startedStudentCount: Number(rows[0]?.started_student_count ?? 0),
+        regionCompleteCount: Number(rows[0]?.region_complete_count ?? 0),
+        labyrinths: rows.map((row) => ({
+          labyrinthNumber: Number(row.labyrinth_number),
+          completedCount: Number(row.completed_count)
+        }))
+      };
+    },
+
+    /**
      * @param {string} userId
      * @param {string} classroomId
      * @param {string} expeditionId

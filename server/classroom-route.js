@@ -21,7 +21,7 @@ const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPEDITION_SUBPATH_PATTERN =
-  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|grants|grants\/outcome)$/;
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|progress|grants|grants\/outcome)$/;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -253,7 +253,12 @@ function advisoryCompletionDate(value) {
  *       userId: string,
  *       classroomId: string,
  *       expeditionId: string
- *     ) => Promise<Record<string, unknown>[]>
+ *     ) => Promise<Record<string, unknown>[]>,
+ *     progressForExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>
  *   },
  *   billing?: {
  *     createLicenseCheckout: (purchase: {
@@ -370,6 +375,7 @@ export function createClassroomHandler({
       }
 
       const selectedClassroomId = classroomId(pathname);
+      const expeditionMatch = pathname.match(EXPEDITION_SUBPATH_PATTERN);
       if (pathname.endsWith("/domain")) {
         await store.requireTeacher(userId, selectedClassroomId);
         if (request.method === "GET") {
@@ -431,7 +437,7 @@ export function createClassroomHandler({
         sendJson(response, 200, { verifiedDomain: registered });
         return;
       }
-      if (pathname.endsWith("/progress")) {
+      if (pathname.endsWith("/progress") && !expeditionMatch) {
         if (request.method !== "GET") {
           response.setHeader("allow", "GET");
           sendJson(response, 405, {
@@ -516,7 +522,6 @@ export function createClassroomHandler({
         return;
       }
 
-      const expeditionMatch = pathname.match(EXPEDITION_SUBPATH_PATTERN);
       if (expeditionMatch) {
         const expeditionId = expeditionMatch[1];
         const subResource = expeditionMatch[2];
@@ -633,6 +638,23 @@ export function createClassroomHandler({
           }
           sendJson(response, 200, {
             capacity: await store.capacityForTeacher(
+              userId,
+              selectedClassroomId,
+              expeditionId
+            )
+          });
+          return;
+        }
+        if (subResource === "progress") {
+          if (request.method !== "GET") {
+            response.setHeader("allow", "GET");
+            sendJson(response, 405, {
+              error: "Use GET for Class Expedition progress."
+            });
+            return;
+          }
+          sendJson(response, 200, {
+            progress: await store.progressForExpedition(
               userId,
               selectedClassroomId,
               expeditionId

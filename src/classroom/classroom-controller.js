@@ -87,6 +87,10 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
  *       classroomId: string,
  *       expeditionId: string
  *     ) => Promise<{ grants?: unknown }>,
+ *     getClassExpeditionProgress: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ progress?: Record<string, unknown> }>,
  *     purchaseClassExpeditionLicense: (
  *       classroomId: string,
  *       expeditionId: string,
@@ -1011,10 +1015,42 @@ export async function renderClassroom(root, dependencies = {}) {
       capacityLine.className = "classroom-expedition-card__capacity";
       capacityLine.setAttribute("role", "status");
       capacityLine.textContent = "Checking seats and License…";
+      const progressLine = document.createElement("p");
+      progressLine.className = "classroom-expedition-card__progress";
+      progressLine.textContent = "Checking class progress…";
       const actions = document.createElement("div");
       actions.className = "classroom-form__row";
       actions.append(toggle);
-      card.append(heading, facts, capacityLine, actions);
+      card.append(heading, facts, progressLine, capacityLine, actions);
+      void (async () => {
+        try {
+          const result = await client.getClassExpeditionProgress(
+            entry.id,
+            String(record.id)
+          );
+          const summary = /** @type {Record<string, unknown>} */ (
+            result.progress ?? {}
+          );
+          const labyrinths = Array.isArray(summary.labyrinths)
+            ? /** @type {Record<string, unknown>[]} */ (summary.labyrinths)
+            : [];
+          const perLabyrinth = labyrinths
+            .map(
+              (lab) =>
+                `L${Number(lab.labyrinthNumber)}: ${Number(
+                  lab.completedCount
+                )}`
+            )
+            .join(" · ");
+          progressLine.textContent =
+            `${Number(summary.startedStudentCount ?? 0)} started · ` +
+            `${Number(summary.regionCompleteCount ?? 0)} finished the Region` +
+            (perLabyrinth ? ` · ${perLabyrinth}` : "");
+        } catch {
+          progressLine.textContent =
+            "Class progress counts are unavailable right now.";
+        }
+      })();
       void (async () => {
         try {
           const result = await client.getClassExpeditionCapacity(
