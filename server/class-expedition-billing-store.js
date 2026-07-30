@@ -25,24 +25,37 @@ import { withTenantContext } from "./tenant-context.js";
 export function createClassExpeditionBillingStore(pool) {
   return {
     /**
+     * Reservation runs inside the sponsor's tenant transaction: the definer
+     * verifies the transaction-local Teacher identity against the
+     * Expedition's own Classroom, so a Teacher of one Classroom cannot
+     * reserve a License against another Classroom's Expedition.
+     *
      * @param {string} sponsorUserId
      * @param {{
      *   purchaseId: string,
      *   expeditionId: string,
+     *   classroomId: string,
      *   kind: "base" | "extension",
      *   priceId: string
      * }} input
      */
     async reserveLicense(sponsorUserId, input) {
-      await pool.query(
-        "SELECT reserve_class_expedition_license($1, $2, $3, $4, $5)",
-        [
-          input.purchaseId,
-          input.expeditionId,
-          input.kind,
-          sponsorUserId,
-          input.priceId
-        ]
+      const connectable =
+        /** @type {Parameters<typeof withTenantContext>[0]} */ (pool);
+      await withTenantContext(
+        connectable,
+        { explorerId: sponsorUserId, classroomId: input.classroomId },
+        (database) =>
+          database.query(
+            "SELECT reserve_class_expedition_license($1, $2, $3, $4, $5)",
+            [
+              input.purchaseId,
+              input.expeditionId,
+              input.kind,
+              sponsorUserId,
+              input.priceId
+            ]
+          )
       );
       return true;
     },

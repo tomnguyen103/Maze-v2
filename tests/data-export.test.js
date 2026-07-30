@@ -266,10 +266,16 @@ describe("buildUserExport", () => {
     const adapter = fixtureAdapter();
     await buildUserExport(adapter, USER, { now: () => "x" });
     for (const sql of adapter.queries) {
+      // The two Class Expedition definer readers bind to the
+      // transaction-local Explorer identity instead of a parameter.
+      if (sql.includes("read_own_class_expedition_")) {
+        continue;
+      }
       expect(sql).toContain("$1");
     }
-    // Personal sections plus three Classroom-scoped sections.
-    expect(adapter.queries).toHaveLength(15);
+    // Personal sections plus four Classroom-scoped sections and the two
+    // Explorer-keyed Class Expedition definer readers.
+    expect(adapter.queries).toHaveLength(18);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -345,7 +351,7 @@ describe("exportUserSnapshot", () => {
     expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
     // Context plus 12 section reads between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(15);
+    expect(pool.statements).toHaveLength(17);
     expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });

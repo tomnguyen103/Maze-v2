@@ -29,6 +29,7 @@ export class ExpeditionBillingError extends Error {
  *       input: {
  *         purchaseId: string,
  *         expeditionId: string,
+ *         classroomId: string,
  *         kind: "base" | "extension",
  *         priceId: string
  *       }
@@ -79,12 +80,12 @@ export function createClassExpeditionBilling({
      * }} purchase
      */
     async createLicenseCheckout({ userId, classroomId, expeditionId, kind }) {
-      void classroomId;
       const priceId = kind === "base" ? basePriceId : extensionPriceId;
       const purchaseId = createId();
       await store.reserveLicense(userId, {
         purchaseId,
         expeditionId,
+        classroomId,
         kind,
         priceId
       });

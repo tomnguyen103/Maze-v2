@@ -15,7 +15,7 @@ export class ClassExpeditionStateError extends Error {
   }
 }
 
-const STATE_MESSAGES = [
+export const STATE_MESSAGES = [
   "Class Expedition is closed.",
   "Class Expedition capacity is fully assigned.",
   "Class Expedition has no paid base License.",
@@ -68,6 +68,12 @@ function mapDatabaseError(error) {
   }
   if (message.includes("outside the assigned Atlas Region")) {
     return new InputError("Labyrinth is outside the assigned Atlas Region.");
+  }
+  // Two simultaneous first Grants for the same Labyrinth race past the
+  // row lock (no row exists yet); the primary key wins the race and the
+  // loser retries into the idempotent duplicate path.
+  if (code === "23505" && message.includes("classroom_run_grants")) {
+    return new ClassExpeditionStateError("Classroom Run Grant conflict.");
   }
   return error;
 }
@@ -280,9 +286,9 @@ export function createClassExpeditionStore(pool) {
           const result = await database.query(
             `SELECT labyrinth_number, run_id, status
              FROM classroom_run_grants
-             WHERE expedition_id = $1
+             WHERE expedition_id = $1 AND clerk_user_id = $2
              ORDER BY labyrinth_number`,
-            [expeditionId]
+            [expeditionId, userId]
           );
           return result.rows.map((row) => ({
             labyrinthNumber: Number(row.labyrinth_number),

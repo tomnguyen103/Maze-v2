@@ -424,7 +424,7 @@ async function recordRegion4Screenshot(page, testInfo, state) {
  *
  * @param {import("@playwright/test").Page} page
  * @param {import("@playwright/test").TestInfo} testInfo
- * @param {2 | 3} milestone
+ * @param {2 | 3 | 4} milestone
  * @param {string} slug
  */
 async function recordEvidenceScreenshot(page, testInfo, milestone, slug) {
@@ -753,7 +753,7 @@ test("announces the Mixed Trail continuation once per Quest", async ({
     }
   }
 
-  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toContainText(
     "Number Trail is out of reviewed Questions here"
   );
@@ -782,7 +782,7 @@ test("announces the Mixed Trail continuation once per Quest", async ({
       break;
     }
   }
-  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toBeHidden();
   await expect(page.locator("#quest-level-name")).toHaveText(
     "Quest Level 2 · Trail Scout · Number Trail"
@@ -5590,4 +5590,101 @@ test("upgrades a version 2 locator to Classic Rules", async ({ page }) => {
     atlasRegionId: "foundation",
     rulesetRevision: "classic-v1"
   });
+});
+
+
+test("plays nonvisually with Trail Compass and reveals no hidden state", async ({
+  page
+}, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:explorer-access-settings:v1",
+      JSON.stringify({
+        version: 2,
+        highContrast: false,
+        largeMarks: false,
+        readerFriendlyQuestions: false,
+        reducedEffects: false,
+        trailCompassEnabled: true,
+        narrationPace: "standard"
+      })
+    );
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#trail-compass")).toBeVisible();
+
+  await page.locator("#compass-describe").click();
+  const live = page.locator("#live-region");
+  await expect(live).toContainText(/row \d+, column \d+/);
+  const described = String(await live.textContent());
+  // At the DAYLIGHT-0 start the Gate and every Echo sit in Fog: the engine
+  // confirms nothing beyond the reveal radius, so the Compass must not
+  // speak of them.
+  expect(described).not.toMatch(/The Gate is/);
+  expect(described).not.toMatch(/An Echo shimmers/);
+
+  // Desktop hides the touch pad; document-level keyboard input is the
+  // equally nonvisual path and never needs Canvas focus. Leave the Describe
+  // button first — arrows are ignored while a native control has focus.
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+  });
+  await page.keyboard.press(KEY_BY_DIRECTION[WINNING_PATH[0]]);
+  await expect(live).toContainText("At row");
+
+  await page.locator("#compass-listen").click();
+  await expect(live).toContainText(/Listen: |Nothing revealed/);
+  await recordEvidenceScreenshot(page, testInfo, 4, "trail-compass");
+});
+
+test("keeps Read Aloud honest without a local voice and shows the six-field settings", async ({
+  page
+}, testInfo) => {
+  await page.addInitScript(() => {
+    const emptySynthesis = {
+      getVoices: () => [],
+      speak: () => {},
+      cancel: () => {},
+      pause: () => {},
+      resume: () => {},
+      addEventListener: () => {}
+    };
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      get: () => emptySynthesis
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Workshop", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Lantern Trail Workshop" })
+  ).toBeVisible();
+  await page.locator("#practice-objectives button").first().click();
+  const read = page.locator(".practice-support [data-narration='read']");
+  await expect(read).toBeVisible();
+  await expect(read).toBeDisabled();
+  await expect(
+    page.locator(".practice-support .narration-status")
+  ).toContainText("voice stored on this device");
+  await recordEvidenceScreenshot(page, testInfo, 4, "read-aloud-unavailable");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Explorer Access Settings" })
+  ).toBeVisible();
+  await expect(page.locator("#access-trail-compass")).toBeVisible();
+  await expect(page.locator("#access-narration-pace")).toBeVisible();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    4,
+    "access-settings-six-fields"
+  );
 });

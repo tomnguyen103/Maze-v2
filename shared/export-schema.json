@@ -21,6 +21,9 @@
         "journal",
         "class_quest_progress",
         "class_journals",
+        "class_run_grants",
+        "class_expedition_seats",
+        "class_expedition_licenses",
         "access_settings",
         "verified_daily_results",
         "verified_daily_best_results",
@@ -77,6 +80,21 @@
         },
         "class_journals": {
           "description": "Class Play learning_journals rows, each identified by classroom_id.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "class_run_grants": {
+          "description": "Classroom Run Grants issued to this Explorer for assigned Class Expeditions: Labyrinth, Run identifier, and outcome status.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "class_expedition_seats": {
+          "description": "Non-recyclable Class Expedition seats assigned to this Explorer.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "class_expedition_licenses": {
+          "description": "Class Expedition Licenses and extensions this Explorer sponsored (Stripe identifiers only, never card data).",
           "type": "array",
           "items": { "type": "object" }
         },

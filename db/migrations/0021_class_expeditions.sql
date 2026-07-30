@@ -9,6 +9,8 @@
 -- Authoritative Classroom Membership removal cascades Grants away, while
 -- assigned seats deliberately survive it.
 
+BEGIN;
+
 CREATE TABLE class_expeditions (
   id TEXT PRIMARY KEY CHECK (id ~ '^exped_[A-Za-z0-9_-]{3,120}$'),
   classroom_id TEXT NOT NULL
@@ -171,6 +173,8 @@ CREATE POLICY class_expeditions_teacher_insert
     )
   );
 
+-- Tenant-owner ALL policies below are the definer functions' working set;
+-- runtime-facing access stays confined to the narrow policies above.
 CREATE POLICY class_expeditions_tenant_owner_write
   ON class_expeditions
   FOR ALL
@@ -300,6 +304,23 @@ BEGIN
     RAISE EXCEPTION 'Class Expedition not found.';
   END IF;
 
+  -- Sponsor purchases are Teacher-initiated in this milestone: the caller's
+  -- transaction-local identity must be a Teacher of the Expedition's own
+  -- Classroom, and the sponsor parameter must be that same identity.
+  IF v_classroom IS DISTINCT FROM
+       NULLIF(current_setting('echo_maze.classroom_id', true), '')
+     OR p_sponsor_user_id IS DISTINCT FROM
+       NULLIF(current_setting('echo_maze.explorer_id', true), '')
+     OR NOT EXISTS (
+       SELECT 1
+       FROM public.classroom_memberships AS teacher
+       WHERE teacher.classroom_id = v_classroom
+         AND teacher.clerk_user_id = p_sponsor_user_id
+         AND teacher.role = 'teacher'
+     ) THEN
+    RAISE EXCEPTION 'Class Expedition access denied.';
+  END IF;
+
   -- An extension only makes sense once a base License is paid.
   IF p_kind = 'extension' AND NOT EXISTS (
     SELECT 1
@@ -335,6 +356,11 @@ BEGIN
 END;
 $$;
 
+-- Activation and status transitions are driven by verified Stripe webhook
+-- deliveries, which carry no Explorer session: these two functions therefore
+-- gate on validated inputs and monotonic provider timestamps rather than the
+-- transaction-local tenant context. EXECUTE stays limited to the runtime
+-- role, and the webhook inbox is the only caller in the application.
 CREATE FUNCTION activate_class_expedition_license(
   p_purchase_id UUID,
   p_checkout_session_id TEXT,
@@ -408,6 +434,9 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_purchase_id
     AND state_event_created < p_event_created
+    -- A dispute resolution may only reinstate a License that is actually
+    -- disputed; it can never resurrect a refunded or expired purchase.
+    AND (p_status <> 'paid' OR status = 'disputed')
   RETURNING TRUE INTO applied;
 
   RETURN applied IS NOT DISTINCT FROM TRUE;
@@ -491,7 +520,11 @@ BEGIN
       RETURN;
     END IF;
 
-    IF v_grant.status = 'defeated' THEN
+    -- Defeat retries and lost terminal acknowledgements both re-point the
+    -- same Grant to the Student's fresh Run: without the 'issued' branch a
+    -- transient failure while recording an outcome would strand this
+    -- Labyrinth forever. 'escaped' stays terminal.
+    IF v_grant.status IN ('issued', 'defeated') THEN
       IF v_expedition.status <> 'open' THEN
         RAISE EXCEPTION 'Class Expedition is closed.';
       END IF;
@@ -511,12 +544,15 @@ BEGIN
     RAISE EXCEPTION 'Class Expedition is closed.';
   END IF;
 
+  -- ADR 0030: billing disputes never automatically interrupt Class Play.
+  -- A disputed base License keeps funding Grants; only refunded, expired,
+  -- failed, or never-paid Licenses block new assigned play.
   IF NOT EXISTS (
     SELECT 1
     FROM public.class_expedition_licenses
     WHERE expedition_id = p_expedition_id
       AND kind = 'base'
-      AND status = 'paid'
+      AND status IN ('paid', 'disputed')
   ) THEN
     RAISE EXCEPTION 'Class Expedition has no paid base License.';
   END IF;
@@ -534,9 +570,12 @@ BEGIN
     FROM public.class_expedition_licenses
     WHERE expedition_id = p_expedition_id
       AND kind = 'extension'
-      AND status = 'paid';
+      AND status IN ('paid', 'disputed');
 
-    SELECT COUNT(*) INTO v_assigned
+    -- Consumed capacity is the highest seat number ever assigned, not the
+    -- surviving row count: account deletion cascades a seat row away as
+    -- personal data, but the seat itself is never recycled.
+    SELECT COALESCE(MAX(seat_number), 0) INTO v_assigned
     FROM public.class_expedition_seats
     WHERE expedition_id = p_expedition_id;
 
@@ -734,7 +773,7 @@ AS $$
       )
   ),
   assigned AS (
-    SELECT COUNT(*)::BIGINT AS seat_count
+    SELECT COALESCE(MAX(seats.seat_number), 0)::BIGINT AS seat_count
     FROM public.class_expedition_seats AS seats
     WHERE seats.expedition_id = p_expedition_id
   ),
@@ -751,7 +790,13 @@ AS $$
             WHERE earlier.expedition_id = p_expedition_id
               AND earlier.kind = 'extension'
               AND earlier.status = 'paid'
-              AND earlier.created_at < licenses.created_at
+              AND (
+                earlier.created_at < licenses.created_at
+                OR (
+                  earlier.created_at = licenses.created_at
+                  AND earlier.id < licenses.id
+                )
+              )
           )
       )::BIGINT AS refund_eligible_count
     FROM public.class_expedition_licenses AS licenses
@@ -777,6 +822,59 @@ AS $$
   CROSS JOIN extensions
 $$;
 
+-- Self-service data export: an Explorer's own seat and sponsored-License
+-- facts are personal data. Both readers key on the transaction-local
+-- Explorer identity and return nothing for anyone else.
+CREATE FUNCTION read_own_class_expedition_seats()
+RETURNS TABLE (
+  expedition_id TEXT,
+  seat_number INTEGER,
+  assigned_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT seats.expedition_id, seats.seat_number, seats.assigned_at
+  FROM public.class_expedition_seats AS seats
+  WHERE seats.clerk_user_id =
+    NULLIF(current_setting('echo_maze.explorer_id', true), '')
+  ORDER BY seats.assigned_at, seats.expedition_id
+$$;
+
+CREATE FUNCTION read_own_class_expedition_licenses()
+RETURNS TABLE (
+  id UUID,
+  expedition_id TEXT,
+  classroom_id TEXT,
+  kind TEXT,
+  seats SMALLINT,
+  stripe_price_id TEXT,
+  checkout_session_id TEXT,
+  payment_intent_id TEXT,
+  amount INTEGER,
+  currency TEXT,
+  status TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT licenses.id, licenses.expedition_id, licenses.classroom_id,
+    licenses.kind, licenses.seats, licenses.stripe_price_id,
+    licenses.checkout_session_id, licenses.payment_intent_id,
+    licenses.amount, licenses.currency, licenses.status,
+    licenses.created_at, licenses.updated_at
+  FROM public.class_expedition_licenses AS licenses
+  WHERE licenses.sponsor_user_id =
+    NULLIF(current_setting('echo_maze.explorer_id', true), '')
+  ORDER BY licenses.created_at, licenses.id
+$$;
+
 ALTER FUNCTION close_class_expedition(TEXT, TEXT)
   OWNER TO echo_maze_tenant_owner;
 ALTER FUNCTION reserve_class_expedition_license(UUID, TEXT, TEXT, TEXT, TEXT)
@@ -793,6 +891,10 @@ ALTER FUNCTION record_classroom_run_outcome(TEXT, SMALLINT, TEXT, TEXT)
 ALTER FUNCTION read_class_expedition_progress(TEXT, TEXT)
   OWNER TO echo_maze_tenant_owner;
 ALTER FUNCTION read_class_expedition_capacity(TEXT)
+  OWNER TO echo_maze_tenant_owner;
+ALTER FUNCTION read_own_class_expedition_seats()
+  OWNER TO echo_maze_tenant_owner;
+ALTER FUNCTION read_own_class_expedition_licenses()
   OWNER TO echo_maze_tenant_owner;
 
 REVOKE ALL ON FUNCTION close_class_expedition(TEXT, TEXT) FROM PUBLIC;
@@ -813,6 +915,8 @@ REVOKE ALL ON FUNCTION record_classroom_run_outcome(
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION read_class_expedition_progress(TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION read_class_expedition_capacity(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION read_own_class_expedition_seats() FROM PUBLIC;
+REVOKE ALL ON FUNCTION read_own_class_expedition_licenses() FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION close_class_expedition(TEXT, TEXT)
   TO echo_maze_runtime;
@@ -835,3 +939,9 @@ GRANT EXECUTE ON FUNCTION read_class_expedition_progress(TEXT, TEXT)
   TO echo_maze_runtime;
 GRANT EXECUTE ON FUNCTION read_class_expedition_capacity(TEXT)
   TO echo_maze_runtime;
+GRANT EXECUTE ON FUNCTION read_own_class_expedition_seats()
+  TO echo_maze_runtime;
+GRANT EXECUTE ON FUNCTION read_own_class_expedition_licenses()
+  TO echo_maze_runtime;
+
+COMMIT;

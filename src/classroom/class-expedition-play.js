@@ -4,6 +4,7 @@ import {
   loadPendingClassRunOutcome,
   savePendingClassRunOutcome
 } from "./class-expedition-selection.js";
+import { loadSelectedClassroom } from "./classroom-selection.js";
 
 /**
  * Game-side Class Expedition companion, loaded lazily so the game bundle
@@ -52,8 +53,27 @@ export function createClassExpeditionPlay({
   );
   const resolveUserId =
     getUserId ?? (() => playerController?.getAuthenticatedUserId() ?? null);
+  /**
+   * The Expedition selection is only live while its Classroom is still the
+   * selected Class Play context. A stale selection (Personal Play resumed,
+   * or another Classroom chosen) retires itself so Personal Runs are never
+   * routed through Classroom Run Grants.
+   */
   function selection() {
-    return loadClassExpeditionSelection(storage, resolveUserId());
+    const userId = resolveUserId();
+    const active = loadClassExpeditionSelection(storage, userId);
+    if (!active) {
+      return null;
+    }
+    const selectedClassroom = loadSelectedClassroom(
+      /** @type {Storage} */ (storage),
+      userId
+    );
+    if (selectedClassroom !== active.classroomId) {
+      clearClassExpeditionSelection(storage, userId);
+      return null;
+    }
+    return active;
   }
 
   function deactivate() {
@@ -91,9 +111,10 @@ export function createClassExpeditionPlay({
       );
       savePendingClassRunOutcome(storage, resolveUserId(), null);
     } catch (error) {
-      // Any server verdict settles the pending entry; only transport
-      // failures keep it for the next attempt.
-      if (statusOf(error) > 0) {
+      // Only a definitive server verdict settles the pending entry; a
+      // transport failure, 5xx, or rate limit keeps it for the next attempt.
+      const status = statusOf(error);
+      if (status === 400 || status === 403 || status === 404 || status === 409) {
         savePendingClassRunOutcome(storage, resolveUserId(), null);
       }
       throw error;
@@ -103,14 +124,15 @@ export function createClassExpeditionPlay({
   return {
     /**
      * @param {{ runId: string, labyrinthNumber: number }} locator
-     * @returns {Promise<boolean>} whether the assigned Run may start/resume
+     * @returns {Promise<boolean | null>} true/false for an assigned Run;
+     *   null when no live Class Expedition governs this device, so normal
+     *   Personal admission should continue.
      */
     async authorize(locator) {
       const active = selection();
       if (!active) {
         deactivate();
-        announce("Open your Classroom page to continue the Class Expedition.");
-        return false;
+        return null;
       }
       const regionEnd = active.atlasRegion * 4;
       const regionStart = regionEnd - 3;
@@ -159,7 +181,7 @@ export function createClassExpeditionPlay({
      * @param {string} runId
      * @param {number} labyrinthNumber
      * @param {boolean} won
-     * @returns {Promise<"recorded" | "pending" | "removed" | "skipped">}
+     * @returns {Promise<"recorded" | "pending" | "removed" | "rejected" | "skipped">}
      */
     async recordOutcome(runId, labyrinthNumber, won) {
       const locator = { runId, labyrinthNumber };
@@ -191,17 +213,26 @@ export function createClassExpeditionPlay({
           await handleMembershipLoss();
           return "removed";
         }
-        if (status === 0) {
-          savePendingClassRunOutcome(storage, resolveUserId(), {
-            classroomId: active.classroomId,
-            expeditionId: active.expeditionId,
-            runId: locator.runId,
-            labyrinthNumber: locator.labyrinthNumber,
-            outcome
-          });
-          return "pending";
+        if (status === 400 || status === 404 || status === 409) {
+          // A definitive server rejection is a real verdict, not a success:
+          // say so instead of silently dropping the Class outcome.
+          announce(
+            error instanceof Error && error.message
+              ? error.message
+              : "This Class Run outcome could not be recorded."
+          );
+          return "rejected";
         }
-        return "recorded";
+        // Transport failures, 5xx, and rate limits are retryable: keep one
+        // bounded pending outcome so the Grant cannot strand as issued.
+        savePendingClassRunOutcome(storage, resolveUserId(), {
+          classroomId: active.classroomId,
+          expeditionId: active.expeditionId,
+          runId: locator.runId,
+          labyrinthNumber: locator.labyrinthNumber,
+          outcome
+        });
+        return "pending";
       }
     }
   };

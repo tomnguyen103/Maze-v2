@@ -203,6 +203,10 @@ export function createQuestionNarration({
       speaking = true;
       paused = false;
       pause.textContent = "Pause";
+      utterance.onend = () => {
+        speaking = false;
+        paused = false;
+      };
       synthesis?.speak(utterance);
     });
     pause.addEventListener("click", () => {
@@ -224,10 +228,29 @@ export function createQuestionNarration({
     const dialog = root.getElementById(config.dialogId);
     if (dialog) {
       dialog.addEventListener("close", stop);
+      // The Echo Lens surface is a <details> element: collapsing it fires
+      // toggle, not close, and must cancel speech just the same.
+      dialog.addEventListener("toggle", () => {
+        if (!(/** @type {{ open?: boolean }} */ (dialog).open)) {
+          stop();
+        }
+      });
       // Replaced or re-rendered content cancels speech immediately: the
-      // spoken words must never outlive the exact visible revision.
-      const observer = new MutationObserver(() => {
-        if (speaking) {
+      // spoken words must never outlive the exact visible revision. The
+      // controls row itself is exempt — Pause flipping its own label must
+      // not read as a content change and self-cancel the narration.
+      const observer = new MutationObserver((records) => {
+        if (!speaking) {
+          return;
+        }
+        const external = records.some((record) => {
+          const node =
+            record.target instanceof Element
+              ? record.target
+              : record.target.parentElement;
+          return !node?.closest(".narration-controls");
+        });
+        if (external) {
           stop();
         }
       });
@@ -236,7 +259,7 @@ export function createQuestionNarration({
         characterData: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["hidden"]
+        attributeFilter: ["hidden", "open"]
       });
     }
 

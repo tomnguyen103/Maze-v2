@@ -90,6 +90,7 @@ describe("Class Expedition billing", () => {
     expect(store.reserveLicense).toHaveBeenCalledWith("user_sponsor_1", {
       purchaseId: "9d2f8a34-0000-4000-8000-000000000001",
       expeditionId: "exped_billing_1",
+      classroomId: "org_class_1",
       kind: "base",
       priceId: BASE_PRICE
     });

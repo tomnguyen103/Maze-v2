@@ -110,7 +110,7 @@ let echoLensRequestId = 0;
 let deferChallengeQuestionForLens = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
-/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
+/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled" | "compass-echo" | "compass-gate" | "compass-warden"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
@@ -1613,13 +1613,20 @@ function loadClassExpeditionPlay() {
         playerController,
         announce,
         onFailClose: async () => {
+          // Stop the assigned Run and delete only its local recovery.
+          // Personal Run Replays are unrelated memories and stay.
           activeRunLocator = null;
           clearActiveRunLocator();
-          await clearActiveRunRecoveryForIdentityChange();
+          clearActiveRunRecoveryOnly();
         }
       })
     )
-    .catch(() => null);
+    .catch(() => {
+      // A failed chunk load must not be cached forever: the next start
+      // retries instead of stranding Class Play behind one bad fetch.
+      classExpeditionPlayPromise = undefined;
+      return null;
+    });
   return classExpeditionPlayPromise;
 }
 
@@ -2522,11 +2529,15 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
     // Class Runs are Classroom-sponsored and never offline: every start and
     // resume rechecks Membership and assignment through the Grant request.
     const classPlay = await classPlayLoading;
-    if (classPlay) {
-      return classPlay.authorize(locator);
+    if (!classPlay) {
+      announce("Run access could not be checked. Try again.");
+      return false;
     }
-    announce("Run access could not be checked. Try again.");
-    return false;
+    const verdict = await classPlay.authorize(locator);
+    if (verdict !== null) {
+      return verdict === true;
+    }
+    // Stale flag: no live Class Expedition — Personal admission continues.
   }
   let config;
   try {
@@ -2872,6 +2883,10 @@ function clearActiveRunRecoveryForIdentityChange() {
     announce(message);
     showEvent(message);
   }
+  clearActiveRunRecoveryOnly();
+}
+
+function clearActiveRunRecoveryOnly() {
   if (!activeRunRecoveryController) {
     if (scrubActiveRunRecovery()) {
       return;

@@ -252,7 +252,7 @@ export function describeCompassAction(run) {
  * @param {{
  *   getRun: () => GameRun | null | undefined,
  *   announce: (message: string) => void,
- *   playCue?: (cue: any) => void,
+ *   playCue?: (cue: "compass-echo" | "compass-gate" | "compass-warden") => void,
  *   root?: Document
  * }} dependencies
  */

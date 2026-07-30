@@ -688,6 +688,13 @@ describe("Class Expedition migration", () => {
     expect(sql.match(/OWNER TO echo_maze_tenant_owner/g)?.length ?? 0)
       .toBeGreaterThanOrEqual(4);
     expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0020");
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+    expect(sql).toContain("status IN ('paid', 'disputed')");
+    expect(sql).toContain("COALESCE(MAX(seat_number), 0)");
+    expect(sql).toContain("(p_status <> 'paid' OR status = 'disputed')");
+    expect(sql).toContain("read_own_class_expedition_seats");
+    expect(sql).toContain("read_own_class_expedition_licenses");
     expect(sql).not.toContain("BYPASSRLS");
     expect(sql).not.toContain("DROP TABLE");
   });
@@ -729,6 +736,17 @@ describe("Class Expedition migration", () => {
     );
   });
 
+  it("gates License reservation on the sponsor's own Classroom authority", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+    const reserve = sql.slice(
+      sql.indexOf("CREATE FUNCTION reserve_class_expedition_license"),
+      sql.indexOf("CREATE FUNCTION activate_class_expedition_license")
+    );
+    expect(reserve).toContain("current_setting('echo_maze.classroom_id'");
+    expect(reserve).toContain("current_setting('echo_maze.explorer_id'");
+    expect(reserve).toContain("role = 'teacher'");
+  });
+
   it("keeps licenses and seats reachable only through definer functions", async () => {
     const sql = await readFile(migrationUrl, "utf8");
 
@@ -762,11 +780,11 @@ describe("Class Expedition migration", () => {
     expect(sql).toContain("CREATE FUNCTION record_classroom_run_outcome");
     expect(sql).toContain("CREATE FUNCTION read_class_expedition_progress");
     expect(sql).toContain("CREATE FUNCTION read_class_expedition_capacity");
-    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(8);
-    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(8);
+    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(10);
+    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(10);
     expect(sql.match(/REVOKE ALL ON FUNCTION [^;]+ FROM PUBLIC/g))
-      .toHaveLength(8);
-    expect(sql.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(8);
+      .toHaveLength(10);
+    expect(sql.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(10);
     expect(sql).toContain("pg_advisory_xact_lock");
     expect(sql).toContain("role = 'student'");
     expect(sql).toContain("role = 'teacher'");
@@ -846,6 +864,18 @@ describe("Class Expedition migration", () => {
     expect(sql).not.toMatch(/voice|speech|audio_url/i);
   });
 
+  it("raises exactly the messages the store maps to state errors", async () => {
+    const [sql, { STATE_MESSAGES }] = await Promise.all([
+      readFile(migrationUrl, "utf8"),
+      import("../server/class-expedition-store.js")
+    ]);
+    // The store routes 409s by matching these exact strings; a reworded
+    // RAISE would silently degrade a state conflict into a 500.
+    for (const message of STATE_MESSAGES) {
+      expect(sql).toContain(message);
+    }
+  });
+
   it("exposes aggregate counts only, never a named Student fact", async () => {
     const sql = await readFile(migrationUrl, "utf8");
 
@@ -853,7 +883,7 @@ describe("Class Expedition migration", () => {
       sql.indexOf("CREATE FUNCTION read_class_expedition_progress")
     );
     expect(progressReader).toContain("COUNT(");
-    expect(progressReader.slice(0, sql.length)).not.toContain("username");
+    expect(progressReader).not.toContain("username");
     expect(sql).not.toMatch(/\bstudent_name\b/);
     expect(sql).not.toMatch(/prompt|answer_text|selected_answer|route/i);
     expect(sql).not.toMatch(/\brank\b/i);

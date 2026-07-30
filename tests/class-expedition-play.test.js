@@ -8,6 +8,7 @@ import {
   saveClassExpeditionSelection,
   savePendingClassRunOutcome
 } from "../src/classroom/class-expedition-selection.js";
+import { saveSelectedClassroom } from "../src/classroom/classroom-selection.js";
 
 const USER = "user_student_play_1";
 const SELECTION = {
@@ -44,6 +45,7 @@ function apiError(status, message = "denied") {
 /** @param {Record<string, unknown>} [clientOverrides] */
 function play(clientOverrides = {}) {
   const storage = fakeStorage();
+  saveSelectedClassroom(SELECTION.classroomId, storage, USER);
   saveClassExpeditionSelection(storage, USER, SELECTION);
   const client = {
     issueClassRunGrant: vi.fn(async () => ({
@@ -198,5 +200,31 @@ describe("Class Expedition play", () => {
     expect(loadPendingClassRunOutcome(storage, USER)).not.toBeNull();
     savePendingClassRunOutcome(storage, USER, null);
     expect(loadPendingClassRunOutcome(storage, USER)).toBeNull();
+  });
+});
+
+
+describe("stale Class Expedition selections", () => {
+  it("retires the selection and yields to Personal Play when the Classroom changed", async () => {
+    const storage = fakeStorage();
+    saveSelectedClassroom("org_other_classroom_1", storage, USER);
+    saveClassExpeditionSelection(storage, USER, SELECTION);
+    const client = {
+      issueClassRunGrant: vi.fn(async () => ({ grant: {} })),
+      recordClassRunOutcome: vi.fn(async () => ({}))
+    };
+    const module = createClassExpeditionPlay({
+      client,
+      getUserId: () => USER,
+      storage,
+      announce: vi.fn(),
+      onFailClose: vi.fn()
+    });
+    await expect(
+      module.authorize({ runId: "class_run_p0009", labyrinthNumber: 5 })
+    ).resolves.toBe(null);
+    expect(client.issueClassRunGrant).not.toHaveBeenCalled();
+    expect(loadClassExpeditionSelection(storage, USER)).toBeNull();
+    expect(storage.getItem(CLASS_EXPEDITION_ACTIVE_KEY)).toBeNull();
   });
 });

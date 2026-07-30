@@ -9,6 +9,9 @@
 
 ## What the price must cover
 
+> The dollar figures in this section are illustrative fee arithmetic using
+> Stripe's published rates — they are cost anchors, not proposed prices.
+
 ### 1. Payment fees
 
 - Stripe's published standard card fee at the time of writing is

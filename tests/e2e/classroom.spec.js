@@ -201,6 +201,59 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
             status: "pending",
             url: "https://accounts.example.test/invitations/orginv_1"
           }
+        }),
+        listClassExpeditions: async () => ({
+          expeditions: [{
+            id: "exped_e2e_1",
+            classroomId: "org_class_1",
+            atlasRegion: 2,
+            levelId: "trail-scout",
+            learningDeckId: "number-trail",
+            learningDeckRevision:
+              "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+            status: "open",
+            completionDate: "2026-09-15"
+          }]
+        }),
+        listClassExpeditionGrants: async () => ({
+          grants: [
+            { labyrinthNumber: 5, runId: "class_run_e2e_0001", status: "escaped" }
+          ]
+        }),
+        getClassExpeditionProgress: async () => ({
+          progress: {
+            startedStudentCount: 6,
+            regionCompleteCount: 1,
+            labyrinths: [
+              { labyrinthNumber: 5, completedCount: 6 },
+              { labyrinthNumber: 6, completedCount: 4 },
+              { labyrinthNumber: 7, completedCount: 2 },
+              { labyrinthNumber: 8, completedCount: 1 }
+            ]
+          }
+        }),
+        getClassExpeditionCapacity: async () => ({
+          capacity: {
+            seatsTotal: 30,
+            seatsAssigned: 6,
+            baseStatus: "paid",
+            extensionPaidCount: 0,
+            baseRefundEligible: false,
+            extensionRefundEligibleCount: 0
+          }
+        }),
+        /** @param {string} _classroomId @param {string} expeditionId @param {string} kind */
+        purchaseClassExpeditionLicense: async (
+          _classroomId,
+          expeditionId,
+          kind
+        ) => ({
+          checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_e2e_1",
+          purchaseId: `purchase_${expeditionId}_${kind}`
+        }),
+        /** @param {string} _classroomId @param {string} expeditionId @param {string} status */
+        setClassExpeditionStatus: async (_classroomId, expeditionId, status) => ({
+          expedition: { id: expeditionId, status }
         })
       };
       const rendering = renderClassroom(root, {
@@ -216,3 +269,74 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
     options
   );
 }
+
+
+test("shows Class Expedition tools to Teachers and Students with counts only", async ({
+  page
+}, testInfo) => {
+  await page.goto("/class");
+  await renderMockWorkspace(page, "teacher");
+  const teacherPanel = page.locator("[data-teacher-classroom='org_class_1']");
+  await expect(teacherPanel.locator(".classroom-expeditions")).toBeVisible();
+  await expect(teacherPanel).toContainText("Region 2");
+  await expect(teacherPanel).toContainText("6 started");
+  await expect(teacherPanel).toContainText("1 finished the Region");
+  await expect(teacherPanel).toContainText("6 of 30 seats assigned");
+  await expect(teacherPanel).not.toContainText("Moss escaped");
+  await expect(
+    teacherPanel.locator("select[name='learningDeckId'] option")
+  ).toHaveCount(2);
+  {
+    const body = await page.screenshot({ fullPage: true });
+    await testInfo.attach(
+      `teacher-expeditions-${testInfo.project.name}`,
+      { body, contentType: "image/png" }
+    );
+    if (process.env.RECORD_MILESTONE_4_SCREENSHOTS === "true") {
+      const { writeFile } = await import("node:fs/promises");
+      const { resolve } = await import("node:path");
+      await writeFile(
+        resolve(
+          "docs",
+          "playtests",
+          "screenshots",
+          `milestone-4-teacher-expeditions-${testInfo.project.name}.png`
+        ),
+        body
+      );
+    }
+  }
+
+  await renderMockWorkspace(page, "student");
+  const studentCard = page.locator(".classroom-card", {
+    hasText: "Comet Crew"
+  });
+  await expect(
+    studentCard.locator("[data-student-expedition='exped_e2e_1']")
+  ).toBeVisible();
+  await expect(studentCard).toContainText("1 of 4 Labyrinths escaped");
+  const startButton = studentCard.locator(
+    "[data-action='start-class-expedition']"
+  );
+  await expect(startButton).toHaveText("Continue Class Expedition");
+  {
+    const body = await page.screenshot({ fullPage: true });
+    await testInfo.attach(
+      `student-expeditions-${testInfo.project.name}`,
+      { body, contentType: "image/png" }
+    );
+    if (process.env.RECORD_MILESTONE_4_SCREENSHOTS === "true") {
+      const { writeFile } = await import("node:fs/promises");
+      const { resolve } = await import("node:path");
+      await writeFile(
+        resolve(
+          "docs",
+          "playtests",
+          "screenshots",
+          `milestone-4-student-expeditions-${testInfo.project.name}.png`
+        ),
+        body
+      );
+    }
+  }
+});

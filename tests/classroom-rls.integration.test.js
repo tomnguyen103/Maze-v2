@@ -1009,16 +1009,29 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
           });
         }
       );
-      await expect(
-        withTenantContext(
-          runtimePool,
-          { explorerId: studentId, classroomId: classroomA },
-          (client) => client.query(
+      // A different Run identifier on a non-terminal Grant re-points it:
+      // this is the lost-acknowledgement recovery path.
+      await withTenantContext(
+        runtimePool,
+        { explorerId: studentId, classroomId: classroomA },
+        async (client) => {
+          const repointed = await client.query(
             "SELECT * FROM issue_classroom_run_grant($1, $2, $3::SMALLINT)",
             [expeditionId, runRetry, 1]
-          )
-        )
-      ).rejects.toThrow(/Grant conflict/);
+          );
+          expect(repointed.rows[0]).toMatchObject({
+            out_run_id: runRetry,
+            out_status: "issued",
+            out_duplicate: false
+          });
+          // Restore the original Run and its escaped outcome for the
+          // aggregate assertions below.
+          await client.query(
+            "SELECT * FROM issue_classroom_run_grant($1, $2, $3::SMALLINT)",
+            [expeditionId, runA, 1]
+          );
+        }
+      );
       await expect(
         withTenantContext(
           runtimePool,

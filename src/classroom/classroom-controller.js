@@ -6,7 +6,10 @@ import {
   createQuestProgress,
   saveQuestProgress
 } from "../game/quest-progress.js";
-import { saveClassExpeditionSelection } from "./class-expedition-selection.js";
+import {
+  clearClassExpeditionSelection,
+  saveClassExpeditionSelection
+} from "./class-expedition-selection.js";
 import {
   clearSelectedClassroom,
   loadSelectedClassroom,
@@ -335,6 +338,7 @@ export async function renderClassroom(root, dependencies = {}) {
       .querySelector("[data-action='personal-play']")
       ?.addEventListener("click", () => {
         clearSelectedClassroom(storage, clerk.user?.id);
+        clearClassExpeditionSelection(storage, clerk.user?.id);
         navigate("/play");
       });
     const list = /** @type {HTMLElement} */ (
@@ -383,6 +387,9 @@ export async function renderClassroom(root, dependencies = {}) {
     play.dataset.classPlay = entry.id;
     play.textContent = "Class Play";
     play.addEventListener("click", () => {
+      // Plain Class Play is not an assigned Expedition: retire any stale
+      // Expedition selection so Grants only govern explicit Expedition play.
+      clearClassExpeditionSelection(storage, clerk.user?.id);
       if (saveSelectedClassroom(entry.id, storage, clerk.user?.id)) {
         navigate("/play");
         return;
