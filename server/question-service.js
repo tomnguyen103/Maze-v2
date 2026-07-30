@@ -1,4 +1,4 @@
-import { getBundledQuestion } from "../src/questions/question-bank.js";
+import { selectReviewedDeckQuestion } from "../src/questions/learning-deck-selection.js";
 import {
   LEARNING_OBJECTIVE_IDS,
   LEARNING_TOPIC_IDS
@@ -16,7 +16,10 @@ export { normalizeQuestion };
  *   attempt: number,
  *   labyrinthNumber: number,
  *   questionOrdinal: number,
- *   challengeKind?: "warden" | "gate-warden"
+ *   challengeKind?: "warden" | "gate-warden",
+ *   learningDeckId?: string | null,
+ *   learningDeckRevision?: string | null,
+ *   usedQuestionIds?: readonly string[]
  * }} QuestionRequest
  * @typedef {{
  *   id: string,
@@ -34,7 +37,8 @@ export { normalizeQuestion };
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
- *   source: "ollama" | "gemini" | "database" | "bundled"
+ *   source: "ollama" | "gemini" | "database" | "bundled",
+ *   learningDeckSource?: "focused" | "capstone" | "mixed-fallback" | "mixed"
  * }} QuestionResult
  * @typedef {{
  *   publishedQuestion: (lookup: {
@@ -318,12 +322,27 @@ export function createQuestionService(options = {}) {
    * edit reaches players through every path at once.
    *
    * @param {QuestionRequest} request
-   * @returns {Promise<{ question: WardenQuestion, fromDatabase: boolean }>}
+   * @returns {Promise<{
+   *   question: WardenQuestion,
+   *   fromDatabase: boolean,
+   *   deckSource: "focused" | "capstone" | "mixed-fallback" | "mixed"
+   * }>}
    */
   async function resolveReviewedQuestion(request) {
-    const bundled = getBundledQuestion(request);
-    if (!questionBank || request.challengeKind === "gate-warden") {
-      return { question: bundled, fromDatabase: false };
+    const selection = selectReviewedDeckQuestion(request);
+    const bundled = selection.question;
+    // A focused Deck revision is itself the publishing authority, so the
+    // published bank never overrides the Deck's own reviewed Question.
+    if (
+      !questionBank ||
+      request.challengeKind === "gate-warden" ||
+      selection.source !== "mixed"
+    ) {
+      return {
+        question: bundled,
+        fromDatabase: false,
+        deckSource: selection.source
+      };
     }
     try {
       const published = await questionBank.publishedQuestion({
@@ -332,14 +351,22 @@ export function createQuestionService(options = {}) {
         questionOrdinal: request.questionOrdinal
       });
       if (published) {
-        return { question: published, fromDatabase: true };
+        return {
+          question: published,
+          fromDatabase: true,
+          deckSource: selection.source
+        };
       }
     } catch (error) {
       // A database outage degrades to yesterday's content, never to no
       // content: the bundled bank ships in the deployment itself.
       onQuestionBankError(error);
     }
-    return { question: bundled, fromDatabase: false };
+    return {
+      question: bundled,
+      fromDatabase: false,
+      deckSource: selection.source
+    };
   }
 
   /** @param {QuestionRequest} request @returns {Promise<QuestionResult>} */
@@ -353,7 +380,8 @@ export function createQuestionService(options = {}) {
     if (request.challengeKind === "gate-warden") {
       const result = {
         question: reviewedQuestion,
-        source: /** @type {"bundled"} */ ("bundled")
+        source: /** @type {"bundled"} */ ("bundled"),
+        learningDeckSource: reviewed.deckSource
       };
       rememberPreviousQuestion(encounterKey, result.question);
       return result;
@@ -375,7 +403,8 @@ export function createQuestionService(options = {}) {
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
-          source: "ollama"
+          source: "ollama",
+          learningDeckSource: reviewed.deckSource
         });
       }
       if (
@@ -397,7 +426,8 @@ export function createQuestionService(options = {}) {
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
-          source: "gemini"
+          source: "gemini",
+          learningDeckSource: reviewed.deckSource
         });
       }
     } catch (error) {
@@ -409,7 +439,8 @@ export function createQuestionService(options = {}) {
       question: reviewedQuestion,
       source: /** @type {"database" | "bundled"} */ (
         reviewed.fromDatabase ? "database" : "bundled"
-      )
+      ),
+      learningDeckSource: reviewed.deckSource
     };
     rememberPreviousQuestion(encounterKey, result.question);
     return result;
@@ -459,7 +490,9 @@ export function createQuestionService(options = {}) {
 
 /** @param {QuestionRequest} request */
 function questionKey(request) {
-  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}`;
+  // Deck identity is part of the key: two Decks at the same Run coordinates
+  // ask different reviewed Questions and must never share a cache entry.
+  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}:${request.learningDeckId ?? "mixed-trail"}:${request.learningDeckRevision ?? ""}`;
 }
 
 /**

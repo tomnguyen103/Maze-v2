@@ -10,8 +10,11 @@ import {
 } from "../server/question-service.js";
 import {
   createQuestionRateLimiter,
+  parseQuestionBody,
   parseQuestionRequest
 } from "../server/question-route.js";
+import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
+import { getPublishedLearningDeckRevision } from "../src/questions/learning-decks.js";
 
 const GENERATED_QUESTION = {
   id: "generated-math",
@@ -275,6 +278,137 @@ describe("Quest Questions", () => {
     expect(prompts.at(-1)).toContain("This is the first question");
   });
 
+  it("serves each Learning Deck its own reviewed Question at one coordinate", async () => {
+    const service = createQuestionService({
+      env: { NODE_ENV: "production" },
+      questionBank: null
+    });
+    const coordinate = {
+      levelId: "trail-scout",
+      seed: "STORY-17",
+      wardenId: 2,
+      attempt: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 0,
+      challengeKind: /** @type {const} */ ("warden"),
+      usedQuestionIds: []
+    };
+    const numberTrail = getPublishedLearningDeckOption("number-trail");
+    const wordTrail = getPublishedLearningDeckOption("word-trail");
+
+    const first = await service.getQuestion({
+      ...coordinate,
+      learningDeckId: numberTrail?.deckId,
+      learningDeckRevision: numberTrail?.revisionId
+    });
+    const second = await service.getQuestion({
+      ...coordinate,
+      learningDeckId: wordTrail?.deckId,
+      learningDeckRevision: wordTrail?.revisionId
+    });
+
+    // Same Run coordinate, different Decks: a shared cache entry would serve
+    // one Deck's reviewed content under the other Deck's identity.
+    expect(first.learningDeckSource).toBe("focused");
+    expect(second.learningDeckSource).toBe("focused");
+    expect(first.question.id).not.toBe(second.question.id);
+    expect(first.question.topicId).not.toBe(second.question.topicId);
+  });
+
+  it("continues an exhausted focused Region on announced Mixed Trail content", async () => {
+    const service = createQuestionService({
+      env: { NODE_ENV: "production" },
+      questionBank: null
+    });
+    const numberTrail = getPublishedLearningDeckOption("number-trail");
+    const spent = getPublishedLearningDeckRevision("number-trail")
+      ?.regions.find(
+        (region) =>
+          region.levelId === "bright-start" && region.regionNumber === 1
+      )
+      ?.normalQuestions.map((question) => question.id) ?? [];
+
+    const result = await service.getQuestion({
+      levelId: "bright-start",
+      seed: "STORY-17",
+      wardenId: 1,
+      attempt: 0,
+      labyrinthNumber: 2,
+      questionOrdinal: spent.length,
+      challengeKind: "warden",
+      learningDeckId: numberTrail?.deckId,
+      learningDeckRevision: numberTrail?.revisionId,
+      usedQuestionIds: spent
+    });
+
+    expect(spent.length).toBeGreaterThan(0);
+    expect(result.learningDeckSource).toBe("mixed-fallback");
+    expect(spent).not.toContain(result.question.id);
+    expect(result.question.difficultyBand).toBe("foundation");
+  });
+
+  it("accepts a posted Learning Deck identity and used-Question ledger", () => {
+    const numberTrail = getPublishedLearningDeckOption("number-trail");
+
+    expect(
+      parseQuestionBody({
+        levelId: "trail-scout",
+        seed: "STORY-17",
+        wardenId: 2,
+        attempt: 0,
+        labyrinthNumber: 5,
+        questionOrdinal: 7,
+        challengeKind: "warden",
+        learningDeckId: numberTrail?.deckId,
+        learningDeckRevision: numberTrail?.revisionId,
+        usedQuestionIds: ["scout-developing-0"]
+      })
+    ).toMatchObject({
+      learningDeckId: "number-trail",
+      learningDeckRevision: numberTrail?.revisionId,
+      usedQuestionIds: ["scout-developing-0"]
+    });
+  });
+
+  it("rejects unusable Learning Deck identity and ledger input", () => {
+    const numberTrail = getPublishedLearningDeckOption("number-trail");
+    const base = {
+      levelId: "trail-scout",
+      seed: "STORY-17",
+      wardenId: 2,
+      attempt: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 7,
+      challengeKind: "warden"
+    };
+
+    // A Deck without its exact revision cannot pin anything.
+    expect(() =>
+      parseQuestionBody({ ...base, learningDeckId: "number-trail" })
+    ).toThrow(/revision/i);
+    expect(() =>
+      parseQuestionBody({
+        ...base,
+        learningDeckId: "number-trail",
+        learningDeckRevision: "deck:number-trail:v1:not-a-digest"
+      })
+    ).toThrow(/revision/i);
+    expect(() =>
+      parseQuestionBody({
+        ...base,
+        learningDeckId: numberTrail?.deckId,
+        learningDeckRevision: numberTrail?.revisionId,
+        usedQuestionIds: ["fine", { id: "hostile" }]
+      })
+    ).toThrow(/Used Question identifiers/);
+    expect(() =>
+      parseQuestionBody({
+        ...base,
+        usedQuestionIds: Array.from({ length: 5001 }, (_, index) => `q-${index}`)
+      })
+    ).toThrow(/Used Question identifiers/);
+  });
+
   it("accepts only bounded Quest Question request parameters", () => {
     expect(
       parseQuestionRequest(
@@ -289,7 +423,10 @@ describe("Quest Questions", () => {
       attempt: 1,
       labyrinthNumber: 5,
       questionOrdinal: 7,
-      challengeKind: "gate-warden"
+      challengeKind: "gate-warden",
+      learningDeckId: null,
+      learningDeckRevision: null,
+      usedQuestionIds: []
     });
     expect(
       parseQuestionRequest(

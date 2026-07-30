@@ -2246,6 +2246,34 @@ function selectedLearningDeckOption() {
   return learningDeck;
 }
 
+const MIXED_FALLBACK_KEY = "echo-maze:quest-mixed-fallback:v1";
+let mixedFallbackNotice = "";
+
+/**
+ * A focused Deck publishes a finite reviewed pool per Region, so a Quest
+ * always outruns it and continues on Mixed Trail content. The Explorer hears
+ * that once per Quest — the Deck they chose does not change. The notice rides
+ * the Question's own source line, which stays on screen and in the dialog's
+ * accessible content: a live-region announcement is overwritten by the next
+ * Run event before the Explorer can read it.
+ */
+function mixedTrailNotice() {
+  try {
+    if (localStorage.getItem(MIXED_FALLBACK_KEY) === questProgress.questId) {
+      return "";
+    }
+    localStorage.setItem(MIXED_FALLBACK_KEY, questProgress.questId);
+  } catch {
+    // Storage refusal must not silence the notice, only its memory.
+  }
+  return `${currentLearningDeckOption().label} has used its reviewed Questions for this stretch. This Quest continues with Mixed Trail Questions at the same level.`;
+}
+
+/** @param {string} message */
+function withMixedTrailNotice(message) {
+  return mixedFallbackNotice ? `${message} ${mixedFallbackNotice}` : message;
+}
+
 /**
  * A Quest replaced without the picker keeps the Explorer's standing Deck
  * choice, pinned to that Deck's current published revision.
@@ -3427,6 +3455,9 @@ function hideSkipWarning() {
 }
 
 async function loadChallengeQuestion() {
+  // Scoped to this Question: re-rendering the dialog must not drop the notice,
+  // and the next Question must not repeat it.
+  mixedFallbackNotice = "";
   if (run.status !== "challenge" || !run.challenge) {
     return;
   }
@@ -3491,22 +3522,35 @@ async function loadChallengeQuestion() {
     let question;
     let source = "bundled";
     try {
-      const parameters = new URLSearchParams({
-        level: request.levelId,
-        seed: request.seed,
-        warden: String(request.wardenId),
-        attempt: String(request.attempt),
-        labyrinth: String(request.labyrinthNumber),
-        question: String(request.questionOrdinal),
-        challenge: request.challengeKind
+      // The Quest's used-Question ledger travels with the request: it is the
+      // only way the service knows which of a focused Region's finite
+      // reviewed pool this Quest has already spent. It carries Question
+      // identifiers only, never answers.
+      const response = await fetch("/api/question", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          levelId: request.levelId,
+          seed: request.seed,
+          wardenId: request.wardenId,
+          attempt: request.attempt,
+          labyrinthNumber: request.labyrinthNumber,
+          questionOrdinal: request.questionOrdinal,
+          challengeKind: request.challengeKind,
+          learningDeckId: questProgress.learningDeckId,
+          learningDeckRevision: questProgress.learningDeckRevision,
+          usedQuestionIds: questProgress.usedQuestionIds
+        })
       });
-      const response = await fetch(`/api/question?${parameters}`);
       if (!response.ok) {
         throw new Error("Question service unavailable.");
       }
       const payload = await response.json();
       question = normalizeQuestion(payload.question);
       source = payload.source;
+      if (payload.learningDeckSource === "mixed-fallback") {
+        mixedFallbackNotice = mixedTrailNotice();
+      }
     } catch {
       question = getBundledQuestion(request);
     }
@@ -3541,11 +3585,13 @@ async function loadChallengeQuestion() {
     rememberQuestion(questProgress, acceptedQuestion.id, acceptedOrdinal)
   );
 
-  elements.challengeSource.textContent = {
-    ollama: "A fresh local question is ready.",
-    gemini: "A fresh quest question is ready.",
-    bundled: "A trusty question card is ready."
-  }[acceptedSource] ?? "Your question is ready.";
+  elements.challengeSource.textContent = withMixedTrailNotice(
+    {
+      ollama: "A fresh local question is ready.",
+      gemini: "A fresh quest question is ready.",
+      bundled: "A trusty question card is ready."
+    }[acceptedSource] ?? "Your question is ready."
+  );
   transition({ type: "provide-question", question: acceptedQuestion });
 }
 

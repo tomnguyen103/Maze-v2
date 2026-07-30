@@ -515,13 +515,32 @@ async function completeMilestonePlan(
 }
 
 /** @param {import("@playwright/test").Page} page */
+/**
+ * The Question route takes a POST body so the Quest's used-Question ledger can
+ * travel with the request. Fixtures read the request the same way the service
+ * does rather than from a query string.
+ *
+ * @param {import("@playwright/test").Request} request
+ */
+function questionRequestOf(request) {
+  try {
+    return JSON.parse(request.postData() ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** @param {import("@playwright/test").Request} request */
+function questionOrdinalOf(request) {
+  return Number(questionRequestOf(request).questionOrdinal ?? 0);
+}
+
+/** @param {import("@playwright/test").Page} page */
 async function mockQuestionApi(page) {
   /** @type {ReturnType<typeof getBundledQuestion>[]} */
   const servedQuestions = [];
-  await page.route("**/api/question?**", async (route) => {
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+  await page.route("**/api/question**", async (route) => {
+    const ordinal = questionOrdinalOf(route.request());
     const reviewedQuestion = reviewedQuestionForRequest(ordinal);
     servedQuestions.push(reviewedQuestion);
     await route.fulfill({
@@ -672,6 +691,82 @@ test("locks one published Learning Deck into a new Quest", async ({
     testInfo,
     3,
     "learning-deck-atlas"
+  );
+});
+
+test("announces the Mixed Trail continuation once per Quest", async ({
+  page
+}) => {
+  if (!NUMBER_TRAIL) {
+    throw new Error("Published Number Trail fixture is missing.");
+  }
+  /** @type {Record<string, unknown>[]} */
+  const questionRequests = [];
+  /** @type {ReturnType<typeof getBundledQuestion>[]} */
+  const served = [];
+  await page.route("**/api/question**", async (route) => {
+    const request = questionRequestOf(route.request());
+    questionRequests.push(request);
+    const question = reviewedQuestionForRequest(
+      Number(request.questionOrdinal ?? 0)
+    );
+    served.push(question);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question,
+        source: "bundled",
+        // The focused Region is spent, so the service continues the Quest on
+        // Mixed Trail content without changing the chosen Deck.
+        learningDeckSource: "mixed-fallback"
+      })
+    });
+  });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page
+    .getByRole("group", { name: "Choose a Learning Deck" })
+    .getByRole("radio", { name: /Number Trail/ })
+    .check();
+  await chooseTrailScout(page);
+  await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
+
+  await expect
+    .poll(async () =>
+      (await page.locator("#seed-value").textContent())?.trim() ?? ""
+    )
+    .not.toBe("");
+  const seed = (await page.locator("#seed-value").textContent())?.trim() ?? "";
+  await page.getByLabel(/Interactive maze/).focus();
+  const plan = milestoneWinningPlan(seed, 1);
+  for (const action of plan.actions) {
+    if (action.type === "move") {
+      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+    }
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#challenge-source")).toContainText(
+    "Number Trail has used its reviewed Questions"
+  );
+  // The Quest carries its Deck identity and uniqueness ledger on every ask.
+  expect(questionRequests[0]).toMatchObject({
+    learningDeckId: "number-trail",
+    learningDeckRevision: NUMBER_TRAIL.revisionId
+  });
+  expect(Array.isArray(questionRequests[0]?.usedQuestionIds)).toBe(true);
+  // Announced once, and the Deck the Explorer chose has not changed.
+  const lastServed = served.at(-1);
+  if (!lastServed) {
+    throw new Error("The reviewed Question fixture has not served a card.");
+  }
+  await answerCorrectlyIfChallenged(page, () => lastServed);
+  await expect(page.locator("#quest-level-name")).toHaveText(
+    "Quest Level 2 · Trail Scout · Number Trail"
   );
 });
 
@@ -3276,7 +3371,7 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
 test("shows an inert reviewed Echo Lens only after an answer is committed", async ({
   page
 }) => {
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -3340,10 +3435,8 @@ test("shows an inert reviewed Echo Lens only after an answer is committed", asyn
 test("holds a wrong-answer Echo Lens for review before loading a fresh Question", async ({
   page
 }) => {
-  await page.route("**/api/question?**", async (route) => {
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+  await page.route("**/api/question**", async (route) => {
+    const ordinal = questionOrdinalOf(route.request());
     const question =
       ordinal === 0
         ? LENS_QUESTION
@@ -4136,9 +4229,9 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     await atlasChunkGate;
     await route.continue();
   });
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     requestedChallengeKinds.push(
-      new URL(route.request().url()).searchParams.get("challenge")
+      questionRequestOf(route.request()).challengeKind ?? null
     );
     await route.fulfill({
       contentType: "application/json",
@@ -4320,7 +4413,7 @@ test("uses a compact result after the Region Sigil ceremony was seen", async ({
       })
     );
   }, { activeQuestId: questId });
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       status: 503,
@@ -4654,7 +4747,7 @@ test("scrubs a checkpoint when Campfire deletion is denied", async ({
 test("waits for Campfire Continue before resolving a loading Challenge", async ({
   page
 }) => {
-  const questionRoute = "**/api/question?**";
+  const questionRoute = "**/api/question**";
   let initialRequestCount = 0;
   let continuedRequestCount = 0;
   let releaseInitialQuestion = () => {};
@@ -4725,9 +4818,7 @@ test("waits for Campfire Continue before resolving a loading Challenge", async (
   );
   await recoveredPage.route(questionRoute, async (route) => {
     continuedRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -4764,7 +4855,7 @@ test("waits for Campfire Continue before resolving a loading Challenge", async (
 test("restores wrong-answer feedback and replacement loading without duplicate learning writes", async ({
   page
 }) => {
-  const questionRoute = "**/api/question?**";
+  const questionRoute = "**/api/question**";
   let initialRequestCount = 0;
   let continuedRequestCount = 0;
   let releaseReplacement = () => {};
@@ -4782,9 +4873,7 @@ test("restores wrong-answer feedback and replacement loading without duplicate l
   const firstQuestion = reviewedQuestionForRequest(0);
   await page.route(questionRoute, async (route) => {
     initialRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     if (initialRequestCount === 2) {
       await replacementReleased;
       try {
@@ -4887,9 +4976,7 @@ test("restores wrong-answer feedback and replacement loading without duplicate l
   );
   await recoveredPage.route(questionRoute, async (route) => {
     continuedRequestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -4956,11 +5043,9 @@ test("recovers the exact reviewed Question revision and revealed Hint without an
   let requestCount = 0;
   let servedQuestion =
     /** @type {ReturnType<typeof getBundledQuestion> | null} */ (null);
-  await page.route("**/api/question?**", async (route) => {
+  await page.route("**/api/question**", async (route) => {
     requestCount += 1;
-    const ordinal = Number(
-      new URL(route.request().url()).searchParams.get("question") ?? 0
-    );
+    const ordinal = questionOrdinalOf(route.request());
     const reviewedQuestion = reviewedQuestionForRequest(ordinal);
     servedQuestion = normalizeQuestion({
       ...reviewedQuestion,
@@ -5099,7 +5184,7 @@ test("erases temporary Challenge history when the signed-in identity ends", asyn
     }]));
   });
   const question = reviewedQuestionForRequest(0);
-  await page.route("**/api/question?**", (route) =>
+  await page.route("**/api/question**", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
