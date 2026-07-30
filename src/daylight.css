@@ -2573,6 +2573,18 @@ body[data-run-mode="first-light"] .play-workbench {
   gap: var(--space-2);
 }
 
+/* Sits above the Question so a Deck notice is readable without scrolling at
+   390 by 844, where the source line below the choices falls past the fold. */
+.challenge-notice {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 0.25rem solid var(--color-signal);
+  background: var(--color-signal-glow);
+  color: var(--color-ink);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .challenge-source {
   margin: var(--space-4) 0 0;
   color: var(--color-ink-faint);

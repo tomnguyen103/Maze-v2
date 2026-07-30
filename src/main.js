@@ -223,6 +223,7 @@ const elements = {
   challengePromise: requiredElement("challenge-promise", HTMLElement),
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
+  challengeNotice: requiredElement("challenge-notice", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
   challengeLensPanel: requiredElement("challenge-lens-panel", HTMLElement),
   gateStagingSkip: requiredElement(
@@ -2266,12 +2267,7 @@ function mixedTrailNotice() {
   } catch {
     // Storage refusal must not silence the notice, only its memory.
   }
-  return `${currentLearningDeckOption().label} has used its reviewed Questions for this stretch. This Quest continues with Mixed Trail Questions at the same level.`;
-}
-
-/** @param {string} message */
-function withMixedTrailNotice(message) {
-  return mixedFallbackNotice ? `${message} ${mixedFallbackNotice}` : message;
+  return `${currentLearningDeckOption().label} is out of reviewed Questions here. Mixed Trail continues this Quest.`;
 }
 
 /**
@@ -3585,13 +3581,13 @@ async function loadChallengeQuestion() {
     rememberQuestion(questProgress, acceptedQuestion.id, acceptedOrdinal)
   );
 
-  elements.challengeSource.textContent = withMixedTrailNotice(
-    {
-      ollama: "A fresh local question is ready.",
-      gemini: "A fresh quest question is ready.",
-      bundled: "A trusty question card is ready."
-    }[acceptedSource] ?? "Your question is ready."
-  );
+  elements.challengeSource.textContent = {
+    ollama: "A fresh local question is ready.",
+    gemini: "A fresh quest question is ready.",
+    bundled: "A trusty question card is ready."
+  }[acceptedSource] ?? "Your question is ready.";
+  elements.challengeNotice.textContent = mixedFallbackNotice;
+  elements.challengeNotice.hidden = !mixedFallbackNotice;
   transition({ type: "provide-question", question: acceptedQuestion });
 }
 

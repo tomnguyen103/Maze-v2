@@ -696,7 +696,7 @@ test("locks one published Learning Deck into a new Quest", async ({
 
 test("announces the Mixed Trail continuation once per Quest", async ({
   page
-}) => {
+}, testInfo) => {
   if (!NUMBER_TRAIL) {
     throw new Error("Published Number Trail fixture is missing.");
   }
@@ -750,9 +750,10 @@ test("announces the Mixed Trail continuation once per Quest", async ({
   }
 
   await expect(page.locator("#challenge-dialog")).toBeVisible();
-  await expect(page.locator("#challenge-source")).toContainText(
-    "Number Trail has used its reviewed Questions"
+  await expect(page.locator("#challenge-notice")).toContainText(
+    "Number Trail is out of reviewed Questions here"
   );
+  await recordEvidenceScreenshot(page, testInfo, 3, "mixed-trail-fallback");
   // The Quest carries its Deck identity and uniqueness ledger on every ask.
   expect(questionRequests[0]).toMatchObject({
     learningDeckId: "number-trail",
@@ -3370,7 +3371,7 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
 
 test("shows an inert reviewed Echo Lens only after an answer is committed", async ({
   page
-}) => {
+}, testInfo) => {
   await page.route("**/api/question**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -3396,6 +3397,7 @@ test("shows an inert reviewed Echo Lens only after an answer is committed", asyn
   await expect(lens).toBeVisible();
   await expect(lens).toHaveAttribute("open", "");
   await expect(lens).toContainText(LENS_QUESTION.echoLens?.reasoning ?? "");
+  await recordEvidenceScreenshot(page, testInfo, 3, "echo-lens-after-answer");
   await expect(lens.locator("[role='img']")).toHaveAttribute(
     "aria-label",
     /2 rows by 4 columns; 7 filled/
@@ -3509,7 +3511,7 @@ test("holds a wrong-answer Echo Lens for review before loading a fresh Question"
 
 test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
   page
-}) => {
+}, testInfo) => {
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -3660,6 +3662,12 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
   await expect(page.locator("#practice-feedback")).toContainText(
     "Required Trail complete"
   );
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "workshop-required-boundary"
+  );
   await practice.getByRole("button", { name: "Keep Practicing" }).click();
   await expect(page.locator("#practice-progress")).toContainText(
     "Extra Lantern 1 of 2"
@@ -3669,6 +3677,12 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
   await practice.getByRole("button", { name: "Keep Practicing" }).click();
   await expect(page.locator("#practice-progress")).toContainText(
     "Extra Lantern 2 of 2"
+  );
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    3,
+    "workshop-optional-boundary"
   );
   await answer(4, "correct");
   await practice.getByRole("button", { name: "Finish Trail" }).click();

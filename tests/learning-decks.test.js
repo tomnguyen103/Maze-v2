@@ -286,4 +286,35 @@ describe("published Learning Deck revisions", () => {
     expect(JSON.stringify(report)).not.toContain("prompt");
     expect(JSON.stringify(report)).not.toContain("answerId");
   });
+
+  it("clears all 45 focused Region and Capstone coverage gates", () => {
+    const focused = getLearningDeckCoverageReport().filter(
+      ({ kind }) => kind === "focused"
+    );
+    const regions = focused.flatMap(({ regions: deckRegions }) => deckRegions);
+
+    // Three focused Decks, three Quest Levels, five Regions each.
+    expect(focused).toHaveLength(3);
+    expect(regions).toHaveLength(45);
+    expect(
+      regions.filter(
+        ({ focusedQuestionCount, minimumFocusedQuestions }) =>
+          focusedQuestionCount >= minimumFocusedQuestions
+      )
+    ).toHaveLength(45);
+    expect(regions.filter(({ hasCapstone }) => hasCapstone)).toHaveLength(45);
+    expect(
+      new Set(
+        regions.map(({ levelId, regionNumber }) => `${levelId}:${regionNumber}`)
+      ).size
+    ).toBe(15);
+    // The authored pools sit below each Region's correct-first demand on
+    // purpose, which is what makes the announced Mixed fallback load-bearing.
+    expect(
+      regions.every(
+        ({ minimumFocusedQuestions, correctFirstDemand }) =>
+          minimumFocusedQuestions < correctFirstDemand
+      )
+    ).toBe(true);
+  });
 });
