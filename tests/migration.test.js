@@ -663,3 +663,147 @@ describe("Classroom Teacher read boundary migration", () => {
     expect(sql).not.toContain("BYPASSRLS");
   });
 });
+
+describe("Class Expedition migration", () => {
+  const migrationUrl = new URL(
+    "../db/migrations/0021_class_expeditions.sql",
+    import.meta.url
+  );
+
+  it("creates forced-RLS Class Expedition tables owned by the tenant owner", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("CREATE TABLE class_expeditions");
+    expect(sql).toContain("CREATE TABLE class_expedition_licenses");
+    expect(sql).toContain("CREATE TABLE class_expedition_seats");
+    expect(sql).toContain("CREATE TABLE classroom_run_grants");
+    expect(sql).toContain("atlas_region BETWEEN 1 AND 5");
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
+    expect(sql).toContain("status IN ('open', 'closed')");
+    expect(sql).toContain("labyrinth_number BETWEEN 1 AND 20");
+    expect(sql.match(/ENABLE ROW LEVEL SECURITY/g)).toHaveLength(4);
+    expect(sql.match(/FORCE ROW LEVEL SECURITY/g)).toHaveLength(4);
+    expect(sql.match(/OWNER TO echo_maze_tenant_owner/g)?.length ?? 0)
+      .toBeGreaterThanOrEqual(4);
+    expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0020");
+    expect(sql).not.toContain("BYPASSRLS");
+    expect(sql).not.toContain("DROP TABLE");
+  });
+
+  it("funds thirty non-recyclable seats with five-seat extensions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("kind IN ('base', 'extension')");
+    expect(sql).toContain("(kind = 'base' AND seats = 30)");
+    expect(sql).toContain("(kind = 'extension' AND seats = 5)");
+    expect(sql).toContain("class_expedition_licenses_one_base_idx");
+    expect(sql).toContain("seat_number");
+    expect(sql).toContain("UNIQUE (expedition_id, seat_number)");
+    // Assigned seats survive Membership removal: seats deliberately have no
+    // classroom_memberships foreign key, so a seat is never recycled.
+    const seatsBlock = sql.slice(
+      sql.indexOf("CREATE TABLE class_expedition_seats"),
+      sql.indexOf("CREATE TABLE classroom_run_grants")
+    );
+    expect(seatsBlock).not.toContain("classroom_memberships");
+    expect(sql).toContain("CHECK (amount > 0)");
+    expect(sql).toContain("CHECK (currency = 'usd')");
+    expect(sql).not.toMatch(/amount = \d{3,}/);
+  });
+
+  it("cascades Grants away with Membership removal", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const grantsBlock = sql.slice(
+      sql.indexOf("CREATE TABLE classroom_run_grants")
+    );
+    expect(grantsBlock).toContain(
+      "REFERENCES classroom_memberships(classroom_id, clerk_user_id)"
+    );
+    expect(grantsBlock).toContain("ON DELETE CASCADE");
+    expect(sql).toContain("status IN ('issued', 'escaped', 'defeated')");
+    expect(sql).toContain(
+      "PRIMARY KEY (expedition_id, clerk_user_id, labyrinth_number)"
+    );
+  });
+
+  it("keeps licenses and seats reachable only through definer functions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain(
+      "REVOKE ALL ON TABLE class_expedition_licenses FROM PUBLIC, echo_maze_runtime"
+    );
+    expect(sql).toContain(
+      "REVOKE ALL ON TABLE class_expedition_seats FROM PUBLIC, echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE class_expedition_licenses TO echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE class_expedition_seats TO echo_maze_runtime"
+    );
+    expect(sql).not.toMatch(
+      /GRANT [^;]*INSERT[^;]*ON TABLE classroom_run_grants/
+    );
+  });
+
+  it("issues Grants and records outcomes through SECURITY DEFINER functions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("CREATE FUNCTION close_class_expedition");
+    expect(sql).toContain("CREATE FUNCTION reserve_class_expedition_license");
+    expect(sql).toContain("CREATE FUNCTION activate_class_expedition_license");
+    expect(sql).toContain(
+      "CREATE FUNCTION transition_class_expedition_license"
+    );
+    expect(sql).toContain("CREATE FUNCTION issue_classroom_run_grant");
+    expect(sql).toContain("CREATE FUNCTION record_classroom_run_outcome");
+    expect(sql).toContain("CREATE FUNCTION read_class_expedition_progress");
+    expect(sql).toContain("CREATE FUNCTION read_class_expedition_capacity");
+    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(8);
+    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(8);
+    expect(sql.match(/REVOKE ALL ON FUNCTION [^;]+ FROM PUBLIC/g))
+      .toHaveLength(8);
+    expect(sql.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(8);
+    expect(sql).toContain("pg_advisory_xact_lock");
+    expect(sql).toContain("role = 'student'");
+    expect(sql).toContain("role = 'teacher'");
+  });
+
+  it("accepts exactly the published Deck revisions the roster publishes", async () => {
+    const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
+      readFile(migrationUrl, "utf8"),
+      import("../src/questions/learning-deck-catalog.js")
+    ]);
+
+    const constrained = [
+      ...sql.matchAll(
+        /learning_deck_id = '([a-z-]+)'\s+AND learning_deck_revision =\s+'([^']+)'/g
+      )
+    ].map(([, deckId, revisionId]) => ({ deckId, revisionId }));
+
+    expect(constrained).toEqual(
+      getPublishedLearningDeckOptions().flatMap((option) =>
+        option.publishedRevisionIds.map((revisionId) => ({
+          deckId: option.deckId,
+          revisionId
+        }))
+      )
+    );
+  });
+
+  it("exposes aggregate counts only, never a named Student fact", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const progressReader = sql.slice(
+      sql.indexOf("CREATE FUNCTION read_class_expedition_progress")
+    );
+    expect(progressReader).toContain("COUNT(");
+    expect(progressReader.slice(0, sql.length)).not.toContain("username");
+    expect(sql).not.toMatch(/\bstudent_name\b/);
+    expect(sql).not.toMatch(/prompt|answer_text|selected_answer|route/i);
+    expect(sql).not.toMatch(/\brank\b/i);
+  });
+});
