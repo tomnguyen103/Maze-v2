@@ -44,6 +44,26 @@ const TEST_QUESTION = {
   learningObjectiveId: "scout-equal-groups",
   explanation: "Four plus three equals seven."
 };
+const LENS_QUESTION = normalizeQuestion({
+  ...TEST_QUESTION,
+  reviewedRevisionId: "database:scout-foundation-0:v1",
+  echoLens: {
+    version: 1,
+    kind: "array",
+    title: "See two groups",
+    reasoning: "Four and three combine to make seven altogether.",
+    steps: [
+      "Count the first four.",
+      "Count three more.",
+      "Count all seven."
+    ],
+    visual: {
+      rows: 2,
+      columns: 4,
+      filled: 7
+    }
+  }
+});
 
 /** @param {number} ordinal */
 function reviewedQuestionForRequest(ordinal) {
@@ -3199,6 +3219,147 @@ test("reveals a Hint, grants one free skip, then warns before paid skips", async
   await expect(
     page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
+});
+
+test("shows an inert reviewed Echo Lens only after an answer is committed", async ({
+  page
+}) => {
+  await page.route("**/api/question?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        question: LENS_QUESTION,
+        source: "database"
+      })
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#echo-lens")).toBeHidden();
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await expect(page.locator("#echo-lens")).toBeHidden();
+
+  await page.locator(`[data-answer="${LENS_QUESTION.answerId}"]`).click();
+  const lens = page.locator("#echo-lens");
+  await expect(page.locator("#challenge-dialog")).not.toBeVisible();
+  await expect(lens).toBeVisible();
+  await expect(lens).toHaveAttribute("open", "");
+  await expect(lens).toContainText(LENS_QUESTION.echoLens?.reasoning ?? "");
+  await expect(lens.locator("[role='img']")).toHaveAttribute(
+    "aria-label",
+    /2 rows by 4 columns; 7 filled/
+  );
+
+  const snapshot = async () =>
+    page.evaluate(() => ({
+      score: document.querySelector("#player-score")?.textContent,
+      moves: document.querySelector("#moves-value")?.textContent,
+      vitality: document.querySelector("#vitality-count")?.textContent,
+      echoes: document.querySelector("#echo-count")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }));
+  const beforeToggle = await snapshot();
+  const summary = lens.getByText("Why this works", { exact: true });
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(lens).not.toHaveAttribute("open", "");
+  await page.keyboard.press("Enter");
+  await expect(lens).toHaveAttribute("open", "");
+  expect(await snapshot()).toEqual(beforeToggle);
+  const resumedTime = await page.locator("#time-value").textContent();
+  await expect
+    .poll(() => page.locator("#time-value").textContent(), {
+      timeout: 2_500
+    })
+    .not.toBe(resumedTime);
+  expect(JSON.stringify(beforeToggle.storage)).not.toMatch(
+    /See two groups|Four and three combine|echoLens|answeredAt/i
+  );
+});
+
+test("holds a wrong-answer Echo Lens for review before loading a fresh Question", async ({
+  page
+}) => {
+  await page.route("**/api/question?**", async (route) => {
+    const ordinal = Number(
+      new URL(route.request().url()).searchParams.get("question") ?? 0
+    );
+    const question =
+      ordinal === 0
+        ? LENS_QUESTION
+        : normalizeQuestion({
+            ...TEST_QUESTION,
+            id: `scout-foundation-${ordinal}`,
+            prompt: `Fresh reviewed Question ${ordinal}: What is 4 + 3?`
+          });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ question, source: "database" })
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  const wrongAnswer = LENS_QUESTION.choices.find(
+    (choice) => choice.id !== LENS_QUESTION.answerId
+  );
+  if (!wrongAnswer) {
+    throw new Error("Reviewed fixture needs one wrong answer.");
+  }
+  await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+
+  const panel = page.locator("#challenge-lens-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText(LENS_QUESTION.echoLens?.reasoning ?? "");
+  await expect(page.locator("#vitality-count")).toHaveText("2 / 3");
+  const beforeToggle = await page.evaluate(() => ({
+    score: document.querySelector("#player-score")?.textContent,
+    moves: document.querySelector("#moves-value")?.textContent,
+    time: document.querySelector("#time-value")?.textContent,
+    vitality: document.querySelector("#vitality-count")?.textContent,
+    storage: Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  }));
+  const details = page.locator("#challenge-echo-lens");
+  const summary = details.getByText("Why this works", { exact: true });
+  await summary.press("Enter");
+  await expect(details).not.toHaveAttribute("open", "");
+  await summary.press("Enter");
+  await expect(details).toHaveAttribute("open", "");
+  expect(
+    await page.evaluate(() => ({
+      score: document.querySelector("#player-score")?.textContent,
+      moves: document.querySelector("#moves-value")?.textContent,
+      time: document.querySelector("#time-value")?.textContent,
+      vitality: document.querySelector("#vitality-count")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }))
+  ).toEqual(beforeToggle);
+
+  await page.getByRole("button", { name: "Next question" }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.locator("#challenge-question")).toContainText(
+    "Fresh reviewed Question 1"
+  );
 });
 
 test("reviews coarse Journal outcomes and keeps Practice outside the Run", async ({

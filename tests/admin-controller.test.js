@@ -189,6 +189,32 @@ describe("renderAdmin", () => {
     expect(client.listDeadWebhooks).toHaveBeenCalledTimes(1);
   });
 
+  it("previews the exact reviewed Echo Lens before publication", async () => {
+    const client = staffClient();
+    await renderAdmin(root, {
+      clerk: stubClerk("moderator"),
+      loadProfile: async () => ({
+        access: {
+          role: "moderator",
+          permissions: [
+            "audit:read",
+            "questions:read",
+            "questions:write"
+          ]
+        }
+      }),
+      client
+    });
+
+    const preview = root.querySelector("[data-echo-lens-preview]");
+    expect(preview).toBeInstanceOf(HTMLDetailsElement);
+    expect(preview?.textContent).toContain("See two groups");
+    expect(preview?.textContent).toContain(
+      "Two groups of two make four altogether."
+    );
+    expect(preview?.textContent).toContain("2 rows by 2 columns");
+  });
+
   it("changes a role through a labelled row control", async () => {
     const client = staffClient();
     await renderAdmin(root, {
@@ -372,7 +398,24 @@ function staffClient() {
                 difficultyBand: "foundation",
                 difficultyRank: 11,
                 topicId: "arithmetic",
-                learningObjectiveId: "bright-combine-groups"
+                learningObjectiveId: "bright-combine-groups",
+                reviewedRevisionId: "database:math-1:v1",
+                echoLens: {
+                  version: 1,
+                  kind: "array",
+                  title: "See two groups",
+                  reasoning: "Two groups of two make four altogether.",
+                  steps: [
+                    "Make the first group of two.",
+                    "Make the second group of two.",
+                    "Count all four."
+                  ],
+                  visual: {
+                    rows: 2,
+                    columns: 2,
+                    filled: 4
+                  }
+                }
               }
             }
           ]

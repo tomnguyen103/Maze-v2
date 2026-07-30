@@ -1,4 +1,5 @@
 import { isLearningMetadata } from "./learning-objectives.js";
+import { normalizeEchoLens } from "./echo-lens.js";
 
 /**
  * @typedef {{
@@ -11,7 +12,9 @@ import { isLearningMetadata } from "./learning-objectives.js";
  *   difficultyBand: string,
  *   difficultyRank: number,
  *   topicId: string,
- *   learningObjectiveId: string
+ *   learningObjectiveId: string,
+ *   reviewedRevisionId?: string,
+ *   echoLens?: ReturnType<typeof normalizeEchoLens>
  * }} WardenQuestion
  */
 
@@ -117,6 +120,21 @@ export function normalizeQuestion(
   ) {
     throw new Error("Question did not pass kid-safe content checks.");
   }
+  const reviewedRevisionId =
+    typeof raw.reviewedRevisionId === "string"
+      ? raw.reviewedRevisionId.trim()
+      : "";
+  if (
+    reviewedRevisionId &&
+    !/^[a-z0-9][a-z0-9._:-]{5,119}$/iu.test(reviewedRevisionId)
+  ) {
+    throw new Error("Question reviewed revision is not valid.");
+  }
+  if (raw.echoLens !== undefined && !reviewedRevisionId) {
+    throw new Error("Echo Lens requires an exact Reviewed Question Revision.");
+  }
+  const echoLens =
+    raw.echoLens === undefined ? undefined : normalizeEchoLens(raw.echoLens);
 
   return {
     id:
@@ -131,6 +149,8 @@ export function normalizeQuestion(
     difficultyRank,
     topicId,
     learningObjectiveId,
-    explanation
+    explanation,
+    ...(reviewedRevisionId ? { reviewedRevisionId } : {}),
+    ...(echoLens ? { echoLens } : {})
   };
 }

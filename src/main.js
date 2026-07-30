@@ -93,6 +93,10 @@ import {
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
+/** @type {Promise<typeof import("./learning/echo-lens-view.js") | null> | null} */
+let echoLensViewPromise = null;
+let echoLensRequestId = 0;
+let deferChallengeQuestionForLens = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
 /** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
@@ -189,12 +193,25 @@ const elements = {
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
   challengeChoices: requiredElement("challenge-choices", HTMLElement),
   challengeDialog: requiredElement("challenge-dialog", HTMLDialogElement),
+  challengeEchoLens: requiredElement(
+    "challenge-echo-lens",
+    HTMLDetailsElement
+  ),
+  challengeEchoLensContent: requiredElement(
+    "challenge-echo-lens-content",
+    HTMLElement
+  ),
+  challengeEchoLensContinue: requiredElement(
+    "challenge-echo-lens-continue",
+    HTMLButtonElement
+  ),
   challengeFeedback: requiredElement("challenge-feedback", HTMLElement),
   challengeKicker: requiredElement("challenge-kicker", HTMLElement),
   challengePromise: requiredElement("challenge-promise", HTMLElement),
   challengeQuestion: requiredElement("challenge-question", HTMLElement),
   challengeSource: requiredElement("challenge-source", HTMLElement),
   challengeTitle: requiredElement("challenge-title", HTMLElement),
+  challengeLensPanel: requiredElement("challenge-lens-panel", HTMLElement),
   gateStagingSkip: requiredElement(
     "gate-staging-skip",
     HTMLButtonElement
@@ -215,6 +232,8 @@ const elements = {
   dailyStart: requiredElement("daily-start", HTMLButtonElement),
   dailyTitle: requiredElement("daily-title", HTMLElement),
   echoCount: requiredElement("echo-count", HTMLElement),
+  echoLens: requiredElement("echo-lens", HTMLDetailsElement),
+  echoLensContent: requiredElement("echo-lens-content", HTMLElement),
   echoMeter: requiredElement("echo-meter", HTMLElement),
   eventRibbon: requiredElement("event-ribbon", HTMLElement),
   fieldNote: requiredElement("field-note", HTMLElement),
@@ -652,16 +671,45 @@ elements.challengeChoices.addEventListener("click", (event) => {
   }
 
   const question = run.challenge?.question;
+  const correct = button.dataset.answer === question?.answerId;
   if (question && !activeFirstLight) {
     playerController.recordLearningOutcome(
       question,
-      button.dataset.answer === question.answerId ? "correct" : "wrong"
+      correct ? "correct" : "wrong"
     );
   }
+  clearPostAnswerEchoLens();
+  let hasReviewedEchoLens = false;
+  if (question) {
+    try {
+      const reviewedQuestion = normalizeQuestion(question);
+      hasReviewedEchoLens = Boolean(
+        reviewedQuestion.reviewedRevisionId && reviewedQuestion.echoLens
+      );
+    } catch {
+      hasReviewedEchoLens = false;
+    }
+  }
+  deferChallengeQuestionForLens =
+    hasReviewedEchoLens && !correct && !activeFirstLight;
   transition({
     type: "answer-question",
     answerId: button.dataset.answer
   });
+  if (question && !activeFirstLight) {
+    void showPostAnswerEchoLens(
+      question,
+      deferChallengeQuestionForLens ? "challenge" : "trail"
+    );
+  }
+});
+elements.challengeEchoLensContinue.addEventListener("click", () => {
+  deferChallengeQuestionForLens = false;
+  clearPostAnswerEchoLens();
+  elements.challengeQuestion.textContent = "Preparing your next question…";
+  elements.challengeSource.textContent =
+    "Opening the next reviewed question scroll…";
+  void loadChallengeQuestion();
 });
 elements.hintButton.addEventListener("click", () => {
   if (run.challenge?.hintRevealed) {
@@ -3043,6 +3091,18 @@ function syncChallengeDialog() {
     elements.skipQuestion.disabled = true;
     elements.skipQuestion.hidden = activeFirstLight;
     elements.challengeSource.textContent = "Opening the question scroll…";
+    if (
+      deferChallengeQuestionForLens &&
+      feedback?.kind === "wrong"
+    ) {
+      elements.challengeQuestion.textContent =
+        "Review the explanation, then continue when you are ready.";
+      elements.challengeSource.textContent =
+        "Your timer stays paused. Reviewing does not change this Run.";
+      elements.gateStagingSkip.hidden = true;
+      return;
+    }
+    clearPostAnswerEchoLens();
     if (isGateWarden && !gateStagingComplete) {
       const theme = activeRegionTheme();
       elements.challengeKicker.textContent =
@@ -3063,6 +3123,8 @@ function syncChallengeDialog() {
     return;
   }
 
+  deferChallengeQuestionForLens = false;
+  clearPostAnswerEchoLens();
   elements.challengeQuestion.textContent = question.prompt;
   elements.hintButton.disabled = false;
   elements.hintButton.textContent =
@@ -3104,6 +3166,94 @@ function syncChallengeDialog() {
       : elements.challengeQuestion
     ).focus({ preventScroll: true });
   });
+}
+
+/**
+ * @param {HTMLDetailsElement} details
+ * @param {HTMLElement} content
+ */
+function hideEchoLens(details, content) {
+  details.open = false;
+  details.hidden = true;
+  content.replaceChildren();
+  delete content.dataset.presentation;
+}
+
+function clearPostAnswerEchoLens() {
+  echoLensRequestId += 1;
+  hideEchoLens(elements.echoLens, elements.echoLensContent);
+  hideEchoLens(
+    elements.challengeEchoLens,
+    elements.challengeEchoLensContent
+  );
+  elements.challengeLensPanel.hidden = true;
+}
+
+/**
+ * @param {unknown} rawQuestion
+ * @param {"trail" | "challenge"} placement
+ */
+async function showPostAnswerEchoLens(rawQuestion, placement) {
+  let question;
+  try {
+    question = normalizeQuestion(rawQuestion);
+  } catch {
+    return;
+  }
+  if (!question.reviewedRevisionId || !question.echoLens) {
+    return;
+  }
+  const requestId = ++echoLensRequestId;
+  if (!echoLensViewPromise) {
+    echoLensViewPromise = import("./learning/echo-lens-view.js").catch(() => null);
+  }
+  const view = await echoLensViewPromise;
+  if (requestId !== echoLensRequestId) {
+    return;
+  }
+  const details =
+    placement === "challenge"
+      ? elements.challengeEchoLens
+      : elements.echoLens;
+  const content =
+    placement === "challenge"
+      ? elements.challengeEchoLensContent
+      : elements.echoLensContent;
+  delete content.dataset.presentation;
+  if (view) {
+    view.renderEchoLensContent(content, question.echoLens);
+  } else {
+    const title = document.createElement("h3");
+    title.className = "echo-lens__title";
+    title.textContent = question.echoLens.title;
+    const reasoning = document.createElement("p");
+    reasoning.className = "echo-lens__reasoning";
+    reasoning.textContent = question.echoLens.reasoning;
+    const steps = document.createElement("ol");
+    steps.className = "echo-lens__steps";
+    for (const step of question.echoLens.steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      steps.append(item);
+    }
+    content.replaceChildren(title, reasoning, steps);
+    content.dataset.presentation = "text-only";
+  }
+  if (placement === "challenge") {
+    elements.challengeLensPanel.hidden = false;
+  }
+  details.hidden = false;
+  details.open = true;
+  announce(
+    view
+      ? "Echo Lens opened with a reviewed explanation."
+      : "Echo Lens opened in text-only mode."
+  );
+  if (placement === "challenge") {
+    requestAnimationFrame(() =>
+      details.querySelector("summary")?.focus({ preventScroll: true })
+    );
+  }
 }
 
 function showSkipWarning() {

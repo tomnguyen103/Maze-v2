@@ -34,9 +34,15 @@ const card = (/** @type {string} */ id) => ({
   learningObjectiveId: "bright-combine-groups"
 });
 
+const publishedRow = (/** @type {string} */ id, version = 1) => ({
+  id,
+  version,
+  content: card(id)
+});
+
 describe("question bank store", () => {
   it("asks only for published versions of the requested level and band", async () => {
-    const pool = createPool([{ content: card("db-1") }]);
+    const pool = createPool([publishedRow("db-1")]);
     const store = createQuestionBankStore(pool);
     await store.publishedQuestion({
       levelId: "bright-start",
@@ -51,7 +57,7 @@ describe("question bank store", () => {
   });
 
   it("uses only the published overlay for the requested ordinal", async () => {
-    const pool = createPool([{ content: card("db-7") }]);
+    const pool = createPool([publishedRow("db-7")]);
     const store = createQuestionBankStore(pool);
     expect(
       (
@@ -63,6 +69,23 @@ describe("question bank store", () => {
       )?.id
     ).toBe("db-7");
     expect(pool.queries[0].values[2]).toBe(7);
+  });
+
+  it("binds published content to the immutable database version", async () => {
+    const pool = createPool([
+      { id: "db-7", version: 3, content: card("db-7") }
+    ]);
+    const store = createQuestionBankStore(pool);
+
+    const question = await store.publishedQuestion({
+      levelId: "bright-start",
+      difficultyBand: "foundation",
+      questionOrdinal: 7
+    });
+
+    expect(pool.queries[0].sql).toContain("q.id");
+    expect(pool.queries[0].sql).toContain("v.version");
+    expect(question?.reviewedRevisionId).toBe("database:db-7:v3");
   });
 
   it("returns null when the band has no published card", async () => {
@@ -80,7 +103,9 @@ describe("question bank store", () => {
     // something a player may see. It throws rather than reading as "nothing
     // published", so the service reports it and still falls back.
     const store = createQuestionBankStore(
-      createPool([{ content: { id: "broken", prompt: "" } }])
+      createPool([
+        { id: "broken", version: 1, content: { id: "broken", prompt: "" } }
+      ])
     );
     await expect(
       store.publishedQuestion({
@@ -95,7 +120,9 @@ describe("question bank store", () => {
     // Content and band live in different tables, so no CHECK can hold them
     // together; a miscategorized publish would serve a foundation prompt at
     // mastery.
-    const store = createQuestionBankStore(createPool([{ content: card("db-1") }]));
+    const store = createQuestionBankStore(
+      createPool([publishedRow("db-1")])
+    );
     await expect(
       store.publishedQuestion({
         levelId: "bright-start",

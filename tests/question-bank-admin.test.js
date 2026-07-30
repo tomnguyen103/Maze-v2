@@ -17,6 +17,21 @@ const card = {
   topicId: "arithmetic",
   learningObjectiveId: "bright-combine-groups"
 };
+const echoLens = {
+  version: 1,
+  kind: "number-line",
+  title: "Count two more",
+  reasoning: "Start at two and count forward two steps to reach four.",
+  steps: ["Start at 2.", "Count to 3.", "Count to 4."],
+  visual: {
+    start: 2,
+    end: 4,
+    markers: [
+      { value: 2, label: "Start" },
+      { value: 4, label: "Answer" }
+    ]
+  }
+};
 
 /** @param {(Record<string, unknown>[] | { error: Error })[]} responses */
 function transactionPool(responses) {
@@ -79,7 +94,7 @@ describe("question bank admin writes", () => {
         levelId: "bright-start",
         difficultyBand: "foundation",
         questionOrdinal: 0,
-        content: card
+        content: { ...card, echoLens }
       }, "admin_1")
     ).resolves.toEqual({ id: "math-1", version: 2 });
     expect(pool.queries.map(({ sql }) => sql.trim().split(/\s+/)[0])).toEqual([
@@ -90,7 +105,11 @@ describe("question bank admin writes", () => {
       "INSERT",
       "COMMIT"
     ]);
-    expect(pool.queries[4].values[2]).toEqual(card);
+    expect(pool.queries[4].values[2]).toEqual({
+      ...card,
+      reviewedRevisionId: "database:math-1:v2",
+      echoLens
+    });
     expect(pool.queries[4].values[3]).toBe("admin_1");
   });
 
@@ -106,6 +125,29 @@ describe("question bank admin writes", () => {
         content: card
       }, "admin_1")
     ).rejects.toThrow(/difficulty band/i);
+    expect(pool.queries).toEqual([]);
+  });
+
+  it("rejects a Lens that claims an earlier database revision before saving", async () => {
+    const pool = transactionPool([]);
+    const store = createQuestionBankStore(pool);
+
+    await expect(
+      store.saveDraft(
+        {
+          id: "math-1",
+          levelId: "bright-start",
+          difficultyBand: "foundation",
+          questionOrdinal: 0,
+          content: {
+            ...card,
+            reviewedRevisionId: "database:math-1:v1",
+            echoLens
+          }
+        },
+        "admin_1"
+      )
+    ).rejects.toThrow(/Reviewed Question Revision/i);
     expect(pool.queries).toEqual([]);
   });
 
@@ -198,6 +240,28 @@ describe("question bank admin writes", () => {
     expect(pool.queries[1].sql).toContain("FOR UPDATE");
     expect(pool.queries[2].sql).toContain("status = 'draft'");
     expect(pool.queries[3].sql).toContain("status = 'published'");
+  });
+
+  it("blocks a Lens copied from a different Reviewed Question Revision", async () => {
+    const pool = transactionPool([
+      [],
+      [
+        {
+          content: {
+            ...card,
+            reviewedRevisionId: "database:math-1:v1",
+            echoLens
+          }
+        }
+      ],
+      []
+    ]);
+    const store = createQuestionBankStore(pool);
+
+    await expect(store.publishVersion("math-1", 2)).rejects.toThrow(
+      /Reviewed Question Revision/i
+    );
+    expect(pool.queries.at(-1)?.sql).toBe("ROLLBACK");
   });
 
   it("deletes a question only when it exists", async () => {

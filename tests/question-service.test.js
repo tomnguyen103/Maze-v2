@@ -472,4 +472,51 @@ describe("question bank in Postgres", () => {
     expect(result.source).toBe("ollama");
     expect(prompts[0]).toContain("What is 7 × 3?");
   });
+
+  it("keeps revision identity and Echo Lens outside provider authority", async () => {
+    const reviewedEchoLens = {
+      version: /** @type {1} */ (1),
+      kind: "array",
+      title: "Seven groups of three",
+      reasoning: "Seven equal groups with three in each group make twenty-one.",
+      steps: ["Make seven rows.", "Place three in each row.", "Count 21."],
+      visual: { rows: 7, columns: 3, filled: 21 }
+    };
+    const reviewedQuestion = {
+      ...DATABASE_QUESTION,
+      reviewedRevisionId: "database:db-scout-1:v4",
+      echoLens: reviewedEchoLens
+    };
+    const service = createQuestionService({
+      env: { NODE_ENV: "development" },
+      questionBank: {
+        async publishedQuestion() {
+          return reviewedQuestion;
+        }
+      },
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          message: {
+            content: JSON.stringify({
+              ...DATABASE_QUESTION,
+              reviewedRevisionId: "provider:invented:v1",
+              echoLens: {
+                ...reviewedEchoLens,
+                title: "Provider replacement"
+              }
+            })
+          }
+        })
+      })
+    });
+
+    const result = await service.getQuestion(REQUEST);
+
+    expect(result.source).toBe("ollama");
+    expect(result.question.reviewedRevisionId).toBe(
+      reviewedQuestion.reviewedRevisionId
+    );
+    expect(result.question.echoLens).toEqual(reviewedEchoLens);
+  });
 });

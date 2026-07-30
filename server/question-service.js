@@ -28,7 +28,9 @@ export { normalizeQuestion };
  *   difficultyBand: string,
  *   difficultyRank: number,
  *   topicId: string,
- *   learningObjectiveId: string
+ *   learningObjectiveId: string,
+ *   reviewedRevisionId?: string,
+ *   echoLens?: ReturnType<typeof normalizeQuestion>["echoLens"]
  * }} WardenQuestion
  * @typedef {{
  *   question: WardenQuestion,
@@ -359,13 +361,17 @@ export function createQuestionService(options = {}) {
 
     try {
       if (now() >= providerRetryAt && provider === "ollama") {
-        const question = await requestOllama(
+        const generatedQuestion = await requestOllama(
           request,
           { env, fetchImpl },
           previousQuestion,
           reviewedQuestion
         );
-        assertReviewedTemplate(question, reviewedQuestion);
+        assertReviewedTemplate(generatedQuestion, reviewedQuestion);
+        const question = bindReviewedAuthority(
+          generatedQuestion,
+          reviewedQuestion
+        );
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
@@ -377,13 +383,17 @@ export function createQuestionService(options = {}) {
         provider === "gemini" &&
         env.GEMINI_API_KEY
       ) {
-        const question = await requestGemini(
+        const generatedQuestion = await requestGemini(
           request,
           { env, fetchImpl },
           previousQuestion,
           reviewedQuestion
         );
-        assertReviewedTemplate(question, reviewedQuestion);
+        assertReviewedTemplate(generatedQuestion, reviewedQuestion);
+        const question = bindReviewedAuthority(
+          generatedQuestion,
+          reviewedQuestion
+        );
         assertFreshQuestion(question, previousQuestion);
         return rememberGenerated(request, encounterKey, {
           question,
@@ -464,6 +474,27 @@ function assertFreshQuestion(question, previousQuestion) {
   ) {
     throw new Error("Generated Question repeated the previous prompt.");
   }
+}
+
+/**
+ * Providers may reproduce only the reviewed core. Revision identity and Lens
+ * content always come from the database or bundled review authority.
+ * @param {WardenQuestion} generatedQuestion
+ * @param {WardenQuestion} reviewedQuestion
+ */
+function bindReviewedAuthority(generatedQuestion, reviewedQuestion) {
+  const generatedCore = { ...generatedQuestion };
+  delete generatedCore.reviewedRevisionId;
+  delete generatedCore.echoLens;
+  return normalizeQuestion({
+    ...generatedCore,
+    ...(reviewedQuestion.reviewedRevisionId
+      ? { reviewedRevisionId: reviewedQuestion.reviewedRevisionId }
+      : {}),
+    ...(reviewedQuestion.echoLens
+      ? { echoLens: reviewedQuestion.echoLens }
+      : {})
+  });
 }
 
 /**

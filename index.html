@@ -189,6 +189,11 @@
           <div class="event-ribbon" id="event-ribbon" aria-hidden="true">
             Run ready.
           </div>
+
+          <details class="echo-lens" id="echo-lens" hidden>
+            <summary>Why this works</summary>
+            <div class="echo-lens__content" id="echo-lens-content"></div>
+          </details>
         </article>
 
         <aside class="intel-deck" aria-label="How to play">
@@ -578,6 +583,22 @@
         </div>
       </div>
       <p class="challenge-source" id="challenge-source">Opening the question scroll…</p>
+      <section class="challenge-lens-panel" id="challenge-lens-panel" hidden>
+        <details class="echo-lens" id="challenge-echo-lens">
+          <summary>Why this works</summary>
+          <div
+            class="echo-lens__content"
+            id="challenge-echo-lens-content"
+          ></div>
+        </details>
+        <button
+          class="primary-button"
+          id="challenge-echo-lens-continue"
+          type="button"
+        >
+          Next question
+        </button>
+      </section>
     </dialog>
 
     <dialog
