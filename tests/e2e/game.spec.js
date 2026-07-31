@@ -14,6 +14,10 @@ import {
 } from "../../src/learning/lantern-trail.js";
 import { createTerminalRunReplay } from "../../src/game/run-replay-contract.js";
 import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
+import {
+  createDailyContract,
+  utcDateKey
+} from "../../src/game/daily-labyrinth.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -5735,5 +5739,234 @@ test("keeps Read Aloud honest without a local voice and shows the six-field sett
     testInfo,
     4,
     "access-settings-six-fields"
+  );
+});
+
+/**
+ * Seeds this device's Daily record for today so the post-escape Constellation
+ * is reachable. The seed is derived here, in Node, from the same contract the
+ * page uses: the built e2e bundle serves no module graph to import from.
+ *
+ * @param {import("@playwright/test").Page} page
+ * @param {boolean} escaped
+ */
+async function seedDailyEscape(page, escaped) {
+  const daily = createDailyContract(utcDateKey());
+  await page.addInitScript(
+    ({ record }) => {
+      localStorage.setItem(
+        "echo-maze:daily-records:v1",
+        JSON.stringify([record])
+      );
+    },
+    {
+      record: {
+        version: 1,
+        date: daily.date,
+        seed: daily.seed,
+        completed: escaped,
+        bestElapsedMs: escaped ? 91000 : null,
+        bestMoves: escaped ? 76 : null
+      }
+    }
+  );
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {boolean} [published]
+ */
+async function stubConstellation(page, published = true) {
+  await page.route("**/api/daily/constellation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: utcDateKey(),
+        published,
+        markers: published
+          ? [
+              { kind: "cell", x: 1, y: 1, band: "bright" },
+              { kind: "passage", x: 2, y: 1, band: "bright" },
+              { kind: "cell", x: 3, y: 1, band: "glowing" },
+              { kind: "passage", x: 3, y: 2, band: "glowing" },
+              { kind: "cell", x: 3, y: 3, band: "quiet" },
+              { kind: "pulse", x: 3, y: 3, band: "quiet" }
+            ]
+          : []
+      })
+    });
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {string} name
+ */
+async function recordConstellationScreenshot(page, testInfo, name) {
+  // The Constellation sits below the Verified Daily Board, so the evidence
+  // shot has to scroll to it rather than capture the dialog's first fold.
+  await page.locator("#daily-constellation").scrollIntoViewIfNeeded();
+  const body = await page.screenshot();
+  await testInfo.attach(`${name}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_5_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-5-${name}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function openDailyDialog(page) {
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  await page.getByRole("button", { name: "Daily", exact: true }).click();
+}
+
+test("shows the Constellation only after a Daily escape", async ({ page }) => {
+  await seedDailyEscape(page, false);
+  await stubConstellation(page);
+
+  await openDailyDialog(page);
+
+  await expect(page.locator("#daily-constellation")).toBeHidden();
+});
+
+test("renders the Constellation in density bands after an escape", async ({
+  page
+}, testInfo) => {
+  await seedDailyEscape(page, true);
+  await stubConstellation(page);
+
+  await openDailyDialog(page);
+
+  const constellation = page.locator("#daily-constellation");
+  await expect(constellation).toBeVisible();
+  await expect(page.locator("#daily-constellation-status")).toHaveText(
+    "Today’s shared paths are showing."
+  );
+  await expect(page.locator("#daily-constellation-map")).toBeVisible();
+  await expect(
+    page.locator("#daily-constellation-map .daily-constellation__tile")
+  ).toHaveCount(6);
+  // Nothing countable reaches the surface: no digit, share, or identity.
+  const readable = await constellation.innerText();
+  expect(readable).not.toMatch(/\d/);
+  expect(readable).not.toMatch(/%|contributor|Explorer/i);
+
+  await recordConstellationScreenshot(page, testInfo, "daily-constellation");
+});
+
+test("says the Constellation is still forming below its threshold", async ({
+  page
+}, testInfo) => {
+  await seedDailyEscape(page, true);
+  await stubConstellation(page, false);
+
+  await openDailyDialog(page);
+
+  await expect(page.locator("#daily-constellation-status")).toHaveText(
+    "Paths are still forming."
+  );
+  await expect(page.locator("#daily-constellation-map")).toBeHidden();
+
+  await recordConstellationScreenshot(
+    page,
+    testInfo,
+    "daily-constellation-forming"
+  );
+});
+
+test("keeps the Constellation readable at the mobile fold and 200 percent text", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "The viewport is set explicitly, so one project proves it."
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedDailyEscape(page, true);
+  await stubConstellation(page);
+
+  await openDailyDialog(page);
+
+  const constellation = page.locator("#daily-constellation");
+  await constellation.scrollIntoViewIfNeeded();
+  await expect(page.locator("#daily-constellation-map")).toBeVisible();
+  const map = await page.locator("#daily-constellation-map").boundingBox();
+  if (!map) {
+    throw new Error("Expected a rendered Constellation map.");
+  }
+  expect(map.width).toBeLessThanOrEqual(390);
+
+  // The retry control is the section's only interactive element, so keyboard
+  // reachability is proved against it rather than against the map.
+  await page.evaluate(() => {
+    const retry = document.getElementById("daily-constellation-retry");
+    if (retry) {
+      retry.hidden = false;
+    }
+    document.documentElement.style.fontSize = "200%";
+  });
+  const retry = page.getByRole("button", { name: "Retry Constellation" });
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator("#daily-constellation-status")).toBeVisible();
+
+  await recordConstellationScreenshot(
+    page,
+    testInfo,
+    "daily-constellation-200pct"
+  );
+});
+
+test("offers an explicit retry when the Constellation chunk fails", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "One optional Constellation retry proof is sufficient."
+  );
+  let chunkRequests = 0;
+  await page.route("**/assets/daily-constellation-view-*.js", async (route) => {
+    chunkRequests += 1;
+    if (chunkRequests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await seedDailyEscape(page, true);
+  await stubConstellation(page);
+
+  await openDailyDialog(page);
+
+  await expect(page.locator("#daily-constellation-status")).toHaveText(
+    "The Constellation could not be loaded. Your Daily result is unaffected."
+  );
+  const retry = page.getByRole("button", { name: "Retry Constellation" });
+  await expect(retry).toBeVisible();
+
+  await retry.click();
+  await expect(page.locator("#daily-constellation-status")).toHaveText(
+    "Today’s shared paths are showing."
   );
 });

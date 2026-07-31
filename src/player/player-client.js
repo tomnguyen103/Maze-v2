@@ -359,6 +359,9 @@ export function createPlayerApiClient({
     async getVerifiedDailyLeaderboard() {
       return request("/api/daily/leaderboard", {}, false);
     },
+    async getDailyConstellation() {
+      return request("/api/daily/constellation", {}, false);
+    },
     async getLearningJournal() {
       return request("/api/learning-journal", {}, true, true);
     },

@@ -25,7 +25,11 @@ export class ReplayInputError extends Error {}
  *     context: { run: ReturnType<typeof createRun> }
  *   ) => ReturnType<
  *     (typeof import("../src/questions/question-bank.js"))["getBundledQuestion"]
- *   >
+ *   >,
+ *   onStep?: (
+ *     run: ReturnType<typeof createRun>,
+ *     action: { type: string } | null
+ *   ) => void
  * }} trusted
  */
 export function verifyRunReplay(value, trusted) {
@@ -33,6 +37,7 @@ export function verifyRunReplay(value, trusted) {
   let run = createRun(trusted.seed, trusted.config);
   let elapsedMs = 0;
   let questionIndex = 0;
+  trusted.onStep?.(run, null);
 
   for (const rawEntry of log.actions) {
     if (run.status === "won" || run.status === "lost") {
@@ -70,6 +75,7 @@ export function verifyRunReplay(value, trusted) {
       );
     }
     run = next;
+    trusted.onStep?.(run, action);
   }
 
   if (run.status !== "won" && run.status !== "lost") {

@@ -104,7 +104,18 @@ export function createUserDeletionStore(pool) {
               NOT EXISTS (
                 SELECT 1 FROM verified_daily_entries
                 WHERE player_id = $1
-              ) AS verified_daily_entries_deleted`,
+              ) AS verified_daily_entries_deleted,
+              -- Tolerates a deploy that lands before migration 0023: without
+              -- the regclass guard the whole statement raises "relation does
+              -- not exist", the transaction rolls back, and every account
+              -- deletion fails rather than just this assertion.
+              (
+                to_regclass('public.daily_trail_contributions') IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM daily_trail_contributions
+                  WHERE player_id = $1
+                )
+              ) AS daily_trail_contributions_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -128,12 +139,33 @@ export function createUserDeletionStore(pool) {
   };
 }
 
+// Named rather than counted: a positional count passes unchanged when a
+// future edit swaps one assertion for another, which is the one mistake this
+// guard exists to catch. Extended by hand for every new personal table.
+const DELETION_ASSERTIONS = Object.freeze([
+  "tombstone_present",
+  "cloud_deleted",
+  "player_deleted",
+  "scores_deleted",
+  "access_deleted",
+  "grants_deleted",
+  "purchases_deleted",
+  "journal_deleted",
+  "settings_deleted",
+  "memberships_deleted",
+  "verified_daily_submissions_deleted",
+  "verified_daily_entries_deleted",
+  "daily_trail_contributions_deleted"
+]);
+
 /** @param {unknown} row */
 function deletionVerified(row) {
-  return Boolean(
-    row &&
-    typeof row === "object" &&
-    Object.values(row).length === 12 &&
-    Object.values(row).every((value) => value === true)
+  if (!row || typeof row !== "object") {
+    return false;
+  }
+  const verified = /** @type {Record<string, unknown>} */ (row);
+  return (
+    Object.keys(verified).length === DELETION_ASSERTIONS.length &&
+    DELETION_ASSERTIONS.every((assertion) => verified[assertion] === true)
   );
 }

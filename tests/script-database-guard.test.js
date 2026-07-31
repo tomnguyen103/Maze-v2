@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 const SCRIPTS = [
   { path: "scripts/verify-audit-chain.mjs", args: [] },
   { path: "scripts/prune-rate-limits.mjs", args: [] },
+  { path: "scripts/prune-constellation.mjs", args: [] },
   { path: "scripts/grant-admin.mjs", args: ["user_guard_test"] }
 ];
 

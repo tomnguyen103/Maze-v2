@@ -4,6 +4,7 @@ import {
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
+import { collectTrailMarkers } from "./constellation-markers.js";
 import { ReplayInputError, verifyRunReplay } from "./run-replay.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { UNMETERED } from "./rate-limit-config.js";
@@ -12,9 +13,11 @@ import { URL } from "node:url";
 
 export const DAILY_LEADERBOARD_PATH = "/api/daily/leaderboard";
 export const DAILY_SCORES_PATH = "/api/daily/scores";
+export const DAILY_CONSTELLATION_PATH = "/api/daily/constellation";
 export const DAILY_PATHS = new Set([
   DAILY_LEADERBOARD_PATH,
-  DAILY_SCORES_PATH
+  DAILY_SCORES_PATH,
+  DAILY_CONSTELLATION_PATH
 ]);
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -72,6 +75,17 @@ class DailyInputError extends Error {
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
  *   getProfile: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   constellation?: {
+ *     recordContribution: (
+ *       userId: string,
+ *       date: string,
+ *       markers: import("./constellation-markers.js").TrailMarker[]
+ *     ) => Promise<{ contributed: boolean }>,
+ *     readProjection?: (date: string) => Promise<{
+ *       published: boolean,
+ *       markers: import("../shared/constellation.js").ConstellationMarker[]
+ *     }>
+ *   } | null,
  *   now?: () => Date,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   rateLimit?: import("./rate-limit-request.js").RateLimit
@@ -81,6 +95,7 @@ export function createDailyHandler({
   store,
   getUserId,
   getProfile,
+  constellation = null,
   now = () => new Date(),
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED
@@ -112,6 +127,45 @@ export function createDailyHandler({
           contractVersion: daily.version,
           verification: "verified-replay-v1",
           entries: (await store.getLeaderboard(daily.date, 10)).map(publicEntry)
+        });
+        return;
+      }
+
+      if (pathname === DAILY_CONSTELLATION_PATH) {
+        if (request.method !== "GET") {
+          response.setHeader("allow", "GET");
+          sendJson(response, 405, {
+            error: "Use GET for the Daily Trail Constellation."
+          });
+          return;
+        }
+        // Guests may read this after escaping, so it cannot require an
+        // identity — which leaves it the one Daily read an anonymous caller
+        // can repeat freely. Each call costs two definer round trips, so it
+        // carries the same budget the Verified Daily Board does.
+        const projectionDecision = await rateLimit(
+          "daily.constellation",
+          request,
+          null
+        );
+        if (!projectionDecision.allowed) {
+          sendRateLimited(
+            response,
+            projectionDecision,
+            "Too many Constellation requests. Try again shortly."
+          );
+          return;
+        }
+        // Band labels only, for the canonical UTC Daily and no other. A Daily
+        // that has not reached its thresholds reports itself as unpublished
+        // rather than failing, so the surface can say it is still forming.
+        const projection = (await constellation?.readProjection?.(
+          daily.date
+        )) ?? { published: false, markers: [] };
+        sendJson(response, 200, {
+          date: daily.date,
+          published: projection.published,
+          markers: projection.markers
         });
         return;
       }
@@ -148,10 +202,16 @@ export function createDailyHandler({
       }
 
       const input = validateSubmission(await readJsonBody(request), daily);
+      // The Constellation's markers are derived from the same pass that
+      // verifies the Run, so the submitted log is read once, in request
+      // memory, and nothing derived from it outlives this request beyond the
+      // position set the aggregate is allowed to hold.
+      const trail = collectTrailMarkers();
       const result = verifyRunReplay(input.actionLog, {
         seed: daily.seed,
         config: getLabyrinthConfig(daily.levelId, daily.labyrinthNumber),
-        questionFor: (index) => getDailyQuestion(daily, index)
+        questionFor: (index) => getDailyQuestion(daily, index),
+        onStep: trail.observe
       });
       if (result.status !== "won") {
         throw new DailyInputError(
@@ -170,6 +230,26 @@ export function createDailyHandler({
         moves: result.moves,
         elapsedMs: result.elapsedMs
       });
+      if (constellation) {
+        try {
+          await constellation.recordContribution(
+            userId,
+            daily.date,
+            trail.collected()
+          );
+        } catch (error) {
+          // A Constellation that cannot aggregate must never cost an Explorer
+          // the verified result they already earned. The PostgreSQL SQLSTATE
+          // is logged beside the safe name because a systematic outage — a
+          // missing migration, a constraint violation, a lock timeout — is
+          // otherwise indistinguishable from a one-off, and the code itself
+          // carries no Explorer data.
+          console.error("[daily] Constellation aggregation failed", {
+            name: safeErrorName(error),
+            code: sqlStateOf(error)
+          });
+        }
+      }
       await recordAudit(request, {
         actorId: userId,
         action: "daily.score.submit",
@@ -300,6 +380,19 @@ function assertClaimMatches(claimed, result) {
       "Daily result does not match the server replay."
     );
   }
+}
+
+/**
+ * PostgreSQL puts its five-character SQLSTATE on `error.code`. It names a
+ * failure class and never carries a value from the row that failed.
+ *
+ * @param {unknown} error
+ */
+function sqlStateOf(error) {
+  const code = /** @type {{ code?: unknown }} */ (error)?.code;
+  return typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)
+    ? code
+    : "unknown";
 }
 
 /** @param {Record<string, unknown>} entry */

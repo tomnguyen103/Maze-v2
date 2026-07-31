@@ -895,3 +895,207 @@ describe("Class Expedition migration", () => {
     expect(sql).not.toMatch(/\brank\b/i);
   });
 });
+
+describe("Daily Trail Constellation migration", () => {
+  // Comment prose necessarily names the things the statements must not do,
+  // so every "must not appear" assertion runs against the statements alone.
+  /** @param {string} sql */
+  const statementsOf = (sql) =>
+    sql
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+  const migrationUrl = new URL(
+    "../db/migrations/0023_daily_trail_constellation.sql",
+    import.meta.url
+  );
+
+  it("wraps the whole migration in one transaction", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("BEGIN;");
+    expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
+  });
+
+  it("forces row level security on every new table", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    for (const table of [
+      "daily_trail_constellation_totals",
+      "daily_trail_constellation_counters",
+      "daily_trail_contributions"
+    ]) {
+      expect(sql).toContain(`CREATE TABLE ${table}`);
+      expect(sql).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      expect(sql).toContain(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+      expect(sql).toContain(
+        `REVOKE ALL ON TABLE ${table}\n  FROM PUBLIC, echo_maze_runtime;`
+      );
+    }
+  });
+
+  it("pins search_path on every definer function and revokes PUBLIC", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const definerCount = sql.match(/SECURITY DEFINER/g)?.length ?? 0;
+    const pinnedCount =
+      sql.match(/SET search_path = pg_catalog, public/g)?.length ?? 0;
+    expect(definerCount).toBe(6);
+    expect(pinnedCount).toBe(definerCount);
+    // Every read-only definer declares its volatility, matching the
+    // LANGUAGE sql STABLE readers migration 0021 established.
+    expect(sql.match(/\nSTABLE\n/g)).toHaveLength(3);
+    for (const signature of [
+      "record_daily_trail_contribution(DATE, JSONB)",
+      "publish_daily_trail_batch(DATE)",
+      "read_daily_trail_summary(DATE)",
+      "read_daily_trail_constellation(DATE, INTEGER)",
+      "read_own_daily_trail_contributions()",
+      "prune_daily_trail_constellation()"
+    ]) {
+      expect(sql).toContain(`REVOKE ALL ON FUNCTION ${signature}`);
+      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${signature}`);
+    }
+  });
+
+  it("validates every input the runtime can reach", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // An unbounded marker array is materialized by jsonb_to_recordset before
+    // any CHECK fires, and an out-of-window date would create a receipt the
+    // prune job never reaches.
+    expect(sql).toContain("jsonb_array_length(p_markers) > 4096");
+    // Resolved in UTC rather than the session time zone: the Daily key is
+    // a UTC date, so CURRENT_DATE would shift the window by a day on a
+    // non-UTC connection.
+    expect(statementsOf(sql)).not.toContain("CURRENT_DATE");
+    expect(
+      sql.match(
+        /OR p_daily_date < \(NOW\(\) AT TIME ZONE 'UTC'\)::date - 2 THEN/g
+      )
+    ).toHaveLength(2);
+    // Publication eligibility is decided under the totals row lock, not by
+    // the caller, so two queued callers cannot advance the snapshot twice.
+    expect(sql).toContain("AND contributor_count >= 20");
+    expect(sql).toContain(
+      "AND contributor_count - published_contributor_count >= 10"
+    );
+    expect(sql).toContain(
+      "totals.published_contributor_count >= 20"
+    );
+  });
+
+  it("takes the totals row before the counters in both writers", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // Opposite lock orders between the contributing and publishing writers
+    // would deadlock the moment the two ran concurrently, so both are
+    // checked rather than only the publisher.
+    const writers = [
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION record_daily_trail_contribution"),
+        sql.indexOf("CREATE FUNCTION publish_daily_trail_batch")
+      ),
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION publish_daily_trail_batch"),
+        sql.indexOf("CREATE FUNCTION read_daily_trail_summary")
+      )
+    ];
+    for (const writer of writers) {
+      const totals = writer.indexOf(
+        "public.daily_trail_constellation_totals"
+      );
+      const counters = writer.indexOf(
+        "public.daily_trail_constellation_counters"
+      );
+      expect(totals).toBeGreaterThan(-1);
+      expect(counters).toBeGreaterThan(-1);
+      expect(totals).toBeLessThan(counters);
+    }
+  });
+
+  it("makes one contribution per Explorer per canonical UTC Daily", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("PRIMARY KEY (player_id, daily_date)");
+    expect(sql).toContain("ON CONFLICT (player_id, daily_date) DO NOTHING");
+    expect(sql).toContain(
+      "REFERENCES players(clerk_user_id) ON DELETE CASCADE"
+    );
+  });
+
+  it("gives the contribution receipt no column that could hold a path", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const start = sql.indexOf("CREATE TABLE daily_trail_contributions (");
+    const body = sql.slice(start, sql.indexOf(");", start));
+    // Column definitions sit at exactly two spaces of indent; continuation
+    // lines are indented further, so this cannot mistake one for a column.
+    const columns = body
+      .split("\n")
+      .slice(1)
+      .filter((line) => /^ {2}\S/.test(line))
+      .map((line) => line.trim().split(/[\s(]/)[0])
+      .filter((name) => /^[a-z_]+$/.test(name));
+    expect(columns).toEqual([
+      "player_id",
+      "daily_date",
+      "contributed_at",
+      "expires_at"
+    ]);
+  });
+
+  it("expires both classes of row 48 hours after the Daily ends", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const generated = sql.match(
+      /expires_at TIMESTAMPTZ NOT NULL GENERATED ALWAYS AS \(\n\s*timezone\('UTC', \(daily_date \+ 3\)::timestamp\)\n\s*\) STORED/g
+    );
+    expect(generated).toHaveLength(3);
+    expect(sql).toContain("DELETE FROM public.daily_trail_constellation_totals\n  WHERE expires_at <= NOW();");
+    expect(sql).toContain("DELETE FROM public.daily_trail_contributions\n  WHERE expires_at <= NOW();");
+  });
+
+  it("guards every read on the expiry window as well as the prune job", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const readers = [
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION read_daily_trail_summary"),
+        sql.indexOf("CREATE FUNCTION read_daily_trail_constellation")
+      ),
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
+        sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
+      ),
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions"),
+        sql.indexOf("CREATE FUNCTION prune_daily_trail_constellation")
+      )
+    ];
+    for (const reader of readers) {
+      expect(reader).toContain("expires_at > NOW()");
+    }
+  });
+
+  it("serves suppressed published density and never a personal fact", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const projection = sql.slice(
+      sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
+      sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
+    );
+    // The caller's threshold is floored at the contract's 5, so an
+    // application asking for less gets the contract rather than what it asked
+    // for. That is what makes this a second gate, not a restatement.
+    expect(projection).toContain(
+      "GREATEST(COALESCE(p_marker_threshold, 5), 5)"
+    );
+    expect(projection).toContain("counters.expires_at > NOW()");
+    expect(projection).not.toContain("player_id");
+    expect(projection).not.toContain("username");
+    expect(statementsOf(sql)).not.toMatch(
+      /elapsed|answer|prompt|username|action_log/i
+    );
+  });
+});

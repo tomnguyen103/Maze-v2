@@ -32,7 +32,7 @@ Run, Quest, score, Question, or shared-link state.
 - Returns a versioned envelope conforming to the checked-in contract
   `shared/export-schema.json` (structurally pinned by unit test — the schema
   file itself documents per-section constraints for external consumers):
-  `{ "schema": "echo-maze-export/3", "generated_at": …, "data": { … } }`,
+  `{ "schema": "echo-maze-export/4", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows. Classroom Memberships and Personal/Class Play
@@ -81,6 +81,10 @@ with the Membership. Personal Play remains.
   Classroom name when needed, and event time.
 - Rate-limit counters are dead weight after their window;
   `npm run prune:rate-limits` clears them.
+- Daily Trail Constellation aggregates and contribution receipts are hard-deleted
+  48 hours after their Daily ends. `npm run prune:constellation` performs the
+  deletion; every Constellation read filters on the same expiry instant, so an
+  unpruned row is never served. No historical archive is kept.
 - Audit rows are append-only by design (tamper-evident chain, ADR 0013) and
   store a daily-rotating address hash, never a raw address.
 - A daily HMAC over the checkpoint time and audit chain position is stored in a

@@ -1,6 +1,6 @@
 import { setTenantContext } from "./tenant-context.js";
 
-export const EXPORT_SCHEMA_ID = "echo-maze-export/3";
+export const EXPORT_SCHEMA_ID = "echo-maze-export/4";
 
 /**
  * Snapshot variant: every section reads from ONE repeatable-read snapshot,
@@ -138,6 +138,14 @@ const SECTION_QUERIES = {
     FROM verified_daily_entries
     WHERE player_id = $1
     ORDER BY daily_date, achieved_at`,
+  // Definer reader keyed on the transaction-local Explorer identity, and the
+  // only Constellation data that is personal: that this Explorer contributed
+  // to a Daily, never where they walked. It applies the same 48-hour window
+  // every other Constellation read does.
+  daily_trail_contributions: `SELECT
+      to_char(daily_date, 'YYYY-MM-DD') AS daily_date,
+      contributed_at
+    FROM read_own_daily_trail_contributions()`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 
@@ -229,6 +237,10 @@ export async function buildUserExport(
     "class_expedition_licenses",
     []
   );
+  const dailyTrailContributions = await rowsOf(
+    "daily_trail_contributions",
+    []
+  );
 
   return {
     schema: EXPORT_SCHEMA_ID,
@@ -252,6 +264,7 @@ export async function buildUserExport(
       access_settings: accessSettings[0] ?? null,
       verified_daily_results: verifiedDailyResults,
       verified_daily_best_results: verifiedDailyBestResults,
+      daily_trail_contributions: dailyTrailContributions,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"
     }
