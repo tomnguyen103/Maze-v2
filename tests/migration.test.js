@@ -895,3 +895,136 @@ describe("Class Expedition migration", () => {
     expect(sql).not.toMatch(/\brank\b/i);
   });
 });
+
+describe("Daily Trail Constellation migration", () => {
+  const migrationUrl = new URL(
+    "../db/migrations/0023_daily_trail_constellation.sql",
+    import.meta.url
+  );
+
+  it("wraps the whole migration in one transaction", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("BEGIN;");
+    expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
+  });
+
+  it("forces row level security on every new table", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    for (const table of [
+      "daily_trail_constellation_totals",
+      "daily_trail_constellation_counters",
+      "daily_trail_contributions"
+    ]) {
+      expect(sql).toContain(`CREATE TABLE ${table}`);
+      expect(sql).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      expect(sql).toContain(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+      expect(sql).toContain(
+        `REVOKE ALL ON TABLE ${table}\n  FROM PUBLIC, echo_maze_runtime;`
+      );
+    }
+  });
+
+  it("pins search_path on every definer function and revokes PUBLIC", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const definerCount = sql.match(/SECURITY DEFINER/g)?.length ?? 0;
+    const pinnedCount =
+      sql.match(/SET search_path = pg_catalog, public/g)?.length ?? 0;
+    expect(definerCount).toBe(4);
+    expect(pinnedCount).toBe(definerCount);
+    for (const signature of [
+      "record_daily_trail_contribution(DATE, JSONB, INTEGER)",
+      "read_daily_trail_constellation(DATE, INTEGER, INTEGER)",
+      "read_own_daily_trail_contributions()",
+      "prune_daily_trail_constellation()"
+    ]) {
+      expect(sql).toContain(`REVOKE ALL ON FUNCTION ${signature}`);
+      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${signature}`);
+    }
+  });
+
+  it("makes one contribution per Explorer per canonical UTC Daily", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("PRIMARY KEY (player_id, daily_date)");
+    expect(sql).toContain("ON CONFLICT (player_id, daily_date) DO NOTHING");
+    expect(sql).toContain(
+      "REFERENCES players(clerk_user_id) ON DELETE CASCADE"
+    );
+  });
+
+  it("gives the contribution receipt no column that could hold a path", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const start = sql.indexOf("CREATE TABLE daily_trail_contributions (");
+    const body = sql.slice(start, sql.indexOf(");", start));
+    // Column definitions sit at exactly two spaces of indent; continuation
+    // lines are indented further, so this cannot mistake one for a column.
+    const columns = body
+      .split("\n")
+      .slice(1)
+      .filter((line) => /^ {2}\S/.test(line))
+      .map((line) => line.trim().split(/[\s(]/)[0])
+      .filter((name) => /^[a-z_]+$/.test(name));
+    expect(columns).toEqual([
+      "player_id",
+      "daily_date",
+      "contributed_at",
+      "expires_at"
+    ]);
+  });
+
+  it("expires both classes of row 48 hours after the Daily ends", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const generated = sql.match(
+      /expires_at TIMESTAMPTZ NOT NULL GENERATED ALWAYS AS \(\n\s*timezone\('UTC', \(daily_date \+ 3\)::timestamp\)\n\s*\) STORED/g
+    );
+    expect(generated).toHaveLength(3);
+    expect(sql).toContain("DELETE FROM public.daily_trail_constellation_totals\n  WHERE expires_at <= NOW();");
+    expect(sql).toContain("DELETE FROM public.daily_trail_contributions\n  WHERE expires_at <= NOW();");
+  });
+
+  it("guards every read on the expiry window as well as the prune job", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const readers = [
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
+        sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
+      ),
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions"),
+        sql.indexOf("CREATE FUNCTION prune_daily_trail_constellation")
+      )
+    ];
+    for (const reader of readers) {
+      expect(reader).toContain("expires_at > NOW()");
+    }
+  });
+
+  it("serves bands rather than counts and never a personal fact", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const projection = sql.slice(
+      sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
+      sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
+    );
+    expect(projection).toContain("'bright'");
+    expect(projection).toContain("'glowing'");
+    expect(projection).toContain("'quiet'");
+    expect(projection).not.toContain("player_id");
+    expect(projection).not.toContain("username");
+    // Comment prose names the things the schema must not hold, so the
+    // guarantee is asserted against the statements alone.
+    const statements = sql
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    expect(statements).not.toMatch(
+      /elapsed|answer|prompt|username|action_log/i
+    );
+  });
+});

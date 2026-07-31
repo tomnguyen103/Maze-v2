@@ -22,7 +22,8 @@ function verifiedClient() {
             settings_deleted: true,
             memberships_deleted: true,
             verified_daily_submissions_deleted: true,
-            verified_daily_entries_deleted: true
+            verified_daily_entries_deleted: true,
+            daily_trail_contributions_deleted: true
           }]
         : []
     })),

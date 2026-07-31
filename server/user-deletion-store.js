@@ -104,7 +104,11 @@ export function createUserDeletionStore(pool) {
               NOT EXISTS (
                 SELECT 1 FROM verified_daily_entries
                 WHERE player_id = $1
-              ) AS verified_daily_entries_deleted`,
+              ) AS verified_daily_entries_deleted,
+              NOT EXISTS (
+                SELECT 1 FROM daily_trail_contributions
+                WHERE player_id = $1
+              ) AS daily_trail_contributions_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -133,7 +137,9 @@ function deletionVerified(row) {
   return Boolean(
     row &&
     typeof row === "object" &&
-    Object.values(row).length === 12 &&
+    // Bumped by hand for every new personal table: 13 covers the twelve
+    // Milestone 4 assertions plus the Constellation contribution receipt.
+    Object.values(row).length === 13 &&
     Object.values(row).every((value) => value === true)
   );
 }

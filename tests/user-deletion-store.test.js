@@ -19,7 +19,8 @@ describe("Clerk user deletion store", () => {
               settings_deleted: true,
               memberships_deleted: true,
               verified_daily_submissions_deleted: true,
-              verified_daily_entries_deleted: true
+              verified_daily_entries_deleted: true,
+              daily_trail_contributions_deleted: true
             }]
           : []
         };
@@ -69,7 +70,8 @@ describe("Clerk user deletion store", () => {
               settings_deleted: true,
               memberships_deleted: true,
               verified_daily_submissions_deleted: true,
-              verified_daily_entries_deleted: true
+              verified_daily_entries_deleted: true,
+              daily_trail_contributions_deleted: true
             }]
           : []
         };
@@ -127,5 +129,44 @@ describe("Clerk user deletion store", () => {
     );
     expect(client.release).toHaveBeenCalledWith(true);
     expect(client.release).toHaveBeenCalledOnce();
+  });
+  it("verifies the Constellation contribution receipt is gone too", async () => {
+    /** @type {string[]} */
+    const statements = [];
+    const client = {
+      query: vi.fn(async (...args) => {
+        const [sql] = args;
+        statements.push(sql);
+        return {
+          rows: sql.includes("AS tombstone_present") ? [{
+              tombstone_present: true,
+              cloud_deleted: true,
+              player_deleted: true,
+              scores_deleted: true,
+              access_deleted: true,
+              grants_deleted: true,
+              purchases_deleted: true,
+              journal_deleted: true,
+              settings_deleted: true,
+              memberships_deleted: true,
+              verified_daily_submissions_deleted: true,
+              verified_daily_entries_deleted: true,
+              daily_trail_contributions_deleted: false
+            }]
+          : []
+        };
+      }),
+      release: vi.fn()
+    };
+    const store = createUserDeletionStore({
+      connect: vi.fn(async () => client)
+    });
+
+    await expect(store.deleteUser("user_deleted")).rejects.toThrow(
+      "Account deletion verification failed."
+    );
+    expect(
+      statements.find((sql) => sql.includes("AS tombstone_present"))
+    ).toContain("FROM daily_trail_contributions");
   });
 });
