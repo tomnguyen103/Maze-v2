@@ -35,6 +35,12 @@ describe("Explorer Access Settings dialog", () => {
           <input id="access-large-marks" name="largeMarks" type="checkbox" />
           <input id="access-reader-type" name="readerFriendlyQuestions" type="checkbox" />
           <input id="access-reduced-effects" name="reducedEffects" type="checkbox" />
+          <input id="access-trail-compass" name="trailCompassEnabled" type="checkbox" />
+          <select id="access-narration-pace" name="narrationPace">
+            <option value="standard">Standard</option>
+            <option value="slower">Slower</option>
+            <option value="faster">Faster</option>
+          </select>
           <p id="access-settings-status"></p>
           <button id="access-settings-reset" type="button">Reset</button>
           <button id="access-settings-save" type="submit">Save settings</button>
@@ -185,5 +191,40 @@ describe("Explorer Access Settings dialog", () => {
       ).checked
     ).toBe(true);
     expect(onApply).toHaveBeenLastCalledWith(cloud);
+  });
+});
+
+describe("Trail Compass and narration pace controls", () => {
+  it("round-trips the two new fields through the dialog", async () => {
+    const storage = createStorage({ ...DEFAULT_ACCESS_SETTINGS });
+    const onApply = vi.fn();
+    const view = createAccessSettingsView({ storage, onApply });
+    view.show(
+      /** @type {HTMLButtonElement} */ (
+        document.getElementById("settings-trigger")
+      )
+    );
+    const compass = /** @type {HTMLInputElement} */ (
+      document.getElementById("access-trail-compass")
+    );
+    const pace = /** @type {HTMLSelectElement} */ (
+      document.getElementById("access-narration-pace")
+    );
+    compass.checked = true;
+    pace.value = "faster";
+    compass.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onApply).toHaveBeenLastCalledWith({
+      ...DEFAULT_ACCESS_SETTINGS,
+      trailCompassEnabled: true,
+      narrationPace: "faster"
+    });
+    const form = /** @type {HTMLFormElement} */ (
+      document.getElementById("access-settings-form")
+    );
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    expect(
+      JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
+    ).toMatchObject({ trailCompassEnabled: true, narrationPace: "faster" });
   });
 });

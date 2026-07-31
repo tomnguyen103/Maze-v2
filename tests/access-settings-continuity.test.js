@@ -6,19 +6,23 @@ import {
 import { createAccessSettingsContinuity } from "../src/player/access-settings-continuity.js";
 
 const LOCAL = /** @type {const} */ ({
-  version: 1,
+  version: 2,
   highContrast: true,
   largeMarks: false,
   readerFriendlyQuestions: true,
-  reducedEffects: false
+  reducedEffects: false,
+  trailCompassEnabled: true,
+  narrationPace: "slower"
 });
 
 const CLOUD = /** @type {const} */ ({
-  version: 1,
+  version: 2,
   highContrast: false,
   largeMarks: true,
   readerFriendlyQuestions: false,
-  reducedEffects: true
+  reducedEffects: true,
+  trailCompassEnabled: false,
+  narrationPace: "faster"
 });
 
 function storageWith(settings = LOCAL) {

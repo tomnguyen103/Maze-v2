@@ -663,3 +663,235 @@ describe("Classroom Teacher read boundary migration", () => {
     expect(sql).not.toContain("BYPASSRLS");
   });
 });
+
+describe("Class Expedition migration", () => {
+  const migrationUrl = new URL(
+    "../db/migrations/0021_class_expeditions.sql",
+    import.meta.url
+  );
+
+  it("creates forced-RLS Class Expedition tables owned by the tenant owner", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("CREATE TABLE class_expeditions");
+    expect(sql).toContain("CREATE TABLE class_expedition_licenses");
+    expect(sql).toContain("CREATE TABLE class_expedition_seats");
+    expect(sql).toContain("CREATE TABLE classroom_run_grants");
+    expect(sql).toContain("atlas_region BETWEEN 1 AND 5");
+    expect(sql).toContain(
+      "level_id IN ('bright-start', 'trail-scout', 'maze-master')"
+    );
+    expect(sql).toContain("status IN ('open', 'closed')");
+    expect(sql).toContain("labyrinth_number BETWEEN 1 AND 20");
+    expect(sql.match(/ENABLE ROW LEVEL SECURITY/g)).toHaveLength(4);
+    expect(sql.match(/FORCE ROW LEVEL SECURITY/g)).toHaveLength(4);
+    expect(sql.match(/OWNER TO echo_maze_tenant_owner/g)?.length ?? 0)
+      .toBeGreaterThanOrEqual(4);
+    expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0020");
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+    expect(sql).toContain("status IN ('paid', 'disputed')");
+    // Consumed capacity is a watermark on the Expedition, never derived from
+    // the surviving seat rows: a seat row is personal data that account
+    // deletion cascades away, and deriving from MAX(seat_number) would hand a
+    // deleted Explorer's seat to a replacement account.
+    expect(sql).toContain("seats_consumed INTEGER NOT NULL DEFAULT 0");
+    expect(sql).toContain("SET seats_consumed = v_seat");
+    expect(sql).not.toContain("COALESCE(MAX(seat_number), 0)");
+    expect(sql).toContain("(p_status <> 'paid' OR status = 'disputed')");
+    expect(sql).toContain("read_own_class_expedition_seats");
+    expect(sql).toContain("read_own_class_expedition_licenses");
+    expect(sql).not.toContain("BYPASSRLS");
+    expect(sql).not.toContain("DROP TABLE");
+  });
+
+  it("funds thirty non-recyclable seats with five-seat extensions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("kind IN ('base', 'extension')");
+    expect(sql).toContain("(kind = 'base' AND seats = 30)");
+    expect(sql).toContain("(kind = 'extension' AND seats = 5)");
+    expect(sql).toContain("class_expedition_licenses_one_base_idx");
+    expect(sql).toContain("seat_number");
+    expect(sql).toContain("UNIQUE (expedition_id, seat_number)");
+    // Assigned seats survive Membership removal: seats deliberately have no
+    // classroom_memberships foreign key, so a seat is never recycled.
+    const seatsBlock = sql.slice(
+      sql.indexOf("CREATE TABLE class_expedition_seats"),
+      sql.indexOf("CREATE TABLE classroom_run_grants")
+    );
+    expect(seatsBlock).not.toContain("classroom_memberships");
+    expect(sql).toContain("CHECK (amount > 0)");
+    expect(sql).toContain("CHECK (currency = 'usd')");
+    expect(sql).not.toMatch(/amount = \d{3,}/);
+  });
+
+  it("cascades Grants away with Membership removal", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const grantsBlock = sql.slice(
+      sql.indexOf("CREATE TABLE classroom_run_grants")
+    );
+    expect(grantsBlock).toContain(
+      "REFERENCES classroom_memberships(classroom_id, clerk_user_id)"
+    );
+    expect(grantsBlock).toContain("ON DELETE CASCADE");
+    expect(sql).toContain("status IN ('issued', 'escaped', 'defeated')");
+    expect(sql).toContain(
+      "PRIMARY KEY (expedition_id, clerk_user_id, labyrinth_number)"
+    );
+  });
+
+  it("gates License reservation on the sponsor's own Classroom authority", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+    const reserve = sql.slice(
+      sql.indexOf("CREATE FUNCTION reserve_class_expedition_license"),
+      sql.indexOf("CREATE FUNCTION activate_class_expedition_license")
+    );
+    expect(reserve).toContain("current_setting('echo_maze.classroom_id'");
+    expect(reserve).toContain("current_setting('echo_maze.explorer_id'");
+    expect(reserve).toContain("role = 'teacher'");
+  });
+
+  it("keeps licenses and seats reachable only through definer functions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain(
+      "REVOKE ALL ON TABLE class_expedition_licenses FROM PUBLIC, echo_maze_runtime"
+    );
+    expect(sql).toContain(
+      "REVOKE ALL ON TABLE class_expedition_seats FROM PUBLIC, echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE class_expedition_licenses TO echo_maze_runtime"
+    );
+    expect(sql).not.toContain(
+      "GRANT SELECT ON TABLE class_expedition_seats TO echo_maze_runtime"
+    );
+    expect(sql).not.toMatch(
+      /GRANT [^;]*INSERT[^;]*ON TABLE classroom_run_grants/
+    );
+  });
+
+  it("issues Grants and records outcomes through SECURITY DEFINER functions", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    expect(sql).toContain("CREATE FUNCTION close_class_expedition");
+    expect(sql).toContain("CREATE FUNCTION reserve_class_expedition_license");
+    expect(sql).toContain("CREATE FUNCTION activate_class_expedition_license");
+    expect(sql).toContain(
+      "CREATE FUNCTION transition_class_expedition_license"
+    );
+    expect(sql).toContain("CREATE FUNCTION issue_classroom_run_grant");
+    expect(sql).toContain("CREATE FUNCTION record_classroom_run_outcome");
+    expect(sql).toContain("CREATE FUNCTION read_class_expedition_progress");
+    expect(sql).toContain("CREATE FUNCTION read_class_expedition_capacity");
+    expect(sql.match(/SECURITY DEFINER/g)).toHaveLength(10);
+    expect(sql.match(/SET search_path = pg_catalog, public/g)).toHaveLength(10);
+    expect(sql.match(/REVOKE ALL ON FUNCTION [^;]+ FROM PUBLIC/g))
+      .toHaveLength(10);
+    expect(sql.match(/GRANT EXECUTE ON FUNCTION/g)).toHaveLength(10);
+    expect(sql).toContain("pg_advisory_xact_lock");
+    expect(sql).toContain("role = 'student'");
+    expect(sql).toContain("role = 'teacher'");
+  });
+
+  it("lets a started Labyrinth recover after explicit closure", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // Closure blocks NEW Grants and defeat retries, never the idempotent
+    // recovery of an already-issued Run: the existing-Grant lookup must
+    // come before any closed-status rejection inside the issue function.
+    const issueFunction = sql.slice(
+      sql.indexOf("CREATE FUNCTION issue_classroom_run_grant"),
+      sql.indexOf("CREATE FUNCTION record_classroom_run_outcome")
+    );
+    const lookup = issueFunction.indexOf("FROM public.classroom_run_grants");
+    const closedCheck = issueFunction.indexOf(
+      "'Class Expedition is closed.'"
+    );
+    expect(lookup).toBeGreaterThan(-1);
+    expect(closedCheck).toBeGreaterThan(-1);
+    expect(lookup).toBeLessThan(closedCheck);
+  });
+
+  it("accepts exactly the published Deck revisions the roster publishes", async () => {
+    const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
+      readFile(migrationUrl, "utf8"),
+      import("../src/questions/learning-deck-catalog.js")
+    ]);
+
+    const constrained = [
+      ...sql.matchAll(
+        /learning_deck_id = '([a-z-]+)'\s+AND learning_deck_revision =\s+'([^']+)'/g
+      )
+    ].map(([, deckId, revisionId]) => ({ deckId, revisionId }));
+
+    expect(constrained).toEqual(
+      getPublishedLearningDeckOptions().flatMap((option) =>
+        option.publishedRevisionIds.map((revisionId) => ({
+          deckId: option.deckId,
+          revisionId
+        }))
+      )
+    );
+  });
+
+  it("advances Explorer Access Settings to the six-field record", async () => {
+    const sql = await readFile(
+      new URL("../db/migrations/0022_access_settings_v2.sql", import.meta.url),
+      "utf8"
+    );
+
+    expect(sql).toContain(
+      "ADD COLUMN IF NOT EXISTS trail_compass_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+    expect(sql).toContain(
+      "ADD COLUMN IF NOT EXISTS narration_pace TEXT NOT NULL DEFAULT 'standard'"
+    );
+    expect(sql).toContain(
+      "narration_pace IN ('standard', 'slower', 'faster')"
+    );
+    expect(sql).toContain("schema_version IN (1, 2)");
+    // Migration 0011 pins CHECK (schema_version = 1) inline; the drop must
+    // land before the backfill or the UPDATE aborts on any populated table.
+    const dropsOldCheck = sql.indexOf(
+      "DROP CONSTRAINT IF EXISTS explorer_access_settings_schema_version_check"
+    );
+    const backfills = sql.indexOf("SET schema_version = 2");
+    expect(dropsOldCheck).toBeGreaterThan(-1);
+    expect(backfills).toBeGreaterThan(-1);
+    expect(dropsOldCheck).toBeLessThan(backfills);
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+    expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0021");
+    expect(sql).not.toMatch(/\bDELETE\b/);
+    expect(sql).not.toContain("DROP TABLE");
+    expect(sql).not.toMatch(/voice|speech|audio_url/i);
+  });
+
+  it("raises exactly the messages the store maps to state errors", async () => {
+    const [sql, { STATE_MESSAGES }] = await Promise.all([
+      readFile(migrationUrl, "utf8"),
+      import("../server/class-expedition-store.js")
+    ]);
+    // The store routes 409s by matching these exact strings; a reworded
+    // RAISE would silently degrade a state conflict into a 500.
+    for (const message of STATE_MESSAGES) {
+      expect(sql).toContain(message);
+    }
+  });
+
+  it("exposes aggregate counts only, never a named Student fact", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    const progressReader = sql.slice(
+      sql.indexOf("CREATE FUNCTION read_class_expedition_progress")
+    );
+    expect(progressReader).toContain("COUNT(");
+    expect(progressReader).not.toContain("username");
+    expect(sql).not.toMatch(/\bstudent_name\b/);
+    expect(sql).not.toMatch(/prompt|answer_text|selected_answer|route/i);
+    expect(sql).not.toMatch(/\brank\b/i);
+  });
+});

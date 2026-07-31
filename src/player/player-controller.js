@@ -161,6 +161,9 @@ export function createPlayerController({
     getAuthenticatedUserId() {
       return clerkBrowser.user?.id ?? null;
     },
+    getApiClient() {
+      return client;
+    },
     getLanternJournal() {
       return journalContinuity.getJournal();
     },

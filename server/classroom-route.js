@@ -2,6 +2,7 @@ import {
   ClassroomAccessDeniedError,
   ClassroomContextError
 } from "./classroom-context.js";
+import { ClassExpeditionStateError } from "./class-expedition-store.js";
 import {
   ClassroomDomainConflictError,
   ClassroomDomainInputError,
@@ -12,19 +13,26 @@ import { InputError } from "./player-validation.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-identity.js";
+import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 
 const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EXPEDITION_SUBPATH_PATTERN =
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|progress|grants|grants\/outcome)$/;
+const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** @param {string} pathname */
 export function isClassroomPath(pathname) {
   return (
     pathname === "/api/classrooms" ||
-    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress)$/.test(
+    /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress|expeditions)$/.test(
       pathname
-    )
+    ) ||
+    EXPEDITION_SUBPATH_PATTERN.test(pathname)
   );
 }
 
@@ -98,6 +106,76 @@ function classroomId(pathname) {
   return id;
 }
 
+/** @param {unknown} value */
+function atlasRegion(value) {
+  if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 5) {
+    throw new InputError("Choose an Atlas Region from 1 to 5.");
+  }
+  return Number(value);
+}
+
+/** @param {unknown} value */
+function questLevelId(value) {
+  if (
+    value !== "bright-start" &&
+    value !== "trail-scout" &&
+    value !== "maze-master"
+  ) {
+    throw new InputError("Choose a Quest Level for the Class Expedition.");
+  }
+  return value;
+}
+
+/** @param {unknown} deckId @param {unknown} revisionId */
+function publishedLearningDeck(deckId, revisionId) {
+  if (
+    typeof deckId !== "string" ||
+    typeof revisionId !== "string" ||
+    !isPublishedLearningDeckRevision(deckId, revisionId)
+  ) {
+    throw new InputError("Choose a published Learning Deck revision.");
+  }
+  return { deckId, revisionId };
+}
+
+/** @param {Record<string, unknown>} body */
+function runGrantInput(body) {
+  if (typeof body.runId !== "string" || !RUN_ID_PATTERN.test(body.runId)) {
+    throw new InputError("Classroom Run Grant needs a valid Run identifier.");
+  }
+  if (
+    !Number.isInteger(body.labyrinthNumber) ||
+    Number(body.labyrinthNumber) < 1 ||
+    Number(body.labyrinthNumber) > 20
+  ) {
+    throw new InputError(
+      "Classroom Run Grant needs a Labyrinth Number from 1 to 20."
+    );
+  }
+  return {
+    runId: body.runId,
+    labyrinthNumber: Number(body.labyrinthNumber)
+  };
+}
+
+/** @param {unknown} value */
+function advisoryCompletionDate(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string" || !ISO_DATE_PATTERN.test(value)) {
+    throw new InputError("Completion date must look like 2026-09-15.");
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw new InputError("Completion date must be a real calendar date.");
+  }
+  return value;
+}
+
 /**
  * @param {{
  *   store: {
@@ -127,8 +205,69 @@ function classroomId(pathname) {
      *     ) => Promise<{
      *       progress: Record<string, unknown>[],
      *       truncated: boolean
-     *     }>
+     *     }>,
+ *     listExpeditions: (
+ *       userId: string,
+ *       classroomId: string
+ *     ) => Promise<Record<string, unknown>[]>,
+ *     createExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       input: {
+ *         expeditionId: string,
+ *         atlasRegion: number,
+ *         levelId: string,
+ *         learningDeckId: string,
+ *         learningDeckRevision: string,
+ *         completionDate: string | null
+ *       }
+ *     ) => Promise<Record<string, unknown>>,
+ *     setExpeditionStatus: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       status: "open" | "closed"
+ *     ) => Promise<Record<string, unknown>>,
+ *     capacityForTeacher: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>,
+ *     issueRunGrant: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       input: { runId: string, labyrinthNumber: number }
+ *     ) => Promise<Record<string, unknown>>,
+ *     recordRunOutcome: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       input: {
+ *         runId: string,
+ *         labyrinthNumber: number,
+ *         outcome: "escaped" | "defeated"
+ *       }
+ *     ) => Promise<unknown>,
+ *     listOwnGrants: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>[]>,
+ *     progressForExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>
  *   },
+ *   billing?: {
+ *     createLicenseCheckout: (purchase: {
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       kind: "base" | "extension"
+ *     }) => Promise<{ checkoutUrl: string, purchaseId: string }>
+ *   } | null,
  *   provider: {
  *     createClassroom: (
  *       input: { name: string, creatorUserId: string }
@@ -158,6 +297,7 @@ function classroomId(pathname) {
 export function createClassroomHandler({
   store,
   provider,
+  billing = null,
   getUserId,
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED
@@ -235,6 +375,7 @@ export function createClassroomHandler({
       }
 
       const selectedClassroomId = classroomId(pathname);
+      const expeditionMatch = pathname.match(EXPEDITION_SUBPATH_PATTERN);
       if (pathname.endsWith("/domain")) {
         await store.requireTeacher(userId, selectedClassroomId);
         if (request.method === "GET") {
@@ -296,7 +437,7 @@ export function createClassroomHandler({
         sendJson(response, 200, { verifiedDomain: registered });
         return;
       }
-      if (pathname.endsWith("/progress")) {
+      if (pathname.endsWith("/progress") && !expeditionMatch) {
         if (request.method !== "GET") {
           response.setHeader("allow", "GET");
           sendJson(response, 405, {
@@ -312,6 +453,295 @@ export function createClassroomHandler({
           classroomId: selectedClassroomId,
           ...progress
         });
+        return;
+      }
+
+      if (pathname.endsWith("/expeditions")) {
+        if (request.method === "GET") {
+          sendJson(response, 200, {
+            expeditions: await store.listExpeditions(
+              userId,
+              selectedClassroomId
+            )
+          });
+          return;
+        }
+        if (request.method !== "POST") {
+          response.setHeader("allow", "GET, POST");
+          sendJson(response, 405, {
+            error: "Use GET or POST for Class Expeditions."
+          });
+          return;
+        }
+        const decision = await rateLimit(
+          "classroom.expedition",
+          request,
+          userId
+        );
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Class Expedition changes. Try again shortly."
+          );
+          return;
+        }
+        const body = /** @type {Record<string, unknown>} */ (
+          await readJsonBody(request)
+        );
+        const deck = publishedLearningDeck(
+          body.learningDeckId,
+          body.learningDeckRevision
+        );
+        const expedition = await store.createExpedition(
+          userId,
+          selectedClassroomId,
+          {
+            expeditionId: `exped_${randomUUID().replaceAll("-", "")}`,
+            atlasRegion: atlasRegion(body.atlasRegion),
+            levelId: questLevelId(body.levelId),
+            learningDeckId: deck.deckId,
+            learningDeckRevision: deck.revisionId,
+            completionDate: advisoryCompletionDate(body.completionDate)
+          }
+        );
+        await recordAudit(request, {
+          actorId: userId,
+          action: "classroom.expedition.create",
+          resource: { type: "classroom", id: selectedClassroomId },
+          after: {
+            expeditionId: expedition.id,
+            atlasRegion: expedition.atlasRegion,
+            levelId: expedition.levelId,
+            learningDeckId: expedition.learningDeckId,
+            learningDeckRevision: expedition.learningDeckRevision,
+            status: expedition.status
+          }
+        });
+        sendJson(response, 201, { expedition });
+        return;
+      }
+
+      if (expeditionMatch) {
+        const expeditionId = expeditionMatch[1];
+        const subResource = expeditionMatch[2];
+        if (subResource === "grants") {
+          if (request.method === "GET") {
+            sendJson(response, 200, {
+              grants: await store.listOwnGrants(
+                userId,
+                selectedClassroomId,
+                expeditionId
+              )
+            });
+            return;
+          }
+          if (request.method !== "POST") {
+            response.setHeader("allow", "GET, POST");
+            sendJson(response, 405, {
+              error: "Use GET or POST for Classroom Run Grants."
+            });
+            return;
+          }
+          const decision = await rateLimit(
+            "classroom.grant",
+            request,
+            userId
+          );
+          if (!decision.allowed) {
+            sendRateLimited(
+              response,
+              decision,
+              "Too many Classroom Run Grant requests. Try again shortly."
+            );
+            return;
+          }
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          const grantInput = runGrantInput(body);
+          const grant = await store.issueRunGrant(
+            userId,
+            selectedClassroomId,
+            expeditionId,
+            grantInput
+          );
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.grant",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              labyrinthNumber: grantInput.labyrinthNumber,
+              duplicate: grant.duplicate === true
+            }
+          });
+          sendJson(response, 201, { grant });
+          return;
+        }
+        if (subResource === "grants/outcome") {
+          if (request.method !== "POST") {
+            response.setHeader("allow", "POST");
+            sendJson(response, 405, {
+              error: "Use POST for Classroom Run outcomes."
+            });
+            return;
+          }
+          const decision = await rateLimit(
+            "classroom.grant",
+            request,
+            userId
+          );
+          if (!decision.allowed) {
+            sendRateLimited(
+              response,
+              decision,
+              "Too many Classroom Run Grant requests. Try again shortly."
+            );
+            return;
+          }
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          const grantInput = runGrantInput(body);
+          if (body.outcome !== "escaped" && body.outcome !== "defeated") {
+            throw new InputError(
+              "Classroom Run outcome must be escaped or defeated."
+            );
+          }
+          await store.recordRunOutcome(
+            userId,
+            selectedClassroomId,
+            expeditionId,
+            { ...grantInput, outcome: body.outcome }
+          );
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.outcome",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              labyrinthNumber: grantInput.labyrinthNumber,
+              outcome: body.outcome
+            }
+          });
+          sendJson(response, 200, { recorded: true });
+          return;
+        }
+        if (subResource === "capacity") {
+          if (request.method !== "GET") {
+            response.setHeader("allow", "GET");
+            sendJson(response, 405, {
+              error: "Use GET for Class Expedition capacity."
+            });
+            return;
+          }
+          sendJson(response, 200, {
+            capacity: await store.capacityForTeacher(
+              userId,
+              selectedClassroomId,
+              expeditionId
+            )
+          });
+          return;
+        }
+        if (subResource === "progress") {
+          if (request.method !== "GET") {
+            response.setHeader("allow", "GET");
+            sendJson(response, 405, {
+              error: "Use GET for Class Expedition progress."
+            });
+            return;
+          }
+          sendJson(response, 200, {
+            progress: await store.progressForExpedition(
+              userId,
+              selectedClassroomId,
+              expeditionId
+            )
+          });
+          return;
+        }
+        if (request.method !== "POST") {
+          response.setHeader("allow", "POST");
+          sendJson(response, 405, {
+            error: "Use POST for Class Expedition changes."
+          });
+          return;
+        }
+        const decision = await rateLimit(
+          "classroom.expedition",
+          request,
+          userId
+        );
+        if (!decision.allowed) {
+          sendRateLimited(
+            response,
+            decision,
+            "Too many Class Expedition changes. Try again shortly."
+          );
+          return;
+        }
+        if (subResource === "license") {
+          if (!billing) {
+            sendJson(response, 503, {
+              error:
+                "Class Expedition License purchases are not configured."
+            });
+            return;
+          }
+          await store.requireTeacher(userId, selectedClassroomId);
+          const body = /** @type {Record<string, unknown>} */ (
+            await readJsonBody(request)
+          );
+          if (body.kind !== "base" && body.kind !== "extension") {
+            throw new InputError(
+              "Class Expedition License kind must be base or extension."
+            );
+          }
+          const checkout = await billing.createLicenseCheckout({
+            userId,
+            classroomId: selectedClassroomId,
+            expeditionId,
+            kind: body.kind
+          });
+          await recordAudit(request, {
+            actorId: userId,
+            action: "classroom.expedition.license",
+            resource: { type: "classroom", id: selectedClassroomId },
+            after: {
+              expeditionId,
+              kind: body.kind,
+              purchaseId: checkout.purchaseId
+            }
+          });
+          sendJson(response, 201, checkout);
+          return;
+        }
+        const body = /** @type {Record<string, unknown>} */ (
+          await readJsonBody(request)
+        );
+        if (body.status !== "open" && body.status !== "closed") {
+          throw new InputError(
+            "Class Expedition status must be open or closed."
+          );
+        }
+        const expedition = await store.setExpeditionStatus(
+          userId,
+          selectedClassroomId,
+          expeditionId,
+          body.status
+        );
+        await recordAudit(request, {
+          actorId: userId,
+          action: "classroom.expedition.status",
+          resource: { type: "classroom", id: selectedClassroomId },
+          after: {
+            expeditionId,
+            status: body.status
+          }
+        });
+        sendJson(response, 200, { expedition });
         return;
       }
 
@@ -366,7 +796,10 @@ export function createClassroomHandler({
         sendJson(response, 400, { error: error.message });
         return;
       }
-      if (error instanceof ClassroomDomainConflictError) {
+      if (
+        error instanceof ClassroomDomainConflictError ||
+        error instanceof ClassExpeditionStateError
+      ) {
         sendJson(response, 409, { error: error.message });
         return;
       }

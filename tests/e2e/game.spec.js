@@ -424,7 +424,7 @@ async function recordRegion4Screenshot(page, testInfo, state) {
  *
  * @param {import("@playwright/test").Page} page
  * @param {import("@playwright/test").TestInfo} testInfo
- * @param {2 | 3} milestone
+ * @param {2 | 3 | 4} milestone
  * @param {string} slug
  */
 async function recordEvidenceScreenshot(page, testInfo, milestone, slug) {
@@ -560,6 +560,41 @@ async function mockQuestionApi(page) {
     }
     return question;
   };
+}
+
+// createSeed() names a Quest seed from three random Uint16 values, and starting
+// a Quest redraws until the Labyrinth is one the Explorer has not mapped.
+// Serving that draw from a counter keeps the redraw loop terminating — a
+// constant draw would starve it — while making the seed, and so the Labyrinth's
+// challenge layout, the same on every run. Only createSeed() reads a
+// three-value Uint16 draw in this application's own code.
+//
+// PINNED_QUEST_SEED is the seed the Quest settles on, not the first draw: the
+// boot Run consumes draws before the Quest's own. It therefore depends on how
+// many times the page calls createSeed() before the Quest starts, which no test
+// can see — so the seed is asserted on screen, and any drift in that count
+// fails loudly there instead of quietly restoring the flake.
+const PINNED_QUEST_SEED_DRAW_ORIGIN = 11;
+const PINNED_QUEST_SEED = "ASH-HOLLOW-77";
+
+/** @param {import("@playwright/test").Page} page */
+async function pinQuestSeed(page) {
+  await page.addInitScript((origin) => {
+    const original = crypto.getRandomValues.bind(crypto);
+    let draw = origin;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true,
+      /** @param {ArrayBufferView<ArrayBuffer>} array */
+      value: (array) => {
+        if (array instanceof Uint16Array && array.length === 3) {
+          draw += 1;
+          array.set([draw * 7, draw * 13, draw * 29]);
+          return array;
+        }
+        return original(array);
+      }
+    });
+  }, PINNED_QUEST_SEED_DRAW_ORIGIN);
 }
 
 /** @param {import("@playwright/test").Page} page */
@@ -727,6 +762,13 @@ test("announces the Mixed Trail continuation once per Quest", async ({
     });
   });
 
+  // The announcement is asserted across two challenges, so the Labyrinth has to
+  // hold two. A Quest otherwise draws its seed at random, and 22.4 percent of
+  // the 4200 seeds createSeed() can name lay out a Labyrinth holding fewer than
+  // two challenges (832 hold one, 107 hold none) — which left this case passing
+  // on seed luck. Pin the draw the Quest makes rather than the URL: a shared
+  // seed needs level and labyrinth alongside it and would skip the Deck picker.
+  await pinQuestSeed(page);
   await page.goto("/play");
   await expectGameReady(page);
   await page
@@ -736,24 +778,45 @@ test("announces the Mixed Trail continuation once per Quest", async ({
   await chooseTrailScout(page);
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
 
-  await expect
-    .poll(async () =>
-      (await page.locator("#seed-value").textContent())?.trim() ?? ""
-    )
-    .not.toBe("");
-  const seed = (await page.locator("#seed-value").textContent())?.trim() ?? "";
+  await expect(page.locator("#seed-value")).toHaveText(PINNED_QUEST_SEED);
   await page.getByLabel(/Interactive maze/).focus();
-  const plan = milestoneWinningPlan(seed, 1);
-  for (const action of plan.actions) {
-    if (action.type === "move") {
+  const plan = milestoneWinningPlan(PINNED_QUEST_SEED, 1);
+  // The pin exists to guarantee the two challenges this case reads, so it says
+  // so: a Labyrinth generation change that costs the second one fails here
+  // rather than as an unexplained missing dialog further down.
+  expect(
+    plan.actions.filter((action) => action.type === "answer").length
+  ).toBeGreaterThanOrEqual(2);
+  // The plan marks the exact move each challenge follows, so walking it with a
+  // single cursor keeps the Explorer's position and the plan in step; replaying
+  // it from the start after a challenge would spend moves the Run already made.
+  let cursor = 0;
+  const pressUntilChallenge = async () => {
+    while (cursor < plan.actions.length) {
+      const action = plan.actions[cursor];
+      if (action.type === "answer") {
+        return;
+      }
       await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
+      cursor += 1;
     }
-    if (await page.locator("#challenge-dialog").isVisible()) {
-      break;
-    }
-  }
+    throw new Error("The winning plan holds no further challenge.");
+  };
+  // The walker stops on the answer marker without spending it, so answering has
+  // to step past it or the next walk stops on the same challenge forever.
+  const answerChallenge = async () => {
+    await answerCorrectlyIfChallenged(page, () => {
+      const card = served.at(-1);
+      if (!card) {
+        throw new Error("The reviewed Question fixture has not served a card.");
+      }
+      return card;
+    });
+    cursor += 1;
+  };
 
-  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await pressUntilChallenge();
+  await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toContainText(
     "Number Trail is out of reviewed Questions here"
   );
@@ -764,25 +827,11 @@ test("announces the Mixed Trail continuation once per Quest", async ({
     learningDeckRevision: NUMBER_TRAIL.revisionId
   });
   expect(Array.isArray(questionRequests[0]?.usedQuestionIds)).toBe(true);
-  // Announced once, and the Deck the Explorer chose has not changed.
   // Announced once: a second fallback Question in the same Quest is silent,
   // and the Deck the Explorer chose has not changed.
-  await answerCorrectlyIfChallenged(page, () => {
-    const card = served.at(-1);
-    if (!card) {
-      throw new Error("The reviewed Question fixture has not served a card.");
-    }
-    return card;
-  });
-  for (const action of plan.actions) {
-    if (action.type === "move") {
-      await page.keyboard.press(KEY_BY_DIRECTION[action.direction]);
-    }
-    if (await page.locator("#challenge-dialog").isVisible()) {
-      break;
-    }
-  }
-  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  await answerChallenge();
+  await pressUntilChallenge();
+  await expect(page.locator("#challenge-dialog")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#challenge-notice")).toBeHidden();
   await expect(page.locator("#quest-level-name")).toHaveText(
     "Quest Level 2 · Trail Scout · Number Trail"
@@ -1683,11 +1732,13 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
     localStorage.getItem("echo-maze:explorer-access-settings:v1")
   );
   expect(JSON.parse(storedSettings ?? "null")).toEqual({
-    version: 1,
+    version: 2,
     highContrast: true,
     largeMarks: true,
     readerFriendlyQuestions: true,
-    reducedEffects: true
+    reducedEffects: true,
+    trailCompassEnabled: false,
+    narrationPace: "standard"
   });
   const savedRunFacts = await page.evaluate(() => ({
     seed: document.querySelector("#seed-value")?.textContent,
@@ -5588,4 +5639,101 @@ test("upgrades a version 2 locator to Classic Rules", async ({ page }) => {
     atlasRegionId: "foundation",
     rulesetRevision: "classic-v1"
   });
+});
+
+
+test("plays nonvisually with Trail Compass and reveals no hidden state", async ({
+  page
+}, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:explorer-access-settings:v1",
+      JSON.stringify({
+        version: 2,
+        highContrast: false,
+        largeMarks: false,
+        readerFriendlyQuestions: false,
+        reducedEffects: false,
+        trailCompassEnabled: true,
+        narrationPace: "standard"
+      })
+    );
+  });
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await expect(page.locator("#trail-compass")).toBeVisible();
+
+  await page.locator("#compass-describe").click();
+  const live = page.locator("#live-region");
+  await expect(live).toContainText(/row \d+, column \d+/);
+  const described = String(await live.textContent());
+  // At the DAYLIGHT-0 start the Gate and every Echo sit in Fog: the engine
+  // confirms nothing beyond the reveal radius, so the Compass must not
+  // speak of them.
+  expect(described).not.toMatch(/The Gate is/);
+  expect(described).not.toMatch(/An Echo shimmers/);
+
+  // Desktop hides the touch pad; document-level keyboard input is the
+  // equally nonvisual path and never needs Canvas focus. Leave the Describe
+  // button first — arrows are ignored while a native control has focus.
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+  });
+  await page.keyboard.press(KEY_BY_DIRECTION[WINNING_PATH[0]]);
+  await expect(live).toContainText("At row");
+
+  await page.locator("#compass-listen").click();
+  await expect(live).toContainText(/Listen: |Nothing revealed/);
+  await recordEvidenceScreenshot(page, testInfo, 4, "trail-compass");
+});
+
+test("keeps Read Aloud honest without a local voice and shows the six-field settings", async ({
+  page
+}, testInfo) => {
+  await page.addInitScript(() => {
+    const emptySynthesis = {
+      getVoices: () => [],
+      speak: () => {},
+      cancel: () => {},
+      pause: () => {},
+      resume: () => {},
+      addEventListener: () => {}
+    };
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      get: () => emptySynthesis
+    });
+  });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Workshop", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Lantern Trail Workshop" })
+  ).toBeVisible();
+  await page.locator("#practice-objectives button").first().click();
+  const read = page.locator(".practice-support [data-narration='read']");
+  await expect(read).toBeVisible();
+  await expect(read).toBeDisabled();
+  await expect(
+    page.locator(".practice-support .narration-status")
+  ).toContainText("voice stored on this device");
+  await recordEvidenceScreenshot(page, testInfo, 4, "read-aloud-unavailable");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Explorer Access Settings" })
+  ).toBeVisible();
+  await expect(page.locator("#access-trail-compass")).toBeVisible();
+  await expect(page.locator("#access-narration-pace")).toBeVisible();
+  await recordEvidenceScreenshot(
+    page,
+    testInfo,
+    4,
+    "access-settings-six-fields"
+  );
 });

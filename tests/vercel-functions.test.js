@@ -295,6 +295,51 @@ describe("Vercel function budget", () => {
         503
       ],
       [
+        "/api/profile?_classroomRoute=org_class_1/domain",
+        "/api/classrooms/org_class_1/domain",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions",
+        "/api/classrooms/org_class_1/expeditions",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/status",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/status",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/license",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/license",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/capacity",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/capacity",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/grants",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/grants",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/grants/outcome",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/grants/outcome",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/exped_abc123/progress",
+        "/api/classrooms/org_class_1/expeditions/exped_abc123/progress",
+        503
+      ],
+      [
+        "/api/profile?_classroomRoute=org_class_1/expeditions/../../secret",
+        "/api/profile?_classroomRoute=org_class_1/expeditions/../../secret",
+        404
+      ],
+      [
         "/api/profile?_classroomRoute=../secret",
         "/api/profile?_classroomRoute=../secret",
         404

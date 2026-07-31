@@ -1,6 +1,15 @@
 import "./classroom.css";
 import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
+import { getPublishedLearningDeckOptions } from "../questions/learning-deck-catalog.js";
+import {
+  createQuestProgress,
+  saveQuestProgress
+} from "../game/quest-progress.js";
+import {
+  clearClassExpeditionSelection,
+  saveClassExpeditionSelection
+} from "./class-expedition-selection.js";
 import {
   clearSelectedClassroom,
   loadSelectedClassroom,
@@ -54,7 +63,42 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
  *         status: string,
  *         url: string | null
  *       }
- *     }>
+ *     }>,
+ *     listClassExpeditions: (classroomId: string) => Promise<{
+ *       expeditions?: unknown
+ *     }>,
+ *     createClassExpedition: (
+ *       classroomId: string,
+ *       input: {
+ *         atlasRegion: number,
+ *         levelId: string,
+ *         learningDeckId: string,
+ *         learningDeckRevision: string,
+ *         completionDate?: string | null
+ *       }
+ *     ) => Promise<{ expedition: Record<string, unknown> }>,
+ *     setClassExpeditionStatus: (
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       status: "open" | "closed"
+ *     ) => Promise<{ expedition: Record<string, unknown> }>,
+ *     getClassExpeditionCapacity: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ capacity?: Record<string, unknown> }>,
+ *     listClassExpeditionGrants: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ grants?: unknown }>,
+ *     getClassExpeditionProgress: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ progress?: Record<string, unknown> }>,
+ *     purchaseClassExpeditionLicense: (
+ *       classroomId: string,
+ *       expeditionId: string,
+ *       kind: "base" | "extension"
+ *     ) => Promise<{ checkoutUrl?: string, purchaseId?: string }>
  *   },
  *   navigate?: (path: string) => void,
  *   clipboard?: { writeText: (value: string) => Promise<void> },
@@ -294,6 +338,7 @@ export async function renderClassroom(root, dependencies = {}) {
       .querySelector("[data-action='personal-play']")
       ?.addEventListener("click", () => {
         clearSelectedClassroom(storage, clerk.user?.id);
+        clearClassExpeditionSelection(storage, clerk.user?.id);
         navigate("/play");
       });
     const list = /** @type {HTMLElement} */ (
@@ -342,6 +387,9 @@ export async function renderClassroom(root, dependencies = {}) {
     play.dataset.classPlay = entry.id;
     play.textContent = "Class Play";
     play.addEventListener("click", () => {
+      // Plain Class Play is not an assigned Expedition: retire any stale
+      // Expedition selection so Grants only govern explicit Expedition play.
+      clearClassExpeditionSelection(storage, clerk.user?.id);
       if (saveSelectedClassroom(entry.id, storage, clerk.user?.id)) {
         navigate("/play");
         return;
@@ -350,6 +398,152 @@ export async function renderClassroom(root, dependencies = {}) {
         "This browser could not save the Class Play choice. Personal Play remains active.";
     });
     card.append(label, heading, copy, play);
+    if (entry.role === "student") {
+      card.append(studentExpeditionSection(entry));
+    }
+    return card;
+  }
+
+  /** @param {Classroom} entry */
+  function studentExpeditionSection(entry) {
+    const section = document.createElement("div");
+    section.className = "classroom-student-expeditions";
+    section.innerHTML = `
+      <p class="section-label">Class Expeditions</p>
+      <div class="classroom-student-expeditions__list" aria-busy="true">
+        ${loadingMarkup()}
+      </div>
+    `;
+    const list = /** @type {HTMLElement} */ (
+      section.querySelector(".classroom-student-expeditions__list")
+    );
+    void (async () => {
+      try {
+        const result = await client.listClassExpeditions(entry.id);
+        const expeditions = Array.isArray(result.expeditions)
+          ? /** @type {Record<string, unknown>[]} */ (result.expeditions)
+          : [];
+        list.removeAttribute("aria-busy");
+        list.replaceChildren();
+        if (expeditions.length === 0) {
+          const note = document.createElement("p");
+          note.textContent =
+            "No Class Expedition is assigned yet. Class Play above still works.";
+          list.append(note);
+          return;
+        }
+        for (const record of expeditions) {
+          list.append(await studentExpeditionCard(entry, record));
+        }
+      } catch {
+        list.removeAttribute("aria-busy");
+        list.innerHTML = `
+          <p class="classroom-inline-error" role="alert">
+            Class Expeditions are unavailable right now.
+          </p>
+        `;
+      }
+    })();
+    return section;
+  }
+
+  /**
+   * @param {Classroom} entry
+   * @param {Record<string, unknown>} record
+   */
+  async function studentExpeditionCard(entry, record) {
+    const card = document.createElement("article");
+    card.className = "classroom-expedition-card";
+    card.dataset.studentExpedition = String(record.id);
+    /** @type {Record<string, unknown>[]} */
+    let grants = [];
+    // "The lookup failed" and "there are no Grants" must stay distinguishable:
+    // treating a blip as no Grants would re-seed Quest Progress back to the
+    // Region's first Labyrinth and erase what the Explorer already escaped.
+    let grantsKnown = true;
+    try {
+      const result = await client.listClassExpeditionGrants(
+        entry.id,
+        String(record.id)
+      );
+      grants = Array.isArray(result.grants)
+        ? /** @type {Record<string, unknown>[]} */ (result.grants)
+        : [];
+    } catch {
+      grants = [];
+      grantsKnown = false;
+    }
+    const escaped = grants.filter(
+      (grant) => grant.status === "escaped"
+    ).length;
+    const heading = document.createElement("h4");
+    heading.textContent = `Region ${Number(record.atlasRegion)}`;
+    const facts = document.createElement("p");
+    facts.textContent = `${escaped} of 4 Labyrinths escaped · ${
+      record.status === "open" ? "Open" : "Closed"
+    }${
+      record.completionDate
+        ? ` · finish by ${String(record.completionDate)} (advisory)`
+        : ""
+    }`;
+    const start = document.createElement("button");
+    start.className = "primary-button";
+    start.type = "button";
+    start.dataset.action = "start-class-expedition";
+    start.textContent =
+      grants.length > 0 || !grantsKnown
+        ? "Continue Class Expedition"
+        : "Start Class Expedition";
+    if (record.status !== "open" && grantsKnown && grants.length === 0) {
+      start.disabled = true;
+    }
+    if (escaped >= 4) {
+      start.disabled = true;
+      start.textContent = "Class Expedition complete";
+    }
+    start.addEventListener("click", () => {
+      const userId = clerk.user?.id;
+      if (!saveSelectedClassroom(entry.id, storage, userId)) {
+        status.textContent =
+          "This browser could not save the Class Play choice. Personal Play remains active.";
+        return;
+      }
+      const atlasRegion = Number(record.atlasRegion);
+      if (grantsKnown && grants.length === 0) {
+        try {
+          saveQuestProgress(
+            createQuestProgress(
+              String(record.levelId),
+              (atlasRegion - 1) * 4 + 1,
+              undefined,
+              {
+                deckId: String(record.learningDeckId),
+                revisionId: String(record.learningDeckRevision)
+              }
+            ),
+            storage
+          );
+        } catch {
+          // createQuestProgress rejects an unknown Quest Level or a Learning
+          // Deck revision that is no longer published — exactly what a Deck
+          // republished after assignment produces. Saying so beats a button
+          // that silently does nothing.
+          status.textContent =
+            "This Class Expedition needs a fresh assignment from your Teacher before it can start.";
+          return;
+        }
+      }
+      saveClassExpeditionSelection(storage, userId, {
+        classroomId: entry.id,
+        expeditionId: String(record.id),
+        atlasRegion,
+        levelId: String(record.levelId),
+        learningDeckId: String(record.learningDeckId),
+        learningDeckRevision: String(record.learningDeckRevision)
+      });
+      navigate("/play");
+    });
+    card.append(heading, facts, start);
     return card;
   }
 
@@ -415,6 +609,7 @@ export async function renderClassroom(root, dependencies = {}) {
     const panel = document.createElement("section");
     let progressEpoch = 0;
     let domainEpoch = 0;
+    let expeditionEpoch = 0;
     panel.className = "classroom-panel classroom-panel--teacher";
     panel.dataset.teacherClassroom = entry.id;
     const inviteInputId = `classroom-invite-email-${entry.id}`;
@@ -483,6 +678,55 @@ export async function renderClassroom(root, dependencies = {}) {
         <p class="classroom-form__status" role="status" aria-live="polite"></p>
         <div class="classroom-invitation-result"></div>
       </form>
+      <div class="classroom-expeditions">
+        <div class="classroom-progress__heading">
+          <div>
+            <p class="section-label">Class Expeditions</p>
+            <h3>Assigned Region journeys</h3>
+          </div>
+          <button class="control-button" data-action="refresh-expeditions" type="button">
+            Refresh Expeditions
+          </button>
+        </div>
+        <p class="classroom-domain__copy">
+          One Class Expedition assigns one four-Labyrinth Atlas Region at one
+          Quest Level and one published Learning Deck revision. Students never
+          see a paywall, and a completion date is advice, not a lock.
+        </p>
+        <div class="classroom-expeditions__list" aria-busy="true">
+          ${loadingMarkup()}
+        </div>
+        <form class="classroom-form" data-classroom-expedition="${entry.id}">
+          <label for="expedition-region-${entry.id}">Atlas Region</label>
+          <select id="expedition-region-${entry.id}" name="atlasRegion">
+            <option value="1">Region 1 — Labyrinths 1 to 4</option>
+            <option value="2">Region 2 — Labyrinths 5 to 8</option>
+            <option value="3">Region 3 — Labyrinths 9 to 12</option>
+            <option value="4">Region 4 — Labyrinths 13 to 16</option>
+            <option value="5">Region 5 — Labyrinths 17 to 20</option>
+          </select>
+          <label for="expedition-level-${entry.id}">Quest Level</label>
+          <select id="expedition-level-${entry.id}" name="levelId">
+            <option value="bright-start">Bright Start</option>
+            <option value="trail-scout">Trail Scout</option>
+            <option value="maze-master">Maze Master</option>
+          </select>
+          <label for="expedition-deck-${entry.id}">Learning Deck</label>
+          <select id="expedition-deck-${entry.id}" name="learningDeckId"></select>
+          <label for="expedition-date-${entry.id}">
+            Completion date (advisory, optional)
+          </label>
+          <input
+            id="expedition-date-${entry.id}"
+            name="completionDate"
+            type="date"
+          />
+          <button class="primary-button" type="submit">
+            Assign Class Expedition
+          </button>
+          <p class="classroom-form__status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
       <div class="classroom-progress">
         <div class="classroom-progress__heading">
           <div>
@@ -607,8 +851,67 @@ export async function renderClassroom(root, dependencies = {}) {
     panel
       .querySelector("[data-action='refresh-progress']")
       ?.addEventListener("click", () => void loadProgress());
+    const expeditionForm = /** @type {HTMLFormElement} */ (
+      panel.querySelector("[data-classroom-expedition]")
+    );
+    const expeditionDeckSelect = /** @type {HTMLSelectElement} */ (
+      expeditionForm.querySelector("select[name='learningDeckId']")
+    );
+    for (const option of getPublishedLearningDeckOptions()) {
+      const element = document.createElement("option");
+      element.value = option.deckId;
+      element.dataset.revision = option.revisionId;
+      element.textContent = `${option.label} — ${option.description}`;
+      expeditionDeckSelect.append(element);
+    }
+    const expeditionStatus = /** @type {HTMLElement} */ (
+      expeditionForm.querySelector(".classroom-form__status")
+    );
+    expeditionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submit = expeditionForm.querySelector("button[type='submit']");
+      if (submit instanceof HTMLButtonElement) submit.disabled = true;
+      expeditionStatus.textContent = "Assigning the Class Expedition…";
+      try {
+        const region = Number(
+          /** @type {HTMLSelectElement} */ (
+            expeditionForm.querySelector("select[name='atlasRegion']")
+          ).value
+        );
+        const levelId = /** @type {HTMLSelectElement} */ (
+          expeditionForm.querySelector("select[name='levelId']")
+        ).value;
+        const deckOption =
+          expeditionDeckSelect.selectedOptions[0] ??
+          expeditionDeckSelect.options[0];
+        const completionDate = /** @type {HTMLInputElement} */ (
+          expeditionForm.querySelector("input[name='completionDate']")
+        ).value;
+        await client.createClassExpedition(entry.id, {
+          atlasRegion: region,
+          levelId,
+          learningDeckId: deckOption.value,
+          learningDeckRevision: deckOption.dataset.revision ?? "",
+          completionDate: completionDate || null
+        });
+        expeditionStatus.textContent =
+          "Class Expedition assigned. Students can start from their Classroom page once the License is paid.";
+        void loadExpeditions();
+      } catch (error) {
+        expeditionStatus.textContent = readableError(
+          error,
+          "The Class Expedition could not be assigned. Try again."
+        );
+      } finally {
+        if (submit instanceof HTMLButtonElement) submit.disabled = false;
+      }
+    });
+    panel
+      .querySelector("[data-action='refresh-expeditions']")
+      ?.addEventListener("click", () => void loadExpeditions());
     void loadDomain();
     void loadProgress();
+    void loadExpeditions();
     return panel;
 
     /** @param {string} message */
@@ -647,6 +950,196 @@ export async function renderClassroom(root, dependencies = {}) {
           domainSubmit.disabled = false;
         }
       }
+    }
+
+    async function loadExpeditions() {
+      const requestEpoch = ++expeditionEpoch;
+      const listContent = /** @type {HTMLElement} */ (
+        panel.querySelector(".classroom-expeditions__list")
+      );
+      listContent.setAttribute("aria-busy", "true");
+      try {
+        const result = await client.listClassExpeditions(entry.id);
+        if (requestEpoch !== expeditionEpoch) return;
+        listContent.removeAttribute("aria-busy");
+        listContent.replaceChildren();
+        const expeditions = Array.isArray(result.expeditions)
+          ? /** @type {Record<string, unknown>[]} */ (result.expeditions)
+          : [];
+        if (expeditions.length === 0) {
+          listContent.innerHTML = `
+            <div class="classroom-empty">
+              <p class="section-label">No Expeditions yet</p>
+              <h3>Assign the first Region journey below.</h3>
+            </div>
+          `;
+          return;
+        }
+        for (const record of expeditions) {
+          listContent.append(expeditionCard(record));
+        }
+      } catch (error) {
+        if (requestEpoch !== expeditionEpoch) return;
+        listContent.removeAttribute("aria-busy");
+        listContent.innerHTML = `
+          <p class="classroom-inline-error" role="alert">
+            ${escapeHtml(
+              readableError(
+                error,
+                "Class Expeditions are unavailable. Try again."
+              )
+            )}
+          </p>
+        `;
+      }
+    }
+
+    /** @param {Record<string, unknown>} record */
+    function expeditionCard(record) {
+      const card = document.createElement("article");
+      card.className = "classroom-expedition-card";
+      card.dataset.expedition = String(record.id);
+      card.dataset.expeditionStatus = String(record.status);
+      const heading = document.createElement("h4");
+      heading.textContent = `Region ${Number(record.atlasRegion)}`;
+      const facts = document.createElement("p");
+      const deckOption = getPublishedLearningDeckOptions().find(
+        (option) => option.deckId === record.learningDeckId
+      );
+      const dateNote = record.completionDate
+        ? ` · finish by ${String(record.completionDate)} (advisory)`
+        : "";
+      facts.textContent = `${levelLabel(String(record.levelId))} · ${
+        deckOption?.label ?? String(record.learningDeckId)
+      } · ${record.status === "open" ? "Open" : "Closed"}${dateNote}`;
+      const toggle = document.createElement("button");
+      toggle.className = "control-button";
+      toggle.type = "button";
+      toggle.dataset.action = "toggle-expedition";
+      toggle.textContent =
+        record.status === "open" ? "Close assignment" : "Reopen assignment";
+      toggle.addEventListener("click", async () => {
+        toggle.disabled = true;
+        try {
+          await client.setClassExpeditionStatus(
+            entry.id,
+            String(record.id),
+            record.status === "open" ? "closed" : "open"
+          );
+          void loadExpeditions();
+        } catch (error) {
+          expeditionStatus.textContent = readableError(
+            error,
+            "The assignment status could not change. Try again."
+          );
+          toggle.disabled = false;
+        }
+      });
+      const capacityLine = document.createElement("p");
+      capacityLine.className = "classroom-expedition-card__capacity";
+      capacityLine.setAttribute("role", "status");
+      capacityLine.textContent = "Checking seats and License…";
+      const progressLine = document.createElement("p");
+      progressLine.className = "classroom-expedition-card__progress";
+      progressLine.textContent = "Checking class progress…";
+      const actions = document.createElement("div");
+      actions.className = "classroom-form__row";
+      actions.append(toggle);
+      card.append(heading, facts, progressLine, capacityLine, actions);
+      void (async () => {
+        try {
+          const result = await client.getClassExpeditionProgress(
+            entry.id,
+            String(record.id)
+          );
+          const summary = /** @type {Record<string, unknown>} */ (
+            result.progress ?? {}
+          );
+          const labyrinths = Array.isArray(summary.labyrinths)
+            ? /** @type {Record<string, unknown>[]} */ (summary.labyrinths)
+            : [];
+          const perLabyrinth = labyrinths
+            .map(
+              (lab) =>
+                `L${Number(lab.labyrinthNumber)}: ${Number(
+                  lab.completedCount
+                )}`
+            )
+            .join(" · ");
+          progressLine.textContent =
+            `${Number(summary.startedStudentCount ?? 0)} started · ` +
+            `${Number(summary.regionCompleteCount ?? 0)} finished the Region` +
+            (perLabyrinth ? ` · ${perLabyrinth}` : "");
+        } catch {
+          progressLine.textContent =
+            "Class progress counts are unavailable right now.";
+        }
+      })();
+      void (async () => {
+        try {
+          const result = await client.getClassExpeditionCapacity(
+            entry.id,
+            String(record.id)
+          );
+          const capacity = /** @type {Record<string, unknown>} */ (
+            result.capacity ?? {}
+          );
+          const assigned = Number(capacity.seatsAssigned ?? 0);
+          const total = Number(capacity.seatsTotal ?? 30);
+          const basePaid = capacity.baseStatus === "paid";
+          capacityLine.textContent = basePaid
+            ? `${assigned} of ${total} seats assigned · License paid (Stripe test mode)`
+            : "No paid License yet — Students cannot start until a sponsor completes the test-mode purchase.";
+          /** @type {"base" | "extension" | null} */
+          const purchaseKind = !basePaid
+            ? "base"
+            : assigned >= total
+              ? "extension"
+              : null;
+          if (purchaseKind) {
+            const buy = document.createElement("button");
+            buy.className = "primary-button";
+            buy.type = "button";
+            buy.dataset.action = "buy-expedition-license";
+            buy.textContent =
+              purchaseKind === "base"
+                ? "Buy the License (Stripe test mode)"
+                : "Buy a 5-seat extension (Stripe test mode)";
+            buy.addEventListener("click", async () => {
+              buy.disabled = true;
+              try {
+                const purchase = await client.purchaseClassExpeditionLicense(
+                  entry.id,
+                  String(record.id),
+                  purchaseKind
+                );
+                if (typeof purchase.checkoutUrl === "string") {
+                  navigate(purchase.checkoutUrl);
+                }
+              } catch (error) {
+                expeditionStatus.textContent = readableError(
+                  error,
+                  "The test-mode checkout could not start. Try again."
+                );
+                buy.disabled = false;
+              }
+            });
+            actions.append(buy);
+          }
+        } catch {
+          capacityLine.textContent =
+            "Seat and License details are unavailable right now.";
+        }
+      })();
+      return card;
+    }
+
+    /** @param {string} levelId */
+    function levelLabel(levelId) {
+      if (levelId === "bright-start") return "Bright Start";
+      if (levelId === "trail-scout") return "Trail Scout";
+      if (levelId === "maze-master") return "Maze Master";
+      return levelId;
     }
 
     async function loadProgress() {

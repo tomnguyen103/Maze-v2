@@ -150,11 +150,37 @@
 
 .classroom-card,
 .progress-card,
+.classroom-expedition-card,
 .classroom-empty {
   padding: var(--space-4);
   border: 2px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-paper);
+}
+
+.classroom-expeditions {
+  margin-block-start: var(--space-6);
+}
+
+.classroom-expeditions__list {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-4);
+}
+
+.classroom-expedition-card h4 {
+  margin: var(--space-1) 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.classroom-expedition-card > p {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--color-ink-muted);
+}
+
+.classroom-expedition-card[data-expedition-status="closed"] {
+  border-style: dashed;
 }
 
 .classroom-card h3,
@@ -393,4 +419,15 @@
   .classroom-loading span {
     animation: none;
   }
+}
+
+.classroom-form select {
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  padding-inline: var(--space-2);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  font: inherit;
 }

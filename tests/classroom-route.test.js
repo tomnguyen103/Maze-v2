@@ -51,7 +51,15 @@ function classroomStore() {
         total: 5
       }],
       truncated: false
-    }))
+    })),
+    listExpeditions: vi.fn(async () => []),
+    createExpedition: vi.fn(async () => ({})),
+    setExpeditionStatus: vi.fn(async () => ({})),
+    capacityForTeacher: vi.fn(async () => ({})),
+    issueRunGrant: vi.fn(async () => ({})),
+    recordRunOutcome: vi.fn(async () => true),
+    listOwnGrants: vi.fn(async () => []),
+    progressForExpedition: vi.fn(async () => ({}))
   };
 }
 

@@ -10,17 +10,23 @@ const COLUMNS = `
   large_marks,
   reader_friendly_questions,
   reduced_effects,
+  trail_compass_enabled,
+  narration_pace,
   revision,
   updated_at
 `;
 
+const NARRATION_PACES = new Set(["standard", "slower", "faster"]);
+
 /**
  * @typedef {{
- *   version: 1,
+ *   version: 2,
  *   highContrast: boolean,
  *   largeMarks: boolean,
  *   readerFriendlyQuestions: boolean,
- *   reducedEffects: boolean
+ *   reducedEffects: boolean,
+ *   trailCompassEnabled: boolean,
+ *   narrationPace: "standard" | "slower" | "faster"
  * }} AccessSettings
  */
 
@@ -54,16 +60,18 @@ export function createAccessSettingsStore(database) {
     async save(userId, expectedRevision, settings) {
       const result = expectedRevision === 0
         ? await database.query(
-            `WITH ${activeUserGuardCtes("$7")}
+            `WITH ${activeUserGuardCtes("$9")}
              INSERT INTO explorer_access_settings (
                clerk_user_id,
                schema_version,
                high_contrast,
                large_marks,
                reader_friendly_questions,
-               reduced_effects
+               reduced_effects,
+               trail_compass_enabled,
+               narration_pace
              )
-             SELECT $1, $2, $3, $4, $5, $6
+             SELECT $1, $2, $3, $4, $5, $6, $7, $8
              FROM active_user
              ON CONFLICT DO NOTHING
              RETURNING ${COLUMNS}`,
@@ -74,6 +82,8 @@ export function createAccessSettingsStore(database) {
               settings.largeMarks,
               settings.readerFriendlyQuestions,
               settings.reducedEffects,
+              settings.trailCompassEnabled,
+              settings.narrationPace,
               deletedUserHash(userId)
             ]
           )
@@ -85,6 +95,8 @@ export function createAccessSettingsStore(database) {
                large_marks = $5,
                reader_friendly_questions = $6,
                reduced_effects = $7,
+               trail_compass_enabled = $8,
+               narration_pace = $9,
                revision = revision + 1,
                updated_at = NOW()
              WHERE clerk_user_id = $1
@@ -97,7 +109,9 @@ export function createAccessSettingsStore(database) {
               settings.highContrast,
               settings.largeMarks,
               settings.readerFriendlyQuestions,
-              settings.reducedEffects
+              settings.reducedEffects,
+              settings.trailCompassEnabled,
+              settings.narrationPace
             ]
           );
 
@@ -134,22 +148,33 @@ export function createAccessSettingsStore(database) {
 
 /** @param {Record<string, unknown>} row */
 function mapRecord(row) {
+  const schemaVersion = Number(row.schema_version);
   if (
-    Number(row.schema_version) !== 1 ||
+    (schemaVersion !== 1 && schemaVersion !== 2) ||
     typeof row.high_contrast !== "boolean" ||
     typeof row.large_marks !== "boolean" ||
     typeof row.reader_friendly_questions !== "boolean" ||
-    typeof row.reduced_effects !== "boolean"
+    typeof row.reduced_effects !== "boolean" ||
+    typeof row.trail_compass_enabled !== "boolean" ||
+    !NARRATION_PACES.has(String(row.narration_pace))
   ) {
     throw new Error("Stored Explorer Access Settings are invalid.");
   }
   return {
     settings: {
-      version: /** @type {const} */ (1),
+      // A pre-migration version-1 row reads as the deterministic version-2
+      // upgrade: migration 0022's column defaults are Trail Compass Off and
+      // Standard pace, so the mapped record and the migration agree.
+      version: /** @type {const} */ (2),
       highContrast: row.high_contrast,
       largeMarks: row.large_marks,
       readerFriendlyQuestions: row.reader_friendly_questions,
-      reducedEffects: row.reduced_effects
+      reducedEffects: row.reduced_effects,
+      trailCompassEnabled: row.trail_compass_enabled,
+      narrationPace:
+        /** @type {"standard" | "slower" | "faster"} */ (
+          String(row.narration_pace)
+        )
     },
     revision: Number(row.revision),
     updatedAt: new Date(String(row.updated_at)).toISOString()

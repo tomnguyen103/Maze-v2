@@ -67,6 +67,46 @@ function workspaceClient() {
         status: "pending",
         url: "https://accounts.example.test/invitations/default"
       }
+    })),
+    listClassExpeditions: vi.fn(async () => ({
+      /** @type {Record<string, unknown>[]} */
+      expeditions: []
+    })),
+    listClassExpeditionGrants: vi.fn(async () => ({
+      /** @type {Record<string, unknown>[]} */
+      grants: []
+    })),
+    getClassExpeditionProgress: vi.fn(async () => ({
+      progress: {
+        startedStudentCount: 0,
+        regionCompleteCount: 0,
+        /** @type {Record<string, unknown>[]} */
+        labyrinths: []
+      }
+    })),
+    createClassExpedition: vi.fn(async (_classroomId, input) => ({
+      expedition: {
+        id: "exped_created_1",
+        status: "open",
+        ...input
+      }
+    })),
+    setClassExpeditionStatus: vi.fn(async (_classroomId, id, status) => ({
+      expedition: { id, status }
+    })),
+    getClassExpeditionCapacity: vi.fn(async () => ({
+      capacity: {
+        seatsTotal: 30,
+        seatsAssigned: 0,
+        baseStatus: null,
+        extensionPaidCount: 0,
+        baseRefundEligible: true,
+        extensionRefundEligibleCount: 0
+      }
+    })),
+    purchaseClassExpeditionLicense: vi.fn(async () => ({
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_ui_1",
+      purchaseId: "9d2f8a34-0000-4000-8000-000000000002"
     }))
   };
 }
@@ -273,6 +313,224 @@ describe("Classroom workspace", () => {
     expect(root.textContent).toContain(
       "learn.school.example is ready for verified student accounts"
     );
+  });
+
+  it("lets a Teacher assign, close, and reopen a Class Expedition", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 2,
+          levelId: "trail-scout",
+          learningDeckId: "number-trail",
+          learningDeckRevision:
+            "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+          status: "open",
+          completionDate: "2026-09-15"
+        }
+      ]
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+
+    await vi.waitFor(() => {
+      expect(client.listClassExpeditions).toHaveBeenCalledWith("org_class_1");
+      expect(root.textContent).toContain("Region 2");
+      expect(root.textContent).toContain("Number Trail");
+      expect(root.textContent).toContain("2026-09-15");
+    });
+
+    const panel = root.querySelector(
+      "[data-teacher-classroom='org_class_1']"
+    );
+    const deckSelect = panel?.querySelector("select[name='learningDeckId']");
+    expect(deckSelect).toBeInstanceOf(HTMLSelectElement);
+    if (deckSelect instanceof HTMLSelectElement) {
+      expect(
+        [...deckSelect.options].map((option) => option.value)
+      ).toEqual(["mixed-trail", "number-trail"]);
+    }
+
+    const regionSelect = panel?.querySelector("select[name='atlasRegion']");
+    if (regionSelect instanceof HTMLSelectElement) {
+      regionSelect.value = "3";
+    }
+    const levelSelect = panel?.querySelector("select[name='levelId']");
+    if (levelSelect instanceof HTMLSelectElement) {
+      levelSelect.value = "maze-master";
+    }
+    const form = panel?.querySelector("[data-classroom-expedition]");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(client.createClassExpedition).toHaveBeenCalledWith(
+        "org_class_1",
+        expect.objectContaining({
+          atlasRegion: 3,
+          levelId: "maze-master",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          completionDate: null
+        })
+      )
+    );
+
+    const toggle = panel?.querySelector("[data-action='toggle-expedition']");
+    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(client.setClassExpeditionStatus).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "closed"
+      )
+    );
+
+    // The reopen branch is the other half of this case's title, and asserting
+    // only the close transition left it free to regress silently.
+    client.setClassExpeditionStatus.mockClear();
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 2,
+          levelId: "trail-scout",
+          learningDeckId: "number-trail",
+          learningDeckRevision:
+            "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+          status: "closed",
+          completionDate: null
+        }
+      ]
+    });
+    root.replaceChildren();
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+    const closedPanel = await vi.waitUntil(() =>
+      root.querySelector(".classroom-expeditions")
+    );
+    const reopen = closedPanel?.querySelector(
+      "[data-action='toggle-expedition']"
+    );
+    reopen?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(client.setClassExpeditionStatus).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "open"
+      )
+    );
+  });
+
+  it("shows aggregate-only Expedition progress to Teachers", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 1,
+          levelId: "bright-start",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          status: "open",
+          completionDate: null
+        }
+      ]
+    });
+    client.getClassExpeditionProgress.mockResolvedValue({
+      progress: {
+        startedStudentCount: 5,
+        regionCompleteCount: 2,
+        labyrinths: [
+          { labyrinthNumber: 1, completedCount: 5 },
+          { labyrinthNumber: 2, completedCount: 4 },
+          { labyrinthNumber: 3, completedCount: 3 },
+          { labyrinthNumber: 4, completedCount: 2 }
+        ],
+        // Identity the aggregate-only contract forbids rendering. It is served
+        // here deliberately: without a name in the payload the assertion below
+        // could never fail, and the privacy guarantee would go untested. The
+        // cast is the point — the contract has no such field, and the card
+        // must still not render one that arrives anyway.
+        .../** @type {Record<string, unknown>} */ ({
+          studentName: "Moss",
+          students: [{ username: "Moss", labyrinthNumber: 4 }]
+        })
+      }
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+
+    await vi.waitFor(() => {
+      expect(client.getClassExpeditionProgress).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1"
+      );
+      expect(root.textContent).toContain("5 started");
+      expect(root.textContent).toContain("2 finished the Region");
+      expect(root.textContent).toContain("L4: 2");
+    });
+    expect(root.textContent).not.toContain("Moss");
+  });
+
+  it("offers the sponsor test-mode License purchase until the License is paid", async () => {
+    const client = workspaceClient();
+    const navigate = vi.fn();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 1,
+          levelId: "bright-start",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          status: "open",
+          completionDate: null
+        }
+      ]
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client, navigate });
+
+    await vi.waitFor(() => {
+      expect(client.getClassExpeditionCapacity).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1"
+      );
+      expect(root.textContent).toContain("No paid License yet");
+    });
+
+    const buy = root.querySelector("[data-action='buy-expedition-license']");
+    expect(buy).toBeInstanceOf(HTMLButtonElement);
+    expect(buy?.textContent).toContain("Stripe test mode");
+    buy?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(client.purchaseClassExpeditionLicense).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "base"
+      );
+      expect(navigate).toHaveBeenCalledWith(
+        "https://checkout.stripe.com/c/pay/cs_test_ui_1"
+      );
+    });
   });
 
   it("renders tools and progress for every Teacher Classroom", async () => {

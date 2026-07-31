@@ -41,7 +41,10 @@ import {
   getQuestRunRuleset,
   normalizeRunRuleset
 } from "./game/run-ruleset.js";
-import { createVerifiedDailySubmission } from "./player/daily-submission.js";
+// Loaded on demand: building a verified Daily submission is reached only when
+// a Daily Run ends, and the game chunk is at its ceiling. ADR 0035 keeps
+// Verified Daily on Run Action Log v1, so this seam never carries offline work.
+
 import {
   createRunAccessId,
   isAdmittedRunResume,
@@ -71,8 +74,7 @@ import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
 import {
   getDefaultLearningDeckOption,
-  getPublishedLearningDeckOption,
-  getPublishedLearningDeckOptions
+  getPublishedLearningDeckOption
 } from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
@@ -111,7 +113,7 @@ let echoLensRequestId = 0;
 let deferChallengeQuestionForLens = false;
 
 /** @typedef {"up" | "right" | "down" | "left"} Direction */
-/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} AudioCue */
+/** @typedef {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled" | "compass-echo" | "compass-gate" | "compass-warden"} AudioCue */
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
@@ -439,6 +441,16 @@ const playerController = createPlayerController({
     elements.journalStatus.textContent = message;
   }
 });
+// Declared above createAccessSettingsContinuity because its onApply runs
+// synchronously during construction and calls syncTrailCompass(), which reads
+// these. syncTrailCompass itself is a hoisted function declaration, so only
+// the bindings have to live up here to stay out of the temporal dead zone.
+/** @type {Record<string, any> | null} */
+let trailCompassController = null;
+/** @type {Promise<unknown> | undefined} */
+let trailCompassPromise;
+let trailCompassActive = false;
+
 const accessSettingsContinuity = createAccessSettingsContinuity({
   client: {
     getAccessSettings: () => playerController.getCloudAccessSettings(),
@@ -448,6 +460,7 @@ const accessSettingsContinuity = createAccessSettingsContinuity({
   onApply: (settings) => {
     applyAccessSettings(settings);
     renderer.render(run);
+    syncTrailCompass();
   },
   onStatus: (message) => {
     if (message) {
@@ -996,6 +1009,7 @@ elements.settingsButton.addEventListener("click", async () => {
           onApply: (settings) => {
             applyAccessSettings(settings);
             renderer.render(run);
+            syncTrailCompass();
           },
           onClose: () => {
             if (resumeAfterAccessSettings && run.status === "paused") {
@@ -1567,6 +1581,60 @@ async function loadActiveRunRecoveryModule() {
       module.createActiveRunRecoveryController();
   }
   return module;
+}
+
+/** @type {Promise<Record<string, any> | null> | undefined} */
+let classExpeditionPlayPromise;
+
+function syncTrailCompass() {
+  trailCompassActive =
+    document.documentElement.dataset.accessCompass === "trail";
+  if (trailCompassActive) {
+    trailCompassPromise ??= import("./game/trail-compass.js")
+      .then((module) => {
+        trailCompassController = module.createTrailCompass({
+          getRun: () => run,
+          announce,
+          playCue: playAudio
+        });
+      })
+      .catch(() => null);
+  }
+}
+
+function loadClassExpeditionPlay() {
+  try {
+    if (
+      localStorage.getItem("echo-maze:cx-on:v1") !== "true"
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  classExpeditionPlayPromise ??= import(
+    "./classroom/class-expedition-play.js"
+  )
+    .then((module) =>
+      module.createClassExpeditionPlay({
+        playerController,
+        announce,
+        onFailClose: async () => {
+          // Stop the assigned Run and delete only its local recovery.
+          // Personal Run Replays are unrelated memories and stay.
+          activeRunLocator = null;
+          clearActiveRunLocator();
+          clearActiveRunRecoveryOnly();
+        }
+      })
+    )
+    .catch(() => {
+      // A failed chunk load must not be cached forever: the next start
+      // retries instead of stranding Class Play behind one bad fetch.
+      classExpeditionPlayPromise = undefined;
+      return null;
+    });
+  return classExpeditionPlayPromise;
 }
 
 /** @param {boolean} [force] */
@@ -2205,35 +2273,14 @@ function createFreshLocator(levelId, labyrinthNumber) {
 }
 
 function renderLearningDeckOptions() {
-  const defaultDeck = getDefaultLearningDeckOption();
-  // Reopening the picker shows the Deck this Quest is on, not Mixed Trail.
-  const activeDeckId =
-    getPublishedLearningDeckOption(questProgress?.learningDeckId)?.deckId ??
-    defaultDeck.deckId;
-  elements.learningDeckOptions.replaceChildren(
-    ...getPublishedLearningDeckOptions().map((deck) => {
-      const label = document.createElement("label");
-      const input = document.createElement("input");
-      const name = document.createElement("strong");
-      const description = document.createElement("span");
-      label.className = "learning-deck-option";
-      input.type = "radio";
-      input.name = "learning-deck";
-      input.value = deck.deckId;
-      input.dataset.revision = deck.revisionId;
-      input.checked = deck.deckId === activeDeckId;
-      name.id = `learning-deck-name-${deck.deckId}`;
-      name.textContent = deck.label;
-      description.id = `learning-deck-description-${deck.deckId}`;
-      description.textContent = deck.description;
-      // The Deck name alone is the accessible name; the description follows it
-      // as a separate announcement rather than becoming part of the name.
-      input.setAttribute("aria-labelledby", name.id);
-      input.setAttribute("aria-describedby", description.id);
-      label.append(input, name, description);
-      return label;
-    })
-  );
+  void import("./player/deck-picker.js")
+    .then((module) =>
+      module.renderLearningDeckOptions(
+        elements.learningDeckOptions,
+        questProgress?.learningDeckId
+      )
+    )
+    .catch(() => {});
 }
 
 function selectedLearningDeckOption() {
@@ -2484,6 +2531,21 @@ async function canOpenStartChoice() {
  * @param {boolean} [resumingAdmittedRun]
  */
 async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
+  const classPlayLoading = loadClassExpeditionPlay();
+  if (classPlayLoading) {
+    // Class Runs are Classroom-sponsored and never offline: every start and
+    // resume rechecks Membership and assignment through the Grant request.
+    const classPlay = await classPlayLoading;
+    if (!classPlay) {
+      announce("Run access could not be checked. Try again.");
+      return false;
+    }
+    const verdict = await classPlay.authorize(locator);
+    if (verdict !== null) {
+      return verdict === true;
+    }
+    // Stale flag: no live Class Expedition — Personal admission continues.
+  }
   let config;
   try {
     config = await playerController.getRunAccessConfig();
@@ -2828,6 +2890,10 @@ function clearActiveRunRecoveryForIdentityChange() {
     announce(message);
     showEvent(message);
   }
+  clearActiveRunRecoveryOnly();
+}
+
+function clearActiveRunRecoveryOnly() {
   if (!activeRunRecoveryController) {
     if (scrubActiveRunRecovery()) {
       return;
@@ -3189,7 +3255,11 @@ function transition(action) {
       addStory(eventMessage, eventType);
     }
   }
-  if (eventChanged || wardenMode !== previousWardenMode) {
+  if (trailCompassActive && trailCompassController) {
+    // Trail Compass owns the one polite status per player action, and derives
+    // Warden mode from the Run itself so this path stays a single status.
+    trailCompassController.onTransition(run);
+  } else if (eventChanged || wardenMode !== previousWardenMode) {
     const modeAnnouncement =
       wardenMode !== previousWardenMode
         ? ` Warden mode: ${wardenModeLabel(wardenMode)}.`
@@ -3223,7 +3293,17 @@ function transition(action) {
   }
 }
 
+/** @type {Promise<unknown> | undefined} */
+let questionNarrationPromise;
+
 function syncChallengeDialog() {
+  if (run.status === "challenge") {
+    questionNarrationPromise ??= import(
+      "./learning/question-narration.js"
+    )
+      .then((module) => module.ensureQuestionNarration())
+      .catch(() => null);
+  }
   if (run.status !== "challenge" || !run.challenge) {
     stagedGateWardenId = null;
     gateStagingComplete = false;
@@ -3836,6 +3916,22 @@ async function finishRun() {
   const finishedLabyrinthNumber = currentLabyrinthNumber;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
+  const classPlayLoading = loadClassExpeditionPlay();
+  if (classPlayLoading && activeRunLocator) {
+    const classPlay = await classPlayLoading;
+    const verdict = await classPlay?.recordOutcome(
+      activeRunLocator.runId,
+      finishedLabyrinthNumber,
+      won
+    );
+    if (verdict === "removed") {
+      // Authoritative Membership removal: stop here and persist no Class
+      // result. Personal Play remains untouched.
+      pendingRunReplay = null;
+      updateInterface();
+      return;
+    }
+  }
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,
@@ -4167,6 +4263,9 @@ async function submitVerifiedDailyRun(daily) {
     announce("Daily replay limit reached. Your local result is unchanged.");
     return;
   }
+  const { createVerifiedDailySubmission } = await import(
+    "./player/daily-submission.js"
+  );
   const submission = createVerifiedDailySubmission(daily, submittedLog, run);
   if (playerController.hasAuthenticatedUser()) {
     elements.resultKicker.textContent = "Checking Daily replay";

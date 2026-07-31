@@ -114,8 +114,17 @@ const SECTION_QUERIES = {
       updated_at
     FROM learning_journals
     WHERE clerk_user_id = $1 AND classroom_id = $2`,
+  class_run_grants: `SELECT expedition_id, labyrinth_number, run_id, status,
+      created_at, updated_at
+    FROM classroom_run_grants
+    WHERE clerk_user_id = $1 AND classroom_id = $2
+    ORDER BY expedition_id, labyrinth_number`,
+  class_expedition_seats: "SELECT * FROM read_own_class_expedition_seats()",
+  class_expedition_licenses:
+    "SELECT * FROM read_own_class_expedition_licenses()",
   access_settings: `SELECT schema_version, high_contrast, large_marks,
-      reader_friendly_questions, reduced_effects, revision, created_at,
+      reader_friendly_questions, reduced_effects, trail_compass_enabled,
+      narration_pace, revision, created_at,
       updated_at
     FROM explorer_access_settings WHERE clerk_user_id = $1`,
   verified_daily_results: `SELECT daily_date, daily_version, score,
@@ -186,6 +195,8 @@ export async function buildUserExport(
   const classJournals = [];
   /** @type {Record<string, unknown>[]} */
   const classScores = [];
+  /** @type {Record<string, unknown>[]} */
+  const classRunGrants = [];
   for (const membership of classroomMemberships) {
     if (typeof membership.classroom_id !== "string") continue;
     await adapter.selectClassroom?.(membership.classroom_id);
@@ -201,10 +212,23 @@ export async function buildUserExport(
       "class_journal",
       [userId, membership.classroom_id]
     );
+    const grantRows = await rowsOf(
+      "class_run_grants",
+      [userId, membership.classroom_id]
+    );
     classScores.push(...scoreRows);
     classQuestProgress.push(...questRows);
     classJournals.push(...journalRows);
+    classRunGrants.push(...grantRows);
   }
+  // Definer readers keyed on the transaction-local Explorer identity: seats
+  // survive Membership removal and sponsored Licenses are the sponsor's own
+  // billing records, so neither depends on the membership loop above.
+  const classExpeditionSeats = await rowsOf("class_expedition_seats", []);
+  const classExpeditionLicenses = await rowsOf(
+    "class_expedition_licenses",
+    []
+  );
 
   return {
     schema: EXPORT_SCHEMA_ID,
@@ -222,6 +246,9 @@ export async function buildUserExport(
       journal: personalJournal[0] ?? null,
       class_quest_progress: classQuestProgress,
       class_journals: classJournals,
+      class_run_grants: classRunGrants,
+      class_expedition_seats: classExpeditionSeats,
+      class_expedition_licenses: classExpeditionLicenses,
       access_settings: accessSettings[0] ?? null,
       verified_daily_results: verifiedDailyResults,
       verified_daily_best_results: verifiedDailyBestResults,

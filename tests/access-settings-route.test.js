@@ -4,11 +4,13 @@ import { createAccessSettingsHandler } from "../server/access-settings-route.js"
 import { DeletedUserError } from "../server/deleted-user-guard.js";
 
 const SETTINGS = {
-  version: 1,
+  version: 2,
   highContrast: true,
   largeMarks: false,
   readerFriendlyQuestions: true,
-  reducedEffects: false
+  reducedEffects: false,
+  trailCompassEnabled: true,
+  narrationPace: "slower"
 };
 
 const RECORD = {

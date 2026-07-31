@@ -55,7 +55,7 @@ export class EchoAudio {
   }
 
   /**
-   * @param {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled"} cue
+   * @param {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled" | "compass-echo" | "compass-gate" | "compass-warden"} cue
    */
   play(cue) {
     if (!this.#enabled || !this.#context) {
@@ -74,7 +74,10 @@ export class EchoAudio {
       wrong: [96, 0.2, "sawtooth"],
       won: [520, 0.45, "triangle"],
       lost: [62, 0.5, "sawtooth"],
-      enabled: [330, 0.16, "sine"]
+      enabled: [330, 0.16, "sine"],
+      "compass-echo": [440, 0.12, "sine"],
+      "compass-gate": [520, 0.12, "triangle"],
+      "compass-warden": [110, 0.12, "square"]
     };
     const [frequency, duration, wave] = palette[cue];
     const now = this.#context.currentTime;

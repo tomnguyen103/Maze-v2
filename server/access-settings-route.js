@@ -9,18 +9,23 @@ const SETTING_KEYS = new Set([
   "highContrast",
   "largeMarks",
   "readerFriendlyQuestions",
-  "reducedEffects"
+  "reducedEffects",
+  "trailCompassEnabled",
+  "narrationPace"
 ]);
+const NARRATION_PACES = new Set(["standard", "slower", "faster"]);
 
 class AccessSettingsInputError extends Error {}
 
 /**
  * @typedef {{
- *   version: 1,
+ *   version: 2,
  *   highContrast: boolean,
  *   largeMarks: boolean,
  *   readerFriendlyQuestions: boolean,
- *   reducedEffects: boolean
+ *   reducedEffects: boolean,
+ *   trailCompassEnabled: boolean,
+ *   narrationPace: "standard" | "slower" | "faster"
  * }} AccessSettings
  */
 
@@ -146,11 +151,17 @@ function validateWrite(value) {
   const candidate = /** @type {Record<string, unknown>} */ (settings);
   if (
     Object.keys(candidate).some((key) => !SETTING_KEYS.has(key)) ||
-    candidate.version !== 1 ||
+    candidate.version !== 2 ||
     typeof candidate.highContrast !== "boolean" ||
     typeof candidate.largeMarks !== "boolean" ||
     typeof candidate.readerFriendlyQuestions !== "boolean" ||
-    typeof candidate.reducedEffects !== "boolean"
+    typeof candidate.reducedEffects !== "boolean" ||
+    typeof candidate.trailCompassEnabled !== "boolean" ||
+    // Membership is checked on the raw value: coercing first would let a
+    // one-element array like ["standard"] pass and then persist unchanged,
+    // failing the client's strict check later.
+    typeof candidate.narrationPace !== "string" ||
+    !NARRATION_PACES.has(candidate.narrationPace)
   ) {
     throw new AccessSettingsInputError(
       "Explorer Access Settings are invalid."

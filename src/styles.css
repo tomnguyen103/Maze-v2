@@ -851,3 +851,51 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+.trail-compass {
+  display: none;
+}
+
+html[data-access-compass="trail"] .trail-compass {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+}
+
+/* Matches the enabling rule's specificity so [hidden] still wins over it.
+   `.trail-compass[hidden]` alone scores below
+   `html[data-access-compass="trail"] .trail-compass` and the panel would
+   render while hidden. */
+html .trail-compass[hidden] {
+  display: none;
+}
+
+.access-setting--select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.access-setting--select select {
+  min-height: 44px;
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  font: inherit;
+  padding-inline: var(--space-2);
+}
+
+.narration-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.narration-status {
+  color: var(--color-ink-muted);
+  font-size: 0.875rem;
+}

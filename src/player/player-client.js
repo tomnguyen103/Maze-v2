@@ -136,6 +136,123 @@ export function createPlayerApiClient({
         }
       );
     },
+    /** @param {string} classroomId */
+    async listClassExpeditions(classroomId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/expeditions`
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {{
+     *   atlasRegion: number,
+     *   levelId: string,
+     *   learningDeckId: string,
+     *   learningDeckRevision: string,
+     *   completionDate?: string | null
+     * }} input
+     */
+    async createClassExpedition(classroomId, input) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(classroomId)}/expeditions`,
+        {
+          method: "POST",
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{ runId: string, labyrinthNumber: number }} input
+     */
+    async issueClassRunGrant(classroomId, expeditionId, input) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants`,
+        {
+          method: "POST",
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {{
+     *   runId: string,
+     *   labyrinthNumber: number,
+     *   outcome: "escaped" | "defeated"
+     * }} input
+     */
+    async recordClassRunOutcome(classroomId, expeditionId, input) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants/outcome`,
+        {
+          method: "POST",
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    /** @param {string} classroomId @param {string} expeditionId */
+    async listClassExpeditionGrants(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/grants`
+      );
+    },
+    /** @param {string} classroomId @param {string} expeditionId */
+    async getClassExpeditionProgress(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/progress`
+      );
+    },
+    /** @param {string} classroomId @param {string} expeditionId */
+    async getClassExpeditionCapacity(classroomId, expeditionId) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/capacity`
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {"base" | "extension"} kind
+     */
+    async purchaseClassExpeditionLicense(classroomId, expeditionId, kind) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/license`,
+        {
+          method: "POST",
+          body: JSON.stringify({ kind })
+        }
+      );
+    },
+    /**
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     * @param {"open" | "closed"} status
+     */
+    async setClassExpeditionStatus(classroomId, expeditionId, status) {
+      return request(
+        `/api/classrooms/${encodeURIComponent(
+          classroomId
+        )}/expeditions/${encodeURIComponent(expeditionId)}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status })
+        }
+      );
+    },
     async listAdminUsers() {
       return request("/api/admin/users");
     },

@@ -59,9 +59,11 @@ For Vercel, connect the Neon project and apply the migrations in order:
 18. `db/migrations/0018_verified_daily_entries.sql`
 19. `db/migrations/0019_score_entry_ruleset_partitions.sql`
 20. `db/migrations/0020_learning_deck_quest_identity.sql`
+21. `db/migrations/0021_class_expeditions.sql`
+22. `db/migrations/0022_access_settings_v2.sql`
 
-Migrations 0012 through 0020 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all nine.
+Migrations 0012 through 0022 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all eleven.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -167,6 +169,8 @@ RUN_ACCESS_ENFORCEMENT_ENABLED=false
 STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
 STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
+STRIPE_EXPEDITION_PRICE_ID=your-class-expedition-license-test-price-id
+STRIPE_EXPEDITION_EXTENSION_PRICE_ID=your-five-seat-extension-test-price-id
 ECHO_MAZE_APP_ORIGIN=https://your-app.example
 TRUST_PROXY_HEADERS=true
 REQUEST_ADDRESS_SALT=your-random-address-salt
