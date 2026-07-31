@@ -5970,3 +5970,91 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
     "Today’s shared paths are showing."
   );
 });
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {"pending" | "unverified"} verification
+ */
+async function seedOfflineRunRecord(page, verification) {
+  await page.addInitScript(
+    ({ record }) => {
+      localStorage.setItem(
+        "echo-maze:offline-run-record:v1",
+        JSON.stringify(record)
+      );
+    },
+    {
+      record: {
+        runId: "offline_run_01J1MOSSWATCH",
+        verification,
+        playAuthorityOpen: verification === "pending"
+      }
+    }
+  );
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").TestInfo} testInfo
+ * @param {string} name
+ */
+async function recordOfflineScreenshot(page, testInfo, name) {
+  await page.locator("#offline-continuity").scrollIntoViewIfNeeded();
+  const body = await page.screenshot();
+  await testInfo.attach(`${name}-${testInfo.project.name}`, {
+    body,
+    contentType: "image/png"
+  });
+  if (process.env.RECORD_MILESTONE_5_SCREENSHOTS === "true") {
+    await writeFile(
+      resolve(
+        "docs",
+        "playtests",
+        "screenshots",
+        `milestone-5-${name}-${testInfo.project.name}.png`
+      ),
+      body
+    );
+  }
+}
+
+test("labels an unverified offline Run Record Pending verification", async ({
+  page
+}, testInfo) => {
+  await seedOfflineRunRecord(page, "pending");
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  const label = page.locator("#offline-continuity-label");
+  await expect(label).toBeVisible();
+  await expect(label).toHaveText("Pending verification");
+  await expect(page.locator("#offline-continuity-note")).toHaveText(
+    "Reconnect to have this result checked."
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue Offline" })
+  ).toBeVisible();
+
+  await recordOfflineScreenshot(page, testInfo, "offline-pending-verification");
+});
+
+test("labels a terminally rejected offline Run Offline—unverified", async ({
+  page
+}, testInfo) => {
+  await seedOfflineRunRecord(page, "unverified");
+  await page.goto("/play");
+  await expectGameReady(page);
+
+  const label = page.locator("#offline-continuity-label");
+  await expect(label).toBeVisible();
+  await expect(label).toHaveText("Offline—unverified");
+  await expect(page.locator("#offline-continuity-note")).toHaveText(
+    "This result stayed on this device. Your Quest, score, and Journal did not change."
+  );
+  // A terminal rejection offers no way to keep playing offline.
+  await expect(
+    page.getByRole("button", { name: "Continue Offline" })
+  ).toBeHidden();
+
+  await recordOfflineScreenshot(page, testInfo, "offline-unverified");
+});

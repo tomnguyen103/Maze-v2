@@ -1264,6 +1264,47 @@ kbd {
   font-weight: 700;
 }
 
+.offline-continuity {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.offline-continuity__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.offline-continuity__label,
+.offline-continuity__note {
+  margin: var(--space-2) 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/*
+ * The two states read differently on purpose. Pending is neutral because the
+ * result may still be confirmed; unverified is marked because it is the state
+ * an Explorer needs to notice.
+ */
+.offline-continuity__label[data-state="pending"] {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.offline-continuity__label[data-state="unverified"] {
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ink);
+  border-left: 0.25rem solid var(--color-warden);
+  background: var(--color-warden-soft);
+  font-weight: 700;
+}
+
 .daily-constellation__heading {
   display: flex;
   min-width: 0;

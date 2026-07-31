@@ -59,6 +59,12 @@ const budgets = [
     suffix: ".js",
     maxKb: 2
   },
+  {
+    label: "Offline continuity JavaScript",
+    prefix: "offline-continuity-view-",
+    suffix: ".js",
+    maxKb: 3
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

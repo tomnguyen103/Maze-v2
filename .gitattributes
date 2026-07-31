@@ -1,2 +1,10 @@
 .githooks/* text eol=lf
 *.sh text eol=lf
+
+# SQL migrations are asserted against multi-line text in the test suite, so
+# they must check out with LF on every platform.
+*.sql text eol=lf
+
+# SQL migrations are asserted against multi-line text in the test suite, so
+# they must check out with LF on every platform.
+*.sql text eol=lf

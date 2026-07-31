@@ -62,9 +62,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 21. `db/migrations/0021_class_expeditions.sql`
 22. `db/migrations/0022_access_settings_v2.sql`
 23. `db/migrations/0023_daily_trail_constellation.sql`
+24. `db/migrations/0024_offline_run_continuity.sql`
 
-Migrations 0012 through 0023 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all twelve.
+Migrations 0012 through 0024 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all thirteen.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -278,6 +279,22 @@ that instead.
 `prune:rate-limits` takes `--older-than-hours` (default 24); guest counter keys
 stop being reachable once their address hash rotates daily, so old rows are dead
 weight rather than state.
+
+### Offline Run Continuity keys
+
+Offline Continuity Receipts are signed with ECDSA P-256 over SHA-256. Generate a
+key pair, keep the PKCS#8 private key server-side in
+`OFFLINE_RECEIPT_PRIVATE_KEY`, and publish the matching P-256 public JWK — with
+a `kid` matching `OFFLINE_RECEIPT_KEY_ID` — in the JSON array
+`VITE_OFFLINE_RECEIPT_PUBLIC_KEYS` that the browser bundles. Leaving all three
+unset disables offline continuity; setting some but not all is an error rather
+than a half-configured signer.
+
+Rotation is additive. Add the new key to the published array and point
+`OFFLINE_RECEIPT_KEY_ID` at it, but keep the retiring key listed until the last
+receipt it signed is past its nine-day submission deadline. Removing it earlier
+invalidates every outstanding receipt, which would strand offline results that
+were legitimately earned.
 
 `prune:constellation` takes no arguments: the 48-hour window is a generated
 column on every Constellation row, so the job has nothing to configure. It is
