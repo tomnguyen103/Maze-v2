@@ -142,8 +142,10 @@ const SECTION_QUERIES = {
   // only Constellation data that is personal: that this Explorer contributed
   // to a Daily, never where they walked. It applies the same 48-hour window
   // every other Constellation read does.
-  daily_trail_contributions:
-    "SELECT * FROM read_own_daily_trail_contributions()",
+  daily_trail_contributions: `SELECT
+      to_char(daily_date, 'YYYY-MM-DD') AS daily_date,
+      contributed_at
+    FROM read_own_daily_trail_contributions()`,
   role: `SELECT role FROM user_roles WHERE user_id = $1`
 };
 

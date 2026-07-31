@@ -587,6 +587,10 @@ export function createPlayerApi(env = process.env) {
       store: dailyStore,
       getUserId: () => null,
       getProfile: (userId) => store.getProfile(userId),
+      // The projection read needs no identity, so a deployment with a
+      // database but no Clerk keys must still serve it rather than
+      // reporting every Daily as still forming.
+      constellation: constellationStore,
       rateLimit
     });
     const unavailableAdminHandler = createAdminHandler({

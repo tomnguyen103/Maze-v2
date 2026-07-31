@@ -897,6 +897,14 @@ describe("Class Expedition migration", () => {
 });
 
 describe("Daily Trail Constellation migration", () => {
+  // Comment prose necessarily names the things the statements must not do,
+  // so every "must not appear" assertion runs against the statements alone.
+  /** @param {string} sql */
+  const statementsOf = (sql) =>
+    sql
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
   const migrationUrl = new URL(
     "../db/migrations/0023_daily_trail_constellation.sql",
     import.meta.url
@@ -957,9 +965,21 @@ describe("Daily Trail Constellation migration", () => {
     // any CHECK fires, and an out-of-window date would create a receipt the
     // prune job never reaches.
     expect(sql).toContain("jsonb_array_length(p_markers) > 4096");
+    // Resolved in UTC rather than the session time zone: the Daily key is
+    // a UTC date, so CURRENT_DATE would shift the window by a day on a
+    // non-UTC connection.
+    expect(statementsOf(sql)).not.toContain("CURRENT_DATE");
     expect(
-      sql.match(/OR p_daily_date < CURRENT_DATE - 2 THEN/g)
+      sql.match(
+        /OR p_daily_date < \(NOW\(\) AT TIME ZONE 'UTC'\)::date - 2 THEN/g
+      )
     ).toHaveLength(2);
+    // Publication eligibility is decided under the totals row lock, not by
+    // the caller, so two queued callers cannot advance the snapshot twice.
+    expect(sql).toContain("AND contributor_count >= 20");
+    expect(sql).toContain(
+      "AND contributor_count - published_contributor_count >= 10"
+    );
     expect(sql).toContain(
       "totals.published_contributor_count >= 20"
     );
@@ -969,14 +989,29 @@ describe("Daily Trail Constellation migration", () => {
     const sql = await readFile(migrationUrl, "utf8");
 
     // Opposite lock orders between the contributing and publishing writers
-    // would deadlock the moment the two ran concurrently.
-    const publish = sql.slice(
-      sql.indexOf("CREATE FUNCTION publish_daily_trail_batch"),
-      sql.indexOf("CREATE FUNCTION read_daily_trail_summary")
-    );
-    expect(publish.indexOf("daily_trail_constellation_totals")).toBeLessThan(
-      publish.indexOf("daily_trail_constellation_counters")
-    );
+    // would deadlock the moment the two ran concurrently, so both are
+    // checked rather than only the publisher.
+    const writers = [
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION record_daily_trail_contribution"),
+        sql.indexOf("CREATE FUNCTION publish_daily_trail_batch")
+      ),
+      sql.slice(
+        sql.indexOf("CREATE FUNCTION publish_daily_trail_batch"),
+        sql.indexOf("CREATE FUNCTION read_daily_trail_summary")
+      )
+    ];
+    for (const writer of writers) {
+      const totals = writer.indexOf(
+        "public.daily_trail_constellation_totals"
+      );
+      const counters = writer.indexOf(
+        "public.daily_trail_constellation_counters"
+      );
+      expect(totals).toBeGreaterThan(-1);
+      expect(counters).toBeGreaterThan(-1);
+      expect(totals).toBeLessThan(counters);
+    }
   });
 
   it("makes one contribution per Explorer per canonical UTC Daily", async () => {
@@ -1026,6 +1061,10 @@ describe("Daily Trail Constellation migration", () => {
 
     const readers = [
       sql.slice(
+        sql.indexOf("CREATE FUNCTION read_daily_trail_summary"),
+        sql.indexOf("CREATE FUNCTION read_daily_trail_constellation")
+      ),
+      sql.slice(
         sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
         sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
       ),
@@ -1055,13 +1094,7 @@ describe("Daily Trail Constellation migration", () => {
     expect(projection).toContain("counters.expires_at > NOW()");
     expect(projection).not.toContain("player_id");
     expect(projection).not.toContain("username");
-    // Comment prose names the things the schema must not hold, so the
-    // guarantee is asserted against the statements alone.
-    const statements = sql
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("--"))
-      .join("\n");
-    expect(statements).not.toMatch(
+    expect(statementsOf(sql)).not.toMatch(
       /elapsed|answer|prompt|username|action_log/i
     );
   });

@@ -177,9 +177,14 @@ BEGIN
   -- Only a live Daily may be aggregated. Without this an out-of-window date
   -- would create a receipt whose generated expiry the prune job never
   -- reaches, leaving personal data that cannot be deleted on schedule.
+  --
+  -- The window resolves in UTC, not the session time zone: p_daily_date is
+  -- a canonical UTC Daily key, and CURRENT_DATE on a non-UTC connection
+  -- would shift it by a day and silently reject live escapes near the
+  -- boundary.
   IF p_daily_date IS NULL
-     OR p_daily_date > CURRENT_DATE
-     OR p_daily_date < CURRENT_DATE - 2 THEN
+     OR p_daily_date > (NOW() AT TIME ZONE 'UTC')::date
+     OR p_daily_date < (NOW() AT TIME ZONE 'UTC')::date - 2 THEN
     RAISE EXCEPTION 'Constellation aggregation needs a live Daily date.';
   END IF;
 
@@ -254,23 +259,34 @@ DECLARE
   v_published INTEGER;
 BEGIN
   IF p_daily_date IS NULL
-     OR p_daily_date > CURRENT_DATE
-     OR p_daily_date < CURRENT_DATE - 2 THEN
+     OR p_daily_date > (NOW() AT TIME ZONE 'UTC')::date
+     OR p_daily_date < (NOW() AT TIME ZONE 'UTC')::date - 2 THEN
     RAISE EXCEPTION 'Constellation publication needs a live Daily date.';
   END IF;
 
+  -- Eligibility is decided here, under the totals row lock, not by the
+  -- caller. Two callers that both read the same published figure before
+  -- either published would otherwise advance the snapshot twice, and the
+  -- second advance would expose a single Explorer's marker delta — the one
+  -- thing the batch rule exists to prevent.
   UPDATE public.daily_trail_constellation_totals
   SET published_contributor_count = contributor_count
   WHERE daily_date = p_daily_date
     AND expires_at > NOW()
+    AND contributor_count >= 20
+    AND contributor_count - published_contributor_count >= 10
   RETURNING published_contributor_count INTO v_published;
+
+  IF v_published IS NULL THEN
+    RETURN 0;
+  END IF;
 
   UPDATE public.daily_trail_constellation_counters
   SET published_count = contributor_count
   WHERE daily_date = p_daily_date
     AND expires_at > NOW();
 
-  RETURN COALESCE(v_published, 0);
+  RETURN v_published;
 END;
 $$;
 
@@ -299,10 +315,11 @@ $$;
 
 -- Serves the published density figures for one Daily. Expiry is filtered
 -- here as well as by the prune job, so an unpruned row can never be served,
--- and the caller's suppression threshold is floored at the contract's 5: an
--- application asking for less gets the contract rather than what it asked
--- for. That is what makes this a second gate rather than a restatement of
--- the first.
+-- the publication threshold and the caller's suppression threshold are both
+-- applied here: an application asking for a lower marker threshold gets the
+-- contract's 5 rather than what it asked for, and an unpublished Daily
+-- returns nothing whatever the caller asks. That is what makes this a
+-- second gate rather than a restatement of the first.
 CREATE FUNCTION read_daily_trail_constellation(
   p_daily_date DATE,
   p_marker_threshold INTEGER
@@ -326,6 +343,13 @@ AS $$
   FROM public.daily_trail_constellation_counters AS counters
   WHERE counters.daily_date = p_daily_date
     AND counters.expires_at > NOW()
+    AND EXISTS (
+      SELECT 1
+      FROM public.daily_trail_constellation_totals AS totals
+      WHERE totals.daily_date = p_daily_date
+        AND totals.expires_at > NOW()
+        AND totals.published_contributor_count >= 20
+    )
     AND counters.published_count >=
       GREATEST(COALESCE(p_marker_threshold, 5), 5)
   ORDER BY counters.marker_kind, counters.grid_x, counters.grid_y;

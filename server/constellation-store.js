@@ -133,11 +133,13 @@ export function createConstellationStore(pool, { now = () => new Date() } = {}) 
         { explorerId: userId, classroomId: null },
         async (database) => {
           const result = await database.query(
-            `SELECT daily_date, contributed_at
+            `SELECT
+               to_char(daily_date, 'YYYY-MM-DD') AS daily_date,
+               contributed_at
              FROM read_own_daily_trail_contributions()`
           );
           return result.rows.map((row) => ({
-            dailyDate: String(row.daily_date).slice(0, 10),
+            dailyDate: String(row.daily_date),
             contributedAt: new Date(
               /** @type {string} */ (row.contributed_at)
             ).toISOString()
