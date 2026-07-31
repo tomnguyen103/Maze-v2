@@ -99,6 +99,9 @@ import { createPlayerController } from "./player/player-controller.js";
 import {
   createLanternJournal
 } from "./learning/lantern-journal.js";
+import {
+  OFFLINE_RUN_RECORD_KEY
+} from "./game/offline-local-scrub.js";
 /** @type {Promise<typeof import("./learning/lantern-journal-ui.js")> | null} */
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
@@ -240,6 +243,16 @@ const elements = {
   dailyBoardStatus: requiredElement("daily-board-status", HTMLElement),
   dailyClose: requiredElement("daily-close", HTMLButtonElement),
   dailyConstellation: requiredElement("daily-constellation", HTMLElement),
+  offlineContinuity: requiredElement("offline-continuity", HTMLElement),
+  offlineContinuityLabel: requiredElement(
+    "offline-continuity-label",
+    HTMLElement
+  ),
+  offlineContinuityNote: requiredElement(
+    "offline-continuity-note",
+    HTMLElement
+  ),
+  offlineContinue: requiredElement("offline-continue", HTMLButtonElement),
   dailyConstellationMap: requiredElement(
     "daily-constellation-map",
     HTMLElement
@@ -518,6 +531,8 @@ let dailyConstellationViewPromise = null;
 let dailyConstellationViewRetry = false;
 let dailyConstellationFailedTwice = false;
 let dailyConstellationRequestId = 0;
+/** @type {Promise<ReturnType<typeof import("./game/offline-continuity-view.js").createOfflineContinuityView>> | null} */
+let offlineContinuityViewPromise = null;
 let demoAccessPending = hasCompletedGuestDemo();
 let activeFirstLight = false;
 let firstLightEntryPending = false;
@@ -579,6 +594,9 @@ void gameReady.then(() => {
   }
 });
 void playerController.isAuthenticated().then(handleAuthenticationChange);
+// The verification label belongs to the local Run Record, so it appears with
+// the Record on boot rather than waiting for a reconnect that may not come.
+void renderOfflineContinuityFromDevice();
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
@@ -2134,6 +2152,81 @@ function loadDailyConstellationView() {
       });
   }
   return dailyConstellationViewPromise;
+}
+
+/**
+ * The offline surface is presentation only. Whether a Run may continue offline
+ * is decided by `offlineContinuityOffer`, and whether a result is verified is
+ * decided by the server's replay — this only shows the answer.
+ *
+ * @param {{
+ *   offer?: { offered: boolean, reason?: string },
+ *   verification?: import("./game/offline-continuity.js").VerificationState
+ * }} state
+ */
+async function renderOfflineContinuity(state) {
+  try {
+    const view = await loadOfflineContinuityView();
+    if (state.offer) {
+      view.renderOffer(state.offer);
+    }
+    if (state.verification) {
+      view.renderVerification(state.verification);
+    }
+  } catch {
+    // The offline surface is optional presentation. A chunk that will not load
+    // must not take the Run Record with it, so the section simply stays out of
+    // the way rather than showing a control that cannot work.
+    elements.offlineContinuity.hidden = true;
+    elements.offlineContinue.hidden = true;
+  }
+}
+
+/**
+ * Reads what this device already knows about offline continuity and shows it.
+ * Both answers come from local state on purpose: the label has to appear the
+ * moment the Run Record does, before any reconnect, and the offer has to
+ * survive having no network at all.
+ */
+async function renderOfflineContinuityFromDevice() {
+  /** @type {Record<string, unknown> | null} */
+  let record;
+  try {
+    const stored = globalThis.localStorage?.getItem(OFFLINE_RUN_RECORD_KEY);
+    record = stored ? JSON.parse(stored) : null;
+  } catch {
+    // Unreadable local state shows nothing rather than a guess.
+    return;
+  }
+  if (!record) {
+    return;
+  }
+  const verification =
+    record.verification === "verified" || record.verification === "unverified"
+      ? record.verification
+      : "pending";
+  await renderOfflineContinuity({
+    verification:
+      /** @type {"pending" | "verified" | "unverified"} */ (verification),
+    offer: {
+      offered: verification === "pending" && record.playAuthorityOpen === true,
+      reason: typeof record.reason === "string" ? record.reason : undefined
+    }
+  });
+}
+
+function loadOfflineContinuityView() {
+  offlineContinuityViewPromise ??= import(
+    "./game/offline-continuity-view.js"
+  ).then(({ createOfflineContinuityView }) =>
+    createOfflineContinuityView({
+      section: elements.offlineContinuity,
+      button: elements.offlineContinue,
+      label: elements.offlineContinuityLabel,
+      note: elements.offlineContinuityNote
+    })
+  );
+  return offlineContinuityViewPromise;
 }
 
 function renderDailyBoardParticipation() {
