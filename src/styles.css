@@ -863,7 +863,11 @@ html[data-access-compass="trail"] .trail-compass {
   margin-block-start: var(--space-3);
 }
 
-.trail-compass[hidden] {
+/* Matches the enabling rule's specificity so [hidden] still wins over it.
+   `.trail-compass[hidden]` alone scores below
+   `html[data-access-compass="trail"] .trail-compass` and the panel would
+   render while hidden. */
+html .trail-compass[hidden] {
   display: none;
 }
 

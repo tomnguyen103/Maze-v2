@@ -41,7 +41,10 @@ import {
   getQuestRunRuleset,
   normalizeRunRuleset
 } from "./game/run-ruleset.js";
-import { createVerifiedDailySubmission } from "./player/daily-submission.js";
+// Loaded on demand: building a verified Daily submission is reached only when
+// a Daily Run ends, and the game chunk is at its ceiling. ADR 0035 keeps
+// Verified Daily on Run Action Log v1, so this seam never carries offline work.
+
 import {
   createRunAccessId,
   isAdmittedRunResume,
@@ -438,6 +441,16 @@ const playerController = createPlayerController({
     elements.journalStatus.textContent = message;
   }
 });
+// Declared above createAccessSettingsContinuity because its onApply runs
+// synchronously during construction and calls syncTrailCompass(), which reads
+// these. syncTrailCompass itself is a hoisted function declaration, so only
+// the bindings have to live up here to stay out of the temporal dead zone.
+/** @type {Record<string, any> | null} */
+let trailCompassController = null;
+/** @type {Promise<unknown> | undefined} */
+let trailCompassPromise;
+let trailCompassActive = false;
+
 const accessSettingsContinuity = createAccessSettingsContinuity({
   client: {
     getAccessSettings: () => playerController.getCloudAccessSettings(),
@@ -1572,12 +1585,6 @@ async function loadActiveRunRecoveryModule() {
 
 /** @type {Promise<Record<string, any> | null> | undefined} */
 let classExpeditionPlayPromise;
-
-/** @type {Record<string, any> | null} */
-let trailCompassController = null;
-/** @type {Promise<unknown> | undefined} */
-let trailCompassPromise;
-let trailCompassActive = false;
 
 function syncTrailCompass() {
   trailCompassActive =
@@ -3249,7 +3256,8 @@ function transition(action) {
     }
   }
   if (trailCompassActive && trailCompassController) {
-    // Trail Compass owns the one polite status per player action.
+    // Trail Compass owns the one polite status per player action, and derives
+    // Warden mode from the Run itself so this path stays a single status.
     trailCompassController.onTransition(run);
   } else if (eventChanged || wardenMode !== previousWardenMode) {
     const modeAnnouncement =
@@ -4255,6 +4263,9 @@ async function submitVerifiedDailyRun(daily) {
     announce("Daily replay limit reached. Your local result is unchanged.");
     return;
   }
+  const { createVerifiedDailySubmission } = await import(
+    "./player/daily-submission.js"
+  );
   const submission = createVerifiedDailySubmission(daily, submittedLog, run);
   if (playerController.hasAuthenticatedUser()) {
     elements.resultKicker.textContent = "Checking Daily replay";

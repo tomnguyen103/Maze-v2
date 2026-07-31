@@ -691,7 +691,13 @@ describe("Class Expedition migration", () => {
     expect(sql).toContain("BEGIN;");
     expect(sql).toContain("COMMIT;");
     expect(sql).toContain("status IN ('paid', 'disputed')");
-    expect(sql).toContain("COALESCE(MAX(seat_number), 0)");
+    // Consumed capacity is a watermark on the Expedition, never derived from
+    // the surviving seat rows: a seat row is personal data that account
+    // deletion cascades away, and deriving from MAX(seat_number) would hand a
+    // deleted Explorer's seat to a replacement account.
+    expect(sql).toContain("seats_consumed INTEGER NOT NULL DEFAULT 0");
+    expect(sql).toContain("SET seats_consumed = v_seat");
+    expect(sql).not.toContain("COALESCE(MAX(seat_number), 0)");
     expect(sql).toContain("(p_status <> 'paid' OR status = 'disputed')");
     expect(sql).toContain("read_own_class_expedition_seats");
     expect(sql).toContain("read_own_class_expedition_licenses");

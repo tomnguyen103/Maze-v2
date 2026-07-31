@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { exportUserSnapshot } from "../server/data-export.js";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
@@ -27,11 +27,10 @@ let runtimePool = null;
 let adminPool = null;
 
 describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
-  afterAll(async () => {
-    await Promise.all([runtimePool?.end(), adminPool?.end()]);
-  });
-
-  it("forces RLS and clears pooled tenant context after commit and rollback", async () => {
+  // Shared so either case can run alone. Creating the pools inside the first
+  // case made the forced-RLS case throw whenever it was run on its own, e.g.
+  // through a `-t` filter.
+  beforeAll(() => {
     runtimePool = new Pool({
       connectionString: normalizeDatabaseConnectionString(databaseUrl),
       max: 2
@@ -40,7 +39,16 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       connectionString: normalizeDatabaseConnectionString(adminDatabaseUrl),
       max: 1
     });
+  });
 
+  afterAll(async () => {
+    await Promise.all([runtimePool?.end(), adminPool?.end()]);
+  });
+
+  it("forces RLS and clears pooled tenant context after commit and rollback", async () => {
+    if (!runtimePool || !adminPool) {
+      throw new Error("Pools are created by the suite's beforeAll fixture.");
+    }
     const suffix = randomUUID().replaceAll("-", "");
     const explorerId = `user_${suffix}`;
     const otherExplorerId = `user_other_${suffix}`;
@@ -813,7 +821,7 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
 
   it("isolates Class Expeditions, seats, Licenses, and Grants under forced RLS", async () => {
     if (!runtimePool || !adminPool) {
-      throw new Error("Pools are created by the tenant boundary test.");
+      throw new Error("Pools are created by the suite's beforeAll fixture.");
     }
     const suffix = randomUUID().replaceAll("-", "");
     const teacherId = `user_teach_${suffix}`;

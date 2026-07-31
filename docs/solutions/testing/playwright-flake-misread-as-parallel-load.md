@@ -18,8 +18,8 @@ second `#challenge-dialog` never became visible.
   opens.
 - **Running the case in isolation to "confirm" the load theory.** Isolation
   passes were read as evidence for load. They were actually seed luck: a single
-  isolated run redraws the seed just like a suite run does, and ~9 seeds in 10
-  pass.
+  isolated run redraws the seed just like a suite run does, and 77.6% of seeds
+  — about 8 in 10 — lay out a Labyrinth the case can pass on.
 
 ## Root cause
 

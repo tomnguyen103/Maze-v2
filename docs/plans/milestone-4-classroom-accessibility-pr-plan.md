@@ -30,7 +30,10 @@ ready-flip and at most one re-review round.
 | 8 | [#132](https://github.com/tomnguyen103/Maze-v2/issues/132) | Integrated release evidence and milestone gate | all above |
 
 Each ticket receives one focused commit after its red-green-refactor loop.
-The branch stays green between commits.
+The branch is intended to stay green between commits. It did not hold for two
+of them: commits `e4b44ae` and `de27dfb` claimed a green lint that was masked
+by piping gate output through `tail`, and `34340cf` restored the branch to
+green and stopped the masking. The release evidence discloses this in full.
 
 ## Review-event plan
 

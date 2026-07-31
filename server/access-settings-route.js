@@ -157,7 +157,11 @@ function validateWrite(value) {
     typeof candidate.readerFriendlyQuestions !== "boolean" ||
     typeof candidate.reducedEffects !== "boolean" ||
     typeof candidate.trailCompassEnabled !== "boolean" ||
-    !NARRATION_PACES.has(String(candidate.narrationPace))
+    // Membership is checked on the raw value: coercing first would let a
+    // one-element array like ["standard"] pass and then persist unchanged,
+    // failing the client's strict check later.
+    typeof candidate.narrationPace !== "string" ||
+    !NARRATION_PACES.has(candidate.narrationPace)
   ) {
     throw new AccessSettingsInputError(
       "Explorer Access Settings are invalid."

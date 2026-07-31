@@ -119,16 +119,24 @@ Run on Node 22.23.1.
 | Types | `npm run typecheck` | Pass |
 | Unit and integration | `npm run test` | 1156 passed, 18 skipped, 0 failed (1174 total) |
 | Production build | `npm run build` | Pass |
-| Bundle budgets | `npm run check:bundle` | Pass — 9 budgets measured, 1 skipped (optional Sentry, not built) |
+| Bundle budgets | `npm run check:bundle` | Pass — 10 budgets measured, 1 skipped (optional Sentry, not built) |
 | Browser matrix | `npm run test:e2e` | Two consecutive runs, each 218 passed, 18 skipped, 0 failed (236 total) — 1.7m and 1.6m |
 
 Bundle results: landing 6.06 KB / 8 KB, game **30.00 KB / 30 KB (2 bytes of
 headroom)**, Campfire Resume 3.95 / 5, shared styles 11.45 / 12, Trail
-Compass 1.71 / 6, Class Expedition play 1.01 / 5, Question Narration
-1.47 / 6, Clerk 544.21 / 600, admin 6.03 / 20. The lazy Deck-picker chunk
-this milestone extracted carries no budget row of its own, so the bytes moved
-out of the game chunk are unmeasured; a row for it is recorded as a deferred
-finding on the pull request.
+Compass 1.81 / 6, Class Expedition play 1.01 / 5, Question Narration
+1.47 / 6, Deck picker 0.41 / 2, Daily submission 0.37 / 2, Clerk 544.21 / 600,
+admin 6.03 / 20. Both lazy chunks this milestone extracted now carry their own
+budget rows, so the bytes moved out of the game chunk stay measured and
+enforced rather than growing unpoliced.
+
+The ceiling bit during the CodeRabbit round: the Warden-mode fix put the game
+chunk 21 bytes over, and the roadmap forbids raising a budget as a workaround.
+It was paid for structurally, not by dropping the fix — the Warden-mode note
+moved into `describeCompassAction` so its bytes land in the Compass chunk,
+only the three Compass `let` bindings were hoisted for the temporal-dead-zone
+fix rather than the whole function, and `daily-submission.js` became a lazy
+import at its already-async call site. The game chunk still has 2 bytes.
 
 **Headroom debt stated plainly:** the game chunk sits 2 bytes under its
 ceiling. Milestone 4 already moved the Deck picker into a lazy chunk to stay
@@ -229,6 +237,27 @@ missing export coverage for Grants, seats, and Licenses.
 
 Deferred low-severity findings, each with its reason, are recorded in the
 pull request description.
+
+CodeRabbit then reviewed the branch and posted 19 actionable findings — 7 Major
+and 12 Minor — plus 13 trivial nitpicks. All 19 were fixed in one batch. The
+material ones: consumed Expedition capacity was derived from `MAX(seat_number)`
+over surviving seat rows, so account deletion lowered it and a replacement
+account could reuse a spent seat; the capacity reader counted only `paid`
+extensions while issuance counted `paid` and `disputed`, letting
+`seats_assigned` exceed `seats_total`; a failed Grants lookup was
+indistinguishable from "no Grants" and silently re-seeded a Student's Quest
+Progress to the Region's first Labyrinth; a checkout failure after
+`reserveLicense` left the reservation dangling; `createQuestProgress` could
+throw inside a click handler and leave the button dead; and two "no student
+names" privacy assertions were checked against strings the fixtures never
+produced, so neither could fail. Consumed capacity is now a non-personal
+watermark on the Expedition that only increases.
+
+One finding was verified and found overstated rather than accepted as written:
+the reported temporal-dead-zone crash on the Compass bindings does not occur in
+the production build — 218 browser cases pass at the reviewed commit, which a
+boot-time throw would have prevented. The ordering was corrected anyway, since
+declarations-before-use does not depend on a minifier's tolerance.
 
 ## External actions that remain truthfully deferred
 

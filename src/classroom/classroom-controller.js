@@ -457,6 +457,10 @@ export async function renderClassroom(root, dependencies = {}) {
     card.dataset.studentExpedition = String(record.id);
     /** @type {Record<string, unknown>[]} */
     let grants = [];
+    // "The lookup failed" and "there are no Grants" must stay distinguishable:
+    // treating a blip as no Grants would re-seed Quest Progress back to the
+    // Region's first Labyrinth and erase what the Explorer already escaped.
+    let grantsKnown = true;
     try {
       const result = await client.listClassExpeditionGrants(
         entry.id,
@@ -467,6 +471,7 @@ export async function renderClassroom(root, dependencies = {}) {
         : [];
     } catch {
       grants = [];
+      grantsKnown = false;
     }
     const escaped = grants.filter(
       (grant) => grant.status === "escaped"
@@ -486,8 +491,10 @@ export async function renderClassroom(root, dependencies = {}) {
     start.type = "button";
     start.dataset.action = "start-class-expedition";
     start.textContent =
-      grants.length > 0 ? "Continue Class Expedition" : "Start Class Expedition";
-    if (record.status !== "open" && grants.length === 0) {
+      grants.length > 0 || !grantsKnown
+        ? "Continue Class Expedition"
+        : "Start Class Expedition";
+    if (record.status !== "open" && grantsKnown && grants.length === 0) {
       start.disabled = true;
     }
     if (escaped >= 4) {
@@ -502,19 +509,29 @@ export async function renderClassroom(root, dependencies = {}) {
         return;
       }
       const atlasRegion = Number(record.atlasRegion);
-      if (grants.length === 0) {
-        saveQuestProgress(
-          createQuestProgress(
-            String(record.levelId),
-            (atlasRegion - 1) * 4 + 1,
-            undefined,
-            {
-              deckId: String(record.learningDeckId),
-              revisionId: String(record.learningDeckRevision)
-            }
-          ),
-          storage
-        );
+      if (grantsKnown && grants.length === 0) {
+        try {
+          saveQuestProgress(
+            createQuestProgress(
+              String(record.levelId),
+              (atlasRegion - 1) * 4 + 1,
+              undefined,
+              {
+                deckId: String(record.learningDeckId),
+                revisionId: String(record.learningDeckRevision)
+              }
+            ),
+            storage
+          );
+        } catch {
+          // createQuestProgress rejects an unknown Quest Level or a Learning
+          // Deck revision that is no longer published — exactly what a Deck
+          // republished after assignment produces. Saying so beats a button
+          // that silently does nothing.
+          status.textContent =
+            "This Class Expedition needs a fresh assignment from your Teacher before it can start.";
+          return;
+        }
       }
       saveClassExpeditionSelection(storage, userId, {
         classroomId: entry.id,

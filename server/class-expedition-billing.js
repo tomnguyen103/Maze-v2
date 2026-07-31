@@ -59,15 +59,36 @@ export function createClassExpeditionBilling({
   store,
   createId = randomUUID
 }) {
+  // ownsEvent resolves a PaymentIntent purely to answer "is this mine?", and
+  // the refund/dispute branch then resolves the same one again. Because the
+  // webhook dispatcher asks this service first, that second lookup put every
+  // Lifetime refund webhook behind two live Stripe calls as well. One bounded
+  // cache of the resolved purchase makes it one call per PaymentIntent; the
+  // metadata a PaymentIntent carries does not change under us.
+  const PURCHASE_CACHE_LIMIT = 256;
+  /** @type {Map<string, { purchaseId: string } | null>} */
+  const purchaseByPaymentIntent = new Map();
+
   /** @param {string} paymentIntentId */
   async function purchaseFromPaymentIntent(paymentIntentId) {
+    if (purchaseByPaymentIntent.has(paymentIntentId)) {
+      return purchaseByPaymentIntent.get(paymentIntentId) ?? null;
+    }
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
     const metadata = objectMetadata(intent);
-    if (metadata?.purchase_kind !== EXPEDITION_PURCHASE_KIND) {
-      return null;
+    const purchaseId =
+      metadata?.purchase_kind === EXPEDITION_PURCHASE_KIND
+        ? String(metadata.purchase_id ?? "")
+        : "";
+    const purchase = purchaseId ? { purchaseId } : null;
+    if (purchaseByPaymentIntent.size >= PURCHASE_CACHE_LIMIT) {
+      const oldest = purchaseByPaymentIntent.keys().next().value;
+      if (oldest !== undefined) {
+        purchaseByPaymentIntent.delete(oldest);
+      }
     }
-    const purchaseId = String(metadata.purchase_id ?? "");
-    return purchaseId ? { purchaseId } : null;
+    purchaseByPaymentIntent.set(paymentIntentId, purchase);
+    return purchase;
   }
 
   return {
@@ -96,35 +117,52 @@ export function createClassExpeditionBilling({
         license_kind: kind,
         sponsor_user_id: userId
       };
-      const session = await stripe.checkout.sessions.create(
-        {
-          allow_promotion_codes: false,
-          cancel_url: `${appOrigin}/class?expedition-checkout=canceled`,
-          client_reference_id: purchaseId,
-          expand: ["line_items.data.price", "payment_intent"],
-          line_items: [{ price: priceId, quantity: 1 }],
-          metadata,
-          mode: "payment",
-          payment_intent_data: { metadata },
-          success_url:
-            `${appOrigin}/class?expedition-checkout=success&session_id={CHECKOUT_SESSION_ID}`
-        },
-        { idempotencyKey: `echo-maze-expedition:${purchaseId}` }
-      );
-      const checkoutUrl = String(session.url ?? "");
-      if (
-        session.livemode === true ||
-        session.mode !== "payment" ||
-        session.status !== "open" ||
-        Number(session.amount_total) <= 0 ||
-        safeHostname(checkoutUrl) !== "checkout.stripe.com" ||
-        objectMetadata(session)?.purchase_id !== purchaseId
-      ) {
-        throw new ExpeditionBillingError(
-          "Stripe Checkout configuration does not match the Class Expedition License."
+      // The License is already reserved, so every exit from here that is not a
+      // usable Checkout URL has to release it. A dangling reservation consumes
+      // capacity the Teacher can neither use nor retry out of. The release is
+      // recorded at provider timestamp 0 so a genuine later Stripe event for
+      // this purchase still supersedes it.
+      try {
+        const session = await stripe.checkout.sessions.create(
+          {
+            allow_promotion_codes: false,
+            cancel_url: `${appOrigin}/class?expedition-checkout=canceled`,
+            client_reference_id: purchaseId,
+            expand: ["line_items.data.price", "payment_intent"],
+            line_items: [{ price: priceId, quantity: 1 }],
+            metadata,
+            mode: "payment",
+            payment_intent_data: { metadata },
+            success_url:
+              `${appOrigin}/class?expedition-checkout=success&session_id={CHECKOUT_SESSION_ID}`
+          },
+          { idempotencyKey: `echo-maze-expedition:${purchaseId}` }
         );
+        const checkoutUrl = String(session.url ?? "");
+        if (
+          session.livemode === true ||
+          session.mode !== "payment" ||
+          session.status !== "open" ||
+          Number(session.amount_total) <= 0 ||
+          safeHostname(checkoutUrl) !== "checkout.stripe.com" ||
+          objectMetadata(session)?.purchase_id !== purchaseId
+        ) {
+          throw new ExpeditionBillingError(
+            "Stripe Checkout configuration does not match the Class Expedition License."
+          );
+        }
+        return { checkoutUrl, purchaseId };
+      } catch (error) {
+        // Releasing is best effort: the original failure is what the Teacher
+        // needs to see, and a failed release must not replace it.
+        try {
+          await store.transitionLicense(purchaseId, "failed", 0);
+        } catch {
+          // Intentionally ignored — the reservation is reconciled by the
+          // provider event or by expiry if this release could not be recorded.
+        }
+        throw error;
       }
-      return { checkoutUrl, purchaseId };
     },
 
     /**

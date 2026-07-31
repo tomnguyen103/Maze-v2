@@ -1,4 +1,5 @@
 import { ClassroomAccessDeniedError } from "./classroom-context.js";
+import { mapDatabaseError } from "./class-expedition-store.js";
 import { withTenantContext } from "./tenant-context.js";
 
 /**
@@ -42,21 +43,28 @@ export function createClassExpeditionBillingStore(pool) {
     async reserveLicense(sponsorUserId, input) {
       const connectable =
         /** @type {Parameters<typeof withTenantContext>[0]} */ (pool);
-      await withTenantContext(
-        connectable,
-        { explorerId: sponsorUserId, classroomId: input.classroomId },
-        (database) =>
-          database.query(
-            "SELECT reserve_class_expedition_license($1, $2, $3, $4, $5)",
-            [
-              input.purchaseId,
-              input.expeditionId,
-              input.kind,
-              sponsorUserId,
-              input.priceId
-            ]
-          )
-      );
+      try {
+        await withTenantContext(
+          connectable,
+          { explorerId: sponsorUserId, classroomId: input.classroomId },
+          (database) =>
+            database.query(
+              "SELECT reserve_class_expedition_license($1, $2, $3, $4, $5)",
+              [
+                input.purchaseId,
+                input.expeditionId,
+                input.kind,
+                sponsorUserId,
+                input.priceId
+              ]
+            )
+        );
+      } catch (error) {
+        // Unmapped SQL reaches the route's generic 502 branch, which reads as
+        // "we broke" for what is really an access denial or an unpaid base
+        // License. The shared mapper answers both with their own status.
+        throw mapDatabaseError(error);
+      }
       return true;
     },
 
@@ -126,6 +134,9 @@ export function createClassExpeditionBillingStore(pool) {
         seatsAssigned: Number(row.seats_assigned),
         baseStatus: row.base_status === null ? null : String(row.base_status),
         extensionPaidCount: Number(row.extension_paid_count),
+        // A disputed extension keeps funding seats under ADR 0030, so it is
+        // counted in the total and surfaced separately rather than hidden.
+        extensionDisputedCount: Number(row.extension_disputed_count ?? 0),
         baseRefundEligible: row.base_refund_eligible === true,
         extensionRefundEligibleCount: Number(
           row.extension_refund_eligible_count

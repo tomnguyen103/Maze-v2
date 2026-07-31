@@ -23,6 +23,13 @@ CREATE TABLE class_expeditions (
   learning_deck_revision VARCHAR(120) NOT NULL,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
   completion_date DATE,
+  -- The highest seat number ever handed out for this Expedition. Held here,
+  -- not derived from the seat rows, because a seat row is personal data that
+  -- account deletion cascades away: deriving it from MAX(seat_number) would
+  -- let a deleted Explorer's seat be handed to a replacement account and would
+  -- make spent Licenses look refundable once their holders were erased. This
+  -- column only ever increases and holds no personal data.
+  seats_consumed INTEGER NOT NULL DEFAULT 0 CHECK (seats_consumed >= 0),
   created_by TEXT NOT NULL CHECK (created_by ~ '^user_[A-Za-z0-9_-]{3,120}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -572,12 +579,12 @@ BEGIN
       AND kind = 'extension'
       AND status IN ('paid', 'disputed');
 
-    -- Consumed capacity is the highest seat number ever assigned, not the
-    -- surviving row count: account deletion cascades a seat row away as
-    -- personal data, but the seat itself is never recycled.
-    SELECT COALESCE(MAX(seat_number), 0) INTO v_assigned
-    FROM public.class_expedition_seats
-    WHERE expedition_id = p_expedition_id;
+    -- Consumed capacity is the watermark on the Expedition, not the surviving
+    -- seat rows: account deletion cascades a seat row away as personal data,
+    -- and a seat is never recycled to a replacement account.
+    SELECT seats_consumed INTO v_assigned
+    FROM public.class_expeditions
+    WHERE id = p_expedition_id;
 
     IF v_assigned >= v_capacity THEN
       RAISE EXCEPTION 'Class Expedition capacity is fully assigned.';
@@ -590,6 +597,10 @@ BEGIN
       seat_number
     )
     VALUES (p_expedition_id, v_explorer, v_seat);
+
+    UPDATE public.class_expeditions
+    SET seats_consumed = v_seat
+    WHERE id = p_expedition_id;
   END IF;
 
   INSERT INTO public.classroom_run_grants (
@@ -749,6 +760,7 @@ RETURNS TABLE (
   seats_assigned BIGINT,
   base_status TEXT,
   extension_paid_count BIGINT,
+  extension_disputed_count BIGINT,
   base_refund_eligible BOOLEAN,
   extension_refund_eligible_count BIGINT
 )
@@ -773,13 +785,22 @@ AS $$
       )
   ),
   assigned AS (
-    SELECT COALESCE(MAX(seats.seat_number), 0)::BIGINT AS seat_count
-    FROM public.class_expedition_seats AS seats
-    WHERE seats.expedition_id = p_expedition_id
+    -- The same watermark issuance spends, so the Teacher's view of consumed
+    -- capacity cannot drift below it when a Student's account is deleted.
+    SELECT expedition.seats_consumed::BIGINT AS seat_count
+    FROM public.class_expeditions AS expedition
+    WHERE expedition.id = p_expedition_id
   ),
   extensions AS (
     SELECT
-      COUNT(*) FILTER (WHERE licenses.status = 'paid')::BIGINT AS paid_count,
+      -- Counted exactly as issue_classroom_run_grant counts them: ADR 0030
+      -- keeps a disputed License funding play, so a disputed extension's
+      -- seats exist and seats_assigned could otherwise exceed seats_total.
+      COUNT(*) FILTER (
+        WHERE licenses.status IN ('paid', 'disputed')
+      )::BIGINT AS paid_count,
+      COUNT(*) FILTER (WHERE licenses.status = 'disputed')::BIGINT
+        AS disputed_count,
       COUNT(*) FILTER (
         WHERE licenses.status = 'paid'
           AND (
@@ -789,7 +810,7 @@ AS $$
             FROM public.class_expedition_licenses AS earlier
             WHERE earlier.expedition_id = p_expedition_id
               AND earlier.kind = 'extension'
-              AND earlier.status = 'paid'
+              AND earlier.status IN ('paid', 'disputed')
               AND (
                 earlier.created_at < licenses.created_at
                 OR (
@@ -815,6 +836,7 @@ AS $$
       LIMIT 1
     ) AS base_status,
     extensions.paid_count AS extension_paid_count,
+    extensions.disputed_count AS extension_disputed_count,
     assigned.seat_count = 0 AS base_refund_eligible,
     extensions.refund_eligible_count AS extension_refund_eligible_count
   FROM gate

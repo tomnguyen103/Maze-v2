@@ -119,10 +119,15 @@ describe("Trail Compass controller", () => {
     expect(announce).toHaveBeenCalledTimes(1);
     expect(String(announce.mock.calls[0][0])).toContain("row");
 
+    // Tones follow revealed entities and an explicit Listen press, never the
+    // press alone and never automatically. Nothing is revealed in this Run, so
+    // Listen says so and still plays nothing. Asserted as an exact absence:
+    // `toBeGreaterThanOrEqual(0)` could not have failed either way.
+    expect(playCue).not.toHaveBeenCalled();
     document.getElementById("compass-listen")?.click();
     expect(announce).toHaveBeenCalledTimes(2);
-    // Tones only after the explicit Listen press, never automatically.
-    expect(playCue.mock.calls.length).toBeGreaterThanOrEqual(0);
+    expect(String(announce.mock.calls[1][0])).toContain("Nothing revealed");
+    expect(playCue).not.toHaveBeenCalled();
 
     const before = JSON.stringify(run);
     compass.onTransition(run);

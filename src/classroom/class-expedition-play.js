@@ -150,7 +150,18 @@ export function createClassExpeditionPlay({
         return false;
       }
       try {
-        await flushPendingOutcome();
+        // A definitive verdict on the PREVIOUS Run's outcome settles and
+        // clears that entry, then rethrows. Letting it escape here would read
+        // as a verdict on this start: the Grant is never attempted and the
+        // Explorer is denied once, with the stale outcome's message. The entry
+        // is already gone, so this start proceeds on its own merits.
+        try {
+          await flushPendingOutcome();
+        } catch {
+          // Intentionally ignored — settling a prior outcome is not a verdict
+          // on this Labyrinth. A transient failure leaves the entry pending
+          // for the next attempt.
+        }
         await api.issueClassRunGrant(active.classroomId, active.expeditionId, {
           runId: locator.runId,
           labyrinthNumber: locator.labyrinthNumber

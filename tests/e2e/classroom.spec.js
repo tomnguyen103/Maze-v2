@@ -229,7 +229,11 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
               { labyrinthNumber: 6, completedCount: 4 },
               { labyrinthNumber: 7, completedCount: 2 },
               { labyrinthNumber: 8, completedCount: 1 }
-            ]
+            ],
+            // Served on purpose so the aggregate-only assertion below has an
+            // identity it could fail on.
+            studentName: "Moss",
+            students: [{ username: "Moss", labyrinthNumber: 8 }]
           }
         }),
         getClassExpeditionCapacity: async () => ({
@@ -282,7 +286,11 @@ test("shows Class Expedition tools to Teachers and Students with counts only", a
   await expect(teacherPanel).toContainText("6 started");
   await expect(teacherPanel).toContainText("1 finished the Region");
   await expect(teacherPanel).toContainText("6 of 30 seats assigned");
-  await expect(teacherPanel).not.toContainText("Moss escaped");
+  // Scoped to the Expedition list and matching the name the progress fixture
+  // actually serves, so this fails if a Student's identity ever renders.
+  await expect(
+    teacherPanel.locator(".classroom-expeditions")
+  ).not.toContainText("Moss");
   await expect(
     teacherPanel.locator("select[name='learningDeckId'] option")
   ).toHaveCount(2);

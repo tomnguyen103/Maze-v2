@@ -241,7 +241,31 @@ export function describeCompassAction(run) {
   const event = run.event?.message ? `${run.event.message} ` : "";
   const place = `At row ${run.explorer.row + 1}, column ${run.explorer.col + 1}.`;
   const exitNote = exits.length ? ` Open: ${exits.join(", ")}.` : "";
-  return `${event}${place}${exitNote}`.trim();
+  // Warden mode is on screen for a sighted Explorer at all times, so a
+  // nonvisual Run has to carry it too. It rides this one status rather than
+  // becoming a second announcement, and it is derived from the Run's own
+  // Wardens — revealed state only, nothing Fog-hidden.
+  return `${event}${place}${exitNote} ${wardenModeNote(run)}`.trim();
+}
+
+/**
+ * @param {GameRun} run
+ */
+function wardenModeNote(run) {
+  if (run.wardens.length === 0) {
+    return "Warden mode: Path clear.";
+  }
+  const modes = run.wardens.map((warden) => warden.mode);
+  if (modes.includes("lured")) {
+    return "Warden mode: Lured to Bell.";
+  }
+  if (modes.includes("intercept")) {
+    return "Warden mode: Intercept active.";
+  }
+  if (modes.includes("hunt")) {
+    return "Warden mode: Hunt active.";
+  }
+  return "Warden mode: Patrol.";
 }
 
 /**

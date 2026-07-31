@@ -33,6 +33,20 @@ const budgets = [
     suffix: ".js",
     maxKb: 6
   },
+  // Extracted from the game chunk to hold the 30 KB ceiling. Budgeted so the
+  // bytes moved out stay measured rather than growing unpoliced.
+  {
+    label: "Deck picker JavaScript",
+    prefix: "deck-picker-",
+    suffix: ".js",
+    maxKb: 2
+  },
+  {
+    label: "Daily submission JavaScript",
+    prefix: "daily-submission-",
+    suffix: ".js",
+    maxKb: 2
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

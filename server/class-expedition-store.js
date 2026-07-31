@@ -44,7 +44,12 @@ function completionDate(value) {
     return null;
   }
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    // pg parses a DATE column into local midnight, so toISOString() would
+    // report the previous calendar day wherever the process timezone runs
+    // ahead of UTC. The local components are the date the column holds.
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${value.getFullYear()}-${month}-${day}`;
   }
   return String(value).slice(0, 10);
 }
@@ -56,7 +61,7 @@ function completionDate(value) {
  *
  * @param {unknown} error
  */
-function mapDatabaseError(error) {
+export function mapDatabaseError(error) {
   const code = /** @type {{ code?: string }} */ (error)?.code;
   const message = error instanceof Error ? error.message : "";
   if (code === "42501" || message.includes("access denied")) {

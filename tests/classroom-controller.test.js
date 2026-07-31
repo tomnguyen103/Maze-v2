@@ -390,6 +390,41 @@ describe("Classroom workspace", () => {
         "closed"
       )
     );
+
+    // The reopen branch is the other half of this case's title, and asserting
+    // only the close transition left it free to regress silently.
+    client.setClassExpeditionStatus.mockClear();
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 2,
+          levelId: "trail-scout",
+          learningDeckId: "number-trail",
+          learningDeckRevision:
+            "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+          status: "closed",
+          completionDate: null
+        }
+      ]
+    });
+    root.replaceChildren();
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+    const closedPanel = await vi.waitUntil(() =>
+      root.querySelector(".classroom-expeditions")
+    );
+    const reopen = closedPanel?.querySelector(
+      "[data-action='toggle-expedition']"
+    );
+    reopen?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(client.setClassExpeditionStatus).toHaveBeenCalledWith(
+        "org_class_1",
+        "exped_live_1",
+        "open"
+      )
+    );
   });
 
   it("shows aggregate-only Expedition progress to Teachers", async () => {
@@ -423,7 +458,16 @@ describe("Classroom workspace", () => {
           { labyrinthNumber: 2, completedCount: 4 },
           { labyrinthNumber: 3, completedCount: 3 },
           { labyrinthNumber: 4, completedCount: 2 }
-        ]
+        ],
+        // Identity the aggregate-only contract forbids rendering. It is served
+        // here deliberately: without a name in the payload the assertion below
+        // could never fail, and the privacy guarantee would go untested. The
+        // cast is the point — the contract has no such field, and the card
+        // must still not render one that arrives anyway.
+        .../** @type {Record<string, unknown>} */ ({
+          studentName: "Moss",
+          students: [{ username: "Moss", labyrinthNumber: 4 }]
+        })
       }
     });
     await renderClassroom(root, { clerk: signedInClerk(), client });
