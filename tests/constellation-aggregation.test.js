@@ -349,3 +349,75 @@ describe("Constellation aggregation on the Daily verification path", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("Constellation projection endpoint", () => {
+  it("serves band labels for the current Daily and nothing countable", async () => {
+    const projection = {
+      published: true,
+      markers: [
+        { kind: /** @type {const} */ ("cell"), x: 1, y: 1, band: /** @type {const} */ ("bright") },
+        { kind: /** @type {const} */ ("pulse"), x: 3, y: 5, band: /** @type {const} */ ("quiet") }
+      ]
+    };
+
+    await withServer(
+      handlerWith({
+        constellation: {
+          recordContribution: async () => ({ contributed: true }),
+          readProjection: async () => projection
+        }
+      }),
+      async (origin) => {
+        const response = await fetch(`${origin}/api/daily/constellation`);
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body).toEqual({
+          date: "2026-07-26",
+          published: true,
+          markers: projection.markers
+        });
+        expect(JSON.stringify(body)).not.toMatch(
+          /count|percent|username|player|elapsed/i
+        );
+      }
+    );
+  });
+
+  it("reports a forming Constellation rather than failing", async () => {
+    await withServer(
+      handlerWith({
+        constellation: {
+          recordContribution: async () => ({ contributed: true }),
+          readProjection: async () => ({ published: false, markers: [] })
+        }
+      }),
+      async (origin) => {
+        const response = await fetch(`${origin}/api/daily/constellation`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          date: "2026-07-26",
+          published: false,
+          markers: []
+        });
+      }
+    );
+  });
+
+  it("refuses a method other than GET", async () => {
+    await withServer(
+      handlerWith({
+        constellation: {
+          recordContribution: async () => ({ contributed: true }),
+          readProjection: async () => ({ published: false, markers: [] })
+        }
+      }),
+      async (origin) => {
+        const response = await fetch(`${origin}/api/daily/constellation`, {
+          method: "POST"
+        });
+        expect(response.status).toBe(405);
+        expect(response.headers.get("allow")).toBe("GET");
+      }
+    );
+  });
+});

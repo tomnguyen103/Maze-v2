@@ -239,6 +239,19 @@ const elements = {
   dailyBoardRetry: requiredElement("daily-board-retry", HTMLButtonElement),
   dailyBoardStatus: requiredElement("daily-board-status", HTMLElement),
   dailyClose: requiredElement("daily-close", HTMLButtonElement),
+  dailyConstellation: requiredElement("daily-constellation", HTMLElement),
+  dailyConstellationMap: requiredElement(
+    "daily-constellation-map",
+    HTMLElement
+  ),
+  dailyConstellationRetry: requiredElement(
+    "daily-constellation-retry",
+    HTMLButtonElement
+  ),
+  dailyConstellationStatus: requiredElement(
+    "daily-constellation-status",
+    HTMLElement
+  ),
   dailyCopy: requiredElement("daily-copy", HTMLButtonElement),
   dailyDate: requiredElement("daily-date", HTMLElement),
   dailyDialog: requiredElement("daily-dialog", HTMLDialogElement),
@@ -500,6 +513,11 @@ let gateStagingComplete = false;
 let activeDaily = null;
 let dailyQuestionIndex = 0;
 let dailyBoardRequestId = 0;
+/** @type {Promise<ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView>> | null} */
+let dailyConstellationViewPromise = null;
+let dailyConstellationRetry = false;
+let dailyConstellationFailedTwice = false;
+let dailyConstellationRequestId = 0;
 let demoAccessPending = hasCompletedGuestDemo();
 let activeFirstLight = false;
 let firstLightEntryPending = false;
@@ -634,6 +652,9 @@ elements.dailyStart.addEventListener("click", () => {
 });
 elements.dailyCopy.addEventListener("click", async () => {
   await copyDailyLink(elements.dailyCopy);
+});
+elements.dailyConstellationRetry.addEventListener("click", () => {
+  void refreshDailyConstellation(currentDailyContract(), true);
 });
 elements.dailyBoardRetry.addEventListener("click", () => {
   void refreshVerifiedDailyBoard(
@@ -2014,12 +2035,87 @@ function openDailyDialog() {
     expiredRequest || expiredActive ? "Return to Quest" : "Close";
   renderDailyBoardParticipation();
   void refreshVerifiedDailyBoard(currentDaily);
+  void refreshDailyConstellation(currentDaily, record?.completed === true);
   if (!elements.dailyDialog.open) {
     elements.dailyDialog.showModal();
   }
   requestAnimationFrame(() => {
     elements.dailyTitle?.focus?.({ preventScroll: true });
   });
+}
+
+/**
+ * The Constellation is a post-escape surface: it is reached only from the
+ * Daily dialog, and only once this device has a recorded escape for today's
+ * Daily. No URL opens it, so there is no pre-escape path to it.
+ *
+ * @param {ReturnType<typeof createDailyContract>} daily
+ * @param {boolean} escaped
+ */
+async function refreshDailyConstellation(daily, escaped) {
+  const requestId = ++dailyConstellationRequestId;
+  elements.dailyConstellation.hidden = !escaped;
+  elements.dailyConstellationRetry.hidden = true;
+  if (!escaped) {
+    return;
+  }
+  /** @type {ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView> | null} */
+  let view = null;
+  try {
+    view = await loadDailyConstellationView();
+    view.renderLoading();
+    const projection = await playerController.getDailyConstellation();
+    if (requestId !== dailyConstellationRequestId) {
+      return;
+    }
+    view.render(
+      {
+        published: projection.published === true,
+        markers: Array.isArray(projection.markers) ? projection.markers : []
+      },
+      { size: getLabyrinthConfig(daily.levelId, daily.labyrinthNumber).size }
+    );
+  } catch {
+    if (requestId !== dailyConstellationRequestId) {
+      return;
+    }
+    // A chunk that will not load leaves no silent gap: the surface says so
+    // and offers the retry, exactly like every other lazy view here.
+    if (view === null) {
+      elements.dailyConstellationMap.hidden = true;
+      elements.dailyConstellationStatus.textContent =
+        dailyConstellationFailedTwice
+          ? "The Constellation is unavailable. Reload to try again."
+          : "The Constellation could not be loaded. Your Daily result is unaffected.";
+    } else {
+      view.renderUnavailable();
+    }
+    elements.dailyConstellationRetry.hidden = dailyConstellationFailedTwice;
+  }
+}
+
+function loadDailyConstellationView() {
+  if (!dailyConstellationViewPromise) {
+    const retrying = dailyConstellationRetry;
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./game/daily-constellation-view.js?retry=1")
+      : import("./game/daily-constellation-view.js");
+    dailyConstellationRetry = true;
+    dailyConstellationViewPromise = viewModule
+      .then(({ createDailyConstellationView }) =>
+        createDailyConstellationView({
+          map: elements.dailyConstellationMap,
+          status: elements.dailyConstellationStatus
+        })
+      )
+      .catch((error) => {
+        dailyConstellationViewPromise = null;
+        dailyConstellationFailedTwice ||= retrying;
+        throw error;
+      });
+  }
+  return dailyConstellationViewPromise;
 }
 
 function renderDailyBoardParticipation() {

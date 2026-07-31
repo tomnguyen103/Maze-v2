@@ -13,9 +13,11 @@ import { URL } from "node:url";
 
 export const DAILY_LEADERBOARD_PATH = "/api/daily/leaderboard";
 export const DAILY_SCORES_PATH = "/api/daily/scores";
+export const DAILY_CONSTELLATION_PATH = "/api/daily/constellation";
 export const DAILY_PATHS = new Set([
   DAILY_LEADERBOARD_PATH,
-  DAILY_SCORES_PATH
+  DAILY_SCORES_PATH,
+  DAILY_CONSTELLATION_PATH
 ]);
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -78,7 +80,11 @@ class DailyInputError extends Error {
  *       userId: string,
  *       date: string,
  *       markers: import("./constellation-markers.js").TrailMarker[]
- *     ) => Promise<{ contributed: boolean }>
+ *     ) => Promise<{ contributed: boolean }>,
+ *     readProjection?: (date: string) => Promise<{
+ *       published: boolean,
+ *       markers: import("../shared/constellation.js").ConstellationMarker[]
+ *     }>
  *   } | null,
  *   now?: () => Date,
  *   recordAudit?: import("./audit.js").RecordAudit,
@@ -121,6 +127,28 @@ export function createDailyHandler({
           contractVersion: daily.version,
           verification: "verified-replay-v1",
           entries: (await store.getLeaderboard(daily.date, 10)).map(publicEntry)
+        });
+        return;
+      }
+
+      if (pathname === DAILY_CONSTELLATION_PATH) {
+        if (request.method !== "GET") {
+          response.setHeader("allow", "GET");
+          sendJson(response, 405, {
+            error: "Use GET for the Daily Trail Constellation."
+          });
+          return;
+        }
+        // Band labels only, for the canonical UTC Daily and no other. A Daily
+        // that has not reached its thresholds reports itself as unpublished
+        // rather than failing, so the surface can say it is still forming.
+        const projection = (await constellation?.readProjection?.(
+          daily.date
+        )) ?? { published: false, markers: [] };
+        sendJson(response, 200, {
+          date: daily.date,
+          published: projection.published,
+          markers: projection.markers
         });
         return;
       }

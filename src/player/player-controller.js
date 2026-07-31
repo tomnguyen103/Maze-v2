@@ -130,6 +130,9 @@ export function createPlayerController({
     async getVerifiedDailyLeaderboard() {
       return client.getVerifiedDailyLeaderboard();
     },
+    async getDailyConstellation() {
+      return client.getDailyConstellation();
+    },
     async getCloudQuestProgress() {
       await clerkBrowser.initialize();
       return client.getQuestProgress();

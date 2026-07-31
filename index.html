@@ -552,6 +552,37 @@
         </button>
         <p class="daily-board__note" id="daily-board-note"></p>
       </section>
+      <section
+        class="daily-constellation"
+        id="daily-constellation"
+        aria-labelledby="daily-constellation-title"
+        aria-describedby="daily-constellation-status"
+        hidden
+      >
+        <div class="daily-board__heading">
+          <h3 id="daily-constellation-title">Daily Trail Constellation</h3>
+        </div>
+        <p
+          class="daily-board__status"
+          id="daily-constellation-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div
+          class="daily-constellation__map"
+          id="daily-constellation-map"
+          role="img"
+          hidden
+        ></div>
+        <button
+          class="control-button daily-constellation__retry"
+          id="daily-constellation-retry"
+          type="button"
+          hidden
+        >
+          Retry Constellation
+        </button>
+      </section>
       <div class="daily-dialog__actions">
         <button class="primary-button" id="daily-start" type="button">
           Start today’s Daily

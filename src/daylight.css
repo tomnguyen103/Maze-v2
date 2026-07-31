@@ -1264,6 +1264,65 @@ kbd {
   font-weight: 700;
 }
 
+.daily-constellation {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-line);
+}
+
+/*
+ * One square per Labyrinth position, placed on the Daily's own grid. The map
+ * is decorative to assistive technology — the status line beside it carries
+ * the meaning — so nothing here needs to be readable as text.
+ */
+.daily-constellation__map {
+  display: grid;
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: 22rem;
+  margin: var(--space-3) 0;
+  padding: var(--space-2);
+  grid-template-columns: repeat(var(--constellation-size, 13), 1fr);
+  grid-template-rows: repeat(var(--constellation-size, 13), 1fr);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-night-deep);
+}
+
+/* `display: grid` above would otherwise defeat the hidden attribute. */
+.daily-constellation__map[hidden] {
+  display: none;
+}
+
+.daily-constellation__tile {
+  grid-column: calc(var(--constellation-x) + 1);
+  grid-row: calc(var(--constellation-y) + 1);
+  border-radius: 0.1rem;
+  background: var(--color-signal);
+}
+
+.daily-constellation__tile[data-band="quiet"] {
+  opacity: 0.28;
+}
+
+.daily-constellation__tile[data-band="glowing"] {
+  opacity: 0.62;
+}
+
+.daily-constellation__tile[data-band="bright"] {
+  opacity: 1;
+  box-shadow: 0 0 0.35rem var(--color-signal-bright);
+}
+
+.daily-constellation__tile[data-kind="pulse"] {
+  border-radius: 50%;
+  background: var(--color-echo);
+}
+
+.daily-constellation__retry {
+  margin-bottom: var(--space-3);
+}
+
 .daily-dialog__actions {
   display: flex;
   margin-top: var(--space-5);
