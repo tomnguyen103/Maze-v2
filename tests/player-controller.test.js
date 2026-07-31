@@ -102,6 +102,11 @@ const { createPlayerController } = await import(
 describe("Player Profile dialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // A controller's boot chain can outlive the test that created it, so a
+    // one-shot Profile response is not safe here: a leaked call from the
+    // previous test would consume it. Each test restores the signed-out
+    // default and overrides it with a persistent value instead.
+    client.getProfile.mockResolvedValue({ profile: null });
     clerkBrowser.user = { id: "user_123" };
     clerkOnChange = () => {};
     localStorage.clear();
@@ -172,7 +177,7 @@ describe("Player Profile dialog", () => {
   });
 
   it("submits an escaped Run with its exact Region and ruleset", async () => {
-    client.getProfile.mockResolvedValueOnce({ profile });
+    client.getProfile.mockResolvedValue({ profile });
     const controller = createPlayerController();
     await vi.waitFor(() =>
       expect(document.getElementById("player-name")?.textContent).toBe(
@@ -375,7 +380,7 @@ describe("Player Profile dialog", () => {
   });
 
   it("loads the public Daily board and verifies an authenticated Profile result", async () => {
-    client.getProfile.mockResolvedValueOnce({ profile });
+    client.getProfile.mockResolvedValue({ profile });
     const controller = createPlayerController();
     await vi.waitFor(() =>
       expect(document.getElementById("player-name")?.textContent).toBe(
@@ -425,7 +430,7 @@ describe("Player Profile dialog", () => {
   });
 
   it("distinguishes rejected replays from unavailable verification", async () => {
-    client.getProfile.mockResolvedValueOnce({ profile });
+    client.getProfile.mockResolvedValue({ profile });
     const controller = createPlayerController();
     await vi.waitFor(() =>
       expect(document.getElementById("player-name")?.textContent).toBe(

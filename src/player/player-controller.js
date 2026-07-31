@@ -11,7 +11,7 @@ import {
   reducePlayerState
 } from "./player-state.js";
 import { createClerkBrowser } from "./clerk-browser.js";
-import { createJournalContinuity } from "../learning/journal-continuity.js";
+import { createLanternJournal } from "../learning/lantern-journal.js";
 import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
 
 /**
@@ -105,17 +105,19 @@ export function createPlayerController({
       getClassroomId: () =>
         loadSelectedClassroom(globalThis.localStorage, clerkBrowser.user?.id)
     });
-  const journalContinuity = createJournalContinuity({
-    client,
-    onChange: onJournalChange,
-    onStatus: onJournalStatusChange
-  });
+  // The Lantern Journal continuity module is the largest non-boot module the
+  // game chunk used to carry, so it loads on demand. Every call is queued on
+  // the same load promise, which keeps the caller's ordering — `selectUser("")`
+  // at boot still runs before any later `selectUser(userId)`.
+  /** @type {Promise<ReturnType<typeof import("../learning/journal-continuity.js").createJournalContinuity>> | null} */
+  let journalContinuityPromise = null;
+  let lanternJournal = createLanternJournal();
 
   setPalettes(DEFAULT_PLAYER_PROFILE);
   bindEvents();
   renderAuth();
   void refreshLeaderboard();
-  void journalContinuity.selectUser("");
+  void withJournalContinuity((continuity) => continuity.selectUser(""));
   void initializeClerk();
 
   return {
@@ -165,20 +167,22 @@ export function createPlayerController({
       return client;
     },
     getLanternJournal() {
-      return journalContinuity.getJournal();
+      return lanternJournal;
     },
     /**
      * @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} question
      * @param {"correct" | "wrong" | "hint" | "skip"} outcome
      */
     recordLearningOutcome(question, outcome) {
-      return journalContinuity.record(question, outcome);
+      void withJournalContinuity((continuity) =>
+        continuity.record(question, outcome)
+      );
     },
     clearLanternJournal() {
-      journalContinuity.clear();
+      void withJournalContinuity((continuity) => continuity.clear());
     },
     async retryLanternJournalSync() {
-      await journalContinuity.retry();
+      await withJournalContinuity((continuity) => continuity.retry());
     },
     async isAuthenticated() {
       await clerkBrowser.initialize();
@@ -346,6 +350,27 @@ export function createPlayerController({
     reportAuthenticationChange();
   }
 
+  /**
+   * @template T
+   * @param {(continuity: ReturnType<typeof import("../learning/journal-continuity.js").createJournalContinuity>) => T} use
+   * @returns {Promise<T>}
+   */
+  function withJournalContinuity(use) {
+    journalContinuityPromise ??= import(
+      "../learning/journal-continuity.js"
+    ).then(({ createJournalContinuity }) =>
+      createJournalContinuity({
+        client,
+        onChange: (journal) => {
+          lanternJournal = journal;
+          onJournalChange(journal);
+        },
+        onStatus: onJournalStatusChange
+      })
+    );
+    return journalContinuityPromise.then(use);
+  }
+
   async function syncAuthenticatedPlayer() {
     const userId = clerkBrowser.user?.id ?? "";
     if (userId === playerState.userId) {
@@ -359,7 +384,7 @@ export function createPlayerController({
       type: "auth-changed",
       userId
     });
-    await journalContinuity.selectUser(userId);
+    await withJournalContinuity((continuity) => continuity.selectUser(userId));
     if (!userId) {
       setPalettes(DEFAULT_PLAYER_PROFILE);
       renderAuth();
