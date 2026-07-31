@@ -20,7 +20,9 @@ describe("Clerk user deletion store", () => {
               memberships_deleted: true,
               verified_daily_submissions_deleted: true,
               verified_daily_entries_deleted: true,
-              daily_trail_contributions_deleted: true
+              daily_trail_contributions_deleted: true,
+              offline_run_receipts_deleted: true,
+              offline_pending_submissions_deleted: true
             }]
           : []
         };
@@ -71,7 +73,9 @@ describe("Clerk user deletion store", () => {
               memberships_deleted: true,
               verified_daily_submissions_deleted: true,
               verified_daily_entries_deleted: true,
-              daily_trail_contributions_deleted: true
+              daily_trail_contributions_deleted: true,
+              offline_run_receipts_deleted: true,
+              offline_pending_submissions_deleted: true
             }]
           : []
         };
@@ -151,7 +155,9 @@ describe("Clerk user deletion store", () => {
               memberships_deleted: true,
               verified_daily_submissions_deleted: true,
               verified_daily_entries_deleted: true,
-              daily_trail_contributions_deleted: false
+              daily_trail_contributions_deleted: false,
+              offline_run_receipts_deleted: true,
+              offline_pending_submissions_deleted: true
             }]
           : []
         };

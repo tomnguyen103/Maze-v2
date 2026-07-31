@@ -897,6 +897,12 @@ describe("Class Expedition migration", () => {
 });
 
 describe("Daily Trail Constellation migration", () => {
+  // Git checks this file out with CRLF on Windows, so every multi-line
+  // assertion below would fail on a fresh clone without this. The migration
+  // itself is line-ending agnostic; only the assertions care.
+  /** @param {URL} url */
+  const readMigration = async (url) =>
+    (await readFile(url, "utf8")).replaceAll("\r\n", "\n");
   // Comment prose necessarily names the things the statements must not do,
   // so every "must not appear" assertion runs against the statements alone.
   /** @param {string} sql */
@@ -911,14 +917,14 @@ describe("Daily Trail Constellation migration", () => {
   );
 
   it("wraps the whole migration in one transaction", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     expect(sql).toContain("BEGIN;");
     expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
   });
 
   it("forces row level security on every new table", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     for (const table of [
       "daily_trail_constellation_totals",
@@ -935,7 +941,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("pins search_path on every definer function and revokes PUBLIC", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     const definerCount = sql.match(/SECURITY DEFINER/g)?.length ?? 0;
     const pinnedCount =
@@ -959,7 +965,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("validates every input the runtime can reach", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     // An unbounded marker array is materialized by jsonb_to_recordset before
     // any CHECK fires, and an out-of-window date would create a receipt the
@@ -986,7 +992,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("takes the totals row before the counters in both writers", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     // Opposite lock orders between the contributing and publishing writers
     // would deadlock the moment the two ran concurrently, so both are
@@ -1015,7 +1021,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("makes one contribution per Explorer per canonical UTC Daily", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     expect(sql).toContain("PRIMARY KEY (player_id, daily_date)");
     expect(sql).toContain("ON CONFLICT (player_id, daily_date) DO NOTHING");
@@ -1025,7 +1031,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("gives the contribution receipt no column that could hold a path", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     const start = sql.indexOf("CREATE TABLE daily_trail_contributions (");
     const body = sql.slice(start, sql.indexOf(");", start));
@@ -1046,7 +1052,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("expires both classes of row 48 hours after the Daily ends", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     const generated = sql.match(
       /expires_at TIMESTAMPTZ NOT NULL GENERATED ALWAYS AS \(\n\s*timezone\('UTC', \(daily_date \+ 3\)::timestamp\)\n\s*\) STORED/g
@@ -1057,7 +1063,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("guards every read on the expiry window as well as the prune job", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     const readers = [
       sql.slice(
@@ -1079,7 +1085,7 @@ describe("Daily Trail Constellation migration", () => {
   });
 
   it("serves suppressed published density and never a personal fact", async () => {
-    const sql = await readFile(migrationUrl, "utf8");
+    const sql = await readMigration(migrationUrl);
 
     const projection = sql.slice(
       sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),

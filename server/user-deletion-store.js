@@ -115,7 +115,21 @@ export function createUserDeletionStore(pool) {
                   SELECT 1 FROM daily_trail_contributions
                   WHERE player_id = $1
                 )
-              ) AS daily_trail_contributions_deleted`,
+              ) AS daily_trail_contributions_deleted,
+              (
+                to_regclass('public.offline_run_receipts') IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM offline_run_receipts
+                  WHERE player_id = $1
+                )
+              ) AS offline_run_receipts_deleted,
+              (
+                to_regclass('public.offline_pending_submissions') IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM offline_pending_submissions
+                  WHERE player_id = $1
+                )
+              ) AS offline_pending_submissions_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -155,7 +169,9 @@ const DELETION_ASSERTIONS = Object.freeze([
   "memberships_deleted",
   "verified_daily_submissions_deleted",
   "verified_daily_entries_deleted",
-  "daily_trail_contributions_deleted"
+  "daily_trail_contributions_deleted",
+  "offline_run_receipts_deleted",
+  "offline_pending_submissions_deleted"
 ]);
 
 /** @param {unknown} row */
