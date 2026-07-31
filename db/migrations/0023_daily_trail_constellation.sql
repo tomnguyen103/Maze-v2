@@ -130,33 +130,36 @@ REVOKE ALL ON TABLE daily_trail_contributions
 
 GRANT SELECT ON TABLE daily_trail_contributions TO echo_maze_runtime;
 
+
 -- Aggregates one accepted escape. `p_markers` is a JSON array of
 -- {kind, x, y} objects derived in request memory from the submitted Run
 -- Action Log; nothing about their order or timing is recorded, and the array
--- itself is never stored. Returns TRUE only when this call was the Explorer's
--- first contribution to this Daily.
+-- itself is never stored. `contributed` is TRUE only when this call was the
+-- Explorer's first contribution to this Daily. Threshold policy lives in the
+-- application so it can be tested at each boundary; this function reports the
+-- counts that policy decides on.
 CREATE FUNCTION record_daily_trail_contribution(
   p_daily_date DATE,
-  p_markers JSONB,
-  p_batch_threshold INTEGER
+  p_markers JSONB
 )
-RETURNS BOOLEAN
+RETURNS TABLE (
+  contributed BOOLEAN,
+  contributor_count INTEGER,
+  published_contributor_count INTEGER
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_explorer TEXT;
-  v_contributed BOOLEAN;
+  v_inserted BOOLEAN;
   v_total INTEGER;
   v_published INTEGER;
 BEGIN
   v_explorer := NULLIF(current_setting('echo_maze.explorer_id', true), '');
   IF v_explorer IS NULL THEN
     RAISE EXCEPTION 'Constellation aggregation needs an Explorer identity.';
-  END IF;
-  IF p_batch_threshold IS NULL OR p_batch_threshold < 1 THEN
-    RAISE EXCEPTION 'Constellation batch threshold must be positive.';
   END IF;
   IF jsonb_typeof(p_markers) <> 'array' THEN
     RAISE EXCEPTION 'Constellation markers must be a JSON array.';
@@ -165,10 +168,17 @@ BEGIN
   INSERT INTO public.daily_trail_contributions (player_id, daily_date)
   VALUES (v_explorer, p_daily_date)
   ON CONFLICT (player_id, daily_date) DO NOTHING
-  RETURNING TRUE INTO v_contributed;
+  RETURNING TRUE INTO v_inserted;
 
-  IF v_contributed IS NOT TRUE THEN
-    RETURN FALSE;
+  IF v_inserted IS NOT TRUE THEN
+    SELECT
+      totals.contributor_count,
+      totals.published_contributor_count
+    INTO v_total, v_published
+    FROM public.daily_trail_constellation_totals AS totals
+    WHERE totals.daily_date = p_daily_date;
+    RETURN QUERY SELECT FALSE, COALESCE(v_total, 0), COALESCE(v_published, 0);
+    RETURN;
   END IF;
 
   INSERT INTO public.daily_trail_constellation_totals (
@@ -179,7 +189,9 @@ BEGIN
   ON CONFLICT (daily_date) DO UPDATE SET
     contributor_count =
       public.daily_trail_constellation_totals.contributor_count + 1
-  RETURNING contributor_count, published_contributor_count
+  RETURNING
+    daily_trail_constellation_totals.contributor_count,
+    daily_trail_constellation_totals.published_contributor_count
   INTO v_total, v_published;
 
   INSERT INTO public.daily_trail_constellation_counters (
@@ -202,64 +214,78 @@ BEGIN
     contributor_count =
       public.daily_trail_constellation_counters.contributor_count + 1;
 
-  IF v_total - v_published >= p_batch_threshold THEN
-    UPDATE public.daily_trail_constellation_counters
-    SET published_count = contributor_count
-    WHERE daily_date = p_daily_date;
-    UPDATE public.daily_trail_constellation_totals
-    SET published_contributor_count = contributor_count
-    WHERE daily_date = p_daily_date;
-  END IF;
-
-  RETURN TRUE;
+  RETURN QUERY SELECT TRUE, v_total, v_published;
 END;
 $$;
 
--- Serves the projection. Returns no row at all unless the published batch has
--- reached the publication threshold, and never returns a position whose own
--- published figure is below the per-position threshold. Expiry is filtered
--- here as well as by the prune job, so an unpruned row can never be served.
+-- Advances the published snapshot to the live counts for one Daily. Called
+-- only when the application's batch policy says a whole new batch of
+-- contributors has arrived, so the served projection never moves by one.
+CREATE FUNCTION publish_daily_trail_batch(p_daily_date DATE)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_published INTEGER;
+BEGIN
+  UPDATE public.daily_trail_constellation_counters
+  SET published_count = contributor_count
+  WHERE daily_date = p_daily_date
+    AND expires_at > NOW();
+
+  UPDATE public.daily_trail_constellation_totals
+  SET published_contributor_count = contributor_count
+  WHERE daily_date = p_daily_date
+    AND expires_at > NOW()
+  RETURNING published_contributor_count INTO v_published;
+
+  RETURN COALESCE(v_published, 0);
+END;
+$$;
+
+-- How many contributors the served projection is allowed to reflect. Zero
+-- when the Daily is unknown or already past its expiry window.
+CREATE FUNCTION read_daily_trail_summary(p_daily_date DATE)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_published INTEGER;
+BEGIN
+  SELECT totals.published_contributor_count INTO v_published
+  FROM public.daily_trail_constellation_totals AS totals
+  WHERE totals.daily_date = p_daily_date
+    AND totals.expires_at > NOW();
+
+  RETURN COALESCE(v_published, 0);
+END;
+$$;
+
+-- Serves the published density figures for one Daily. Suppression below the
+-- per-marker threshold is applied here as well as in the application, and
+-- expiry is filtered here as well as by the prune job, so an unpruned or
+-- under-observed row can never be served.
 CREATE FUNCTION read_daily_trail_constellation(
   p_daily_date DATE,
-  p_publish_threshold INTEGER,
   p_marker_threshold INTEGER
 )
 RETURNS TABLE (
   marker_kind TEXT,
   grid_x SMALLINT,
   grid_y SMALLINT,
-  band TEXT
+  contributor_count INTEGER
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-DECLARE
-  v_peak INTEGER;
 BEGIN
-  IF p_publish_threshold IS NULL OR p_publish_threshold < 1
-     OR p_marker_threshold IS NULL OR p_marker_threshold < 1 THEN
+  IF p_marker_threshold IS NULL OR p_marker_threshold < 1 THEN
     RAISE EXCEPTION 'Constellation thresholds must be positive.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.daily_trail_constellation_totals AS totals
-    WHERE totals.daily_date = p_daily_date
-      AND totals.expires_at > NOW()
-      AND totals.published_contributor_count >= p_publish_threshold
-  ) THEN
-    RETURN;
-  END IF;
-
-  SELECT MAX(counters.published_count) INTO v_peak
-  FROM public.daily_trail_constellation_counters AS counters
-  WHERE counters.daily_date = p_daily_date
-    AND counters.expires_at > NOW()
-    AND counters.published_count >= p_marker_threshold;
-
-  IF v_peak IS NULL OR v_peak < 1 THEN
-    RETURN;
   END IF;
 
   RETURN QUERY
@@ -267,11 +293,7 @@ BEGIN
     counters.marker_kind,
     counters.grid_x,
     counters.grid_y,
-    CASE
-      WHEN counters.published_count * 3 >= v_peak * 2 THEN 'bright'
-      WHEN counters.published_count * 3 >= v_peak THEN 'glowing'
-      ELSE 'quiet'
-    END AS band
+    counters.published_count
   FROM public.daily_trail_constellation_counters AS counters
   WHERE counters.daily_date = p_daily_date
     AND counters.expires_at > NOW()
@@ -336,25 +358,35 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION record_daily_trail_contribution(DATE, JSONB, INTEGER)
+ALTER FUNCTION record_daily_trail_contribution(DATE, JSONB)
   OWNER TO echo_maze_tenant_owner;
-ALTER FUNCTION read_daily_trail_constellation(DATE, INTEGER, INTEGER)
+ALTER FUNCTION publish_daily_trail_batch(DATE)
+  OWNER TO echo_maze_tenant_owner;
+ALTER FUNCTION read_daily_trail_summary(DATE)
+  OWNER TO echo_maze_tenant_owner;
+ALTER FUNCTION read_daily_trail_constellation(DATE, INTEGER)
   OWNER TO echo_maze_tenant_owner;
 ALTER FUNCTION read_own_daily_trail_contributions()
   OWNER TO echo_maze_tenant_owner;
 ALTER FUNCTION prune_daily_trail_constellation()
   OWNER TO echo_maze_tenant_owner;
 
-REVOKE ALL ON FUNCTION record_daily_trail_contribution(DATE, JSONB, INTEGER)
+REVOKE ALL ON FUNCTION record_daily_trail_contribution(DATE, JSONB)
   FROM PUBLIC;
-REVOKE ALL ON FUNCTION read_daily_trail_constellation(DATE, INTEGER, INTEGER)
+REVOKE ALL ON FUNCTION publish_daily_trail_batch(DATE) FROM PUBLIC;
+REVOKE ALL ON FUNCTION read_daily_trail_summary(DATE) FROM PUBLIC;
+REVOKE ALL ON FUNCTION read_daily_trail_constellation(DATE, INTEGER)
   FROM PUBLIC;
 REVOKE ALL ON FUNCTION read_own_daily_trail_contributions() FROM PUBLIC;
 REVOKE ALL ON FUNCTION prune_daily_trail_constellation() FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION record_daily_trail_contribution(DATE, JSONB, INTEGER)
+GRANT EXECUTE ON FUNCTION record_daily_trail_contribution(DATE, JSONB)
   TO echo_maze_runtime;
-GRANT EXECUTE ON FUNCTION read_daily_trail_constellation(DATE, INTEGER, INTEGER)
+GRANT EXECUTE ON FUNCTION publish_daily_trail_batch(DATE)
+  TO echo_maze_runtime;
+GRANT EXECUTE ON FUNCTION read_daily_trail_summary(DATE)
+  TO echo_maze_runtime;
+GRANT EXECUTE ON FUNCTION read_daily_trail_constellation(DATE, INTEGER)
   TO echo_maze_runtime;
 GRANT EXECUTE ON FUNCTION read_own_daily_trail_contributions()
   TO echo_maze_runtime;

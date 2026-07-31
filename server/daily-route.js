@@ -4,6 +4,7 @@ import {
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
+import { collectTrailMarkers } from "./constellation-markers.js";
 import { ReplayInputError, verifyRunReplay } from "./run-replay.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { UNMETERED } from "./rate-limit-config.js";
@@ -72,6 +73,13 @@ class DailyInputError extends Error {
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
  *   getProfile: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   constellation?: {
+ *     recordContribution: (
+ *       userId: string,
+ *       date: string,
+ *       markers: import("./constellation-markers.js").TrailMarker[]
+ *     ) => Promise<{ contributed: boolean }>
+ *   } | null,
  *   now?: () => Date,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   rateLimit?: import("./rate-limit-request.js").RateLimit
@@ -81,6 +89,7 @@ export function createDailyHandler({
   store,
   getUserId,
   getProfile,
+  constellation = null,
   now = () => new Date(),
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED
@@ -148,10 +157,16 @@ export function createDailyHandler({
       }
 
       const input = validateSubmission(await readJsonBody(request), daily);
+      // The Constellation's markers are derived from the same pass that
+      // verifies the Run, so the submitted log is read once, in request
+      // memory, and nothing derived from it outlives this request beyond the
+      // position set the aggregate is allowed to hold.
+      const trail = collectTrailMarkers();
       const result = verifyRunReplay(input.actionLog, {
         seed: daily.seed,
         config: getLabyrinthConfig(daily.levelId, daily.labyrinthNumber),
-        questionFor: (index) => getDailyQuestion(daily, index)
+        questionFor: (index) => getDailyQuestion(daily, index),
+        onStep: trail.observe
       });
       if (result.status !== "won") {
         throw new DailyInputError(
@@ -170,6 +185,21 @@ export function createDailyHandler({
         moves: result.moves,
         elapsedMs: result.elapsedMs
       });
+      if (constellation) {
+        try {
+          await constellation.recordContribution(
+            userId,
+            daily.date,
+            trail.markers()
+          );
+        } catch (error) {
+          // A Constellation that cannot aggregate must never cost an Explorer
+          // the verified result they already earned.
+          console.error("[daily] Constellation aggregation failed", {
+            name: safeErrorName(error)
+          });
+        }
+      }
       await recordAudit(request, {
         actorId: userId,
         action: "daily.score.submit",

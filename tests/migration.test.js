@@ -932,11 +932,13 @@ describe("Daily Trail Constellation migration", () => {
     const definerCount = sql.match(/SECURITY DEFINER/g)?.length ?? 0;
     const pinnedCount =
       sql.match(/SET search_path = pg_catalog, public/g)?.length ?? 0;
-    expect(definerCount).toBe(4);
+    expect(definerCount).toBe(6);
     expect(pinnedCount).toBe(definerCount);
     for (const signature of [
-      "record_daily_trail_contribution(DATE, JSONB, INTEGER)",
-      "read_daily_trail_constellation(DATE, INTEGER, INTEGER)",
+      "record_daily_trail_contribution(DATE, JSONB)",
+      "publish_daily_trail_batch(DATE)",
+      "read_daily_trail_summary(DATE)",
+      "read_daily_trail_constellation(DATE, INTEGER)",
       "read_own_daily_trail_contributions()",
       "prune_daily_trail_constellation()"
     ]) {
@@ -1005,16 +1007,15 @@ describe("Daily Trail Constellation migration", () => {
     }
   });
 
-  it("serves bands rather than counts and never a personal fact", async () => {
+  it("serves suppressed published density and never a personal fact", async () => {
     const sql = await readFile(migrationUrl, "utf8");
 
     const projection = sql.slice(
       sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
       sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
     );
-    expect(projection).toContain("'bright'");
-    expect(projection).toContain("'glowing'");
-    expect(projection).toContain("'quiet'");
+    expect(projection).toContain("counters.published_count >= p_marker_threshold");
+    expect(projection).toContain("counters.expires_at > NOW()");
     expect(projection).not.toContain("player_id");
     expect(projection).not.toContain("username");
     // Comment prose names the things the schema must not hold, so the

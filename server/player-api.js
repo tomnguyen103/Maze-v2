@@ -55,6 +55,7 @@ import {
   createDailyHandler
 } from "./daily-route.js";
 import { createDailyStore } from "./daily-store.js";
+import { createConstellationStore } from "./constellation-store.js";
 import { createHealthHandler, isHealthPath } from "./health-route.js";
 import { createLogger } from "./logger.js";
 import { createRequestLogger } from "./request-log.js";
@@ -258,6 +259,7 @@ export function createPlayerApi(env = process.env) {
   );
   const store = createPlayerStore(pool);
   const dailyStore = createDailyStore(pool);
+  const constellationStore = createConstellationStore(pool);
   const accessStore = createRunAccessStore(pool);
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
@@ -318,6 +320,7 @@ export function createPlayerApi(env = process.env) {
     store: dailyStore,
     getUserId,
     getProfile: (userId) => store.getProfile(userId),
+    constellation: constellationStore,
     recordAudit,
     rateLimit
   });
