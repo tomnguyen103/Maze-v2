@@ -311,11 +311,12 @@ describe("Offline receipt configuration", () => {
     );
     const pair = keyPair("offline-config");
     const keys = JSON.stringify([pair.jwk]);
+    const pem = pair.privateKey.export({ format: "pem", type: "pkcs8" });
 
     expect(loadOfflineReceiptConfig({})).toBeNull();
     expect(
       loadOfflineReceiptConfig({
-        OFFLINE_RECEIPT_PRIVATE_KEY: "pem",
+        OFFLINE_RECEIPT_PRIVATE_KEY: String(pem),
         OFFLINE_RECEIPT_KEY_ID: pair.keyId,
         VITE_OFFLINE_RECEIPT_PUBLIC_KEYS: keys
       })

@@ -98,7 +98,11 @@ export function scrubOfflineState(storage) {
       }
       target.removeItem(key);
       if (target.getItem(key) !== null) {
-        cleared = false;
+        // Overwriting is the same fallback `scrubActiveRunRecovery` uses:
+        // a storage that refuses removal must not be allowed to leave a
+        // reviewed pack or a receipt readable by the next account.
+        target.setItem(key, "");
+        cleared = target.getItem(key) === "" ? cleared : false;
       }
     } catch {
       cleared = false;

@@ -9,12 +9,14 @@ import {
 import { createRunActionLogV2, tryAppendRunActionV2 } from "../src/game/run-action-log-v2.js";
 import { applyAction, createRun } from "../src/game/game-session.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
+import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { getDailyQuestion } from "../src/game/daily-labyrinth.js";
 import {
   DAILY_REPLAY_CONFIG,
   DAILY_REPLAY_FIXTURE,
   dailyWinningLog
 } from "./helpers/daily-replay-fixture.js";
+import { offlineReceiptWindows } from "../shared/offline-receipt.js";
 
 const DEVICE = "a".repeat(64);
 const PACK_HASH = "b".repeat(64);
@@ -64,6 +66,7 @@ function winningOfflineRun() {
 }
 
 function storedReceipt() {
+  const windows = offlineReceiptWindows(ISSUED_AT);
   return {
     runId: RUN_ID,
     playerId: "user_moss",
@@ -72,7 +75,9 @@ function storedReceipt() {
     levelId: DAILY_REPLAY_FIXTURE.levelId,
     labyrinthNumber: DAILY_REPLAY_FIXTURE.labyrinthNumber,
     rulesetRevision: "classic-v1",
-    contentPackHash: PACK_HASH
+    contentPackHash: PACK_HASH,
+    issuedAt: ISSUED_AT,
+    ...windows
   };
 }
 
@@ -99,34 +104,52 @@ function signedReceipt() {
 /** @param {Record<string, unknown>} [overrides] */
 function service(overrides = {}) {
   const recorded = new Set();
+  const applied = new Set();
   const applyCloudOutcome = vi.fn(async () => {});
+  const completeSubmission = vi.fn(
+    async (/** @type {string} */ key) => {
+      applied.add(key);
+    }
+  );
+  const pendingApply = vi.fn(
+    async (/** @type {string} */ key) =>
+      recorded.has(key) && !applied.has(key)
+  );
   const recordSubmission = vi.fn(
     async (/** @type {{ idempotencyKey: string }} */ submission) => {
       if (recorded.has(submission.idempotencyKey)) {
-        return { recorded: false };
+        return { state: /** @type {const} */ ("duplicate") };
       }
       recorded.add(submission.idempotencyKey);
-      return { recorded: true };
+      return { state: /** @type {const} */ ("recorded") };
     }
   );
   const { pack } = winningOfflineRun();
   return {
     recordSubmission,
+    completeSubmission,
     applyCloudOutcome,
     service: createOfflineSubmissionService({
       verifyReceipt: (receipt) =>
         createOfflineReceiptVerifier({ keys: [jwk] }).verify(receipt),
       loadReceipt: async () => storedReceipt(),
-      labyrinthConfigFor: (levelId, labyrinthNumber) =>
-        getLabyrinthConfig(
+      labyrinthConfigFor: (levelId, labyrinthNumber, rulesetRevision) => ({
+        ...getLabyrinthConfig(
           /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (levelId),
           labyrinthNumber
         ),
+        // The receipt's ruleset, threaded exactly as the service does it.
+        ...(rulesetRevision === "classic-v1"
+          ? {}
+          : { ruleset: getQuestRunRuleset(labyrinthNumber) })
+      }),
       contentPackFor: async () => ({
         hash: PACK_HASH,
         questionForRevision: (revisionId) => pack.get(revisionId) ?? null
       }),
       recordSubmission,
+      completeSubmission,
+      pendingApply,
       applyCloudOutcome,
       now: () => new Date(TERMINAL_AT),
       ...overrides
@@ -216,7 +239,7 @@ describe("Offline submission authority", () => {
       reason: "submission"
     });
 
-    const overrun = service({ now: () => new Date("2026-08-08T00:00:00.000Z") });
+    const overrun = service({ now: () => new Date("2026-08-08T12:00:00.000Z") });
     await expect(
       overrun.service.submit(
         submission({ terminalAt: "2026-08-08T00:00:00.000Z" })
@@ -243,5 +266,102 @@ describe("Offline submission authority", () => {
       moves: expect.any(Number),
       elapsedMs: expect.any(Number)
     });
+  });
+  it("refuses a terminal instant in the future or before the receipt", async () => {
+    const harness = service();
+
+    await expect(
+      harness.service.submit(
+        submission({ terminalAt: "2026-08-01T00:00:00.000Z" })
+      )
+    ).resolves.toMatchObject({ status: "invalid", reason: "terminal-time" });
+    await expect(
+      harness.service.submit(
+        submission({ terminalAt: "2026-07-30T00:00:00.000Z" })
+      )
+    ).resolves.toMatchObject({ status: "invalid", reason: "terminal-time" });
+    expect(harness.applyCloudOutcome).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed idempotency key before touching the database", async () => {
+    const harness = service();
+
+    await expect(
+      harness.service.submit(submission({ idempotencyKey: "short" }))
+    ).resolves.toMatchObject({ status: "invalid", reason: "idempotency-key" });
+    expect(harness.recordSubmission).not.toHaveBeenCalled();
+  });
+
+  it("does not report an acceptance the ledger could not record", async () => {
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("no-live-receipt")
+      })
+    });
+
+    await expect(harness.service.submit(submission())).resolves.toMatchObject({
+      status: "expired",
+      reason: "submission"
+    });
+    expect(harness.applyCloudOutcome).not.toHaveBeenCalled();
+  });
+
+  it("finishes a first attempt that died between the ledger and the write", async () => {
+    let firstAttempt = true;
+    const harness = service({
+      applyCloudOutcome: async () => {
+        if (firstAttempt) {
+          firstAttempt = false;
+          throw new Error("cloud write failed");
+        }
+      }
+    });
+
+    await expect(harness.service.submit(submission())).rejects.toThrow(
+      "cloud write failed"
+    );
+    // The retry finds the ledger row present but unapplied, and completes it
+    // rather than reporting a success that never happened.
+    await expect(harness.service.submit(submission())).resolves.toMatchObject({
+      status: "accepted",
+      duplicate: true
+    });
+    expect(harness.completeSubmission).toHaveBeenCalledWith(
+      "offline_submit_01J1MOSSWATCH"
+    );
+  });
+});
+
+describe("Offline replay uses the receipt-bound ruleset", () => {
+  it("passes the stored ruleset revision into the engine configuration", async () => {
+    /** @type {unknown[]} */
+    const configCalls = [];
+    const harness = service({
+      labyrinthConfigFor: (
+        /** @type {string} */ levelId,
+        /** @type {number} */ labyrinthNumber,
+        /** @type {string} */ rulesetRevision
+      ) => {
+        configCalls.push([levelId, labyrinthNumber, rulesetRevision]);
+        return getLabyrinthConfig(
+          /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (levelId),
+          labyrinthNumber
+        );
+      }
+    });
+
+    await harness.service.submit(submission());
+
+    // Without the third argument every regional Trail Twist action replays
+    // against Classic Rules, no-ops, and terminally rejects a Run that was
+    // played legitimately — the one failure the Classic-only fixtures cannot
+    // surface on their own.
+    expect(configCalls).toEqual([
+      [
+        DAILY_REPLAY_FIXTURE.levelId,
+        DAILY_REPLAY_FIXTURE.labyrinthNumber,
+        "classic-v1"
+      ]
+    ]);
   });
 });

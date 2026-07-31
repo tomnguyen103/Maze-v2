@@ -5,6 +5,8 @@ import {
 } from "../shared/offline-receipt.js";
 import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
 
+const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
+
 /**
  * Accepting an offline Run, per ADR 0035.
  *
@@ -37,11 +39,15 @@ import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
  *     levelId: string,
  *     labyrinthNumber: number,
  *     rulesetRevision: string,
- *     contentPackHash: string
+ *     contentPackHash: string,
+ *     issuedAt: string,
+ *     playExpiresAt: string,
+ *     submissionExpiresAt: string
  *   } | null>,
  *   labyrinthConfigFor: (
  *     levelId: string,
- *     labyrinthNumber: number
+ *     labyrinthNumber: number,
+ *     rulesetRevision: string
  *   ) => Parameters<typeof verifyOfflineRunReplay>[1]["config"],
  *   contentPackFor: (receipt: OfflineReceipt) => Promise<{
  *     hash: string,
@@ -57,7 +63,9 @@ import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
  *     score: number,
  *     moves: number,
  *     elapsedMs: number
- *   }) => Promise<{ recorded: boolean }>,
+ *   }) => Promise<{ state: "recorded" | "duplicate" | "no-live-receipt" }>,
+ *   completeSubmission: (idempotencyKey: string) => Promise<void>,
+ *   pendingApply?: (idempotencyKey: string) => Promise<boolean>,
  *   applyCloudOutcome: (outcome: {
  *     runId: string,
  *     playerId: string | null,
@@ -72,6 +80,8 @@ export function createOfflineSubmissionService({
   labyrinthConfigFor,
   contentPackFor,
   recordSubmission,
+  completeSubmission,
+  pendingApply = async () => false,
   applyCloudOutcome,
   now = () => new Date()
 }) {
@@ -88,6 +98,13 @@ export function createOfflineSubmissionService({
      * @returns {Promise<OfflineSubmissionOutcome>}
      */
     async submit(submission) {
+      if (!IDEMPOTENCY_PATTERN.test(String(submission.idempotencyKey))) {
+        return {
+          status: "invalid",
+          duplicate: false,
+          reason: "idempotency-key"
+        };
+      }
       const signature = verifyReceipt(submission.receipt);
       if (!signature.valid) {
         return { status: "invalid", duplicate: false, reason: signature.reason };
@@ -116,16 +133,45 @@ export function createOfflineSubmissionService({
       }
 
       const terminalAt = new Date(submission.terminalAt);
-      if (Number.isNaN(terminalAt.getTime())) {
+      const at = now();
+      // A client-declared terminal instant decides both windows, so it is
+      // bounded on both sides first: it cannot be in the future, and it
+      // cannot precede the moment the receipt was issued. Without this a
+      // client could play past its play authority and then claim it
+      // finished on day one.
+      if (
+        Number.isNaN(terminalAt.getTime()) ||
+        terminalAt.getTime() > at.getTime() ||
+        terminalAt.getTime() < Date.parse(stored.issuedAt)
+      ) {
         return { status: "invalid", duplicate: false, reason: "terminal-time" };
       }
-      if (!offlineSubmissionOpen(submission.receipt, terminalAt, now())) {
+      // Both windows are read from the server's own row, never from the
+      // copy the client presented. The signature covers those fields, but
+      // the stored row is the thing the server actually promised.
+      const authority = {
+        binding: {
+          playExpiresAt: stored.playExpiresAt,
+          submissionExpiresAt: stored.submissionExpiresAt
+        }
+      };
+      if (
+        !offlineSubmissionOpen(
+          /** @type {OfflineReceipt} */ (authority),
+          terminalAt,
+          at
+        )
+      ) {
         return { status: "expired", duplicate: false, reason: "submission" };
       }
-      if (offlinePlayAuthorityOpen(submission.receipt, terminalAt)) {
-        // A terminal instant inside the play window is the normal case. One
-        // outside it means play continued past the authority it was granted.
-      } else {
+      // A terminal instant inside the play window is the normal case. One
+      // outside it means play continued past the authority it was granted.
+      if (
+        !offlinePlayAuthorityOpen(
+          /** @type {OfflineReceipt} */ (authority),
+          terminalAt
+        )
+      ) {
         return { status: "expired", duplicate: false, reason: "play" };
       }
 
@@ -139,7 +185,14 @@ export function createOfflineSubmissionService({
       try {
         result = verifyOfflineRunReplay(submission.actionLog, {
           seed: stored.seed,
-          config: labyrinthConfigFor(stored.levelId, stored.labyrinthNumber),
+          // The ruleset the receipt bound, not the Labyrinth's default. Without
+          // it every regional Trail Twist action replays against Classic Rules,
+          // no-ops, and terminally rejects a Run that was played legitimately.
+          config: labyrinthConfigFor(
+            stored.levelId,
+            stored.labyrinthNumber,
+            stored.rulesetRevision
+          ),
           questionForRevision: pack.questionForRevision
         });
       } catch (error) {
@@ -147,7 +200,7 @@ export function createOfflineSubmissionService({
           // Terminal rejection: recorded so a retry cannot re-run it, and no
           // cloud write is attempted, so cloud state is byte-identical to
           // what it was before this submission arrived.
-          await recordSubmission({
+          const rejection = await recordSubmission({
             idempotencyKey: submission.idempotencyKey,
             runId: stored.runId,
             accepted: false,
@@ -156,14 +209,18 @@ export function createOfflineSubmissionService({
             moves: 0,
             elapsedMs: 0
           });
+          if (rejection.state === "no-live-receipt") {
+            // The rejection could not be recorded, so claiming it was
+            // durable would be a lie the retry path relies on.
+            return { status: "expired", duplicate: false, reason: "submission" };
+          }
           return { status: "rejected", duplicate: false, reason: "replay" };
         }
         throw error;
       }
 
-      // The ledger decides, not the caller. A retry under the same key finds
-      // the row already present and returns without writing a second time.
-      const { recorded } = await recordSubmission({
+      // The ledger decides, not the caller.
+      const { state } = await recordSubmission({
         idempotencyKey: submission.idempotencyKey,
         runId: stored.runId,
         accepted: true,
@@ -172,16 +229,26 @@ export function createOfflineSubmissionService({
         moves: result.moves,
         elapsedMs: result.elapsedMs
       });
-      if (!recorded) {
+      if (state === "no-live-receipt") {
+        // Nothing was written, so reporting an acceptance would tell the
+        // Explorer a result was verified that the server never took.
+        return { status: "expired", duplicate: false, reason: "submission" };
+      }
+      if (state === "duplicate" && !(await pendingApply(submission.idempotencyKey))) {
         return { status: "accepted", duplicate: true, result };
       }
 
+      // Reached either on the first record, or on a retry whose first
+      // attempt died between the ledger row and the cloud write. The
+      // completion flag is what makes the second case finishable rather
+      // than silently lost.
       await applyCloudOutcome({
         runId: stored.runId,
         playerId: stored.playerId,
         result
       });
-      return { status: "accepted", duplicate: false, result };
+      await completeSubmission(submission.idempotencyKey);
+      return { status: "accepted", duplicate: state === "duplicate", result };
     }
   };
 }

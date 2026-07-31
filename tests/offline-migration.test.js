@@ -52,7 +52,7 @@ describe("Offline Run Continuity migration", () => {
     const definerCount = sql.match(/SECURITY DEFINER/g)?.length ?? 0;
     const pinnedCount =
       sql.match(/SET search_path = pg_catalog, public/g)?.length ?? 0;
-    expect(definerCount).toBeGreaterThanOrEqual(4);
+    expect(definerCount).toBe(6);
     expect(pinnedCount).toBe(definerCount);
     for (const signature of [
       [
@@ -61,7 +61,9 @@ describe("Offline Run Continuity migration", () => {
         "  TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT",
         ")"
       ].join("\n"),
-      "read_offline_run_receipt(TEXT)",
+      "read_offline_run_receipt(TEXT, CHAR)",
+      "complete_offline_submission(TEXT)",
+      "offline_submission_pending_apply(TEXT)",
       [
         "record_offline_submission(",
         "  TEXT, TEXT, BOOLEAN, TEXT, SMALLINT, INTEGER, INTEGER",

@@ -1,4 +1,4 @@
-import process from "node:process";
+import { createPrivateKey } from "node:crypto";
 
 /**
  * Offline Continuity Receipt key configuration, on the
@@ -41,11 +41,20 @@ export function loadOfflineReceiptConfig(env = process.env) {
     );
   }
 
-  return {
-    privateKey: /** @type {string} */ (env.OFFLINE_RECEIPT_PRIVATE_KEY),
-    keyId,
-    keys
-  };
+  // Parsed here rather than at first use: a PEM that is not an EC P-256
+  // private key would otherwise fail on the first Explorer's admission
+  // rather than on the deploy that misconfigured it.
+  const privateKey = createPrivateKey(
+    /** @type {string} */ (env.OFFLINE_RECEIPT_PRIVATE_KEY)
+  );
+  if (
+    privateKey.asymmetricKeyType !== "ec" ||
+    privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1"
+  ) {
+    throw new Error("The offline receipt signing key must be ECDSA P-256.");
+  }
+
+  return { privateKey, keyId, keys };
 }
 
 /** @param {string} value */

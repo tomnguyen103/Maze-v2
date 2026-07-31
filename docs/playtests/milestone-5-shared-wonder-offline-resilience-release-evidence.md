@@ -78,6 +78,42 @@ thresholds and carries no identity, count, or timing, and it now has its own
 rate-limit budget — but a caller who has not escaped can read the published
 band map.
 
+## Offline Run Continuity ships as mechanisms, not as a running feature
+
+**Read the whole offline section below with this in front of it.** Local review
+found that nothing in the application reaches any of it. There is no HTTP route
+that issues or accepts a receipt; `public/sw.js` is published at `/sw.js` but
+never registered and never receives a `pin`, `run-state`, `stage`, or
+`sign-out` message; no module reads `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS`, so the
+browser verifier is never constructed; sign-out calls
+`clearActiveRunRecoveryForIdentityChange`, which does not call
+`scrubOfflineState`; nothing records a version 2 log during play; and the
+rendered **Continue Offline** control has no click handler.
+
+What that means, criterion by criterion:
+
+- **#140** — signing, verification, binding, both expiry edges, Class exclusion
+  and rotation are implemented and proved as modules. "The browser verifies
+  before any offline play begins" is **not met in the application**, because no
+  offline play begins.
+- **#142** — the log, the validator, and the acceptance order are implemented
+  and proved. No route mounts the service.
+- **#143** — every criterion is proved in a sandbox and none in a browser,
+  because the worker is not registered and its message channel has no client.
+- **#144** — eligibility, preservation, labels, and the one-key rule are
+  implemented and proved as functions. The shipped surface renders a label from
+  a local record that nothing writes, and its offer check reads that record
+  rather than calling `offlineContinuityOffer`. The browser screenshots were
+  produced by seeding `localStorage` directly.
+- **#145** — no Trail is cached, pinned, or played.
+- **#146** — the scrub and the warning predicate are implemented and proved per
+  key. **Sign-out does not call them**, so the acceptance criterion "Sign-out
+  erases every account-scoped local artefact" is **not met in the application**.
+
+The rows below are accurate about what the tests prove. They are not evidence
+that an Explorer can do any of it today. Wiring is a follow-up ticket, and it
+is larger than any single ticket in this batch.
+
 ## Offline record — Offline Run Continuity
 
 | Guarantee | Evidence | Executed |
@@ -88,23 +124,43 @@ band map.
 | Submission validity ends at terminal + 48h, capped at issue + 9 days | same file; the cap sits exactly at play expiry + 48h, so it never cuts a legitimate Run short | Yes |
 | Classroom Run Grants never receive a receipt | same file — the signer refuses, rather than a downstream filter | Yes |
 | Key rotation keeps outstanding receipts verifiable | same file — verifies under the retiring key while it remains published, and stops when removed | Yes |
-| No private key in any client bundle | same file — every `src/` module scanned for the import and the variable; built assets scanned for PEM material and for a P-256 JWK carrying `d` | Yes |
+| No private key in any client bundle | same file — every `src/` module scanned for the import and the variable; built assets scanned for PEM material and for a P-256 JWK carrying `d` | Source scan yes; the built-output half **self-skips when `dist/` is absent** and otherwise scans whatever build is on disk |
 | No cloud write without a successful replay | `tests/offline-submission.test.js` — a rejected replay calls no cloud writer | Yes |
 | One idempotency key, one effect | same file — three submissions, one cloud write | Yes |
 | v2 carries no reviewed text | `tests/run-action-log-v2.test.js` — asserted per entry type, key for key | Yes |
 | Verified Daily still validates as v1 | same file — v1 passes unchanged and refuses a v2 log | Yes |
 | Option identifiers never persist | `tests/offline-submission.test.js` — the recorded submission's exact seven fields | Yes |
-| No staged version activates while a Run is non-terminal | `tests/service-worker.test.js` | Yes, in a sandbox |
-| Sign-out erases every account-scoped artefact | `tests/offline-practice-and-scrub.test.js` — asserted per key | Yes |
-| Labels are exactly Pending verification / Offline—unverified | `tests/offline-continuity.test.js` and the browser suite | Yes |
+| No staged version activates while a Run is non-terminal | `tests/service-worker.test.js` | Yes, in a sandbox — and the worker is not registered |
+| Sign-out erases every account-scoped artefact | `tests/offline-practice-and-scrub.test.js` — asserted per key | The function, yes. **Sign-out does not call it.** |
+| Labels are exactly Pending verification / Offline—unverified | `tests/offline-continuity.test.js` and the browser suite | Yes, from seeded local state rather than from an offline Run |
 
-**Stated limits.** The service worker is exercised in a `node:vm` sandbox with
-a fake service-worker global and a fake Cache Storage, not in a real browser
-with a real Cache API. Its nine cases are about its own logic; registration,
-real caching, and real activation timing are unproven here. The offline flow's
-receipt issue and reconnect are covered at the module and service level; there
-is no end-to-end browser proof of a full offline Run, because that needs a
-registered worker and a real network partition.
+**Stated limits.**
+
+- The service worker is exercised in a `node:vm` sandbox with a fake
+  service-worker global and a fake Cache Storage. Its state — which Runs are
+  non-terminal, which version is active, what is staged — lives in module
+  scope and is **not persisted**. A worker restart, which browsers do after
+  about thirty seconds idle, loses all of it: nothing is served from cache, and
+  the next `settle` can evict pinned assets a non-terminal Run still needs.
+  That is the failure #143 exists to prevent, and it is untested and unfixed.
+- The byte-exact staged-update case cannot fail as written: the fake cache
+  stores the same sentinel for every entry, so routing to the wrong version
+  would return the same value. It proves the call succeeds, not that the bytes
+  match.
+- Account-scoped caches are named per version, not per account, so on a shared
+  device one account's cached response can match another's request. Sign-out
+  eviction is the only mitigation, and nothing sends the sign-out message.
+- The offline replay's ruleset threading was found broken during this review
+  and fixed: `labyrinthConfigFor` did not receive the receipt-bound ruleset, so
+  every regional Trail Twist action would have replayed against Classic Rules,
+  no-opped, and terminally rejected a legitimately played Run. No test covered
+  it because every offline fixture uses the Classic Daily configuration. A
+  service-level test now pins the threading; **there is still no test that
+  records and replays a Run under any of the five Trail Twists.**
+- `terminalAt` is client-declared. It is now bounded — not in the future, not
+  before the receipt was issued — and both windows are checked against the
+  server's stored instants rather than the presented copy. It is still not
+  cross-checked against the replayed elapsed time.
 
 ## Gate record
 
@@ -115,7 +171,7 @@ through `tail` or any other filter that could mask a failure.
 | --- | --- | --- |
 | Lint | `npm run lint` | exit 0 |
 | Typecheck | `npm run typecheck` | exit 0 |
-| Unit | `npm test` | 1284 passed, 18 skipped, 1302 total |
+| Unit | `npm test` | 1284 passed, 18 skipped, 1302 total — see the caveat below |
 | Build | `npm run build` | exit 0 |
 | Bundle | `npm run check:bundle` | exit 0 |
 | Browser, run 1 | `npm run test:e2e` | 230 passed, 20 skipped |
@@ -124,7 +180,15 @@ through `tail` or any other filter that could mask a failure.
 Both browser runs were consecutive on the same build, with no retry and no
 quarantine: 230 passed and 20 skipped each time, in 2.0 and 1.8 minutes.
 
-The 18 skipped unit files are the database integration suites, which are
+**Caveat on the unit count.** An independent re-run during review produced
+1266 and 1262 passed against the same 1302 total, each reporting a vitest
+"Worker exited unexpectedly" and each still **exiting 0**. The seven offline
+files pass in isolation. So the exit code alone is not a sufficient gate for
+this suite on this machine: a run can drop tests and still report success. The
+1284 figure above is what was observed here; it is not reliably reproducible,
+and that is a gate weakness worth fixing before the next milestone.
+
+The 18 skipped unit results come from 8 environment-gated files — the database integration suites, which are
 environment-gated behind `RUN_DATABASE_INTEGRATION=1` and a disposable
 migrated database. They did not run. The 20 skipped browser cases are
 project-scoped: cases that assert a single-project behaviour skip on the other
@@ -214,8 +278,14 @@ None of these were performed, and none can be inferred from anything above.
    activation timing are unproven.
 5. **Offline receipt key material.** `OFFLINE_RECEIPT_PRIVATE_KEY`,
    `OFFLINE_RECEIPT_KEY_ID`, and `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS` are
-   documented and unset. Offline continuity is unavailable until an operator
-   generates a key pair and publishes the public half.
+   documented and unset. Generating a key pair is **not** what stands between
+   this milestone and a working feature — see the section above. The wiring is.
+6. **Wiring the offline feature.** A follow-up ticket has to add the issue and
+   submission routes, register the service worker and give its message channel
+   a client, bundle the public keys, record a version 2 log during play, call
+   `scrubOfflineState` on sign-out and account deletion, give the Continue
+   Offline control a handler, and add a prune job for expired receipts. Until
+   then the offline modules are dormant.
 
 ## Checkpoint ledger
 
@@ -224,13 +294,13 @@ None of these were performed, and none can be inferred from anything above.
 | Constellation publishes only above threshold | Met | Boundary tests at every threshold |
 | Constellation reveals no route, identity, or count | Met | Leak tests in DOM, ARIA, and response body |
 | Constellation data is gone 48 hours after its Daily | Met in code, **unexecuted in SQL** | Prune function and read guard both tested; neither run against a database |
-| Receipts bind one exact Run and one device | Met | Per-field drift tests |
+| Receipts bind one exact Run and one device | Met as a module; the device hash is still echoed by the caller rather than derived server-side | Per-field drift tests |
 | Both expiry edges hold | Met | Both instants, both sides |
-| Class Play never goes offline | Met | Refused at the signer and at the offer |
+| Class Play never goes offline | Met at the signer and in `offlineContinuityOffer`; **the rendered offer does not call it** | Signer and offer tests |
 | No cloud write without replay | Met | Rejected replay writes nothing |
 | Retries produce one effect | Met | Three submissions, one write |
-| Updates never disturb a non-terminal Run | Met **in a sandbox** | Service-worker suite is not a browser |
-| Sign-out clears the device | Met | Asserted per key |
+| Updates never disturb a non-terminal Run | **Not established** — sandbox only, state lost on worker restart, byte-exact case cannot fail | Service-worker suite |
+| Sign-out clears the device | **Not met in the application** — the function is proved, sign-out does not call it | Asserted per key |
 | Run Action Log v2 carries no reviewed text | Met | Asserted per entry type |
 | Verified Daily still validates as v1 | Met | Unchanged coverage plus a v2 refusal |
 | Full gate green | Met | Gate record above |

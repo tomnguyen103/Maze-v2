@@ -129,15 +129,32 @@ export function createOfflineReceiptSigner({ privateKey, keyId }) {
  * @param {{ keys: Record<string, unknown>[] }} config
  */
 export function createOfflineReceiptVerifier({ keys }) {
-  const byKeyId = new Map(
-    keys.map((jwk) => [
-      String(jwk.kid),
-      createPublicKey({
-        key: /** @type {import("node:crypto").JsonWebKeyInput["key"]} */ (jwk),
-        format: "jwk"
-      })
-    ])
-  );
+  /** @type {Map<string, import("node:crypto").KeyObject>} */
+  const byKeyId = new Map();
+  for (const jwk of keys) {
+    const keyId = String(jwk.kid);
+    if (byKeyId.has(keyId)) {
+      // Two keys under one id means a rotation reused an id, and every
+      // receipt signed by the first would silently stop verifying.
+      throw new Error("Offline receipt key ids must be unique.");
+    }
+    const key = createPublicKey({
+      key: /** @type {import("node:crypto").JsonWebKeyInput["key"]} */ (jwk),
+      format: "jwk"
+    });
+    // The receipt's algorithm field is a label. Binding it to the key's
+    // actual type here is what stops a differently-shaped key verifying a
+    // receipt that claims ECDSA P-256.
+    if (
+      key.asymmetricKeyType !== "ec" ||
+      key.asymmetricKeyDetails?.namedCurve !== "prime256v1"
+    ) {
+      throw new Error(
+        "An offline receipt verification key must be ECDSA P-256."
+      );
+    }
+    byKeyId.set(keyId, key);
+  }
 
   return {
     /**

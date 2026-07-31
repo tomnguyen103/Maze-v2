@@ -62,6 +62,11 @@ CREATE TABLE offline_pending_submissions (
   player_id TEXT
     REFERENCES players(clerk_user_id) ON DELETE CASCADE,
   accepted BOOLEAN NOT NULL,
+  -- Set only once the cloud write has completed. Without it the ledger
+  -- cannot tell "recorded and applied" from "recorded, then the process
+  -- died", and the retry would report success for a write that never
+  -- happened.
+  applied_at TIMESTAMPTZ,
   outcome VARCHAR(4) NOT NULL CHECK (outcome IN ('won', 'lost')),
   score SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 3500),
   moves INTEGER NOT NULL CHECK (moves BETWEEN 0 AND 100000),
@@ -71,6 +76,13 @@ CREATE TABLE offline_pending_submissions (
 
 CREATE INDEX offline_pending_submissions_run_idx
   ON offline_pending_submissions (run_id);
+
+-- Idempotency is per Run, not per key. Without this a client could submit
+-- one Run twice under two keys and earn two cloud writes, which is exactly
+-- what the idempotency key exists to prevent.
+CREATE UNIQUE INDEX offline_pending_submissions_accepted_run_idx
+  ON offline_pending_submissions (run_id)
+  WHERE accepted;
 
 ALTER TABLE offline_run_receipts OWNER TO echo_maze_tenant_owner;
 ALTER TABLE offline_pending_submissions OWNER TO echo_maze_tenant_owner;
@@ -152,7 +164,15 @@ SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_issued BOOLEAN;
+  v_explorer TEXT;
 BEGIN
+  -- The Explorer comes from the transaction, never from a parameter: a
+  -- caller-supplied id would let one route bug mint a receipt bound to
+  -- somebody else's account. A Guest supplies neither.
+  v_explorer := NULLIF(current_setting('echo_maze.explorer_id', true), '');
+  IF v_explorer IS NOT NULL AND NULLIF(p_player_id, '') IS DISTINCT FROM v_explorer THEN
+    RAISE EXCEPTION 'An offline receipt may only be issued to the session Explorer.';
+  END IF;
   IF p_issued_at IS NULL
      OR p_play_expires_at IS NULL
      OR p_submission_expires_at IS NULL THEN
@@ -195,7 +215,10 @@ $$;
 -- The binding the server re-checks on reconnect. Both expiry instants come
 -- back as the server wrote them, along with whether each window is still open
 -- as of the database's own clock, so no caller has to be trusted to compare.
-CREATE FUNCTION read_offline_run_receipt(p_run_id TEXT)
+CREATE FUNCTION read_offline_run_receipt(
+  p_run_id TEXT,
+  p_device_installation_hash CHAR
+)
 RETURNS TABLE (
   run_id TEXT,
   player_id TEXT,
@@ -231,7 +254,20 @@ AS $$
     receipt.play_expires_at > NOW() AS play_open,
     receipt.submission_expires_at > NOW() AS submission_open
   FROM public.offline_run_receipts AS receipt
-  WHERE receipt.run_id = p_run_id;
+  WHERE receipt.run_id = p_run_id
+    -- A signed-in Explorer reads only their own receipts. A Guest receipt
+    -- has no owner to compare against, so it is reachable only by the
+    -- device installation it was issued to.
+    AND (
+      receipt.player_id = NULLIF(
+        current_setting('echo_maze.explorer_id', true),
+        ''
+      )
+      OR (
+        receipt.player_id IS NULL
+        AND receipt.device_installation_hash = p_device_installation_hash
+      )
+    );
 $$;
 
 -- The idempotency ledger. Returns TRUE only for the call that created the row,
@@ -245,13 +281,14 @@ CREATE FUNCTION record_offline_submission(
   p_moves INTEGER,
   p_elapsed_ms INTEGER
 )
-RETURNS BOOLEAN
+RETURNS TEXT
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_recorded BOOLEAN;
+  v_live BOOLEAN;
 BEGIN
   IF p_outcome NOT IN ('won', 'lost') THEN
     RAISE EXCEPTION 'Offline submission outcome is invalid.';
@@ -282,8 +319,62 @@ BEGIN
   ON CONFLICT (idempotency_key) DO NOTHING
   RETURNING TRUE INTO v_recorded;
 
-  RETURN COALESCE(v_recorded, FALSE);
+  IF v_recorded THEN
+    RETURN 'recorded';
+  END IF;
+
+  -- Nothing was written. That means either the key was already spent, or
+  -- the receipt is gone or past its window — and the caller must not read
+  -- the second as an acceptance, because doing so would report a result
+  -- verified that the server never accepted.
+  SELECT TRUE INTO v_live
+  FROM public.offline_run_receipts AS receipt
+  WHERE receipt.run_id = p_run_id
+    AND receipt.submission_expires_at > NOW();
+
+  RETURN CASE WHEN v_live THEN 'duplicate' ELSE 'no-live-receipt' END;
 END;
+$$;
+
+-- Marks a recorded submission as applied, once the cloud write it
+-- authorised has actually completed.
+CREATE FUNCTION complete_offline_submission(p_idempotency_key TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_applied BOOLEAN;
+BEGIN
+  UPDATE public.offline_pending_submissions
+  SET applied_at = NOW()
+  WHERE idempotency_key = p_idempotency_key
+    AND applied_at IS NULL
+  RETURNING TRUE INTO v_applied;
+
+  RETURN COALESCE(v_applied, FALSE);
+END;
+$$;
+
+-- Whether a recorded submission still owes its cloud write. A retry uses
+-- this to finish a first attempt that died between the two steps.
+CREATE FUNCTION offline_submission_pending_apply(p_idempotency_key TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT COALESCE(
+    (
+      SELECT submission.applied_at IS NULL
+      FROM public.offline_pending_submissions AS submission
+      WHERE submission.idempotency_key = p_idempotency_key
+        AND submission.accepted
+    ),
+    FALSE
+  );
 $$;
 
 -- Deletes receipts whose submission window has closed. A closed window means
@@ -310,7 +401,7 @@ ALTER FUNCTION issue_offline_run_receipt(
   TEXT, CHAR, TEXT, TEXT, SMALLINT, TEXT, CHAR,
   TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT
 ) OWNER TO echo_maze_tenant_owner;
-ALTER FUNCTION read_offline_run_receipt(TEXT)
+ALTER FUNCTION read_offline_run_receipt(TEXT, CHAR)
   OWNER TO echo_maze_tenant_owner;
 ALTER FUNCTION record_offline_submission(
   TEXT, TEXT, BOOLEAN, TEXT, SMALLINT, INTEGER, INTEGER
@@ -322,7 +413,7 @@ REVOKE ALL ON FUNCTION issue_offline_run_receipt(
   TEXT, CHAR, TEXT, TEXT, SMALLINT, TEXT, CHAR,
   TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT
 ) FROM PUBLIC;
-REVOKE ALL ON FUNCTION read_offline_run_receipt(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION read_offline_run_receipt(TEXT, CHAR) FROM PUBLIC;
 REVOKE ALL ON FUNCTION record_offline_submission(
   TEXT, TEXT, BOOLEAN, TEXT, SMALLINT, INTEGER, INTEGER
 ) FROM PUBLIC;
@@ -332,12 +423,23 @@ GRANT EXECUTE ON FUNCTION issue_offline_run_receipt(
   TEXT, CHAR, TEXT, TEXT, SMALLINT, TEXT, CHAR,
   TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT
 ) TO echo_maze_runtime;
-GRANT EXECUTE ON FUNCTION read_offline_run_receipt(TEXT)
+GRANT EXECUTE ON FUNCTION read_offline_run_receipt(TEXT, CHAR)
   TO echo_maze_runtime;
 GRANT EXECUTE ON FUNCTION record_offline_submission(
   TEXT, TEXT, BOOLEAN, TEXT, SMALLINT, INTEGER, INTEGER
 ) TO echo_maze_runtime;
 GRANT EXECUTE ON FUNCTION prune_offline_run_continuity()
+  TO echo_maze_runtime;
+
+ALTER FUNCTION complete_offline_submission(TEXT)
+  OWNER TO echo_maze_tenant_owner;
+ALTER FUNCTION offline_submission_pending_apply(TEXT)
+  OWNER TO echo_maze_tenant_owner;
+REVOKE ALL ON FUNCTION complete_offline_submission(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION offline_submission_pending_apply(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION complete_offline_submission(TEXT)
+  TO echo_maze_runtime;
+GRANT EXECUTE ON FUNCTION offline_submission_pending_apply(TEXT)
   TO echo_maze_runtime;
 
 COMMIT;

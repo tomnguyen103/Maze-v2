@@ -31,7 +31,7 @@ export function createOfflineReceiptVerifier({
   if (!subtle) {
     throw new Error("Offline receipt verification needs Web Crypto.");
   }
-  /** @type {Map<string, Promise<CryptoKey>>} */
+  /** @type {Map<string, Promise<CryptoKey | null>>} */
   const imported = new Map();
   for (const jwk of keys) {
     // A key that arrives with a private component is a packaging fault, not a
@@ -41,7 +41,13 @@ export function createOfflineReceiptVerifier({
     }
     imported.set(
       String(jwk.kid),
-      subtle.importKey("jwk", jwk, KEY_ALGORITHM, false, ["verify"])
+      subtle.importKey("jwk", jwk, KEY_ALGORITHM, false, ["verify"]).catch(
+        () =>
+          // A key that will not import is a packaging fault, but it must
+          // surface as a failed verification rather than as an unhandled
+          // rejection at construction time.
+          null
+      )
     );
   }
 
@@ -65,14 +71,18 @@ export function createOfflineReceiptVerifier({
       ) {
         return { valid: false, reason: "schema" };
       }
-      const key = imported.get(receipt.keyId);
+      const pending = imported.get(receipt.keyId);
+      if (!pending) {
+        return { valid: false, reason: "key" };
+      }
+      const key = await pending;
       if (!key) {
         return { valid: false, reason: "key" };
       }
       try {
         const signed = await subtle.verify(
           VERIFY_ALGORITHM,
-          await key,
+          key,
           base64UrlToBytes(receipt.signature),
           new TextEncoder().encode(offlineReceiptSigningInput(receipt))
         );
