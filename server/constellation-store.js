@@ -21,8 +21,9 @@ import { withTenantContext } from "./tenant-context.js";
  *     release: (destroy?: boolean) => void
  *   }>
  * }} pool
+ * @param {{ now?: () => Date }} [options]
  */
-export function createConstellationStore(pool) {
+export function createConstellationStore(pool, { now = () => new Date() } = {}) {
   return {
     /**
      * Aggregates one verified escape. The marker set arrives already derived
@@ -40,11 +41,11 @@ export function createConstellationStore(pool) {
         /** @type {typeof pool & { connect: NonNullable<typeof pool.connect> }} */ (
           pool
         );
-      return withTenantContext(
+      const recorded = await withTenantContext(
         transactionalPool,
         { explorerId: userId, classroomId: null },
         async (database) => {
-          const recorded = await database.query(
+          const contribution = await database.query(
             `SELECT
                contributed,
                contributor_count,
@@ -52,24 +53,29 @@ export function createConstellationStore(pool) {
              FROM record_daily_trail_contribution($1::date, $2::jsonb)`,
             [date, JSON.stringify(markers)]
           );
-          const row = recorded.rows[0];
+          const row = contribution.rows[0];
           if (!row || row.contributed !== true) {
-            return { contributed: false };
+            return { contributed: false, publish: false };
           }
-          if (
-            shouldPublishBatch({
+          return {
+            contributed: true,
+            publish: shouldPublishBatch({
               contributors: Number(row.contributor_count),
               published: Number(row.published_contributor_count)
             })
-          ) {
-            await database.query(
-              "SELECT publish_daily_trail_batch($1::date)",
-              [date]
-            );
-          }
-          return { contributed: true };
+          };
         }
       );
+      // Publication runs after the contributing transaction commits, in its
+      // own statement. Advancing the snapshot rewrites every counter row for
+      // the Daily, and doing that while still holding the totals row lock
+      // would queue every concurrent escape behind one Explorer's submission.
+      // A crash between the two only delays publication to the next
+      // contributor; it can never publish a partial batch.
+      if (recorded.publish) {
+        await pool.query("SELECT publish_daily_trail_batch($1::date)", [date]);
+      }
+      return { contributed: recorded.contributed };
     },
 
     /**
@@ -77,9 +83,8 @@ export function createConstellationStore(pool) {
      * it, including a Guest, so this deliberately carries no tenant context.
      *
      * @param {string} date
-     * @param {{ now?: () => Date }} [options]
      */
-    async readProjection(date, { now = () => new Date() } = {}) {
+    async readProjection(date) {
       // The prune job is the housekeeping half of the 48-hour guarantee; this
       // is the half that holds even when the job has not run, so an unpruned
       // row is never served.
@@ -92,7 +97,7 @@ export function createConstellationStore(pool) {
           [date]
         ),
         pool.query(
-          `SELECT marker_kind, grid_x, grid_y, contributor_count
+          `SELECT marker_kind, grid_x, grid_y, published_count
            FROM read_daily_trail_constellation($1::date, $2)`,
           [date, CONSTELLATION_MARKER_THRESHOLD]
         )
@@ -105,7 +110,7 @@ export function createConstellationStore(pool) {
           kind: /** @type {TrailMarker["kind"]} */ (String(row.marker_kind)),
           x: Number(row.grid_x),
           y: Number(row.grid_y),
-          contributorCount: Number(row.contributor_count)
+          contributorCount: Number(row.published_count)
         }))
       });
     },

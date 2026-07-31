@@ -4,8 +4,9 @@
 -- Two classes of row live here. Counters hold how many distinct Explorers
 -- touched a Labyrinth position on one canonical UTC Daily, split by marker
 -- kind. Contribution receipts record only that an Explorer contributed to one
--- canonical UTC Daily; they carry no position, no ordering, no timing, no
--- answer, and no username, so no receipt can be joined back into a path.
+-- canonical UTC Daily, and when. They carry no position, no ordering, no
+-- timing within the Run, no answer, and no username, so no receipt can be
+-- joined back into a path.
 --
 -- Every counter carries two totals. `contributor_count` is live and moves on
 -- each accepted escape; `published_count` is the snapshot the projection is
@@ -50,8 +51,11 @@ CREATE TABLE daily_trail_constellation_counters (
   PRIMARY KEY (daily_date, marker_kind, grid_x, grid_y)
 );
 
-CREATE INDEX daily_trail_constellation_counters_expiry_idx
-  ON daily_trail_constellation_counters (expires_at);
+-- The prune deletes from the totals row and lets counters cascade, so this is
+-- the expiry scan that needs the index. Counter reads lead with daily_date,
+-- which their primary key already covers.
+CREATE INDEX daily_trail_constellation_totals_expiry_idx
+  ON daily_trail_constellation_totals (expires_at);
 
 -- One receipt per Explorer per canonical UTC Daily. The primary key is the
 -- whole uniqueness rule: a second escape on the same Daily conflicts and is
@@ -164,6 +168,20 @@ BEGIN
   IF jsonb_typeof(p_markers) <> 'array' THEN
     RAISE EXCEPTION 'Constellation markers must be a JSON array.';
   END IF;
+  -- A marker set larger than any legal Labyrinth can produce is a caller
+  -- fault, and jsonb_to_recordset would materialize it before any CHECK
+  -- fired. The largest Quest Labyrinth is 23 by 23, so 4096 is generous.
+  IF jsonb_array_length(p_markers) > 4096 THEN
+    RAISE EXCEPTION 'Constellation markers exceed the protocol limit.';
+  END IF;
+  -- Only a live Daily may be aggregated. Without this an out-of-window date
+  -- would create a receipt whose generated expiry the prune job never
+  -- reaches, leaving personal data that cannot be deleted on schedule.
+  IF p_daily_date IS NULL
+     OR p_daily_date > CURRENT_DATE
+     OR p_daily_date < CURRENT_DATE - 2 THEN
+    RAISE EXCEPTION 'Constellation aggregation needs a live Daily date.';
+  END IF;
 
   INSERT INTO public.daily_trail_contributions (player_id, daily_date)
   VALUES (v_explorer, p_daily_date)
@@ -221,6 +239,11 @@ $$;
 -- Advances the published snapshot to the live counts for one Daily. Called
 -- only when the application's batch policy says a whole new batch of
 -- contributors has arrived, so the served projection never moves by one.
+--
+-- Totals are updated before counters, the same order
+-- record_daily_trail_contribution takes them in. Taking them in the
+-- opposite order would deadlock the moment anything called this
+-- concurrently with a contribution.
 CREATE FUNCTION publish_daily_trail_batch(p_daily_date DATE)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -230,16 +253,22 @@ AS $$
 DECLARE
   v_published INTEGER;
 BEGIN
-  UPDATE public.daily_trail_constellation_counters
-  SET published_count = contributor_count
-  WHERE daily_date = p_daily_date
-    AND expires_at > NOW();
+  IF p_daily_date IS NULL
+     OR p_daily_date > CURRENT_DATE
+     OR p_daily_date < CURRENT_DATE - 2 THEN
+    RAISE EXCEPTION 'Constellation publication needs a live Daily date.';
+  END IF;
 
   UPDATE public.daily_trail_constellation_totals
   SET published_contributor_count = contributor_count
   WHERE daily_date = p_daily_date
     AND expires_at > NOW()
   RETURNING published_contributor_count INTO v_published;
+
+  UPDATE public.daily_trail_constellation_counters
+  SET published_count = contributor_count
+  WHERE daily_date = p_daily_date
+    AND expires_at > NOW();
 
   RETURN COALESCE(v_published, 0);
 END;
@@ -249,26 +278,31 @@ $$;
 -- when the Daily is unknown or already past its expiry window.
 CREATE FUNCTION read_daily_trail_summary(p_daily_date DATE)
 RETURNS INTEGER
-LANGUAGE plpgsql
+LANGUAGE sql
+STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-DECLARE
-  v_published INTEGER;
-BEGIN
-  SELECT totals.published_contributor_count INTO v_published
-  FROM public.daily_trail_constellation_totals AS totals
-  WHERE totals.daily_date = p_daily_date
-    AND totals.expires_at > NOW();
-
-  RETURN COALESCE(v_published, 0);
-END;
+  -- Reports zero below the publication threshold rather than the raw
+  -- figure, so that gate holds here as well as in the application.
+  SELECT COALESCE(
+    (
+      SELECT totals.published_contributor_count
+      FROM public.daily_trail_constellation_totals AS totals
+      WHERE totals.daily_date = p_daily_date
+        AND totals.expires_at > NOW()
+        AND totals.published_contributor_count >= 20
+    ),
+    0
+  );
 $$;
 
--- Serves the published density figures for one Daily. Suppression below the
--- per-marker threshold is applied here as well as in the application, and
--- expiry is filtered here as well as by the prune job, so an unpruned or
--- under-observed row can never be served.
+-- Serves the published density figures for one Daily. Expiry is filtered
+-- here as well as by the prune job, so an unpruned row can never be served,
+-- and the caller's suppression threshold is floored at the contract's 5: an
+-- application asking for less gets the contract rather than what it asked
+-- for. That is what makes this a second gate rather than a restatement of
+-- the first.
 CREATE FUNCTION read_daily_trail_constellation(
   p_daily_date DATE,
   p_marker_threshold INTEGER
@@ -277,18 +311,13 @@ RETURNS TABLE (
   marker_kind TEXT,
   grid_x SMALLINT,
   grid_y SMALLINT,
-  contributor_count INTEGER
+  published_count INTEGER
 )
-LANGUAGE plpgsql
+LANGUAGE sql
+STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-BEGIN
-  IF p_marker_threshold IS NULL OR p_marker_threshold < 1 THEN
-    RAISE EXCEPTION 'Constellation thresholds must be positive.';
-  END IF;
-
-  RETURN QUERY
   SELECT
     counters.marker_kind,
     counters.grid_x,
@@ -297,9 +326,9 @@ BEGIN
   FROM public.daily_trail_constellation_counters AS counters
   WHERE counters.daily_date = p_daily_date
     AND counters.expires_at > NOW()
-    AND counters.published_count >= p_marker_threshold
+    AND counters.published_count >=
+      GREATEST(COALESCE(p_marker_threshold, 5), 5)
   ORDER BY counters.marker_kind, counters.grid_x, counters.grid_y;
-END;
 $$;
 
 -- The self-service export section. Same expiry guard as every other read.
@@ -309,6 +338,7 @@ RETURNS TABLE (
   contributed_at TIMESTAMPTZ
 )
 LANGUAGE plpgsql
+STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
@@ -316,8 +346,11 @@ DECLARE
   v_explorer TEXT;
 BEGIN
   v_explorer := NULLIF(current_setting('echo_maze.explorer_id', true), '');
+  -- Raises rather than returning nothing: a caller that forgot to set
+  -- tenant context would otherwise receive a silently empty export section
+  -- and believe the Explorer had no receipts.
   IF v_explorer IS NULL THEN
-    RETURN;
+    RAISE EXCEPTION 'Constellation export needs an Explorer identity.';
   END IF;
 
   RETURN QUERY

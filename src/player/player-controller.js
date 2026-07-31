@@ -111,13 +111,20 @@ export function createPlayerController({
   // at boot still runs before any later `selectUser(userId)`.
   /** @type {Promise<ReturnType<typeof import("../learning/journal-continuity.js").createJournalContinuity>> | null} */
   let journalContinuityPromise = null;
+  let journalContinuityRetry = false;
+  let journalContinuityFailedTwice = false;
   let lanternJournal = createLanternJournal();
 
   setPalettes(DEFAULT_PLAYER_PROFILE);
   bindEvents();
   renderAuth();
   void refreshLeaderboard();
-  void withJournalContinuity((continuity) => continuity.selectUser(""));
+  // The status callback already reports a failed load, so the fire-and-forget
+  // callers swallow the rejection rather than surfacing it twice as an
+  // unhandled promise.
+  void withJournalContinuity((continuity) => continuity.selectUser("")).catch(
+    () => {}
+  );
   void initializeClerk();
 
   return {
@@ -179,13 +186,17 @@ export function createPlayerController({
     recordLearningOutcome(question, outcome) {
       void withJournalContinuity((continuity) =>
         continuity.record(question, outcome)
-      );
+      ).catch(() => {});
     },
     clearLanternJournal() {
-      void withJournalContinuity((continuity) => continuity.clear());
+      void withJournalContinuity((continuity) => continuity.clear()).catch(
+        () => {}
+      );
     },
     async retryLanternJournalSync() {
-      await withJournalContinuity((continuity) => continuity.retry());
+      await withJournalContinuity((continuity) => continuity.retry()).catch(
+        () => {}
+      );
     },
     async isAuthenticated() {
       await clerkBrowser.initialize();
@@ -359,18 +370,40 @@ export function createPlayerController({
    * @returns {Promise<T>}
    */
   function withJournalContinuity(use) {
-    journalContinuityPromise ??= import(
-      "../learning/journal-continuity.js"
-    ).then(({ createJournalContinuity }) =>
-      createJournalContinuity({
-        client,
-        onChange: (journal) => {
-          lanternJournal = journal;
-          onJournalChange(journal);
-        },
-        onStatus: onJournalStatusChange
-      })
-    );
+    if (!journalContinuityPromise) {
+      const retrying = journalContinuityRetry;
+      const continuityModule = retrying
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("../learning/journal-continuity.js?retry=1")
+        : import("../learning/journal-continuity.js");
+      journalContinuityRetry = true;
+      journalContinuityPromise = continuityModule
+        .then(({ createJournalContinuity }) =>
+          createJournalContinuity({
+            client,
+            onChange: (
+              /** @type {ReturnType<typeof createLanternJournal>} */ journal
+            ) => {
+              lanternJournal = journal;
+              onJournalChange(journal);
+            },
+            onStatus: onJournalStatusChange
+          })
+        )
+        .catch((error) => {
+          // Cleared so the next call re-imports; the second failure is what
+          // turns the Journal's own retry control into an honest dead end
+          // rather than an invisible one.
+          journalContinuityPromise = null;
+          journalContinuityFailedTwice ||= retrying;
+          onJournalStatusChange(
+            journalContinuityFailedTwice
+              ? "Lantern Journal sync is unavailable. Reload to try again."
+              : "Lantern Journal sync is unavailable. Try again."
+          );
+          throw error;
+        });
+    }
     return journalContinuityPromise.then(use);
   }
 
@@ -387,7 +420,9 @@ export function createPlayerController({
       type: "auth-changed",
       userId
     });
-    await withJournalContinuity((continuity) => continuity.selectUser(userId));
+    await withJournalContinuity((continuity) =>
+      continuity.selectUser(userId)
+    ).catch(() => {});
     if (!userId) {
       setPalettes(DEFAULT_PLAYER_PROFILE);
       renderAuth();

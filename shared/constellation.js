@@ -98,6 +98,12 @@ export function projectConstellation({ publishedContributors, markers }) {
 }
 
 /**
+ * Thirds of the busiest visible marker. Relative rather than absolute because
+ * an absolute scale would leak cohort size — the same corridor would read
+ * Quiet on a small Daily and Bright on a large one, which is a count by
+ * another name. ADR 0033 fixes the three band names but not their boundaries,
+ * so the split is this implementation's choice.
+ *
  * @param {number} count
  * @param {number} peak
  * @returns {ConstellationBand}

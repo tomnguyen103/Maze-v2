@@ -25,6 +25,10 @@
       "destination": "/api/leaderboard?_dailyRoute=scores"
     },
     {
+      "source": "/api/daily/constellation",
+      "destination": "/api/leaderboard?_dailyRoute=constellation"
+    },
+    {
       "source": "/api/me/export",
       "destination": "/api/profile?_meRoute=export"
     },

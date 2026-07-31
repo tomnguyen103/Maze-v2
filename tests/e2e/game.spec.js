@@ -5888,6 +5888,56 @@ test("says the Constellation is still forming below its threshold", async ({
   );
 });
 
+test("keeps the Constellation readable at the mobile fold and 200 percent text", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "The viewport is set explicitly, so one project proves it."
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedDailyEscape(page, true);
+  await stubConstellation(page);
+
+  await openDailyDialog(page);
+
+  const constellation = page.locator("#daily-constellation");
+  await constellation.scrollIntoViewIfNeeded();
+  await expect(page.locator("#daily-constellation-map")).toBeVisible();
+  const map = await page.locator("#daily-constellation-map").boundingBox();
+  if (!map) {
+    throw new Error("Expected a rendered Constellation map.");
+  }
+  expect(map.width).toBeLessThanOrEqual(390);
+
+  // The retry control is the section's only interactive element, so keyboard
+  // reachability is proved against it rather than against the map.
+  await page.evaluate(() => {
+    const retry = document.getElementById("daily-constellation-retry");
+    if (retry) {
+      retry.hidden = false;
+    }
+    document.documentElement.style.fontSize = "200%";
+  });
+  const retry = page.getByRole("button", { name: "Retry Constellation" });
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator("#daily-constellation-status")).toBeVisible();
+
+  await recordConstellationScreenshot(
+    page,
+    testInfo,
+    "daily-constellation-200pct"
+  );
+});
+
 test("offers an explicit retry when the Constellation chunk fails", async ({
   page
 }, testInfo) => {

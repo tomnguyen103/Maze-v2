@@ -5,11 +5,7 @@ import {
   isConstellationReadable
 } from "../shared/constellation.js";
 import { createConstellationStore } from "../server/constellation-store.js";
-import {
-  buildUserExport,
-  EXPORT_SCHEMA_ID,
-  SECTION_QUERIES
-} from "../server/data-export.js";
+import { buildUserExport, EXPORT_SCHEMA_ID } from "../server/data-export.js";
 
 const DAILY = "2026-07-26";
 
@@ -38,7 +34,7 @@ function unprunedPool({ published = 40, markers = undefined } = {}) {
               marker_kind: "cell",
               grid_x: 1,
               grid_y: 1,
-              contributor_count: 30
+              published_count: 30
             }
           ]
         };
@@ -67,18 +63,17 @@ describe("Constellation 48-hour window", () => {
 
   it("never serves an unpruned expired row", async () => {
     const pool = unprunedPool();
-    const store = createConstellationStore(pool);
 
-    const live = await store.readProjection(DAILY, {
+    const live = await createConstellationStore(pool, {
       now: () => new Date("2026-07-28T12:00:00.000Z")
-    });
+    }).readProjection(DAILY);
     expect(live.published).toBe(true);
     expect(live.markers).toHaveLength(1);
 
     pool.statements.length = 0;
-    const expired = await store.readProjection(DAILY, {
+    const expired = await createConstellationStore(pool, {
       now: () => new Date("2026-07-29T00:00:01.000Z")
-    });
+    }).readProjection(DAILY);
     expect(expired).toEqual({ published: false, markers: [] });
     // The guard short-circuits before any read, so an expired Daily cannot be
     // served even by a database whose own filter was somehow bypassed.
@@ -141,14 +136,27 @@ describe("Constellation export section", () => {
     );
   });
 
-  it("exports the receipt through its expiry-guarded definer reader", () => {
-    expect(SECTION_QUERIES.daily_trail_contributions).toContain(
-      "read_own_daily_trail_contributions()"
+  it("exports the receipt through its expiry-guarded definer reader", async () => {
+    /** @type {string[]} */
+    const queries = [];
+    await buildUserExport(
+      {
+        /** @param {string} sql */
+        async query(sql) {
+          queries.push(sql);
+          return { rows: [] };
+        }
+      },
+      "user_export_1",
+      { now: () => "2026-07-27T00:00:00.000Z" }
     );
-    expect(SECTION_QUERIES.daily_trail_contributions).not.toContain("grid_");
-    expect(SECTION_QUERIES.daily_trail_contributions).not.toContain(
-      "marker"
+
+    const section = queries.find((sql) =>
+      sql.includes("read_own_daily_trail_contributions()")
     );
+    expect(section).toBeDefined();
+    expect(section).not.toContain("grid_");
+    expect(section).not.toContain("marker");
   });
 
   it("carries the receipt and nothing that could describe a path", async () => {

@@ -9,6 +9,10 @@
  * @typedef {{ kind: "cell" | "passage" | "pulse", x: number, y: number }} TrailMarker
  */
 
+// Mirrors the `grid_x`/`grid_y BETWEEN 0 AND 63` CHECK constraints in
+// migration 0023. Dropping an out-of-range position here means a caller
+// bug never becomes a failed aggregation on a Run that was otherwise
+// verified; the constraint remains the authority.
 const MAX_GRID_COORDINATE = 63;
 
 export function collectTrailMarkers() {
@@ -35,7 +39,7 @@ export function collectTrailMarkers() {
       }
     },
     /** @returns {TrailMarker[]} */
-    markers: () => [...markers.values()]
+    collected: () => [...markers.values()]
   };
 
   /** @param {TrailMarker["kind"]} kind @param {number} x @param {number} y */

@@ -1264,6 +1264,40 @@ kbd {
   font-weight: 700;
 }
 
+.daily-constellation__heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.daily-constellation__heading h3 {
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.daily-constellation__status {
+  min-height: 1.45em;
+  margin: var(--space-2) 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.daily-constellation__status[data-state="error"] {
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ink);
+  border-left: 0.25rem solid var(--color-warden);
+  background: var(--color-warden-soft);
+  font-weight: 700;
+}
+
 .daily-constellation {
   margin-top: var(--space-5);
   padding-top: var(--space-4);
@@ -1297,7 +1331,7 @@ kbd {
 .daily-constellation__tile {
   grid-column: calc(var(--constellation-x) + 1);
   grid-row: calc(var(--constellation-y) + 1);
-  border-radius: 0.1rem;
+  border-radius: var(--radius-sm);
   background: var(--color-signal);
 }
 

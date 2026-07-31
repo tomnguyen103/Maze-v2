@@ -53,8 +53,10 @@ export function createDailyConstellationView({ map, status }) {
         tile.className = "daily-constellation__tile";
         tile.dataset.band = marker.band;
         tile.dataset.kind = marker.kind;
-        tile.style.setProperty("--constellation-x", String(marker.x));
-        tile.style.setProperty("--constellation-y", String(marker.y));
+        // Coerced here as well as in the store: this is the one hop where a
+        // response value reaches a CSS custom property.
+        tile.style.setProperty("--constellation-x", String(Number(marker.x)));
+        tile.style.setProperty("--constellation-y", String(Number(marker.y)));
         // The map is one image to assistive technology; a per-tile label
         // would read out geometry an Explorer cannot act on.
         tile.setAttribute("aria-hidden", "true");

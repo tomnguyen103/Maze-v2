@@ -128,11 +128,14 @@ describe("Constellation trail markers", () => {
       onStep: collector.observe
     });
 
-    const markers = collector.markers();
+    const markers = collector.collected();
     expect(markers.length).toBeGreaterThan(0);
     expect(new Set(markers.map((marker) => marker.kind))).toEqual(
       new Set(["cell", "passage"])
     );
+    for (const marker of markers) {
+      expect(Object.keys(marker).sort()).toEqual(["kind", "x", "y"]);
+    }
     for (const marker of markers) {
       expect(Object.keys(marker).sort()).toEqual(["kind", "x", "y"]);
       expect(marker.x).toBeGreaterThanOrEqual(0);
@@ -140,6 +143,25 @@ describe("Constellation trail markers", () => {
       expect(marker.x).toBeLessThanOrEqual(63);
       expect(marker.y).toBeLessThanOrEqual(63);
     }
+  });
+
+  it("marks a Pulse where the replay says it was spent", () => {
+    const collector = collectTrailMarkers();
+    const log = dailyWinningLog();
+    // Spending a Pulse at the start changes revealed tiles and the Pulse
+    // count, so the replay accepts it as a real action rather than a no-op.
+    log.actions.unshift({ type: "pulse", elapsedMs: 0 });
+    verifyRunReplay(log, {
+      seed: DAILY_REPLAY_FIXTURE.seed,
+      config: DAILY_REPLAY_CONFIG,
+      questionFor: (index) => getDailyQuestion(DAILY_REPLAY_FIXTURE, index),
+      onStep: collector.observe
+    });
+
+    const pulses = collector
+      .collected()
+      .filter((marker) => marker.kind === "pulse");
+    expect(pulses).toEqual([{ kind: "pulse", x: 1, y: 1 }]);
   });
 
   it("records one marker per position however often it is revisited", () => {
@@ -150,7 +172,7 @@ describe("Constellation trail markers", () => {
     collector.observe(run, { type: "pulse" });
     collector.observe(run, { type: "pulse" });
 
-    expect(collector.markers()).toEqual([
+    expect(collector.collected()).toEqual([
       { kind: "cell", x: 1, y: 1 },
       { kind: "pulse", x: 1, y: 1 }
     ]);
@@ -161,7 +183,7 @@ describe("Constellation trail markers", () => {
     collector.observe({ explorer: { row: 64, col: 1 } }, null);
     collector.observe({ explorer: { row: 1, col: -1 } }, null);
 
-    expect(collector.markers()).toEqual([]);
+    expect(collector.collected()).toEqual([]);
   });
 });
 

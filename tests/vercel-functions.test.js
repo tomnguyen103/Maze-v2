@@ -48,9 +48,34 @@ describe("Vercel function budget", () => {
         {
           source: "/api/daily/scores",
           destination: "/api/leaderboard?_dailyRoute=scores"
+        },
+        {
+          source: "/api/daily/constellation",
+          destination: "/api/leaderboard?_dailyRoute=constellation"
         }
       ])
     );
+  });
+
+  // arrayContaining above cannot notice a path that was added to the handler
+  // and never rewritten, which is exactly how a new Daily endpoint reaches
+  // production as a 404. Derive the expectation from the handler instead.
+  it("rewrites every Daily path the handler answers", async () => {
+    const [{ DAILY_PATHS }, config] = await Promise.all([
+      import("../server/daily-route.js"),
+      readFile(new URL("../vercel.json", import.meta.url), "utf8").then(
+        (text) => JSON.parse(text)
+      )
+    ]);
+
+    const rewritten = new Set(
+      config.rewrites
+        .filter((/** @type {{ source: string }} */ rewrite) =>
+          rewrite.source.startsWith("/api/daily/")
+        )
+        .map((/** @type {{ source: string }} */ rewrite) => rewrite.source)
+    );
+    expect([...DAILY_PATHS].sort()).toEqual([...rewritten].sort());
   });
 
   it("routes the verified Daily namespace through the leaderboard function", async () => {

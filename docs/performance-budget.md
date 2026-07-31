@@ -33,9 +33,20 @@ cannot block the landing or deterministic Run bundle. With no Sentry DSN, the
 production build emits no Sentry chunk; its unchanged ceiling still applies to
 configured builds.
 
+Milestone 5 moved two more modules into lazy chunks with their own ceilings.
+The Lantern Journal continuity module (1.53 KB gzip against 3 KB) left the game
+chunk because that chunk had reached 30.00 KB against its 30 KB ceiling and the
+milestone needed real headroom; the Daily Trail Constellation surface (0.59 KB
+gzip against 2 KB) is post-escape only and never loads for an Explorer who has
+not finished today's Daily. The game chunk measures 29.26 KB gzip after both,
+so it remains within 0.74 KB of its unchanged ceiling — the next feature to
+touch `src/main.js` should expect to pay for its bytes by extraction.
+
 The project also occupies all 12 Vercel Hobby function slots. New endpoints
 must reuse an existing function through a validated rewrite; adding a
-thirteenth function is not allowed.
+thirteenth function is not allowed. `tests/vercel-functions.test.js` derives
+the Daily rewrite set from `DAILY_PATHS`, so a Daily endpoint added to the
+handler without a rewrite fails the gate rather than 404ing in production.
 
 Budget changes require a measured reason in the pull request. Milestone 1 may
 not raise a budget as a workaround. The checks are local release gates; GitHub

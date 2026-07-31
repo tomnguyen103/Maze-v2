@@ -515,7 +515,7 @@ let dailyQuestionIndex = 0;
 let dailyBoardRequestId = 0;
 /** @type {Promise<ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView>> | null} */
 let dailyConstellationViewPromise = null;
-let dailyConstellationRetry = false;
+let dailyConstellationViewRetry = false;
 let dailyConstellationFailedTwice = false;
 let dailyConstellationRequestId = 0;
 let demoAccessPending = hasCompletedGuestDemo();
@@ -654,7 +654,13 @@ elements.dailyCopy.addEventListener("click", async () => {
   await copyDailyLink(elements.dailyCopy);
 });
 elements.dailyConstellationRetry.addEventListener("click", () => {
-  void refreshDailyConstellation(currentDailyContract(), true);
+  // Re-read the record rather than assuming it: the retry control must not be
+  // the one path that reaches the surface without the escape gate.
+  const currentDaily = currentDailyContract();
+  void refreshDailyConstellation(
+    currentDaily,
+    loadDailyRecord(currentDaily.date)?.completed === true
+  );
 });
 elements.dailyBoardRetry.addEventListener("click", () => {
   void refreshVerifiedDailyBoard(
@@ -2063,11 +2069,22 @@ async function refreshDailyConstellation(daily, escaped) {
   let view = null;
   try {
     view = await loadDailyConstellationView();
+    elements.dailyConstellationStatus.dataset.state = "";
     view.renderLoading();
     const projection = await playerController.getDailyConstellation();
     if (requestId !== dailyConstellationRequestId) {
       return;
     }
+    if (projection.date !== daily.date) {
+      // The UTC date turned over while the dialog was open. Rendering the new
+      // Daily's map under the old heading would be a quiet lie.
+      elements.dailyConstellationMap.hidden = true;
+      elements.dailyConstellationStatus.dataset.state = "error";
+      elements.dailyConstellationStatus.textContent =
+        "The UTC date changed. Reopen Daily for today’s Constellation.";
+      return;
+    }
+    elements.dailyConstellationStatus.dataset.state = "";
     view.render(
       {
         published: projection.published === true,
@@ -2075,33 +2092,34 @@ async function refreshDailyConstellation(daily, escaped) {
       },
       { size: getLabyrinthConfig(daily.levelId, daily.labyrinthNumber).size }
     );
-  } catch {
+  } catch (error) {
     if (requestId !== dailyConstellationRequestId) {
       return;
     }
     // A chunk that will not load leaves no silent gap: the surface says so
     // and offers the retry, exactly like every other lazy view here.
-    if (view === null) {
-      elements.dailyConstellationMap.hidden = true;
-      elements.dailyConstellationStatus.textContent =
-        dailyConstellationFailedTwice
+    elements.dailyConstellationMap.hidden = true;
+    elements.dailyConstellationStatus.dataset.state = "error";
+    elements.dailyConstellationStatus.textContent =
+      view === null
+        ? dailyConstellationFailedTwice
           ? "The Constellation is unavailable. Reload to try again."
-          : "The Constellation could not be loaded. Your Daily result is unaffected.";
-    } else {
-      view.renderUnavailable();
-    }
+          : "The Constellation could not be loaded. Your Daily result is unaffected."
+        : errorStatus(error) === 0
+          ? "Network could not reach the Constellation. Your Daily result is unaffected."
+          : "The Constellation is unavailable. Your Daily result is unaffected.";
     elements.dailyConstellationRetry.hidden = dailyConstellationFailedTwice;
   }
 }
 
 function loadDailyConstellationView() {
   if (!dailyConstellationViewPromise) {
-    const retrying = dailyConstellationRetry;
+    const retrying = dailyConstellationViewRetry;
     const viewModule = retrying
       // @ts-expect-error Vite treats the query as a distinct retry chunk.
       ? import("./game/daily-constellation-view.js?retry=1")
       : import("./game/daily-constellation-view.js");
-    dailyConstellationRetry = true;
+    dailyConstellationViewRetry = true;
     dailyConstellationViewPromise = viewModule
       .then(({ createDailyConstellationView }) =>
         createDailyConstellationView({

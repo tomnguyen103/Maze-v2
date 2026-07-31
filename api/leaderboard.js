@@ -3,7 +3,7 @@ import { createPlayerApi } from "../server/player-api.js";
 const handler = createPlayerApi();
 
 const HEALTH_ROUTES = new Set(["health", "ready"]);
-const DAILY_ROUTES = new Set(["leaderboard", "scores"]);
+const DAILY_ROUTES = new Set(["leaderboard", "scores", "constellation"]);
 
 /**
  * Also hosts `/api/health` and `/api/ready` via vercel.json rewrites: the

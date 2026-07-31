@@ -351,7 +351,7 @@ describe("exportUserSnapshot", () => {
     expect(pool.statements[1]).toBe("SELECT set_config('echo_maze.explorer_id',");
     expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
-    // Context plus 12 section reads between BEGIN and COMMIT.
+    // Context plus every section read between BEGIN and COMMIT.
     expect(pool.statements).toHaveLength(18);
     expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);

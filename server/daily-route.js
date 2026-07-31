@@ -139,6 +139,23 @@ export function createDailyHandler({
           });
           return;
         }
+        // Guests may read this after escaping, so it cannot require an
+        // identity — which leaves it the one Daily read an anonymous caller
+        // can repeat freely. Each call costs two definer round trips, so it
+        // carries the same budget the Verified Daily Board does.
+        const projectionDecision = await rateLimit(
+          "daily.constellation",
+          request,
+          null
+        );
+        if (!projectionDecision.allowed) {
+          sendRateLimited(
+            response,
+            projectionDecision,
+            "Too many Constellation requests. Try again shortly."
+          );
+          return;
+        }
         // Band labels only, for the canonical UTC Daily and no other. A Daily
         // that has not reached its thresholds reports itself as unpublished
         // rather than failing, so the surface can say it is still forming.
@@ -218,13 +235,18 @@ export function createDailyHandler({
           await constellation.recordContribution(
             userId,
             daily.date,
-            trail.markers()
+            trail.collected()
           );
         } catch (error) {
           // A Constellation that cannot aggregate must never cost an Explorer
-          // the verified result they already earned.
+          // the verified result they already earned. The PostgreSQL SQLSTATE
+          // is logged beside the safe name because a systematic outage — a
+          // missing migration, a constraint violation, a lock timeout — is
+          // otherwise indistinguishable from a one-off, and the code itself
+          // carries no Explorer data.
           console.error("[daily] Constellation aggregation failed", {
-            name: safeErrorName(error)
+            name: safeErrorName(error),
+            code: sqlStateOf(error)
           });
         }
       }
@@ -358,6 +380,19 @@ function assertClaimMatches(claimed, result) {
       "Daily result does not match the server replay."
     );
   }
+}
+
+/**
+ * PostgreSQL puts its five-character SQLSTATE on `error.code`. It names a
+ * failure class and never carries a value from the row that failed.
+ *
+ * @param {unknown} error
+ */
+function sqlStateOf(error) {
+  const code = /** @type {{ code?: unknown }} */ (error)?.code;
+  return typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)
+    ? code
+    : "unknown";
 }
 
 /** @param {Record<string, unknown>} entry */

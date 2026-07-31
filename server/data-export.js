@@ -62,7 +62,7 @@ export async function exportUserSnapshot(pool, userId, options) {
  * player data) and any raw payment data (none is stored — Stripe identifiers
  * only, per the Lifetime Membership design).
  */
-export const SECTION_QUERIES = {
+const SECTION_QUERIES = {
   profile: `SELECT username, explorer_palette, playground_palette,
       created_at, updated_at
     FROM players WHERE clerk_user_id = $1`,

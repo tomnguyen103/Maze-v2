@@ -934,6 +934,9 @@ describe("Daily Trail Constellation migration", () => {
       sql.match(/SET search_path = pg_catalog, public/g)?.length ?? 0;
     expect(definerCount).toBe(6);
     expect(pinnedCount).toBe(definerCount);
+    // Every read-only definer declares its volatility, matching the
+    // LANGUAGE sql STABLE readers migration 0021 established.
+    expect(sql.match(/\nSTABLE\n/g)).toHaveLength(3);
     for (const signature of [
       "record_daily_trail_contribution(DATE, JSONB)",
       "publish_daily_trail_batch(DATE)",
@@ -945,6 +948,35 @@ describe("Daily Trail Constellation migration", () => {
       expect(sql).toContain(`REVOKE ALL ON FUNCTION ${signature}`);
       expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${signature}`);
     }
+  });
+
+  it("validates every input the runtime can reach", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // An unbounded marker array is materialized by jsonb_to_recordset before
+    // any CHECK fires, and an out-of-window date would create a receipt the
+    // prune job never reaches.
+    expect(sql).toContain("jsonb_array_length(p_markers) > 4096");
+    expect(
+      sql.match(/OR p_daily_date < CURRENT_DATE - 2 THEN/g)
+    ).toHaveLength(2);
+    expect(sql).toContain(
+      "totals.published_contributor_count >= 20"
+    );
+  });
+
+  it("takes the totals row before the counters in both writers", async () => {
+    const sql = await readFile(migrationUrl, "utf8");
+
+    // Opposite lock orders between the contributing and publishing writers
+    // would deadlock the moment the two ran concurrently.
+    const publish = sql.slice(
+      sql.indexOf("CREATE FUNCTION publish_daily_trail_batch"),
+      sql.indexOf("CREATE FUNCTION read_daily_trail_summary")
+    );
+    expect(publish.indexOf("daily_trail_constellation_totals")).toBeLessThan(
+      publish.indexOf("daily_trail_constellation_counters")
+    );
   });
 
   it("makes one contribution per Explorer per canonical UTC Daily", async () => {
@@ -1014,7 +1046,12 @@ describe("Daily Trail Constellation migration", () => {
       sql.indexOf("CREATE FUNCTION read_daily_trail_constellation"),
       sql.indexOf("CREATE FUNCTION read_own_daily_trail_contributions")
     );
-    expect(projection).toContain("counters.published_count >= p_marker_threshold");
+    // The caller's threshold is floored at the contract's 5, so an
+    // application asking for less gets the contract rather than what it asked
+    // for. That is what makes this a second gate, not a restatement.
+    expect(projection).toContain(
+      "GREATEST(COALESCE(p_marker_threshold, 5), 5)"
+    );
     expect(projection).toContain("counters.expires_at > NOW()");
     expect(projection).not.toContain("player_id");
     expect(projection).not.toContain("username");
