@@ -1,12 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "echo-maze-export/3",
+  "$id": "echo-maze-export/4",
   "title": "Echo Maze personal data export",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "generated_at", "data"],
   "properties": {
-    "schema": { "const": "echo-maze-export/3" },
+    "schema": { "const": "echo-maze-export/4" },
     "generated_at": { "type": "string" },
     "data": {
       "type": "object",
@@ -27,6 +27,7 @@
         "access_settings",
         "verified_daily_results",
         "verified_daily_best_results",
+        "daily_trail_contributions",
         "role"
       ],
       "properties": {
@@ -109,6 +110,11 @@
         },
         "verified_daily_best_results": {
           "description": "Current best replay-verified Daily result for each date, including its achievement time.",
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "daily_trail_contributions": {
+          "description": "Daily Trail Constellation contribution receipts: one per canonical UTC Daily this Explorer contributed to. Records that a contribution happened and when, never any position, ordering, or timing within the Run. Rows are hard-deleted 48 hours after their Daily ends, so this section only ever covers the current window.",
           "type": "array",
           "items": { "type": "object" }
         },

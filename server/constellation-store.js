@@ -1,5 +1,6 @@
 import {
   CONSTELLATION_MARKER_THRESHOLD,
+  isConstellationReadable,
   projectConstellation,
   shouldPublishBatch
 } from "../shared/constellation.js";
@@ -76,8 +77,15 @@ export function createConstellationStore(pool) {
      * it, including a Guest, so this deliberately carries no tenant context.
      *
      * @param {string} date
+     * @param {{ now?: () => Date }} [options]
      */
-    async readProjection(date) {
+    async readProjection(date, { now = () => new Date() } = {}) {
+      // The prune job is the housekeeping half of the 48-hour guarantee; this
+      // is the half that holds even when the job has not run, so an unpruned
+      // row is never served.
+      if (!isConstellationReadable(date, now())) {
+        return { published: false, markers: [] };
+      }
       const [summary, counters] = await Promise.all([
         pool.query(
           "SELECT read_daily_trail_summary($1::date) AS published_contributors",

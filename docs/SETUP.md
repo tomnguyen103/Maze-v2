@@ -192,6 +192,7 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 npm run verify:audit                    # recompute the audit_events hash chain
 npm run audit:provision                 # grant + prove the runtime audit boundary
 npm run prune:rate-limits               # drop rate-limit counters whose window has closed
+npm run prune:constellation             # hard-delete Constellation rows past their 48-hour window
 npm run grant:admin -- <clerk-user-id>  # grant the first admin
 npm run webhooks:dead                   # list webhook deliveries that gave up
 npm run webhooks:prune                  # drop settled webhook rows past retention
@@ -277,6 +278,12 @@ that instead.
 `prune:rate-limits` takes `--older-than-hours` (default 24); guest counter keys
 stop being reachable once their address hash rotates daily, so old rows are dead
 weight rather than state.
+
+`prune:constellation` takes no arguments: the 48-hour window is a generated
+column on every Constellation row, so the job has nothing to configure. It is
+the housekeeping half of the deletion guarantee — every Constellation read
+filters on the same instant independently, so a Daily this job has not reached
+yet is already unreadable. Running it twice reports zero the second time.
 
 ### Security headers and rate limits
 
