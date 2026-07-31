@@ -1,4 +1,4 @@
-import { createPrivateKey } from "node:crypto";
+import { createPrivateKey, createPublicKey } from "node:crypto";
 
 /**
  * Offline Continuity Receipt key configuration, on the
@@ -54,6 +54,20 @@ export function loadOfflineReceiptConfig(env = process.env) {
     throw new Error("The offline receipt signing key must be ECDSA P-256.");
   }
 
+  // A rotation that swaps the private key without republishing its public half
+  // would sign receipts that every browser rejects.
+  const derived = /** @type {{ x?: string, y?: string }} */ (
+    createPublicKey(/** @type {never} */ (privateKey)).export({ format: "jwk" })
+  );
+  const published = /** @type {{ x: string, y: string }} */ (
+    keys.find((jwk) => jwk.kid === keyId)
+  );
+  if (derived.x !== published.x || derived.y !== published.y) {
+    throw new Error(
+      "The offline receipt signing key does not match its published key."
+    );
+  }
+
   return { privateKey, keyId, keys };
 }
 
@@ -69,6 +83,7 @@ function parsePublicKeys(value) {
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("Offline receipt public keys must be a JSON array.");
   }
+  const seen = new Set();
   return parsed.map((entry) => {
     const jwk = /** @type {Record<string, unknown>} */ (entry);
     if (
@@ -82,6 +97,12 @@ function parsePublicKeys(value) {
     ) {
       throw new Error("Offline receipt public keys must be P-256 JWKs.");
     }
+    if (seen.has(jwk.kid)) {
+      // Two keys under one id: the signing-key check would pass or fail on
+      // whichever came first, and the browser would pick just as arbitrarily.
+      throw new Error("Offline receipt public key ids must be unique.");
+    }
+    seen.add(jwk.kid);
     if (jwk.d !== undefined) {
       // The one mistake that would put a signing key in every browser bundle.
       throw new Error(

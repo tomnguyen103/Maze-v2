@@ -212,6 +212,59 @@ describe("Offline submission authority", () => {
     expect(harness.applyCloudOutcome).toHaveBeenCalledOnce();
   });
 
+  it("reports the outcome the ledger holds, not the one it just replayed", async () => {
+    // The idempotency key is client-chosen, so a second, different action log
+    // can arrive under a spent key. Both replay cleanly and only the first was
+    // ever stored, so reporting this replay would name a result cloud state
+    // never took.
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("duplicate"),
+        recorded: {
+          outcome: /** @type {const} */ ("lost"),
+          score: 120,
+          moves: 44,
+          elapsedMs: 61000
+        }
+      }),
+      pendingApply: async () => false
+    });
+
+    await expect(harness.service.submit(submission())).resolves.toMatchObject({
+      status: "accepted",
+      duplicate: true,
+      result: { status: "lost", score: 120, moves: 44, elapsedMs: 61000 }
+    });
+  });
+
+  it("applies the ledger's outcome when a first attempt died before the cloud write", async () => {
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("duplicate"),
+        recorded: {
+          outcome: /** @type {const} */ ("won"),
+          score: 900,
+          moves: 12,
+          elapsedMs: 30000
+        }
+      }),
+      pendingApply: async () => true
+    });
+
+    await harness.service.submit(submission());
+
+    expect(harness.applyCloudOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          status: "won",
+          score: 900,
+          moves: 12,
+          elapsedMs: 30000
+        })
+      })
+    );
+  });
+
   it("refuses a receipt presented from another device", async () => {
     const harness = service();
 

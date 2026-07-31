@@ -2198,13 +2198,20 @@ async function renderOfflineContinuityFromDevice() {
     // Unreadable local state shows nothing rather than a guess.
     return;
   }
-  if (!record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    // A stored value that is not a Run Record shows nothing rather than a guess.
     return;
   }
   const verification =
-    record.verification === "verified" || record.verification === "unverified"
+    record.verification === "verified" ||
+    record.verification === "unverified" ||
+    record.verification === "pending"
       ? record.verification
-      : "pending";
+      : null;
+  if (!verification) {
+    // An unrecognised state is not evidence that a result awaits checking.
+    return;
+  }
   await renderOfflineContinuity({
     verification:
       /** @type {"pending" | "verified" | "unverified"} */ (verification),
@@ -2218,14 +2225,20 @@ async function renderOfflineContinuityFromDevice() {
 function loadOfflineContinuityView() {
   offlineContinuityViewPromise ??= import(
     "./game/offline-continuity-view.js"
-  ).then(({ createOfflineContinuityView }) =>
-    createOfflineContinuityView({
-      section: elements.offlineContinuity,
-      button: elements.offlineContinue,
-      label: elements.offlineContinuityLabel,
-      note: elements.offlineContinuityNote
-    })
-  );
+  )
+    .then(({ createOfflineContinuityView }) =>
+      createOfflineContinuityView({
+        section: elements.offlineContinuity,
+        button: elements.offlineContinue,
+        label: elements.offlineContinuityLabel,
+        note: elements.offlineContinuityNote
+      })
+    )
+    .catch((error) => {
+      // A transient chunk failure must not disable the surface for the session.
+      offlineContinuityViewPromise = null;
+      throw error;
+    });
   return offlineContinuityViewPromise;
 }
 

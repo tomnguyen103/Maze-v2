@@ -76,6 +76,33 @@ describe("Offline Run Continuity migration", () => {
     }
   });
 
+  it("scopes the recorded outcome it reports to the Run that asked", async () => {
+    // The idempotency key is a client-chosen global primary key, and this
+    // function is SECURITY DEFINER, so matching on the key alone would hand a
+    // caller another Run's score under its own Run ID.
+    const sql = await readMigration(migrationUrl);
+
+    expect(sql).toContain(
+      [
+        "  WHERE submission.run_id = p_run_id",
+        "    AND (",
+        "      submission.idempotency_key = p_idempotency_key",
+        "      OR submission.accepted",
+        "    )"
+      ].join("\n")
+    );
+  });
+
+  it("reads a receipt that matched nothing as no live receipt", async () => {
+    // A SELECT that matches no row leaves the flag NULL, and a NULL condition
+    // is not taken, so a plain NOT would report an acceptance the ledger never
+    // recorded.
+    const sql = await readMigration(migrationUrl);
+
+    expect(sql).toContain("IF v_live IS NOT TRUE THEN");
+    expect(sql).not.toContain("IF NOT v_live THEN");
+  });
+
   it("keeps one receipt per Run ID", async () => {
     const sql = await readMigration(migrationUrl);
 

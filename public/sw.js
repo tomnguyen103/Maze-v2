@@ -196,7 +196,20 @@ async function dropAccountScoped() {
       await caches.delete(name);
     }
   }
-  runs.clear();
+  // Every Run entry that still blocks a staged activation — non-terminal, or
+  // terminal with no durable verification package yet — keeps its pin, so a
+  // sign-out cannot let a staged version activate underneath a Run that is
+  // still being played. Only entries nothing references any more are dropped.
+  //
+  // The assets are a separate matter: `pin` puts everything without an explicit
+  // public scope in the account cache, so the loop above takes a Guest Run's
+  // assets with it. Fixing that needs the pinning caller to scope Guest assets
+  // as public, which lands with the wiring in #150.
+  for (const [runId, run] of runs) {
+    if (run.terminal && run.durable) {
+      runs.delete(runId);
+    }
+  }
   return { ok: true };
 }
 

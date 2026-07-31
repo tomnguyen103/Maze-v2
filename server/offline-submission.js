@@ -63,7 +63,15 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *     score: number,
  *     moves: number,
  *     elapsedMs: number
- *   }) => Promise<{ state: "recorded" | "duplicate" | "no-live-receipt" }>,
+ *   }) => Promise<{
+ *     state: "recorded" | "duplicate" | "no-live-receipt",
+ *     recorded?: {
+ *       outcome: "won" | "lost",
+ *       score: number,
+ *       moves: number,
+ *       elapsedMs: number
+ *     } | null
+ *   }>,
  *   completeSubmission: (idempotencyKey: string) => Promise<void>,
  *   pendingApply?: (idempotencyKey: string) => Promise<boolean>,
  *   applyCloudOutcome: (outcome: {
@@ -220,7 +228,7 @@ export function createOfflineSubmissionService({
       }
 
       // The ledger decides, not the caller.
-      const { state } = await recordSubmission({
+      const { state, recorded } = await recordSubmission({
         idempotencyKey: submission.idempotencyKey,
         runId: stored.runId,
         accepted: true,
@@ -234,8 +242,23 @@ export function createOfflineSubmissionService({
         // Explorer a result was verified that the server never took.
         return { status: "expired", duplicate: false, reason: "submission" };
       }
+      // What cloud state holds, not what this request replayed. The idempotency
+      // key is client-chosen, so a second, different action log can arrive under
+      // a spent key; both replay cleanly and only the first was ever stored.
+      // Only the four fields the ledger stores are overridden; the rest of the
+      // shape stays as replayed, because the ledger holds no record of them.
+      const ledgerResult = recorded
+        ? {
+            ...result,
+            status: recorded.outcome,
+            score: recorded.score,
+            moves: recorded.moves,
+            elapsedMs: recorded.elapsedMs
+          }
+        : result;
+
       if (state === "duplicate" && !(await pendingApply(submission.idempotencyKey))) {
-        return { status: "accepted", duplicate: true, result };
+        return { status: "accepted", duplicate: true, result: ledgerResult };
       }
 
       // Reached either on the first record, or on a retry whose first
@@ -245,10 +268,14 @@ export function createOfflineSubmissionService({
       await applyCloudOutcome({
         runId: stored.runId,
         playerId: stored.playerId,
-        result
+        result: ledgerResult
       });
       await completeSubmission(submission.idempotencyKey);
-      return { status: "accepted", duplicate: state === "duplicate", result };
+      return {
+        status: "accepted",
+        duplicate: state === "duplicate",
+        result: ledgerResult
+      };
     }
   };
 }

@@ -341,6 +341,27 @@ describe("Offline receipt configuration", () => {
     ).toThrow("not among the published keys");
   });
 
+  it("refuses a signing key whose published half is a different key", async () => {
+    // A rotation that swaps the private key without republishing its public
+    // half signs receipts every browser rejects, and the key id alone cannot
+    // catch it.
+    const { loadOfflineReceiptConfig } = await import(
+      "../server/offline-receipt-config.js"
+    );
+    const pair = keyPair("offline-config");
+    const other = keyPair("offline-other");
+
+    expect(() =>
+      loadOfflineReceiptConfig({
+        OFFLINE_RECEIPT_PRIVATE_KEY: String(
+          other.privateKey.export({ format: "pem", type: "pkcs8" })
+        ),
+        OFFLINE_RECEIPT_KEY_ID: pair.keyId,
+        VITE_OFFLINE_RECEIPT_PUBLIC_KEYS: JSON.stringify([pair.jwk])
+      })
+    ).toThrow("does not match its published key");
+  });
+
   it("refuses a published key that carries private key material", async () => {
     const { loadOfflineReceiptConfig } = await import(
       "../server/offline-receipt-config.js"

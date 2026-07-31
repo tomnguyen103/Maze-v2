@@ -270,8 +270,10 @@ AS $$
     );
 $$;
 
--- The idempotency ledger. Returns TRUE only for the call that created the row,
--- so one key produces one effect however many times transport retries it.
+-- The idempotency ledger. Reports 'recorded' only for the call that created
+-- the row, so one key produces one effect however many times transport retries
+-- it. A duplicate carries the outcome the ledger already holds, so the caller
+-- reports what the server stored rather than what it just replayed.
 CREATE FUNCTION record_offline_submission(
   p_idempotency_key TEXT,
   p_run_id TEXT,
@@ -281,7 +283,13 @@ CREATE FUNCTION record_offline_submission(
   p_moves INTEGER,
   p_elapsed_ms INTEGER
 )
-RETURNS TEXT
+RETURNS TABLE (
+  state TEXT,
+  recorded_outcome TEXT,
+  recorded_score SMALLINT,
+  recorded_moves INTEGER,
+  recorded_elapsed_ms INTEGER
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
@@ -289,38 +297,49 @@ AS $$
 DECLARE
   v_recorded BOOLEAN;
   v_live BOOLEAN;
+  v_existing public.offline_pending_submissions%ROWTYPE;
 BEGIN
   IF p_outcome NOT IN ('won', 'lost') THEN
     RAISE EXCEPTION 'Offline submission outcome is invalid.';
   END IF;
 
-  INSERT INTO public.offline_pending_submissions (
-    idempotency_key,
-    run_id,
-    player_id,
-    accepted,
-    outcome,
-    score,
-    moves,
-    elapsed_ms
-  )
-  SELECT
-    p_idempotency_key,
-    p_run_id,
-    receipt.player_id,
-    p_accepted,
-    p_outcome,
-    p_score,
-    p_moves,
-    p_elapsed_ms
-  FROM public.offline_run_receipts AS receipt
-  WHERE receipt.run_id = p_run_id
-    AND receipt.submission_expires_at > NOW()
-  ON CONFLICT (idempotency_key) DO NOTHING
-  RETURNING TRUE INTO v_recorded;
+  BEGIN
+    INSERT INTO public.offline_pending_submissions (
+      idempotency_key,
+      run_id,
+      player_id,
+      accepted,
+      outcome,
+      score,
+      moves,
+      elapsed_ms
+    )
+    SELECT
+      p_idempotency_key,
+      p_run_id,
+      receipt.player_id,
+      p_accepted,
+      p_outcome,
+      p_score,
+      p_moves,
+      p_elapsed_ms
+    FROM public.offline_run_receipts AS receipt
+    WHERE receipt.run_id = p_run_id
+      AND receipt.submission_expires_at > NOW()
+    ON CONFLICT (idempotency_key) DO NOTHING
+    RETURNING TRUE INTO v_recorded;
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- offline_pending_submissions_accepted_run_idx, not the primary key: the
+      -- Run already holds an accepted submission under a different key. One Run
+      -- earns one cloud write, so that is a duplicate rather than an error.
+      v_recorded := NULL;
+  END;
 
   IF v_recorded THEN
-    RETURN 'recorded';
+    RETURN QUERY
+      SELECT 'recorded'::TEXT, p_outcome, p_score, p_moves, p_elapsed_ms;
+    RETURN;
   END IF;
 
   -- Nothing was written. That means either the key was already spent, or
@@ -332,7 +351,47 @@ BEGIN
   WHERE receipt.run_id = p_run_id
     AND receipt.submission_expires_at > NOW();
 
-  RETURN CASE WHEN v_live THEN 'duplicate' ELSE 'no-live-receipt' END;
+  -- IS NOT TRUE, not NOT: a SELECT that matches nothing leaves v_live NULL,
+  -- and a NULL condition is not taken, so plain NOT would skip this branch in
+  -- exactly the case it exists to catch.
+  IF v_live IS NOT TRUE THEN
+    RETURN QUERY
+      SELECT 'no-live-receipt'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
+        NULL::INTEGER;
+    RETURN;
+  END IF;
+
+  -- The row the ledger already holds for this Run. Reporting the replay just
+  -- performed instead would tell the Explorer a score, move count, and elapsed
+  -- time that cloud state never took: the idempotency key is client-chosen, so
+  -- a second, different action log can arrive under the same key.
+  --
+  -- Scoped to p_run_id on both branches. The idempotency key is a global
+  -- primary key, so matching it alone would hand this caller another Run's
+  -- outcome — and this function runs with definer rights, so it is the only
+  -- thing enforcing that boundary.
+  SELECT submission.* INTO v_existing
+  FROM public.offline_pending_submissions AS submission
+  WHERE submission.run_id = p_run_id
+    AND (
+      submission.idempotency_key = p_idempotency_key
+      OR submission.accepted
+    )
+  ORDER BY (submission.idempotency_key = p_idempotency_key) DESC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    -- The key belongs to a different Run. Nothing was written and nothing of
+    -- this Run's is readable, so the caller gets no outcome to report.
+    RETURN QUERY
+      SELECT 'duplicate'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
+        NULL::INTEGER;
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+    SELECT 'duplicate'::TEXT, v_existing.outcome::TEXT, v_existing.score,
+      v_existing.moves, v_existing.elapsed_ms;
 END;
 $$;
 

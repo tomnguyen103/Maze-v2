@@ -269,6 +269,61 @@ describe("Offline asset pinning service worker", () => {
     expect(worker.cacheNames()).not.toContain("echo-maze-pin-v1-account");
     expect(worker.cacheNames()).toContain("echo-maze-pin-v1-public");
   });
+
+  it("keeps a terminal Run whose verification package is not durable yet", async () => {
+    // settle() blocks activation on this state too, so forgetting it here would
+    // release a version the pending verification package still needs.
+    await worker.send({
+      type: "run-state",
+      runId: "run_undurable",
+      version: "v1",
+      terminal: true,
+      durable: false
+    });
+    await worker.send({ type: "stage", version: "v2" });
+
+    await worker.send({ type: "sign-out" });
+
+    await expect(worker.send({ type: "status" })).resolves.toMatchObject({
+      activeVersion: "v1"
+    });
+  });
+
+  it("drops a Run that has reached a terminal state durably", async () => {
+    // Nothing references this Run's version any more, so sign-out may forget
+    // it and the staged version is free to take over.
+    await worker.send({
+      type: "run-state",
+      runId: "run_done",
+      version: "v1",
+      terminal: true,
+      durable: true
+    });
+
+    await worker.send({ type: "sign-out" });
+
+    await expect(
+      worker.send({ type: "stage", version: "v2" })
+    ).resolves.toMatchObject({ activeVersion: "v2" });
+  });
+
+  it("keeps a Run that sign-out does not end pinned to its version", async () => {
+    // Forgetting a non-terminal Run here would let the staged version activate
+    // and evict the assets that Run is mid-play against — the exact version mix
+    // the worker exists to prevent. A Guest Run is not ended by sign-out at all.
+    await worker.send({
+      type: "run-state",
+      runId: "run_guest",
+      version: "v1",
+      terminal: false
+    });
+
+    await worker.send({ type: "sign-out" });
+
+    await expect(worker.send({ type: "status" })).resolves.toMatchObject({
+      nonTerminalRuns: 1
+    });
+  });
 });
 
 describe("Service worker dependency budget", () => {

@@ -134,11 +134,9 @@ function questionRevisionOf(run) {
   if (!question) {
     return null;
   }
-  const revision = /** @type {{ revisionId?: unknown, id?: unknown }} */ (
-    question
-  );
-  if (typeof revision.revisionId === "string" && revision.revisionId) {
-    return revision.revisionId;
-  }
+  // `id` is the revision identity, and the only one the server accepts: it
+  // resolves the content pack by this field and compares it to the Challenge it
+  // replayed. A second field here would name a revision the server rejects.
+  const revision = /** @type {{ id?: unknown }} */ (question);
   return typeof revision.id === "string" ? revision.id : null;
 }
