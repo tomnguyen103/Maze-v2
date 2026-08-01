@@ -533,6 +533,8 @@ let dailyConstellationFailedTwice = false;
 let dailyConstellationRequestId = 0;
 /** @type {Promise<ReturnType<typeof import("./game/offline-continuity-view.js").createOfflineContinuityView>> | null} */
 let offlineContinuityViewPromise = null;
+/** @type {Promise<ReturnType<typeof import("./game/offline-continuity-client.js").createOfflineContinuityClient>> | null} */
+let offlineContinuityClientPromise = null;
 let demoAccessPending = hasCompletedGuestDemo();
 let activeFirstLight = false;
 let firstLightEntryPending = false;
@@ -2242,6 +2244,44 @@ function loadOfflineContinuityView() {
   return offlineContinuityViewPromise;
 }
 
+function loadOfflineContinuityClient() {
+  offlineContinuityClientPromise ??= import(
+    "./game/offline-continuity-client.js"
+  )
+    .then(({ createOfflineContinuityClient }) =>
+      createOfflineContinuityClient({
+        playerController,
+        accountScope: playerController.getAuthenticatedUserId()
+      })
+    )
+    .catch((error) => {
+      offlineContinuityClientPromise = null;
+      throw error;
+    });
+  return offlineContinuityClientPromise;
+}
+
+/**
+ * Personal admission is the only point at which the app may prepare Offline
+ * Continuity. The client verifies the server response before asking the
+ * worker to pin anything; a failed preparation never blocks the online Run.
+ *
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator
+ */
+async function prepareOfflineContinuity(locator) {
+  try {
+    const client = await loadOfflineContinuityClient();
+    const result = await client.issueAndPin(locator);
+    if (!result.ok && result.reason !== "unconfigured") {
+      showEvent("Offline Continuity is not ready for this Run.");
+    }
+  } catch {
+    // Offline preparation is an enhancement to an already-authorized online
+    // Run. The game remains available, but it must not imply that a pin exists.
+    showEvent("Offline Continuity is not ready for this Run.");
+  }
+}
+
 function renderDailyBoardParticipation() {
   elements.dailyBoardNote.textContent = playerController.hasAuthenticatedUser()
     ? "Signed-in escapes with a saved username are checked by replay before they join this board."
@@ -2831,6 +2871,7 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
     };
     if (access.allowed) {
       markGuestDemoComplete();
+      void prepareOfflineContinuity(locator);
       return true;
     }
     showRunAccessGate(access);

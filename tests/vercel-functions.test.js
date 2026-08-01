@@ -38,6 +38,10 @@ describe("Vercel function budget", () => {
           destination: "/api/access?_accessRoute=guest-runs"
         },
         {
+          source: "/api/offline/receipt",
+          destination: "/api/profile?_offlineRoute=receipt"
+        },
+        {
           source: "/api/admin/:adminPath*",
           destination: "/api/admin?_adminPath=:adminPath*"
         },

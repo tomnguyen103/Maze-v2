@@ -18,13 +18,14 @@
 const PIN_PREFIX = "echo-maze-pin-";
 const ACCOUNT_SCOPED = "account";
 const PUBLIC_SCOPED = "public";
+const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 /**
  * Runs that have not reached a terminal state, and the pending verification
  * packages that outlive them. A version may activate only when both are empty
  * of references to the version it would replace.
  *
- * @type {Map<string, { version: string, terminal: boolean, durable: boolean }>}
+ * @type {Map<string, { version: string, terminal: boolean, durable: boolean, accountScope: string | null }>}
  */
 const runs = new Map();
 
@@ -32,6 +33,8 @@ const runs = new Map();
 let staged = null;
 /** @type {string | null} */
 let activeVersion = null;
+/** @type {string | null} */
+let activeAccountScope = null;
 
 self.addEventListener("install", (event) => {
   // Never skipWaiting: taking over immediately is exactly the mid-Run swap
@@ -66,7 +69,9 @@ self.addEventListener("message", (event) => {
     runs.set(message.runId, {
       version: message.version ?? existing?.version ?? activeVersion ?? "",
       terminal: message.terminal === true,
-      durable: message.durable === true
+      durable: message.durable === true,
+      accountScope:
+        message.accountScope ?? existing?.accountScope ?? activeAccountScope
     });
     event.waitUntil(settle().then(reply, reply));
     return;
@@ -91,19 +96,23 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  const version = versionForRequest();
-  if (!version) {
+  const selected = versionForRequest();
+  if (!selected?.version) {
     return;
   }
   event.respondWith(
-    caches
-      .open(cacheName(version, ACCOUNT_SCOPED))
-      .then((cache) => cache.match(event.request))
+    (selected.accountScope
+      ? caches.open(
+          cacheName(selected.version, ACCOUNT_SCOPED, selected.accountScope)
+        )
+      : Promise.resolve(null)
+    )
+      .then((cache) => cache?.match(event.request))
       .then(
         (hit) =>
           hit ??
           caches
-            .open(cacheName(version, PUBLIC_SCOPED))
+            .open(cacheName(selected.version, PUBLIC_SCOPED))
             .then((cache) => cache.match(event.request))
             .then((publicHit) => publicHit ?? fetch(event.request))
       )
@@ -118,25 +127,52 @@ self.addEventListener("fetch", (event) => {
 function versionForRequest() {
   for (const run of runs.values()) {
     if (!run.terminal) {
-      return run.version || activeVersion;
+      return {
+        version: run.version || activeVersion,
+        accountScope: run.accountScope
+      };
     }
   }
-  return activeVersion;
+  return activeVersion
+    ? { version: activeVersion, accountScope: activeAccountScope }
+    : null;
 }
 
 /** @param {{ version: string, assets: { url: string, scope?: string }[] }} message */
 async function pin(message) {
-  const accountCache = await caches.open(
-    cacheName(message.version, ACCOUNT_SCOPED)
+  const accountAssets = (message.assets ?? []).filter(
+    (asset) => asset.scope !== PUBLIC_SCOPED
   );
+  const accountScope = message.accountScope ?? activeAccountScope;
+  if (accountAssets.length > 0 && !ACCOUNT_SCOPE_PATTERN.test(accountScope ?? "")) {
+    throw new Error("Account-scoped package needs an account scope.");
+  }
+  const nonTerminal = [...runs.values()].some((run) => !run.terminal);
+  if (
+    nonTerminal &&
+    accountScope &&
+    activeAccountScope &&
+    accountScope !== activeAccountScope
+  ) {
+    throw new Error("A non-terminal Run blocks an account cache switch.");
+  }
+  const accountCache = accountAssets.length
+    ? await caches.open(
+        cacheName(message.version, ACCOUNT_SCOPED, accountScope)
+      )
+    : null;
   const publicCache = await caches.open(
     cacheName(message.version, PUBLIC_SCOPED)
   );
   for (const asset of message.assets ?? []) {
     const cache = asset.scope === PUBLIC_SCOPED ? publicCache : accountCache;
+    if (!cache) {
+      throw new Error("Account-scoped package needs an account cache.");
+    }
     await cache.add(new Request(asset.url, { cache: "reload" }));
   }
   activeVersion ??= message.version;
+  activeAccountScope ??= accountScope;
   return { ok: true, version: message.version };
 }
 
@@ -192,19 +228,22 @@ async function evictUnreferenced() {
  */
 async function dropAccountScoped() {
   for (const name of await caches.keys()) {
-    if (name.startsWith(PIN_PREFIX) && name.endsWith(`-${ACCOUNT_SCOPED}`)) {
+    if (
+      name.startsWith(PIN_PREFIX) &&
+      (name.endsWith(`-${ACCOUNT_SCOPED}`) ||
+        name.includes(`-${ACCOUNT_SCOPED}-`))
+    ) {
       await caches.delete(name);
     }
   }
+  activeAccountScope = null;
   // Every Run entry that still blocks a staged activation — non-terminal, or
   // terminal with no durable verification package yet — keeps its pin, so a
   // sign-out cannot let a staged version activate underneath a Run that is
   // still being played. Only entries nothing references any more are dropped.
   //
-  // The assets are a separate matter: `pin` puts everything without an explicit
-  // public scope in the account cache, so the loop above takes a Guest Run's
-  // assets with it. Fixing that needs the pinning caller to scope Guest assets
-  // as public, which lands with the wiring in #150.
+  // The assets are a separate matter: callers must mark Guest-safe assets as
+  // public and provide an account scope for every account-private asset.
   for (const [runId, run] of runs) {
     if (run.terminal && run.durable) {
       runs.delete(runId);
@@ -217,11 +256,14 @@ function status() {
   return {
     activeVersion,
     stagedVersion: staged?.version ?? null,
+    accountScope: activeAccountScope,
     nonTerminalRuns: [...runs.values()].filter((run) => !run.terminal).length
   };
 }
 
-/** @param {string} version @param {string} scope */
-function cacheName(version, scope) {
-  return `${PIN_PREFIX}${version}-${scope}`;
+/** @param {string} version @param {string} scope @param {string | null} [accountScope] */
+function cacheName(version, scope, accountScope = null) {
+  return `${PIN_PREFIX}${version}-${scope}${
+    scope === ACCOUNT_SCOPED && accountScope ? `-${accountScope}` : ""
+  }`;
 }

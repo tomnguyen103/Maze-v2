@@ -44,6 +44,10 @@ const client = {
     freeRunsRemaining: 2,
     state: "free"
   })),
+  issueOfflineReceipt: vi.fn(async () => ({
+    receipt: { binding: { runId: "access_01J1MOSSWATCH" } },
+    assetPackage: { version: "build_01MOSS", assets: [] }
+  })),
   getRunAccessConfig: vi.fn(async () => ({ enforcementEnabled: false })),
   getRunAccess: vi.fn(async () => ({
     freeRunsRemaining: 3,
@@ -358,6 +362,24 @@ describe("Player Profile dialog", () => {
       levelId: "trail-scout",
       labyrinthNumber: 4
     });
+  });
+
+  it("delegates the device-bound Offline Continuity receipt request", async () => {
+    const controller = createPlayerController();
+    const run = {
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+
+    await expect(
+      controller.issueOfflineReceipt(run, "installation_nonce_01MOSS")
+    ).resolves.toMatchObject({ receipt: expect.any(Object) });
+    expect(client.issueOfflineReceipt).toHaveBeenCalledWith(
+      run,
+      "installation_nonce_01MOSS"
+    );
   });
 
   it("reads the server-owned enforcement state", async () => {

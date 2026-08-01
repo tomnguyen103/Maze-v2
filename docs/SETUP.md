@@ -290,6 +290,14 @@ a `kid` matching `OFFLINE_RECEIPT_KEY_ID` — in the JSON array
 unset disables offline continuity; setting some but not all is an error rather
 than a half-configured signer.
 
+Issuing also requires `OFFLINE_DEVICE_HASH_SECRET` (a server-only HMAC secret),
+`OFFLINE_CONTENT_PACK_HASH` (64 lowercase hex characters for the reviewed pack),
+and `OFFLINE_ASSET_PACKAGE` (JSON with one version and same-origin assets whose
+scope is explicitly `public` or `account`). The route derives the device hash
+from the bounded browser nonce and never stores or returns that nonce. Keep the
+asset package version aligned with the reviewed build; an absent or partial set
+leaves the route unavailable rather than issuing an unverifiable receipt.
+
 Rotation is additive. Add the new key to the published array and point
 `OFFLINE_RECEIPT_KEY_ID` at it, but keep the retiring key listed until the last
 receipt it signed is past its nine-day submission deadline. Removing it earlier

@@ -364,6 +364,39 @@ describe("player client", () => {
     );
   });
 
+  it("posts the admitted Run and installation nonce to Offline Continuity", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ receipt: { binding: { runId: "access_01J1MOSSWATCH" } } }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      )
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+    const run = {
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+
+    await expect(
+      client.issueOfflineReceipt(run, "installation_nonce_01MOSS")
+    ).resolves.toMatchObject({ receipt: expect.any(Object) });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/offline/receipt",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          ...run,
+          deviceInstallationNonce: "installation_nonce_01MOSS"
+        })
+      })
+    );
+  });
+
   it("posts guest Run admission without waiting for a Clerk token", async () => {
     const getToken = vi.fn(() => new Promise(() => {}));
     const fetchImpl = vi.fn(async () =>

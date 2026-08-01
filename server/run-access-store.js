@@ -76,6 +76,35 @@ export function createRunAccessStore(pool) {
     },
 
     /**
+     * Reads the exact Personal Run grant without creating a new one. Offline
+     * Continuity is an extension of admission, never a second admission path.
+     *
+     * @param {string} userId
+     * @param {string} runId
+     */
+    async getRunGrant(userId, runId) {
+      const result = await pool.query(
+        `WITH ${activeUserGuardCtes("$2")}
+         SELECT run_id, seed, level_id, labyrinth_number, grant_source
+         FROM run_access_grants
+         WHERE player_id = $1
+           AND run_id = $3
+           AND EXISTS (SELECT 1 FROM active_user)`,
+        [userId, deletedUserHash(userId), runId]
+      );
+      const grant = result.rows[0];
+      return grant
+        ? {
+            runId: String(grant.run_id),
+            seed: String(grant.seed),
+            levelId: String(grant.level_id),
+            labyrinthNumber: Number(grant.labyrinth_number),
+            grantSource: String(grant.grant_source ?? "free")
+          }
+        : null;
+    },
+
+    /**
      * @param {string} userId
      * @param {{
      *   runId: string,

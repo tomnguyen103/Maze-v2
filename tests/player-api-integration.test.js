@@ -105,6 +105,27 @@ describe("composed player API", () => {
     });
   });
 
+  it("fails Offline Continuity closed when the database is absent", async () => {
+    const handler = createPlayerApi({});
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/offline/receipt`, {
+        method: "POST",
+        body: JSON.stringify({
+          runId: "access_01J1MOSSWATCH",
+          seed: "MOSS-WATCH-11",
+          levelId: "trail-scout",
+          labyrinthNumber: 4,
+          deviceInstallationNonce: "installation_nonce_01MOSS"
+        })
+      });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringMatching(/Player services are not configured/i)
+      });
+    });
+  });
+
   it("answers liveness in every configuration and echoes a request id", async () => {
     const handler = createPlayerApi({});
 

@@ -27,24 +27,19 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-/** @param {import("node:http").IncomingMessage} request */
-async function readRunRequest(request) {
-  let body = "";
-  for await (const chunk of request) {
-    body += chunk;
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      throw new Error("Request body is too large.");
-    }
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    throw new Error("Request body must be valid JSON.");
-  }
+/**
+ * @param {unknown} value
+ * @returns {{
+ *   runId: string,
+ *   seed: string,
+ *   levelId: "bright-start" | "trail-scout" | "maze-master",
+ *   labyrinthNumber: number
+ * }}
+ */
+export function validateRunRequest(value) {
   const run =
-    parsed && typeof parsed === "object"
-      ? /** @type {Record<string, unknown>} */ (parsed)
+    value && typeof value === "object"
+      ? /** @type {Record<string, unknown>} */ (value)
       : {};
   const runId = run.runId;
   if (typeof runId !== "string" || !RUN_ID_PATTERN.test(runId)) {
@@ -77,6 +72,24 @@ async function readRunRequest(request) {
     levelId: run.levelId,
     labyrinthNumber: Number(run.labyrinthNumber)
   };
+}
+
+/** @param {import("node:http").IncomingMessage} request */
+async function readRunRequest(request) {
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      throw new Error("Request body is too large.");
+    }
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new Error("Request body must be valid JSON.");
+  }
+  return validateRunRequest(parsed);
 }
 
 /**

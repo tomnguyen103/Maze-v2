@@ -113,6 +113,7 @@ describe("Offline asset pinning service worker", () => {
     await worker.send({
       type: "pin",
       version: "v1",
+      accountScope: "user_01MOSS",
       assets: [
         { url: "https://echo.test/shell.js", scope: "public" },
         { url: "https://echo.test/pack.json", scope: "account" }
@@ -150,7 +151,7 @@ describe("Offline asset pinning service worker", () => {
     await expect(worker.fetchThrough("https://echo.test/pack.json")).resolves.toBe(
       "cached"
     );
-    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account");
+    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account-user_01MOSS");
   });
 
   it("keeps every pinned asset while a Run is non-terminal", async () => {
@@ -167,7 +168,7 @@ describe("Offline asset pinning service worker", () => {
       assets: [{ url: "https://echo.test/shell.js", scope: "public" }]
     });
 
-    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account");
+    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account-user_01MOSS");
     expect(worker.cacheNames()).toContain("echo-maze-pin-v1-public");
   });
 
@@ -220,7 +221,7 @@ describe("Offline asset pinning service worker", () => {
     expect(blocked).toMatchObject({ paused: true, activeVersion: "v1" });
     // The Run's own assets survive the pause, so Active Run Recovery still has
     // everything it needs when the Explorer reconnects.
-    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account");
+    expect(worker.cacheNames()).toContain("echo-maze-pin-v1-account-user_01MOSS");
   });
 
   it("survives a staged update byte-exact for an active local recovery", async () => {
@@ -259,14 +260,14 @@ describe("Offline asset pinning service worker", () => {
     });
     await worker.send({ type: "release", runId: "run_1" });
 
-    expect(worker.cacheNames()).not.toContain("echo-maze-pin-v1-account");
+    expect(worker.cacheNames()).not.toContain("echo-maze-pin-v1-account-user_01MOSS");
     expect(worker.cacheNames()).toContain("echo-maze-pin-v2-public");
   });
 
   it("drops account-scoped content on sign-out and keeps the public shell", async () => {
     await worker.send({ type: "sign-out" });
 
-    expect(worker.cacheNames()).not.toContain("echo-maze-pin-v1-account");
+    expect(worker.cacheNames()).not.toContain("echo-maze-pin-v1-account-user_01MOSS");
     expect(worker.cacheNames()).toContain("echo-maze-pin-v1-public");
   });
 

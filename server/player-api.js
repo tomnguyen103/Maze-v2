@@ -69,6 +69,16 @@ import {
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
+import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
+import { deriveOfflineDeviceHash } from "./offline-device.js";
+import {
+  createOfflineReceiptHandler,
+  createUnavailableOfflineReceiptHandler,
+  OFFLINE_RECEIPT_PATHS
+} from "./offline-receipt-route.js";
+import { createOfflineReceiptSigner } from "./offline-receipt.js";
+import { loadOfflineReceiptConfig } from "./offline-receipt-config.js";
+import { createOfflineReceiptStore } from "./offline-receipt-store.js";
 import {
   createLifetimeHandler,
   LIFETIME_PATHS
@@ -118,6 +128,7 @@ const PLAYER_PATHS = new Set([
   LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
+  ...OFFLINE_RECEIPT_PATHS,
   ...LIFETIME_PATHS,
   CLERK_WEBHOOK_PATH
 ]);
@@ -301,6 +312,34 @@ export function createPlayerApi(env = process.env) {
   ) => getAuth(
     /** @type {import("express").Request} */ (request)
   ).userId;
+  const offlineReceiptConfig = loadOfflineReceiptConfig(env);
+  const offlineContinuityConfig = loadOfflineContinuityConfig(env);
+  const offlineReceiptStore = createOfflineReceiptStore(pool);
+  const offlineReceiptHandler =
+    offlineReceiptConfig && offlineContinuityConfig
+      ? createOfflineReceiptHandler({
+          getUserId,
+          getRunGrant: (userId, runId) => accessStore.getRunGrant(userId, runId),
+          issueReceipt: (binding) =>
+            offlineReceiptStore.issueReceipt(
+              String(binding.playerId),
+              binding
+            ),
+          readReceipt: (userId, runId, deviceHash) =>
+            offlineReceiptStore.readReceipt(userId, runId, deviceHash),
+          signer: createOfflineReceiptSigner({
+            privateKey: offlineReceiptConfig.privateKey,
+            keyId: offlineReceiptConfig.keyId
+          }),
+          deviceHashFor: (nonce) =>
+            deriveOfflineDeviceHash(
+              nonce,
+              offlineContinuityConfig.deviceHashSecret
+            ),
+          contentPackHash: offlineContinuityConfig.contentPackHash,
+          assetPackage: offlineContinuityConfig.assetPackage
+        })
+      : createUnavailableOfflineReceiptHandler();
   const requirePermission = createPermissionGuard({
     resolver: roleResolver,
     getUserId
@@ -778,6 +817,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (ACCESS_PATHS.has(pathname)) {
           void accessHandler(request, response, next);
+          return;
+        }
+        if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
+          void offlineReceiptHandler(request, response, next);
           return;
         }
         if (LIFETIME_PATHS.has(pathname)) {
