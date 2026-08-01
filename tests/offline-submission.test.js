@@ -118,7 +118,16 @@ function service(overrides = {}) {
   const recordSubmission = vi.fn(
     async (/** @type {{ idempotencyKey: string }} */ submission) => {
       if (recorded.has(submission.idempotencyKey)) {
-        return { state: /** @type {const} */ ("duplicate") };
+        return {
+          state: /** @type {const} */ ("duplicate"),
+          recorded: {
+            accepted: true,
+            outcome: /** @type {const} */ ("won"),
+            score: 900,
+            moves: 12,
+            elapsedMs: 30000
+          }
+        };
       }
       recorded.add(submission.idempotencyKey);
       return { state: /** @type {const} */ ("recorded") };
@@ -221,6 +230,7 @@ describe("Offline submission authority", () => {
       recordSubmission: async () => ({
         state: /** @type {const} */ ("duplicate"),
         recorded: {
+          accepted: true,
           outcome: /** @type {const} */ ("lost"),
           score: 120,
           moves: 44,
@@ -242,6 +252,7 @@ describe("Offline submission authority", () => {
       recordSubmission: async () => ({
         state: /** @type {const} */ ("duplicate"),
         recorded: {
+          accepted: true,
           outcome: /** @type {const} */ ("won"),
           score: 900,
           moves: 12,
@@ -263,6 +274,45 @@ describe("Offline submission authority", () => {
         })
       })
     );
+  });
+
+  it("does not verify a replay rejected by the ledger on retry", async () => {
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("duplicate"),
+        recorded: {
+          accepted: false,
+          outcome: /** @type {const} */ ("lost"),
+          score: 0,
+          moves: 0,
+          elapsedMs: 0
+        }
+      }),
+      pendingApply: async () => true
+    });
+
+    await expect(harness.service.submit(submission())).resolves.toEqual({
+      status: "rejected",
+      duplicate: true,
+      reason: "replay"
+    });
+    expect(harness.applyCloudOutcome).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a duplicate whose ledger outcome is not readable", async () => {
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("duplicate")
+      }),
+      pendingApply: async () => false
+    });
+
+    await expect(harness.service.submit(submission())).resolves.toEqual({
+      status: "expired",
+      duplicate: true,
+      reason: "submission"
+    });
+    expect(harness.applyCloudOutcome).not.toHaveBeenCalled();
   });
 
   it("refuses a receipt presented from another device", async () => {

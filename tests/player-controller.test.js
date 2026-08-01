@@ -334,7 +334,14 @@ describe("Player Profile dialog", () => {
 
   it("reports when Clerk removes the active account identity", async () => {
     const onAuthenticationChange = vi.fn();
-    const onIdentityEnd = vi.fn();
+    /** @type {(value?: unknown) => void} */
+    let releaseIdentityEnd = () => {};
+    const onIdentityEnd = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseIdentityEnd = resolve;
+        })
+    );
     createPlayerController({ onAuthenticationChange, onIdentityEnd });
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
@@ -343,6 +350,9 @@ describe("Player Profile dialog", () => {
     clerkBrowser.user = null;
     clerkOnChange();
 
+    await vi.waitFor(() => expect(onIdentityEnd).toHaveBeenCalledOnce());
+    expect(onAuthenticationChange).toHaveBeenLastCalledWith(true);
+    releaseIdentityEnd();
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
       expect(onIdentityEnd).toHaveBeenCalledOnce();

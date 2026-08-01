@@ -95,6 +95,10 @@ describe("Offline Run Continuity migration", () => {
         "    )"
       ].join("\n")
     );
+    expect(sql).toContain("recorded_accepted BOOLEAN");
+    expect(sql).toContain(
+      "SELECT 'duplicate'::TEXT, v_existing.accepted, v_existing.outcome::TEXT"
+    );
   });
 
   it("scopes ledger writes and apply retries to the session Explorer", async () => {

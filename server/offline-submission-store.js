@@ -83,6 +83,7 @@ export function createOfflineSubmissionStore(pool) {
               ? {}
               : {
                   recorded: {
+                    accepted: row.recorded_accepted === true,
                     outcome: /** @type {"won" | "lost"} */ (
                       String(row.recorded_outcome)
                     ),

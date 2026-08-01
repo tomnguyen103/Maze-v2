@@ -86,7 +86,7 @@ repo-controlled wiring gaps through the existing player-function boundary and
 keeps production migration, key, and deployment actions outside this record.
 The receipt boundary landed in `e7400f8`; the P0.2 specification is in
 `2aabed7` while the remaining client, replay, privacy, and browser changes are
-being finalized on this branch.
+implemented on this branch and are pending final review and merge in PR #158.
 
 ### Delivered in the follow-up
 
@@ -110,7 +110,7 @@ being finalized on this branch.
 
 | Surface | Command or evidence | Result |
 | --- | --- | --- |
-| Local gate | `npm run check` | lint, typecheck, build, and bundle passed; Vitest 148 files / 1338 passed / 18 skipped; game JavaScript 30.00 KB gzip against the 30 KB ceiling |
+| Local gate | `npm run check` | lint, typecheck, build, and bundle passed; Vitest 157 files / 1351 passed / 18 skipped; game JavaScript 30.00 KB gzip against the 30 KB ceiling |
 | Browser matrix | `npm run test:e2e` | 230 passed, 20 intentional project skips across desktop and mobile |
 | Responsive regression | `npm run test:e2e -- --workers=4 -g "opens Workshop catalog and transfers paused play to Journal or Atlas"` | 2 passed; includes the 200% text overflow guard |
 | Route/replay/privacy | `tests/offline-submission-route.test.js`, `tests/offline-submission-store.test.js`, `tests/offline-cloud-outcome.test.js`, `tests/offline-content-pack.test.js`, `tests/offline-continuity-controller.test.js`, `tests/service-worker.test.js` | Passed in the full gate; no reviewed text or selected option identifier is retained in the reviewed durable/export shapes |

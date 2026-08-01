@@ -289,6 +289,7 @@ CREATE FUNCTION record_offline_submission(
 )
 RETURNS TABLE (
   state TEXT,
+  recorded_accepted BOOLEAN,
   recorded_outcome TEXT,
   recorded_score SMALLINT,
   recorded_moves INTEGER,
@@ -346,7 +347,8 @@ BEGIN
 
   IF v_recorded THEN
     RETURN QUERY
-      SELECT 'recorded'::TEXT, p_outcome, p_score, p_moves, p_elapsed_ms;
+      SELECT 'recorded'::TEXT, p_accepted, p_outcome, p_score, p_moves,
+        p_elapsed_ms;
     RETURN;
   END IF;
 
@@ -368,8 +370,8 @@ BEGIN
   -- exactly the case it exists to catch.
   IF v_live IS NOT TRUE THEN
     RETURN QUERY
-      SELECT 'no-live-receipt'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
-        NULL::INTEGER;
+      SELECT 'no-live-receipt'::TEXT, NULL::BOOLEAN, NULL::TEXT,
+        NULL::SMALLINT, NULL::INTEGER, NULL::INTEGER;
     RETURN;
   END IF;
 
@@ -400,14 +402,14 @@ BEGIN
     -- The key belongs to a different Run. Nothing was written and nothing of
     -- this Run's is readable, so the caller gets no outcome to report.
     RETURN QUERY
-      SELECT 'duplicate'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
-        NULL::INTEGER;
+      SELECT 'duplicate'::TEXT, NULL::BOOLEAN, NULL::TEXT, NULL::SMALLINT,
+        NULL::INTEGER, NULL::INTEGER;
     RETURN;
   END IF;
 
   RETURN QUERY
-    SELECT 'duplicate'::TEXT, v_existing.outcome::TEXT, v_existing.score,
-      v_existing.moves, v_existing.elapsed_ms;
+    SELECT 'duplicate'::TEXT, v_existing.accepted, v_existing.outcome::TEXT,
+      v_existing.score, v_existing.moves, v_existing.elapsed_ms;
 END;
 $$;
 

@@ -79,6 +79,12 @@ export function createOfflineContinuityBridge(
     setActive,
     clearActiveRun
   };
+  function reportSignOutFailure() {
+    const message =
+      "Clear this site's data before another player uses this device.";
+    announce(message);
+    showEvent(message);
+  }
   /** @type {Promise<OfflineContinuityRuntime> | null} */
   let runtimePromise = null;
 
@@ -136,6 +142,12 @@ export function createOfflineContinuityBridge(
     signOut: () =>
       loadRuntime()
         .then((runtime) => runtime.signOut())
+        .then((result) => {
+          if (/** @type {{ ok?: boolean }} */ (result).ok !== true) {
+            reportSignOutFailure();
+          }
+          return result;
+        }, reportSignOutFailure)
         .finally(() => {
           runtimePromise = null;
         }),

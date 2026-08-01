@@ -432,9 +432,6 @@ let runActionLogOverflowed = false;
 run.status = "paused";
 let lanternJournal = createLanternJournal();
 let lanternJournalStatus = "";
-let authenticationObserved = false;
-/** @type {string | null} */
-let authenticatedUserId = null;
 /** @type {QuestContinuityController | null} */
 let questContinuityController = null;
 /** @type {Promise<QuestContinuityController | null> | null} */
@@ -3059,15 +3056,9 @@ function handleAuthenticationChange(signedIn) {
     renderDailyBoardParticipation();
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
-  if (
-    (authenticationObserved &&
-      authenticatedUserId !== userId) ||
-    hasRunReplayOwnerMismatch(userId)
-  ) {
+  if (hasRunReplayOwnerMismatch(userId)) {
     clearActiveRunRecoveryForIdentityChange();
   }
-  authenticationObserved = !!userId;
-  authenticatedUserId = userId;
   runRecords = loadRunRecords(undefined, userId);
   bestEscapeRecord = bestEscape(runRecords);
   if (elements.recordsDialog.open) {
@@ -3088,14 +3079,10 @@ function handleAuthenticationChange(signedIn) {
   void renderOfflineContinuityFromDevice();
 }
 
-function clearActiveRunRecoveryForIdentityChange() {
+async function clearActiveRunRecoveryForIdentityChange() {
   offlineContinuityActive = false;
   scrubOfflineState();
-  const bridgeAtIdentityEnd = offlineContinuityBridgePromise ||
-    loadOfflineContinuityBridge();
-  void bridgeAtIdentityEnd
-    .then((bridge) => bridge.signOut())
-    .catch(() => {});
+  await loadOfflineContinuityBridge().then((bridge) => bridge.signOut());
   if (scrubRunReplays()) {
     runRecords = loadRunRecords();
     bestEscapeRecord = bestEscape(runRecords);

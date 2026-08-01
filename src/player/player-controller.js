@@ -31,7 +31,7 @@ import { hasUnverifiedOfflineResult } from "../game/offline-local-scrub.js";
  * @param {{
  *   onPaletteChange?: () => void,
  *   onAuthenticationChange?: (signedIn: boolean) => void,
- *   onIdentityEnd?: () => void,
+ *   onIdentityEnd?: () => void | Promise<unknown>,
  *   onJournalChange?: (journal: ReturnType<typeof import("../learning/lantern-journal.js").createLanternJournal>) => void,
  *   onJournalStatusChange?: (message: string) => void,
  *   getScorePartition?: () => {
@@ -90,10 +90,10 @@ export function createPlayerController({
   const clerkBrowser =
     injectedDependencies?.clerkBrowser ??
     createClerkBrowser({
-      onChange: () => {
-        reportAuthenticationChange();
-        void syncAuthenticatedPlayer();
-      }
+      onChange: () =>
+        clerkAvailable
+          ? syncAuthenticatedPlayer().then(reportAuthenticationChange)
+          : undefined
     });
   let clerkAvailable = false;
   /** @type {Parameters<typeof reducePlayerState>[0]} */
@@ -451,7 +451,7 @@ export function createPlayerController({
       return;
     }
     if (playerState.userId) {
-      onIdentityEnd();
+      await onIdentityEnd();
     }
     playerState = reducePlayerState(playerState, {
       type: "auth-changed",

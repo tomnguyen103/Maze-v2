@@ -31,6 +31,7 @@ function createPool() {
           rows: [
             {
               state: "recorded",
+              recorded_accepted: true,
               recorded_outcome: "won",
               recorded_score: 900,
               recorded_moves: 12,
@@ -95,6 +96,7 @@ describe("Offline submission store", () => {
     expect(recorded).toEqual({
       state: "recorded",
       recorded: {
+        accepted: true,
         outcome: "won",
         score: 900,
         moves: 12,

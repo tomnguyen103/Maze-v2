@@ -66,6 +66,7 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *   }) => Promise<{
  *     state: "recorded" | "duplicate" | "no-live-receipt",
  *     recorded?: {
+ *       accepted: boolean,
  *       outcome: "won" | "lost",
  *       score: number,
  *       moves: number,
@@ -311,8 +312,21 @@ export function createOfflineSubmissionService({
           }
         : result;
 
-      if (state === "duplicate" && !(await pendingApply(submission.idempotencyKey))) {
-        return { status: "accepted", duplicate: true, result: ledgerResult };
+      if (state === "duplicate") {
+        if (!recorded) {
+          // The key belongs to another Run. The ledger deliberately exposes
+          // no other Run's outcome, so this retry cannot be reported as
+          // accepted.
+          return { status: "expired", duplicate: true, reason: "submission" };
+        }
+        if (recorded.accepted === false) {
+          // Replay rejections are durable terminal outcomes too. Never turn a
+          // recorded rejection into a verified result on transport retry.
+          return { status: "rejected", duplicate: true, reason: "replay" };
+        }
+        if (!(await pendingApply(submission.idempotencyKey))) {
+          return { status: "accepted", duplicate: true, result: ledgerResult };
+        }
       }
 
       // Reached either on the first record, or on a retry whose first
