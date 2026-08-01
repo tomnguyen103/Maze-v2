@@ -18,7 +18,9 @@ describe("vite config side effects", () => {
     expect(resolved.plugins ?? []).toEqual([]);
     expect(resolved.test).toEqual({
       include: ["tests/*.test.js"],
-      maxWorkers: 8
+      pool: "threads",
+      maxWorkers: 1,
+      fileParallelism: false
     });
   });
 

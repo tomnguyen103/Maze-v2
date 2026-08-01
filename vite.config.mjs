@@ -5,10 +5,12 @@ export default defineConfig(({ mode }) => {
   const base = {
     test: {
       include: ["tests/*.test.js"],
-      // This Windows workstation has 32 logical cores, but one full Vitest
-      // fan-out competes with the browser/MCP processes used by the local
-      // workflow. Eight forks keeps the gate deterministic without retries.
-      maxWorkers: 8
+      // The default fork pool has repeatedly lost workers on this Windows
+      // workstation. A single thread keeps the local gate trustworthy; the
+      // checked summary gate also detects any future partial run.
+      pool: "threads",
+      maxWorkers: 1,
+      fileParallelism: false
     },
     build: {
       outDir: "dist",
