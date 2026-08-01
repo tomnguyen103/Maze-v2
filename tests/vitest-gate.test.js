@@ -1,9 +1,12 @@
+import { EventEmitter } from "node:events";
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   assertCanonicalGateArgs,
   assertVitestGate,
   parseVitestSummary
 } from "../scripts/vitest-gate.mjs";
+import { runVitest, runVitestGate } from "../scripts/run-vitest-gate.mjs";
 
 const EXPECTED = {
   testFiles: 147,
@@ -19,6 +22,25 @@ function summary(overrides = {}) {
     skipped: 18,
     ...overrides
   };
+}
+
+function reporterOutput() {
+  return "Test Files  139 passed | 8 skipped (147)\nTests  1306 passed | 18 skipped (1324)";
+}
+
+/** @param {string[]} stdoutChunks */
+function fakeChild(stdoutChunks = []) {
+  const child = Object.assign(new EventEmitter(), {
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter()
+  });
+  queueMicrotask(() => {
+    for (const chunk of stdoutChunks) {
+      child.stdout.emit("data", Buffer.from(chunk));
+    }
+    child.emit("close", 0, null);
+  });
+  return child;
 }
 
 describe("Vitest gate validation", () => {
@@ -109,5 +131,37 @@ describe("Vitest gate validation", () => {
       passed: 1306,
       skipped: 18
     });
+  });
+
+  it("detects a worker-loss marker split across child-process chunks", async () => {
+    const result = await runVitest({
+      spawnProcess: () => fakeChild(["Worker exited ", "unexpectedly"]),
+      writeStdout: () => {},
+      writeStderr: () => {}
+    });
+
+    expect(result.workerLossDetected).toBe(true);
+  });
+
+  it("wires the package runner result through the canonical gate", async () => {
+    await expect(
+      runVitestGate({
+        expected: EXPECTED,
+        run: async () => ({
+          code: 0,
+          signal: null,
+          output: reporterOutput(),
+          workerLossDetected: true
+        })
+      })
+    ).rejects.toThrow("Worker exited unexpectedly");
+  });
+
+  it("keeps npm test pointed at the canonical wrapper", async () => {
+    const packageJson = JSON.parse(
+      await readFile(new URL("../package.json", import.meta.url), "utf8")
+    );
+
+    expect(packageJson.scripts.test).toBe("node scripts/run-vitest-gate.mjs");
   });
 });

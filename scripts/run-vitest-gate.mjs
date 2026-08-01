@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   assertCanonicalGateArgs,
   assertVitestGate,
@@ -12,15 +12,48 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const countPath = join(root, "scripts", "vitest-test-count.json");
 const vitestPath = join(root, "node_modules", "vitest", "vitest.mjs");
-function runVitest() {
+const OUTPUT_TAIL_LIMIT = 1024 * 1024;
+const WORKER_LOSS_SCAN_TAIL = 128;
+
+/**
+ * @typedef {Object} ChildProcessLike
+ * @property {{ on: (event: string, listener: (chunk: Buffer) => void) => void }} stdout
+ * @property {{ on: (event: string, listener: (chunk: Buffer) => void) => void }} stderr
+ * @property {(event: string, listener: (...args: any[]) => void) => void} once
+ */
+
+/** @typedef {(executable: string, args: string[], options: object) => ChildProcessLike} SpawnProcess */
+
+/**
+ * Run the canonical full Vitest suite and retain enough adjacent output to
+ * detect worker-loss markers split across child-process data events.
+ *
+ * @param {{
+ *   spawnProcess?: SpawnProcess,
+ *   executable?: string,
+ *   vitestExecutable?: string,
+ *   rootDirectory?: string,
+ *   writeStdout?: (chunk: Buffer) => void,
+ *   writeStderr?: (chunk: Buffer) => void
+ * }} options
+ */
+export function runVitest({
+  spawnProcess = spawn,
+  executable = process.execPath,
+  vitestExecutable = vitestPath,
+  rootDirectory = root,
+  writeStdout = (chunk) => process.stdout.write(chunk),
+  writeStderr = (chunk) => process.stderr.write(chunk)
+} = {}) {
   return new Promise((resolveRun, rejectRun) => {
+    /** @type {NodeJS.ProcessEnv} */
     const childEnv = { ...process.env, FORCE_COLOR: "0" };
     delete childEnv.NO_COLOR;
-    const child = spawn(
-      process.execPath,
-      [vitestPath, "run", "--reporter=dot", "--no-color"],
+    const child = spawnProcess(
+      executable,
+      [vitestExecutable, "run", "--reporter=dot", "--no-color"],
       {
-        cwd: root,
+        cwd: rootDirectory,
         env: childEnv,
         stdio: ["inherit", "pipe", "pipe"]
       }
@@ -28,18 +61,22 @@ function runVitest() {
 
     let output = "";
     let workerLossDetected = false;
+    let workerLossScanTail = "";
+    /** @param {Buffer | string} chunk */
     const retainOutput = (chunk) => {
       const text = chunk.toString();
-      workerLossDetected ||= containsWorkerLoss(text);
-      output = `${output}${text}`.slice(-1024 * 1024);
+      const scanText = `${workerLossScanTail}${text}`;
+      workerLossDetected ||= containsWorkerLoss(scanText);
+      workerLossScanTail = scanText.slice(-WORKER_LOSS_SCAN_TAIL);
+      output = `${output}${text}`.slice(-OUTPUT_TAIL_LIMIT);
     };
 
     child.stdout.on("data", (chunk) => {
-      process.stdout.write(chunk);
+      writeStdout(chunk);
       retainOutput(chunk);
     });
     child.stderr.on("data", (chunk) => {
-      process.stderr.write(chunk);
+      writeStderr(chunk);
       retainOutput(chunk);
     });
     child.once("error", rejectRun);
@@ -51,15 +88,22 @@ function runVitest() {
   });
 }
 
-try {
-  assertCanonicalGateArgs(process.argv.slice(2));
-  const expected = JSON.parse(await readFile(countPath, "utf8"));
-  const result = await runVitest();
+/**
+ * Apply the canonical summary, worker-loss, and child-exit checks to one run.
+ * This exported seam keeps the package-level gate testable without spawning a
+ * real Vitest process.
+ *
+ * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number } | null }} options
+ */
+export async function runVitestGate({ run = runVitest, expected = null } = {}) {
+  const expectedManifest =
+    expected ?? JSON.parse(await readFile(countPath, "utf8"));
+  const result = await run();
   const summary = parseVitestSummary(result.output);
   const gate = assertVitestGate({
     summary,
     output: result.output,
-    expected,
+    expected: expectedManifest,
     workerLossDetected: result.workerLossDetected
   });
 
@@ -69,10 +113,23 @@ try {
     );
   }
 
+  return gate;
+}
+
+async function main() {
+  assertCanonicalGateArgs(process.argv.slice(2));
+  const gate = await runVitestGate();
   console.log(
     `Vitest gate passed: ${gate.passed} passed, ${gate.skipped} skipped across ${gate.testFiles} files (${gate.tests} total).`
   );
-} catch (error) {
-  console.error(`Vitest gate failed: ${error.message}`);
-  process.exitCode = 1;
+}
+
+if (
+  process.argv[1] &&
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url
+) {
+  main().catch((error) => {
+    console.error(`Vitest gate failed: ${error.message}`);
+    process.exitCode = 1;
+  });
 }
