@@ -229,6 +229,19 @@ the network is unavailable, plus one preselected fixed Lantern Trail. Its
 player action is **Continue Offline**.
 _Avoid_: Pocket Expedition, offline admission, new offline Run, offline entitlement, offline Class Play
 
+**Offline Verification Package**:
+The bounded device-local receipt, pinned reviewed content identity, and Run
+Action Log v2 retained only while one offline Run awaits replay verification.
+It is deleted after accepted replay or terminal rejection and is not Run Replay
+history.
+_Avoid_: answer history, cloud queue, replay library
+
+**Pinned Offline Cache**:
+One versioned service-worker cache selected by an Offline Continuity Receipt.
+It may be staged for a newer version, but it cannot activate, serve the active
+Run, or evict its assets before terminal state and durable verification handoff.
+_Avoid_: permanent app freeze, account-shared cache, offline entitlement
+
 **Quest ID**:
 The opaque identifier for one intentional twenty-Labyrinth Quest. It lets
 Quest Continuity distinguish two Quests at the same Quest Level.
