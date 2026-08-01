@@ -1,0 +1,5 @@
+{
+  "testFiles": 147,
+  "tests": 1327,
+  "source": "Full Vitest run on 2026-08-01 after adding wrapper and split-output regression tests; update deliberately when tests change."
+}
