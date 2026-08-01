@@ -3,6 +3,7 @@ import {
 } from "./offline-device.js";
 import { createConfiguredOfflineReceiptVerifier } from "./offline-receipt-config.js";
 import { createOfflineWorkerClient } from "./offline-worker-client.js";
+import { OFFLINE_DEVICE_BINDING_KEY } from "./offline-local-scrub.js";
 
 /** @typedef {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} OfflineAssetPackage */
 
@@ -20,7 +21,10 @@ import { createOfflineWorkerClient } from "./offline-worker-client.js";
  *   },
  *   receiptVerifier?: { verify: (receipt: unknown) => Promise<{ valid: boolean, reason?: string }> } | null,
  *   workerClient?: {
- *     pin: (assetPackage: OfflineAssetPackage, options?: { accountScope?: string | null }) => Promise<unknown>
+ *     pin: (assetPackage: OfflineAssetPackage, options?: { accountScope?: string | null }) => Promise<unknown>,
+ *     setRunState?: (message: { runId: string, version: string, terminal: boolean, durable: boolean, accountScope?: string }) => Promise<unknown>,
+ *     release?: (runId: string) => Promise<unknown>,
+ *     signOut?: () => Promise<unknown>
  *   },
  *   storage?: { getItem: (key: string) => string | null, setItem: (key: string, value: string) => unknown },
  *   cryptoLike?: { randomUUID?: () => string },
@@ -35,6 +39,49 @@ export function createOfflineContinuityClient({
   cryptoLike = globalThis.crypto,
   accountScope = null
 }) {
+  /** @param {string} runId */
+  function deviceInstallationHashFor(runId) {
+    try {
+      const stored = storage.getItem(OFFLINE_DEVICE_BINDING_KEY);
+      const binding = stored ? JSON.parse(stored) : null;
+      return binding?.runId === runId &&
+        typeof binding.deviceInstallationHash === "string"
+        ? binding.deviceInstallationHash
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** @param {string} runId @param {unknown} receipt */
+  function rememberDeviceBinding(runId, receipt) {
+    const binding =
+      receipt && typeof receipt === "object"
+        ? /** @type {Record<string, unknown>} */ (receipt).binding
+        : null;
+    if (
+      !binding ||
+      typeof binding !== "object" ||
+      typeof /** @type {Record<string, unknown>} */ (binding).deviceInstallationHash !== "string"
+    ) {
+      return false;
+    }
+    try {
+      storage.setItem(
+        OFFLINE_DEVICE_BINDING_KEY,
+        JSON.stringify({
+          runId,
+          deviceInstallationHash:
+            /** @type {Record<string, unknown>} */ (binding)
+              .deviceInstallationHash
+        })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * @param {unknown} receipt
    * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
@@ -101,6 +148,9 @@ export function createOfflineContinuityClient({
     if (!receiptMatchesRun(issued.receipt, run)) {
       return { ok: false, reason: "binding", verification };
     }
+    if (!rememberDeviceBinding(run.runId, issued.receipt)) {
+      return { ok: false, reason: "device", verification };
+    }
     const pin = await pinAssetPackage(issued.assetPackage);
     if (
       !pin ||
@@ -118,5 +168,11 @@ export function createOfflineContinuityClient({
     };
   }
 
-  return { issueAndPin, verifyReceipt, pinAssetPackage };
+  return {
+    issueAndPin,
+    verifyReceipt,
+    deviceInstallationHashFor,
+    pinAssetPackage,
+    workerClient
+  };
 }

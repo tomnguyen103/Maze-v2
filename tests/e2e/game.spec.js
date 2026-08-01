@@ -5443,6 +5443,9 @@ test("keeps a previous owner's Trail hidden when identity scrub writes fail", as
   for (const direction of DEFEAT_PATH) {
     await page.keyboard.press(KEY_BY_DIRECTION[direction]);
   }
+  await expect(page.locator("#challenge-question")).not.toContainText(
+    "Preparing your question"
+  );
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const question = getCurrentQuestion();
     const wrongChoice = question.choices.find(
@@ -6031,9 +6034,11 @@ test("labels an unverified offline Run Record Pending verification", async ({
   await expect(page.locator("#offline-continuity-note")).toHaveText(
     "Reconnect to have this result checked."
   );
+  // A terminal Pending record is not itself offline authority. Continue
+  // Offline is shown only after the signed receipt and package are verified.
   await expect(
     page.getByRole("button", { name: "Continue Offline" })
-  ).toBeVisible();
+  ).toBeHidden();
 
   await recordOfflineScreenshot(page, testInfo, "offline-pending-verification");
 });

@@ -1,3 +1,5 @@
+import { OFFLINE_PRACTICE_PIN_PREFIX } from "../game/offline-local-scrub.js";
+
 /**
  * Offline Practice on one preselected immutable Lantern Trail, per ADR 0034.
  *
@@ -18,7 +20,7 @@
  * @typedef {{ questionRevisionId: string, outcome: PracticeOutcome }} PracticeEvent
  */
 
-export const OFFLINE_PRACTICE_PIN_KEY = "echo-maze:offline-practice-trail";
+export const OFFLINE_PRACTICE_PIN_KEY = OFFLINE_PRACTICE_PIN_PREFIX.slice(0, -1);
 
 /**
  * Pins one Trail under its own key. Practice expiry must never disturb a

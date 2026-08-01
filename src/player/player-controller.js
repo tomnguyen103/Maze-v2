@@ -13,6 +13,7 @@ import {
 import { createClerkBrowser } from "./clerk-browser.js";
 import { createLanternJournal } from "../learning/lantern-journal.js";
 import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
+import { hasUnverifiedOfflineResult } from "../game/offline-local-scrub.js";
 
 /**
  * @typedef {{
@@ -219,6 +220,26 @@ export function createPlayerController({
     async issueOfflineReceipt(run, deviceInstallationNonce) {
       return client.issueOfflineReceipt(run, deviceInstallationNonce);
     },
+    /**
+     * @param {{
+     *   idempotencyKey: string,
+     *   receipt: import("../../shared/offline-receipt.js").OfflineReceipt,
+     *   deviceInstallationHash: string,
+     *   contentPackHash: string,
+     *   terminalAt: string,
+     *   actionLog: import("../game/run-action-log-v2.js").RunActionLogV2
+     * }} submission
+     * @returns {Promise<{ status: "accepted" | "rejected" | "expired" | "invalid", duplicate?: boolean }>}
+     */
+    async submitOfflineRun(submission) {
+      await clerkBrowser.initialize();
+      if (!clerkBrowser.user) {
+        throw new Error("Sign in again to reconcile this Offline Run.");
+      }
+      return /** @type {Promise<{ status: "accepted" | "rejected" | "expired" | "invalid", duplicate?: boolean }>} */ (
+        client.submitOfflineRun(submission)
+      );
+    },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeGuestRun(run) {
       return client.authorizeGuestRun(run);
@@ -335,6 +356,15 @@ export function createPlayerController({
       }
     });
     elements.signOut.addEventListener("click", async () => {
+      if (
+        hasUnverifiedOfflineResult() &&
+        typeof globalThis.confirm === "function" &&
+        !globalThis.confirm(
+          "This device has an Offline Run that has not been verified. Signing out will erase it. Continue?"
+        )
+      ) {
+        return;
+      }
       await clerkBrowser.signOut();
       await syncAuthenticatedPlayer();
       reportAuthenticationChange();

@@ -68,6 +68,18 @@ describe("Offline Continuity worker client", () => {
     );
   });
 
+  it("does not register a worker just to clean up an unused boundary", async () => {
+    const harness = navigatorWithWorker();
+    const client = createOfflineWorkerClient(harness);
+
+    await expect(client.signOut()).resolves.toEqual({
+      ok: true,
+      reason: "not-registered"
+    });
+    expect(harness.navigatorLike.serviceWorker.register).not.toHaveBeenCalled();
+    expect(harness.worker.postMessage).not.toHaveBeenCalled();
+  });
+
   it("does not ask the worker to pin an invalid or unsupported package", async () => {
     const harness = navigatorWithWorker();
     const client = createOfflineWorkerClient(harness);

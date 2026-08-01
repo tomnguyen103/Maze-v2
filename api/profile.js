@@ -3,7 +3,7 @@ import { createPlayerApi } from "../server/player-api.js";
 const handler = createPlayerApi();
 
 const ME_ROUTES = new Set(["export", "settings"]);
-const OFFLINE_ROUTES = new Set(["receipt"]);
+const OFFLINE_ROUTES = new Set(["receipt", "submission"]);
 const CLASSROOM_ROUTE_PATTERN =
   /^(?:root|org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress|expeditions(?:\/exped_[A-Za-z0-9_-]{3,120}\/(?:status|license|capacity|progress|grants|grants\/outcome))?))$/;
 

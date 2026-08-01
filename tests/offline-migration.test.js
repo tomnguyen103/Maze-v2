@@ -93,6 +93,21 @@ describe("Offline Run Continuity migration", () => {
     );
   });
 
+  it("scopes ledger writes and apply retries to the session Explorer", async () => {
+    const sql = await readMigration(migrationUrl);
+    for (const functionName of [
+      "CREATE FUNCTION record_offline_submission",
+      "CREATE FUNCTION complete_offline_submission",
+      "CREATE FUNCTION offline_submission_pending_apply"
+    ]) {
+      const functionSql = sql.slice(sql.indexOf(functionName));
+      expect(functionSql).toContain("IS NOT DISTINCT FROM NULLIF(");
+      expect(functionSql).toContain(
+        "current_setting('echo_maze.explorer_id', true)"
+      );
+    }
+  });
+
   it("reads a receipt that matched nothing as no live receipt", async () => {
     // A SELECT that matches no row leaves the flag NULL, and a NULL condition
     // is not taken, so a plain NOT would report an acceptance the ledger never

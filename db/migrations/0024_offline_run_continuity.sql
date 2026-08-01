@@ -325,6 +325,10 @@ BEGIN
       p_elapsed_ms
     FROM public.offline_run_receipts AS receipt
     WHERE receipt.run_id = p_run_id
+      AND receipt.player_id IS NOT DISTINCT FROM NULLIF(
+        current_setting('echo_maze.explorer_id', true),
+        ''
+      )
       AND receipt.submission_expires_at > NOW()
     ON CONFLICT (idempotency_key) DO NOTHING
     RETURNING TRUE INTO v_recorded;
@@ -349,6 +353,10 @@ BEGIN
   SELECT TRUE INTO v_live
   FROM public.offline_run_receipts AS receipt
   WHERE receipt.run_id = p_run_id
+    AND receipt.player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND receipt.submission_expires_at > NOW();
 
   -- IS NOT TRUE, not NOT: a SELECT that matches nothing leaves v_live NULL,
@@ -409,6 +417,10 @@ BEGIN
   UPDATE public.offline_pending_submissions
   SET applied_at = NOW()
   WHERE idempotency_key = p_idempotency_key
+    AND player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND applied_at IS NULL
   RETURNING TRUE INTO v_applied;
 
@@ -430,6 +442,10 @@ AS $$
       SELECT submission.applied_at IS NULL
       FROM public.offline_pending_submissions AS submission
       WHERE submission.idempotency_key = p_idempotency_key
+        AND submission.player_id IS NOT DISTINCT FROM NULLIF(
+          current_setting('echo_maze.explorer_id', true),
+          ''
+        )
         AND submission.accepted
     ),
     FALSE

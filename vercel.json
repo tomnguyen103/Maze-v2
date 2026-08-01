@@ -41,6 +41,10 @@
       "destination": "/api/profile?_offlineRoute=receipt"
     },
     {
+      "source": "/api/offline/submission",
+      "destination": "/api/profile?_offlineRoute=submission"
+    },
+    {
       "source": "/api/classrooms",
       "destination": "/api/profile?_classroomRoute=root"
     },

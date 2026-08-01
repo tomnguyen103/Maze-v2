@@ -8,7 +8,77 @@ import { beforeEach, describe, expect, it } from "vitest";
  * and a fake Cache Storage. That keeps the assertions about its behaviour
  * rather than about a mock of itself.
  */
-function loadServiceWorker() {
+/**
+ * Minimal IndexedDB surface for the worker's one durable state record. The
+ * backing object is shared between VM contexts to model a worker restart.
+ * @param {{ version: number, stores: Map<string, Map<string, unknown>> }} backing
+ */
+function createIndexedDb(backing) {
+  function database() {
+    return {
+      objectStoreNames: {
+        contains: /** @param {string} name */ (name) => backing.stores.has(name)
+      },
+      /** @param {string} name */
+      createObjectStore(name) {
+        backing.stores.set(name, new Map());
+        return {};
+      },
+      /** @param {string} name */
+      transaction(name) {
+        const values = backing.stores.get(name);
+        if (!values) {
+          throw new Error(`Missing object store: ${name}`);
+        }
+        const transaction = /** @type {any} */ ({
+          objectStore: () => ({
+            /** @param {string} key */
+            get(key) {
+              const request = /** @type {any} */ ({});
+              queueMicrotask(() => {
+                request.result = values.get(key);
+                request.onsuccess?.({ target: request });
+              });
+              return request;
+            },
+            /** @param {unknown} value @param {string} key */
+            put(value, key) {
+              const request = /** @type {any} */ ({});
+              queueMicrotask(() => {
+                values.set(key, value);
+                request.result = key;
+                request.onsuccess?.({ target: request });
+                queueMicrotask(() => transaction.oncomplete?.());
+              });
+              return request;
+            }
+          })
+        });
+        return transaction;
+      }
+    };
+  }
+
+  return {
+    open() {
+      const request = /** @type {any} */ ({});
+      queueMicrotask(() => {
+        const db = database();
+        request.result = db;
+        if (backing.version === 0) {
+          backing.version = 1;
+          request.onupgradeneeded?.({ target: { result: db } });
+        }
+        request.onsuccess?.({ target: { result: db } });
+      });
+      return request;
+    }
+  };
+}
+
+function loadServiceWorker({
+  durableState = { version: 0, stores: new Map() }
+} = {}) {
   /** @type {Map<string, Map<string, string>>} */
   const store = new Map();
   /** @type {Map<string, (event: Record<string, unknown>) => void>} */
@@ -40,6 +110,7 @@ function loadServiceWorker() {
   const scope = {
     self: /** @type {Record<string, unknown>} */ ({}),
     caches,
+    indexedDB: createIndexedDb(durableState),
     fetch: async () => "network",
     Request: class {
       /** @param {string} url */
@@ -312,18 +383,78 @@ describe("Offline asset pinning service worker", () => {
     // Forgetting a non-terminal Run here would let the staged version activate
     // and evict the assets that Run is mid-play against — the exact version mix
     // the worker exists to prevent. A Guest Run is not ended by sign-out at all.
-    await worker.send({
+    const guestWorker = loadServiceWorker();
+    await guestWorker.send({
       type: "run-state",
       runId: "run_guest",
       version: "v1",
       terminal: false
     });
 
+    await guestWorker.send({ type: "sign-out" });
+
+    await expect(guestWorker.send({ type: "status" })).resolves.toMatchObject({
+      nonTerminalRuns: 1
+    });
+  });
+
+  it("drops account-scoped non-terminal Runs on sign-out", async () => {
+    await worker.send({
+      type: "run-state",
+      runId: "run_account",
+      version: "v1",
+      terminal: false,
+      accountScope: "user_01MOSS"
+    });
+    await worker.send({ type: "stage", version: "v2" });
+
     await worker.send({ type: "sign-out" });
 
     await expect(worker.send({ type: "status" })).resolves.toMatchObject({
+      activeVersion: "v2",
+      nonTerminalRuns: 0
+    });
+  });
+
+  it("restores the version guard and pending staged update after a worker restart", async () => {
+    const durableState = { version: 0, stores: new Map() };
+    const firstWorker = loadServiceWorker({ durableState });
+    await firstWorker.send({
+      type: "pin",
+      version: "v1",
+      accountScope: "user_01MOSS",
+      assets: [
+        { url: "https://echo.test/shell.js", scope: "public" },
+        { url: "https://echo.test/pack.json", scope: "account" }
+      ]
+    });
+    await firstWorker.send({
+      type: "run-state",
+      runId: "run_restart",
+      version: "v1",
+      terminal: false,
+      durable: false,
+      accountScope: "user_01MOSS"
+    });
+    await firstWorker.send({ type: "stage", version: "v2" });
+
+    const restartedWorker = loadServiceWorker({ durableState });
+
+    await expect(restartedWorker.send({ type: "status" })).resolves.toMatchObject({
+      activeVersion: "v1",
+      stagedVersion: "v2",
       nonTerminalRuns: 1
     });
+    await expect(
+      restartedWorker.send({
+        type: "run-state",
+        runId: "run_restart",
+        version: "v1",
+        terminal: true,
+        durable: true,
+        accountScope: "user_01MOSS"
+      })
+    ).resolves.toMatchObject({ activeVersion: "v2", stagedVersion: null });
   });
 });
 

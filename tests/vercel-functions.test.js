@@ -42,6 +42,10 @@ describe("Vercel function budget", () => {
           destination: "/api/profile?_offlineRoute=receipt"
         },
         {
+          source: "/api/offline/submission",
+          destination: "/api/profile?_offlineRoute=submission"
+        },
+        {
           source: "/api/admin/:adminPath*",
           destination: "/api/admin?_adminPath=:adminPath*"
         },
@@ -255,6 +259,10 @@ describe("Vercel function budget", () => {
         {
           source: "/api/me/settings",
           destination: "/api/profile?_meRoute=settings"
+        },
+        {
+          source: "/api/offline/submission",
+          destination: "/api/profile?_offlineRoute=submission"
         }
       ])
     );
@@ -263,6 +271,11 @@ describe("Vercel function budget", () => {
       // 503, not a hang: this shim runs without DATABASE_URL in unit tests.
       ["/api/profile?_meRoute=export", "/api/me/export", 503],
       ["/api/profile?_meRoute=settings", "/api/me/settings", 503],
+      [
+        "/api/profile?_offlineRoute=submission",
+        "/api/offline/submission",
+        503
+      ],
       // The rewritten value is attacker-controlled: anything unknown must be
       // answered, never fall through to a next?.() that does not exist.
       [

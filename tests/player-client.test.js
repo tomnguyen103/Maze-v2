@@ -497,6 +497,41 @@ describe("player client", () => {
     }
   });
 
+  it("submits an Offline Run without attaching a Classroom scope", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ status: "accepted", duplicate: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token",
+      getClassroomId: () => "org_morning_123"
+    });
+    const submission = {
+      idempotencyKey: "offline_run_01MOSSWATCH",
+      receipt: { binding: { runId: "run_01MOSSWATCH" } },
+      deviceInstallationHash: "a".repeat(64),
+      contentPackHash: "b".repeat(64),
+      terminalAt: "2026-08-01T13:00:00.000Z",
+      actionLog: { version: 2, actions: [] }
+    };
+
+    await expect(client.submitOfflineRun(submission)).resolves.toEqual({
+      status: "accepted",
+      duplicate: false
+    });
+    const call = /** @type {any[][]} */ (fetchImpl.mock.calls)[0];
+    expect(call[0]).toBe("/api/offline/submission");
+    expect(new Headers(call[1].headers).get("authorization")).toBe(
+      "Bearer session-token"
+    );
+    expect(new Headers(call[1].headers).has(
+      "x-echo-maze-classroom-id"
+    )).toBe(false);
+  });
+
   it("requests one exact public scoreboard partition", async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ entries: [], globalMaxScore: 0 }), {

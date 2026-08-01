@@ -1,6 +1,7 @@
 import { normalizeOfflineAssetPackage } from "../../shared/offline-asset-package.js";
 
 const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+/** @typedef {{ ok: true, registration: ServiceWorkerRegistration, worker: ServiceWorker } | { ok: false, reason: string }} OfflineWorkerRegistration */
 
 /** @param {unknown} value @returns {boolean} */
 function validAccountScope(value) {
@@ -25,8 +26,10 @@ export function createOfflineWorkerClient({
   messageChannel = () => new MessageChannel(),
   timeoutMs = 8000
 } = {}) {
+  /** @type {Promise<OfflineWorkerRegistration> | null} */
   let registrationPromise = null;
 
+  /** @returns {Promise<OfflineWorkerRegistration>} */
   async function registration() {
     if (!navigatorLike?.serviceWorker?.register) {
       return { ok: false, reason: "unsupported" };
@@ -39,11 +42,14 @@ export function createOfflineWorkerClient({
           (await navigatorLike.serviceWorker.ready).active ??
           registered.waiting ??
           registered.installing;
-        return worker
+        return /** @type {OfflineWorkerRegistration} */ (worker
           ? { ok: true, registration: registered, worker }
-          : { ok: false, reason: "inactive" };
+          : { ok: false, reason: "inactive" });
       })
-      .catch(() => ({ ok: false, reason: "registration" }));
+      .catch(() => /** @type {OfflineWorkerRegistration} */ ({
+        ok: false,
+        reason: "registration"
+      }));
     return registrationPromise;
   }
 
@@ -80,6 +86,8 @@ export function createOfflineWorkerClient({
 
   return {
     register: registration,
+    /** @param {Record<string, unknown>} value */
+    message,
     /**
      * @param {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} assetPackage
      * @param {{ accountScope?: string | null }} [options]
@@ -108,6 +116,42 @@ export function createOfflineWorkerClient({
         ...normalized,
         ...(accountScope ? { accountScope } : {})
       });
+    },
+    /**
+     * @param {{
+     *   runId: string,
+     *   version: string,
+     *   terminal: boolean,
+     *   durable: boolean,
+     *   accountScope?: string | null
+     * }} state
+     */
+    setRunState(state) {
+      return message({
+        type: "run-state",
+        runId: state.runId,
+        version: state.version,
+        terminal: state.terminal === true,
+        durable: state.durable === true,
+        ...(state.accountScope ? { accountScope: state.accountScope } : {})
+      });
+    },
+    /** @param {string} runId */
+    release(runId) {
+      return message({ type: "release", runId });
+    },
+    /** @param {string} version @param {{ blocked?: boolean }} [options] */
+    stage(version, { blocked = false } = {}) {
+      return message({ type: "stage", version, blocked });
+    },
+    signOut() {
+      if (!registrationPromise) {
+        return Promise.resolve({ ok: true, reason: "not-registered" });
+      }
+      return message({ type: "sign-out" });
+    },
+    status() {
+      return message({ type: "status" });
     }
   };
 }

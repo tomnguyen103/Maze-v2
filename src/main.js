@@ -70,6 +70,9 @@ import {
   scrubRunReplays
 } from "./game/storage.js";
 import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
+import {
+  scrubOfflineState
+} from "./game/offline-local-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
 import {
@@ -99,9 +102,6 @@ import { createPlayerController } from "./player/player-controller.js";
 import {
   createLanternJournal
 } from "./learning/lantern-journal.js";
-import {
-  OFFLINE_RUN_RECORD_KEY
-} from "./game/offline-local-scrub.js";
 /** @type {Promise<typeof import("./learning/lantern-journal-ui.js")> | null} */
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
@@ -120,11 +120,17 @@ let deferChallengeQuestionForLens = false;
 /** @typedef {ReturnType<typeof import("./player/quest-continuity-controller.js").createQuestContinuityController>} QuestContinuityController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createActiveRunRecoveryController>} ActiveRunRecoveryController */
 /** @typedef {ReturnType<typeof import("./game/active-run-recovery.js").createCampfireResumeView>} CampfireResumeView */
+/** @typedef {ReturnType<typeof import("./game/offline-continuity-bridge.js").createOfflineContinuityBridge>} OfflineContinuityBridge */
 /** @typedef {InstanceType<typeof import("./game/audio.js").EchoAudio>} EchoAudio */
 /** @typedef {typeof import("./game/region-theme.js").getRegionTheme} RegionThemeLookup */
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
+
+/** @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} question @param {"correct" | "wrong" | "hint" | "skip"} outcome */
+function recordLearningOutcome(question, outcome) {
+  !offlineContinuityActive && playerController.recordLearningOutcome(question, outcome);
+}
 /** @type {EchoAudio | null} */
 let audio = null;
 /** @type {Promise<EchoAudio> | null} */
@@ -243,16 +249,6 @@ const elements = {
   dailyBoardStatus: requiredElement("daily-board-status", HTMLElement),
   dailyClose: requiredElement("daily-close", HTMLButtonElement),
   dailyConstellation: requiredElement("daily-constellation", HTMLElement),
-  offlineContinuity: requiredElement("offline-continuity", HTMLElement),
-  offlineContinuityLabel: requiredElement(
-    "offline-continuity-label",
-    HTMLElement
-  ),
-  offlineContinuityNote: requiredElement(
-    "offline-continuity-note",
-    HTMLElement
-  ),
-  offlineContinue: requiredElement("offline-continue", HTMLButtonElement),
   dailyConstellationMap: requiredElement(
     "daily-constellation-map",
     HTMLElement
@@ -531,10 +527,10 @@ let dailyConstellationViewPromise = null;
 let dailyConstellationViewRetry = false;
 let dailyConstellationFailedTwice = false;
 let dailyConstellationRequestId = 0;
-/** @type {Promise<ReturnType<typeof import("./game/offline-continuity-view.js").createOfflineContinuityView>> | null} */
-let offlineContinuityViewPromise = null;
-/** @type {Promise<ReturnType<typeof import("./game/offline-continuity-client.js").createOfflineContinuityClient>> | null} */
-let offlineContinuityClientPromise = null;
+/** @type {Promise<OfflineContinuityBridge> | null} */
+let offlineContinuityBridgePromise = null;
+/** @type {boolean} */
+let offlineContinuityActive;
 let demoAccessPending = hasCompletedGuestDemo();
 let activeFirstLight = false;
 let firstLightEntryPending = false;
@@ -598,7 +594,6 @@ void gameReady.then(() => {
 void playerController.isAuthenticated().then(handleAuthenticationChange);
 // The verification label belongs to the local Run Record, so it appears with
 // the Record on boot rather than waiting for a reconnect that may not come.
-void renderOfflineContinuityFromDevice();
 requestAnimationFrame(tick);
 
 document.addEventListener("keydown", (event) => {
@@ -752,10 +747,7 @@ elements.challengeChoices.addEventListener("click", (event) => {
   const question = run.challenge?.question;
   const correct = button.dataset.answer === question?.answerId;
   if (question && !activeFirstLight) {
-    playerController.recordLearningOutcome(
-      question,
-      correct ? "correct" : "wrong"
-    );
+    recordLearningOutcome(question, correct ? "correct" : "wrong");
   }
   clearPostAnswerEchoLens();
   let hasReviewedEchoLens = false;
@@ -798,7 +790,7 @@ elements.hintButton.addEventListener("click", () => {
   }
   hintVisible = true;
   if (run.challenge?.question && !activeFirstLight) {
-    playerController.recordLearningOutcome(run.challenge.question, "hint");
+    recordLearningOutcome(run.challenge.question, "hint");
   }
   transition({ type: "reveal-hint" });
 });
@@ -1327,7 +1319,7 @@ function loadLanternTrailView() {
             /** @type {ReturnType<typeof getBundledQuestion>} */ question,
             /** @type {"correct" | "wrong" | "hint" | "skip"} */ outcome
           ) => {
-            playerController.recordLearningOutcome(question, outcome);
+            recordLearningOutcome(question, outcome);
           }
         })
       )
@@ -1434,7 +1426,7 @@ function reportLanternJournalUnavailable() {
 
 function recordCurrentSkip() {
   if (run.challenge?.question && !activeFirstLight) {
-    playerController.recordLearningOutcome(run.challenge.question, "skip");
+    recordLearningOutcome(run.challenge.question, "skip");
   }
 }
 elements.runRecords.addEventListener("click", async (event) => {
@@ -1604,7 +1596,9 @@ window.addEventListener("resize", () => {
 });
 
 window.addEventListener("online", () => {
-  void playerController.retryLanternJournalSync();
+  void loadOfflineContinuityBridge()
+    .then((bridge) => bridge.online())
+    .catch(() => {});
   void loadQuestContinuityController("online").then((controller) =>
     controller?.retry(loadQuestProgress()) ?? false
   );
@@ -1802,6 +1796,7 @@ async function startRun(locator, daily = null, recoveredRun = null) {
     await loadRegionTheme();
   }
   activeFirstLight = false;
+  offlineContinuityActive = false;
   activeDaily = daily;
   dailyQuestionIndex = 0;
   document.body.dataset.runMode = daily ? "daily" : "quest";
@@ -2157,108 +2152,69 @@ function loadDailyConstellationView() {
 }
 
 /**
- * The offline surface is presentation only. Whether a Run may continue offline
- * is decided by `offlineContinuityOffer`, and whether a result is verified is
- * decided by the server's replay — this only shows the answer.
- *
- * @param {{
- *   offer?: { offered: boolean, reason?: string },
- *   verification?: import("./game/offline-continuity.js").VerificationState
- * }} state
- */
-async function renderOfflineContinuity(state) {
-  try {
-    const view = await loadOfflineContinuityView();
-    if (state.offer) {
-      view.renderOffer(state.offer);
-    }
-    if (state.verification) {
-      view.renderVerification(state.verification);
-    }
-  } catch {
-    // The offline surface is optional presentation. A chunk that will not load
-    // must not take the Run Record with it, so the section simply stays out of
-    // the way rather than showing a control that cannot work.
-    elements.offlineContinuity.hidden = true;
-    elements.offlineContinue.hidden = true;
-  }
-}
-
-/**
  * Reads what this device already knows about offline continuity and shows it.
  * Both answers come from local state on purpose: the label has to appear the
  * moment the Run Record does, before any reconnect, and the offer has to
  * survive having no network at all.
  */
-async function renderOfflineContinuityFromDevice() {
-  /** @type {Record<string, unknown> | null} */
-  let record;
-  try {
-    const stored = globalThis.localStorage?.getItem(OFFLINE_RUN_RECORD_KEY);
-    record = stored ? JSON.parse(stored) : null;
-  } catch {
-    // Unreadable local state shows nothing rather than a guess.
-    return;
-  }
-  if (!record || typeof record !== "object" || Array.isArray(record)) {
-    // A stored value that is not a Run Record shows nothing rather than a guess.
-    return;
-  }
-  const verification =
-    record.verification === "verified" ||
-    record.verification === "unverified" ||
-    record.verification === "pending"
-      ? record.verification
-      : null;
-  if (!verification) {
-    // An unrecognised state is not evidence that a result awaits checking.
-    return;
-  }
-  await renderOfflineContinuity({
-    verification:
-      /** @type {"pending" | "verified" | "unverified"} */ (verification),
-    offer: {
-      offered: verification === "pending" && record.playAuthorityOpen === true,
-      reason: typeof record.reason === "string" ? record.reason : undefined
-    }
-  });
+function renderOfflineContinuityFromDevice() {
+  void loadOfflineContinuityBridge()
+    .then((bridge) => bridge.boot())
+    .catch(() => {});
 }
 
-function loadOfflineContinuityView() {
-  offlineContinuityViewPromise ??= import(
-    "./game/offline-continuity-view.js"
+function loadOfflineContinuityBridge() {
+  offlineContinuityBridgePromise ??= import(
+    "./game/offline-continuity-bridge.js"
   )
-    .then(({ createOfflineContinuityView }) =>
-      createOfflineContinuityView({
-        section: elements.offlineContinuity,
-        button: elements.offlineContinue,
-        label: elements.offlineContinuityLabel,
-        note: elements.offlineContinuityNote
-      })
-    )
-    .catch((error) => {
-      // A transient chunk failure must not disable the surface for the session.
-      offlineContinuityViewPromise = null;
-      throw error;
-    });
-  return offlineContinuityViewPromise;
-}
-
-function loadOfflineContinuityClient() {
-  offlineContinuityClientPromise ??= import(
-    "./game/offline-continuity-client.js"
-  )
-    .then(({ createOfflineContinuityClient }) =>
-      createOfflineContinuityClient({
+    .then(({ createOfflineContinuityBridge }) =>
+      createOfflineContinuityBridge(
         playerController,
-        accountScope: playerController.getAuthenticatedUserId()
-      })
+        elements.challengeSource,
+        () => activeRunLocator,
+        () => run,
+        () => activeFirstLight,
+        () => activeDaily !== null,
+        () => navigator.onLine,
+        announce,
+        showEvent,
+        updateInterface,
+        transition,
+        () => campfireResumeView?.close(),
+        () => {
+          if (elements.resultDialog.open) {
+            elements.resultDialog.close();
+          }
+        },
+        loadChallengeQuestion,
+        (question, ordinal, key) => {
+          if (
+            run.status !== "challenge" ||
+            !run.challenge ||
+            questionRequestKey !== key
+          ) {
+            return;
+          }
+          questProgress = saveQuestProgress(
+            rememberQuestion(questProgress, question.id, ordinal)
+          );
+          transition({ type: "provide-question", question });
+        },
+        () => canvas.focus({ preventScroll: true }),
+        (active) => {
+          if (active) {
+            questionRequestKey = "";
+          }
+          offlineContinuityActive = active;
+        },
+        clearOfflineActiveRun
+      )
     )
     .catch((error) => {
-      offlineContinuityClientPromise = null;
+      offlineContinuityBridgePromise = null;
       throw error;
     });
-  return offlineContinuityClientPromise;
+  return offlineContinuityBridgePromise;
 }
 
 /**
@@ -2268,18 +2224,13 @@ function loadOfflineContinuityClient() {
  *
  * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator
  */
-async function prepareOfflineContinuity(locator) {
-  try {
-    const client = await loadOfflineContinuityClient();
-    const result = await client.issueAndPin(locator);
-    if (!result.ok && result.reason !== "unconfigured") {
-      showEvent("Offline Continuity is not ready for this Run.");
-    }
-  } catch {
-    // Offline preparation is an enhancement to an already-authorized online
-    // Run. The game remains available, but it must not imply that a pin exists.
-    showEvent("Offline Continuity is not ready for this Run.");
-  }
+function prepareOfflineContinuity(locator) {
+  return loadOfflineContinuityBridge().then((bridge) => bridge.prepare(locator));
+}
+
+function clearOfflineActiveRun() {
+  activeRunLocator = null;
+  clearActiveRunLocator();
 }
 
 function renderDailyBoardParticipation() {
@@ -2871,7 +2822,7 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
     };
     if (access.allowed) {
       markGuestDemoComplete();
-      void prepareOfflineContinuity(locator);
+      void prepareOfflineContinuity(locator).catch(() => {});
       return true;
     }
     showRunAccessGate(access);
@@ -3108,11 +3059,8 @@ function handleAuthenticationChange(signedIn) {
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   if (
-    (
-      authenticationObserved &&
-      authenticatedUserId &&
-      authenticatedUserId !== (userId ?? "")
-    ) ||
+    (authenticationObserved &&
+      authenticatedUserId !== (userId ?? "")) ||
     hasRunReplayOwnerMismatch(userId)
   ) {
     clearActiveRunRecoveryForIdentityChange();
@@ -3136,9 +3084,17 @@ function handleAuthenticationChange(signedIn) {
     controller.setAuthenticated(userId);
     return userId ? controller.retry(loadQuestProgress()) : false;
   });
+  void renderOfflineContinuityFromDevice();
 }
 
 function clearActiveRunRecoveryForIdentityChange() {
+  scrubOfflineState();
+  const bridgeAtIdentityEnd = offlineContinuityBridgePromise ??
+    loadOfflineContinuityBridge();
+  offlineContinuityBridgePromise = null;
+  void bridgeAtIdentityEnd
+    .then((bridge) => bridge.signOut())
+    .catch(() => {});
   if (scrubRunReplays()) {
     runRecords = loadRunRecords();
     bestEscapeRecord = bestEscape(runRecords);
@@ -3487,6 +3443,10 @@ function transition(action) {
       runActionLogOverflowed = true;
     }
   }
+  offlineContinuityBridgePromise?.then((bridge) =>
+    bridge.recordTransition(previous, action, run)
+  )
+    .catch(() => {});
   const eventType = run.event.type;
   const eventMessage = activeFirstLight
     ? run.event.message.replace(/\s+You earned [^.]+\.$/, "")
@@ -3849,6 +3809,14 @@ async function loadChallengeQuestion() {
   }
   questionRequestKey = key;
 
+  if (offlineContinuityActive) {
+    offlineContinuityBridgePromise?.then((bridge) =>
+      bridge.loadQuestion(challengeSnapshot, key, questProgress.usedQuestionIds)
+    )
+      .catch(() => {});
+    return;
+  }
+
   if (activeDaily) {
     const question = getDailyQuestion(activeDaily, dailyQuestionIndex);
     dailyQuestionIndex += 1;
@@ -3932,7 +3900,8 @@ async function loadChallengeQuestion() {
     challengeSnapshot.labyrinthNumber !== currentLabyrinthNumber ||
     challengeSnapshot.wardenId !== run.challenge.wardenId ||
     challengeSnapshot.attempt !== run.challenge.attempt ||
-    questionRequestKey !== key
+    questionRequestKey !== key ||
+    offlineContinuityActive
   ) {
     return;
   }
@@ -4193,6 +4162,12 @@ async function finishRun() {
       return;
     }
   }
+  const wasOffline = offlineContinuityActive;
+  if (wasOffline) {
+    await offlineContinuityBridgePromise?.then((bridge) =>
+      bridge.terminal()
+    );
+  }
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,
@@ -4216,33 +4191,35 @@ async function finishRun() {
   }, undefined, runReplayOwnerId);
   pendingRunReplay = null;
   bestEscapeRecord = bestEscape(runRecords);
-  if (won) {
-    void playerController.submitEscapedRun(
-      {
-        seed: run.seed,
-        moves: run.moves,
-        elapsedMs: run.elapsedMs,
-        score: run.score,
-        wardensDefeated: run.wardensDefeated,
-        echoesCollected,
-        atlasRegionId: run.ruleset.atlasRegionId,
-        rulesetRevision: run.ruleset.revision
-      },
-      currentLevel.id,
-      finishedLabyrinthNumber
+  if (!wasOffline) {
+    if (won) {
+      void playerController.submitEscapedRun(
+        {
+          seed: run.seed,
+          moves: run.moves,
+          elapsedMs: run.elapsedMs,
+          score: run.score,
+          wardensDefeated: run.wardensDefeated,
+          echoesCollected,
+          atlasRegionId: run.ruleset.atlasRegionId,
+          rulesetRevision: run.ruleset.revision
+        },
+        currentLevel.id,
+        finishedLabyrinthNumber
+      );
+      questProgress = saveQuestProgress(advanceQuest(questProgress));
+    } else {
+      activeRunLocator = null;
+      clearActiveRunLocator();
+    }
+    applyDeferredCloudQuest();
+    if (won) {
+      saveNextBoundaryLocator();
+    }
+    void loadQuestContinuityController("terminal").then((controller) =>
+      controller?.queueBoundary(questProgress) ?? false
     );
-    questProgress = saveQuestProgress(advanceQuest(questProgress));
-  } else {
-    activeRunLocator = null;
-    clearActiveRunLocator();
   }
-  applyDeferredCloudQuest();
-  if (won) {
-    saveNextBoundaryLocator();
-  }
-  void loadQuestContinuityController("terminal").then((controller) =>
-    controller?.queueBoundary(questProgress) ?? false
-  );
   window.history.replaceState({}, "", "/play");
 
   const terminal = {

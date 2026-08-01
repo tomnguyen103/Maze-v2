@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   OFFLINE_DEVICE_NONCE_KEY
 } from "../src/game/offline-device.js";
+import { OFFLINE_DEVICE_BINDING_KEY } from "../src/game/offline-local-scrub.js";
 import { createOfflineContinuityClient } from "../src/game/offline-continuity-client.js";
 
 const RUN = {
@@ -16,7 +17,8 @@ const RECEIPT = {
     runId: RUN.runId,
     seed: RUN.seed,
     levelId: RUN.levelId,
-    labyrinthNumber: RUN.labyrinthNumber
+    labyrinthNumber: RUN.labyrinthNumber,
+    deviceInstallationHash: "a".repeat(64)
   }
 };
 /** @type {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} */
@@ -73,6 +75,10 @@ describe("Offline Continuity browser boundary", () => {
     expect(pin).toHaveBeenCalledWith(ASSET_PACKAGE, {
       accountScope: "user_01MOSS"
     });
+    expect(client.deviceInstallationHashFor(RUN.runId)).toBe("a".repeat(64));
+    expect(localStorage.getItem(OFFLINE_DEVICE_BINDING_KEY)).toContain(
+      RUN.runId
+    );
   });
 
   it("does not pin an unverifiable receipt and reports a failed pin", async () => {

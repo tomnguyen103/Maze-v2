@@ -54,6 +54,7 @@ function secretMatches(candidate, expected) {
  *   } | null,
  *   pruneRateLimits?: (() => Promise<number>) | null,
  *   pruneWebhookInbox?: (() => Promise<number>) | null,
+ *   pruneOfflineRunContinuity?: (() => Promise<number>) | null,
  *   createAuditCheckpoint?: (() => Promise<Record<string, unknown>>) | null,
  *   cronSecret?: string
  * }} dependencies
@@ -62,6 +63,7 @@ export function createInternalHandler({
   inbox,
   pruneRateLimits = null,
   pruneWebhookInbox = null,
+  pruneOfflineRunContinuity = null,
   createAuditCheckpoint = null,
   cronSecret = ""
 }) {
@@ -137,7 +139,8 @@ export function createInternalHandler({
     // stop. Neither half can fail the other.
     const pruning = Promise.all([
       runPrune("rate-limit counters", pruneRateLimits),
-      runPrune("webhook inbox", pruneWebhookInbox)
+      runPrune("webhook inbox", pruneWebhookInbox),
+      runPrune("offline Run continuity", pruneOfflineRunContinuity)
     ]);
     /** @type {RetryOutcome | null} */
     let retry = null;
@@ -148,7 +151,7 @@ export function createInternalHandler({
         name: safeErrorName(error)
       });
     }
-    const [rateLimits, webhookInbox] = await pruning;
+    const [rateLimits, webhookInbox, offlineRunContinuity] = await pruning;
     const checkpoint = await checkpointing;
     if (checkpoint.failed) {
       sendJson(response, 503, {
@@ -160,7 +163,12 @@ export function createInternalHandler({
       sendJson(response, 503, { error: "Webhook retry is unavailable." });
       return;
     }
-    const body = { ...retry, pruned: { rateLimits, webhookInbox } };
+    /** @type {{ rateLimits: number | null, webhookInbox: number | null, offlineRunContinuity?: number | null }} */
+    const pruned = { rateLimits, webhookInbox };
+    if (pruneOfflineRunContinuity !== null) {
+      pruned.offlineRunContinuity = offlineRunContinuity;
+    }
+    const body = { ...retry, pruned };
     sendJson(
       response,
       200,

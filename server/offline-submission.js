@@ -31,7 +31,7 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *   verifyReceipt: (receipt: unknown) => (
  *     { valid: true } | { valid: false, reason: string }
  *   ),
- *   loadReceipt: (runId: string) => Promise<{
+ *   loadReceipt: (runId: string, deviceInstallationHash: string, playerId?: string) => Promise<{
  *     runId: string,
  *     playerId: string | null,
  *     deviceInstallationHash: string,
@@ -77,7 +77,28 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *   applyCloudOutcome: (outcome: {
  *     runId: string,
  *     playerId: string | null,
- *     result: ReturnType<typeof verifyOfflineRunReplay>
+ *     receipt: {
+ *       runId: string,
+ *       playerId: string | null,
+ *       deviceInstallationHash: string,
+ *       seed: string,
+ *       levelId: string,
+ *       labyrinthNumber: number,
+ *       rulesetRevision: string,
+ *       contentPackHash: string,
+ *       issuedAt: string,
+ *       playExpiresAt: string,
+ *       submissionExpiresAt: string
+ *     },
+ *     result: ReturnType<typeof verifyOfflineRunReplay> & {
+ *       journalEvents?: {
+ *         questionId: string,
+ *         topicId: string,
+ *         learningObjectiveId: string,
+ *         difficultyBand: string,
+ *         outcome: "correct" | "wrong" | "hint" | "skip"
+ *       }[]
+ *     }
  *   }) => Promise<void>,
  *   now?: () => Date
  * }} dependencies
@@ -101,7 +122,8 @@ export function createOfflineSubmissionService({
      *   deviceInstallationHash: string,
      *   contentPackHash: string,
      *   terminalAt: string,
-     *   actionLog: unknown
+     *   actionLog: unknown,
+     *   playerId?: string
      * }} submission
      * @returns {Promise<OfflineSubmissionOutcome>}
      */
@@ -117,7 +139,11 @@ export function createOfflineSubmissionService({
       if (!signature.valid) {
         return { status: "invalid", duplicate: false, reason: signature.reason };
       }
-      const stored = await loadReceipt(submission.receipt.binding.runId);
+      const stored = await loadReceipt(
+        submission.receipt.binding.runId,
+        submission.deviceInstallationHash,
+        submission.playerId
+      );
       if (!stored) {
         return { status: "invalid", duplicate: false, reason: "unknown-run" };
       }
@@ -188,8 +214,10 @@ export function createOfflineSubmissionService({
         return { status: "invalid", duplicate: false, reason: "content-pack" };
       }
 
-      /** @type {ReturnType<typeof verifyOfflineRunReplay>} */
+      /** @type {ReturnType<typeof verifyOfflineRunReplay> & { journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[] }} */
       let result;
+      /** @type {{ questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[]} */
+      const journalEvents = [];
       try {
         result = verifyOfflineRunReplay(submission.actionLog, {
           seed: stored.seed,
@@ -201,8 +229,35 @@ export function createOfflineSubmissionService({
             stored.labyrinthNumber,
             stored.rulesetRevision
           ),
-          questionForRevision: pack.questionForRevision
+          questionForRevision: pack.questionForRevision,
+          onAction: (run, action) => {
+            const question = run.challenge?.question;
+            if (!question) {
+              return;
+            }
+            const outcome =
+              action.type === "answer-question"
+                ? action.answerId === question.answerId
+                  ? "correct"
+                  : "wrong"
+                : action.type === "skip-question"
+                  ? "skip"
+                  : action.type === "reveal-hint"
+                    ? "hint"
+                    : null;
+            if (!outcome) {
+              return;
+            }
+            journalEvents.push({
+              questionId: question.id,
+              topicId: question.topicId,
+              learningObjectiveId: question.learningObjectiveId,
+              difficultyBand: question.difficultyBand,
+              outcome
+            });
+          }
         });
+        result = { ...result, journalEvents };
       } catch (error) {
         if (error instanceof ReplayInputError) {
           // Terminal rejection: recorded so a retry cannot re-run it, and no
@@ -268,6 +323,7 @@ export function createOfflineSubmissionService({
       await applyCloudOutcome({
         runId: stored.runId,
         playerId: stored.playerId,
+        receipt: stored,
         result: ledgerResult
       });
       await completeSubmission(submission.idempotencyKey);

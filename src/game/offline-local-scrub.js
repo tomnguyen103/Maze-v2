@@ -16,7 +16,10 @@ import { ACTIVE_RUN_RECOVERY_KEY, scrubActiveRunRecovery } from "./local-recover
  * @typedef {{
  *   getItem: (key: string) => string | null,
  *   setItem: (key: string, value: string) => unknown,
- *   removeItem: (key: string) => unknown
+ *   removeItem: (key: string) => unknown,
+ *   length?: number,
+ *   key?: (index: number) => string | null,
+ *   keys?: () => string[]
  * }} StorageLike
  */
 
@@ -25,6 +28,10 @@ export const OFFLINE_CONTENT_PACK_KEY = "echo-maze:offline-content-pack:v1";
 export const OFFLINE_ACTION_LOG_KEY = "echo-maze:offline-action-log:v1";
 export const OFFLINE_RUN_RECORD_KEY = "echo-maze:offline-run-record:v1";
 export const OFFLINE_REPLAY_KEY = "echo-maze:offline-run-replay:v1";
+export const OFFLINE_DEVICE_BINDING_KEY =
+  "echo-maze:offline-device-binding:v1";
+export const OFFLINE_PRACTICE_PIN_PREFIX =
+  "echo-maze:offline-practice-trail:";
 
 /**
  * Every account-scoped offline artefact. Listed rather than matched by prefix,
@@ -36,8 +43,28 @@ export const OFFLINE_ACCOUNT_SCOPED_KEYS = Object.freeze([
   OFFLINE_CONTENT_PACK_KEY,
   OFFLINE_ACTION_LOG_KEY,
   OFFLINE_RUN_RECORD_KEY,
-  OFFLINE_REPLAY_KEY
+  OFFLINE_REPLAY_KEY,
+  OFFLINE_DEVICE_BINDING_KEY
 ]);
+
+/** @param {StorageLike} storage */
+function suffixedPracticeKeys(storage) {
+  /** @type {string[]} */
+  let keys = [];
+  try {
+    if (typeof storage.keys === "function") {
+      keys = storage.keys();
+    } else if (typeof storage.key === "function") {
+      for (let index = 0; index < (storage.length ?? 0); index += 1) {
+        const key = storage.key(index);
+        if (key !== null) keys.push(key);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return keys.filter((key) => key.startsWith(OFFLINE_PRACTICE_PIN_PREFIX));
+}
 
 /** @param {StorageLike | undefined | null} [storage] */
 function resolveStorage(storage) {
@@ -48,6 +75,28 @@ function resolveStorage(storage) {
     return globalThis.localStorage;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Returns true when a stored receipt belongs to a different authentication
+ * identity. A missing receipt is not evidence of a stale Run; malformed state
+ * is treated conservatively so it cannot survive an identity boundary.
+ *
+ * @param {string | null} userId
+ * @param {StorageLike | undefined | null} [storage]
+ */
+export function ownerMismatch(userId, storage) {
+  const target = resolveStorage(storage);
+  if (!target) {
+    return false;
+  }
+  try {
+    const raw = target.getItem(OFFLINE_RECEIPT_KEY);
+    return raw !== null &&
+      (JSON.parse(raw)?.binding?.playerId || null) !== userId;
+  } catch {
+    return true;
   }
 }
 
@@ -91,7 +140,11 @@ export function scrubOfflineState(storage) {
     return false;
   }
   let cleared = true;
-  for (const key of OFFLINE_ACCOUNT_SCOPED_KEYS) {
+  const keys = new Set([
+    ...OFFLINE_ACCOUNT_SCOPED_KEYS,
+    ...suffixedPracticeKeys(target)
+  ]);
+  for (const key of keys) {
     try {
       if (target.getItem(key) === null) {
         continue;

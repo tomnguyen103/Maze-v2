@@ -121,6 +121,10 @@ export function verifyRunReplay(value, trusted) {
  *   questionForRevision: (revisionId: string) => ReturnType<
  *     (typeof import("../src/questions/question-bank.js"))["getBundledQuestion"]
  *   > | null,
+ *   onAction?: (
+ *     run: ReturnType<typeof createRun>,
+ *     action: { type: string, answerId?: string }
+ *   ) => void,
  *   onStep?: (
  *     run: ReturnType<typeof createRun>,
  *     action: { type: string } | null
@@ -169,6 +173,7 @@ export function verifyOfflineRunReplay(value, trusted) {
     }
 
     const action = replayActionV2(entry, run);
+    trusted.onAction?.(run, action);
     const next = applyAction(run, action);
     if (!changedAsExpected(run, next, action)) {
       throw new ReplayInputError(

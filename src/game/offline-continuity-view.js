@@ -20,6 +20,12 @@ const REASONS = Object.freeze({
     "Class Runs stay online so your Teacher's Classroom stays up to date.",
   receipt: "Reconnect once to make this Run available offline.",
   binding: "Reconnect once to make this Run available offline.",
+  unrecordable:
+    "This Run cannot be verified offline. Reconnect to continue safely.",
+  package: "The offline package is unavailable. Reconnect to prepare this Run.",
+  quota: "This device could not save the offline package. Reconnect to continue.",
+  storage: "Offline storage is unavailable. Reconnect to continue safely.",
+  worker: "Offline pinning is unavailable. Reconnect to continue safely.",
   expired: "Offline play for this Run has ended. Reconnect to continue."
 });
 

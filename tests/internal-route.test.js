@@ -152,10 +152,12 @@ describe("internal webhook retry endpoint", () => {
   it("prunes rate-limit counters and the webhook inbox on the cron path", async () => {
     const pruneRateLimits = vi.fn(async () => 4);
     const pruneWebhookInbox = vi.fn(async () => 2);
+    const pruneOfflineRunContinuity = vi.fn(async () => 5);
     const handler = createInternalHandler({
       inbox: workingInbox,
       pruneRateLimits,
       pruneWebhookInbox,
+      pruneOfflineRunContinuity,
       cronSecret: SECRET
     });
     const { response, captured } = createResponse();
@@ -166,13 +168,14 @@ describe("internal webhook retry endpoint", () => {
     );
     expect(pruneRateLimits).toHaveBeenCalledTimes(1);
     expect(pruneWebhookInbox).toHaveBeenCalledTimes(1);
+    expect(pruneOfflineRunContinuity).toHaveBeenCalledTimes(1);
     expect(captured.statusCode).toBe(200);
     expect(captured.body).toEqual({
       claimed: 2,
       processed: 1,
       failed: 1,
       dead: 0,
-      pruned: { rateLimits: 4, webhookInbox: 2 }
+      pruned: { rateLimits: 4, webhookInbox: 2, offlineRunContinuity: 5 }
     });
   });
 

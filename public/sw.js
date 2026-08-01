@@ -1,40 +1,167 @@
 /*
  * Echo Maze offline asset pinning, per ADR 0036.
  *
- * Hand-written on purpose. The conventional choice here would be Workbox or
- * `vite-plugin-pwa`, and this is the one place the standing no-new-dependency
- * constraint forces something bespoke. Its scope is deliberately narrow: hold
- * one versioned set of assets an active receipt named, refuse to disturb them
- * while a Run is non-terminal, and hand over to a staged version only once
- * nothing depends on the old one.
- *
- * The rule the whole file exists for: while any Run is non-terminal, no staged
- * version activates, no request for that Run is served by a staged version,
- * and no pinned asset is evicted. Mixing engine versions mid-Run would break
- * exact recovery and make the server's later replay disagree with what the
- * Explorer actually saw.
+ * This is deliberately a small hand-written worker. Its state is one
+ * IndexedDB record rather than process memory, because a worker restart must
+ * not forget which version a non-terminal Run is using or release a pending
+ * verification package too early. Cache Storage remains the durable asset
+ * store; IndexedDB holds only the version/run references that protect it.
  */
 
 const PIN_PREFIX = "echo-maze-pin-";
 const ACCOUNT_SCOPED = "account";
 const PUBLIC_SCOPED = "public";
 const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const STATE_DB_NAME = "echo-maze-offline-v1";
+const STATE_STORE_NAME = "state";
+const STATE_KEY = "runtime";
 
 /**
- * Runs that have not reached a terminal state, and the pending verification
- * packages that outlive them. A version may activate only when both are empty
- * of references to the version it would replace.
- *
- * @type {Map<string, { version: string, terminal: boolean, durable: boolean, accountScope: string | null }>}
+ * @typedef {{
+ *   version: string,
+ *   terminal: boolean,
+ *   durable: boolean,
+ *   accountScope: string | null
+ * }} RunReference
+ * @typedef {{
+ *   activeVersion: string | null,
+ *   activeAccountScope: string | null,
+ *   staged: { version: string, blocked: boolean } | null,
+ *   runs: Record<string, RunReference>
+ * }} WorkerState
  */
-const runs = new Map();
 
-/** @type {{ version: string, blocked: boolean } | null} */
-let staged = null;
-/** @type {string | null} */
-let activeVersion = null;
-/** @type {string | null} */
-let activeAccountScope = null;
+/** @returns {WorkerState} */
+function emptyState() {
+  return {
+    activeVersion: null,
+    activeAccountScope: null,
+    staged: null,
+    runs: {}
+  };
+}
+
+/** @param {unknown} value @returns {WorkerState} */
+function normalizeState(value) {
+  if (!value || typeof value !== "object") {
+    return emptyState();
+  }
+  const candidate = /** @type {Record<string, unknown>} */ (value);
+  const runs =
+    candidate.runs && typeof candidate.runs === "object"
+      ? /** @type {Record<string, RunReference>} */ (candidate.runs)
+      : {};
+  return {
+    activeVersion:
+      typeof candidate.activeVersion === "string"
+        ? candidate.activeVersion
+        : null,
+    activeAccountScope:
+      typeof candidate.activeAccountScope === "string"
+        ? candidate.activeAccountScope
+        : null,
+    staged:
+      candidate.staged && typeof candidate.staged === "object"
+        ? {
+            version:
+              typeof candidate.staged.version === "string"
+                ? candidate.staged.version
+                : "",
+            blocked: candidate.staged.blocked === true
+          }
+        : null,
+    runs
+  };
+}
+
+/**
+ * IndexedDB is the worker's durable state boundary. A missing or unavailable
+ * database leaves the worker usable for the current lifetime, but callers get
+ * a failed mutation result rather than a false durability claim.
+ */
+let databasePromise = null;
+
+function openDatabase() {
+  if (typeof indexedDB === "undefined") {
+    return Promise.resolve(null);
+  }
+  databasePromise ??= new Promise((resolve, reject) => {
+    let request;
+    try {
+      request = indexedDB.open(STATE_DB_NAME, 1);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(STATE_STORE_NAME)) {
+        database.createObjectStore(STATE_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB unavailable."));
+  });
+  return databasePromise;
+}
+
+/** @param {IDBRequest} request */
+function requestResult(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed."));
+  });
+}
+
+/** @returns {Promise<WorkerState>} */
+async function loadState() {
+  const database = await openDatabase();
+  if (!database) {
+    return emptyState();
+  }
+  const transaction = database.transaction(STATE_STORE_NAME, "readonly");
+  const stored = await requestResult(
+    transaction.objectStore(STATE_STORE_NAME).get(STATE_KEY)
+  );
+  return normalizeState(stored);
+}
+
+/** @param {WorkerState} state @returns {Promise<boolean>} */
+async function saveState(state) {
+  const database = await openDatabase();
+  if (!database) {
+    return false;
+  }
+  const transaction = database.transaction(STATE_STORE_NAME, "readwrite");
+  await requestResult(
+    transaction.objectStore(STATE_STORE_NAME).put(state, STATE_KEY)
+  );
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB transaction aborted."));
+  });
+  return true;
+}
+
+let statePromise = loadState().catch(() => emptyState());
+let mutationChain = Promise.resolve();
+
+/** @param {(state: WorkerState) => Promise<unknown>} operation */
+function mutateState(operation) {
+  const mutation = mutationChain.then(async () => {
+    const state = await statePromise;
+    const result = await operation(state);
+    if (!(await saveState(state))) {
+      return { ok: false, reason: "storage" };
+    }
+    return result;
+  });
+  mutationChain = mutation.catch(() => {});
+  return mutation;
+}
 
 self.addEventListener("install", (event) => {
   // Never skipWaiting: taking over immediately is exactly the mid-Run swap
@@ -54,68 +181,76 @@ self.addEventListener("message", (event) => {
   const reply = (/** @type {unknown} */ payload) => {
     event.ports?.[0]?.postMessage(payload);
   };
-
-  if (message.type === "pin") {
+  const respond = (promise) => {
     event.waitUntil(
-      pin(message).then(
-        (result) => reply(result),
-        (error) => reply({ ok: false, reason: String(error?.message ?? error) })
+      promise.then(reply, (error) =>
+        reply({ ok: false, reason: String(error?.message ?? error) })
       )
     );
+  };
+
+  if (message.type === "pin") {
+    respond(mutateState((state) => pin(message, state)));
     return;
   }
   if (message.type === "run-state") {
-    const existing = runs.get(message.runId);
-    runs.set(message.runId, {
-      version: message.version ?? existing?.version ?? activeVersion ?? "",
-      terminal: message.terminal === true,
-      durable: message.durable === true,
-      accountScope:
-        message.accountScope ?? existing?.accountScope ?? activeAccountScope
-    });
-    event.waitUntil(settle().then(reply, reply));
+    respond(
+      mutateState(async (state) => {
+        const existing = state.runs[message.runId];
+        state.runs[message.runId] = {
+          version: message.version ?? existing?.version ?? state.activeVersion ?? "",
+          terminal: message.terminal === true,
+          durable: message.durable === true,
+          accountScope:
+            message.accountScope ??
+            existing?.accountScope ??
+            state.activeAccountScope
+        };
+        return settle(state);
+      })
+    );
     return;
   }
   if (message.type === "release") {
-    runs.delete(message.runId);
-    event.waitUntil(settle().then(reply, reply));
+    respond(
+      mutateState(async (state) => {
+        delete state.runs[message.runId];
+        return settle(state);
+      })
+    );
     return;
   }
   if (message.type === "stage") {
-    staged = { version: message.version, blocked: message.blocked === true };
-    event.waitUntil(settle().then(reply, reply));
+    respond(
+      mutateState(async (state) => {
+        state.staged = {
+          version: message.version,
+          blocked: message.blocked === true
+        };
+        return settle(state);
+      })
+    );
     return;
   }
   if (message.type === "sign-out") {
-    event.waitUntil(dropAccountScoped().then(reply, reply));
+    respond(
+      mutateState(async (state) => {
+        await dropAccountScoped(state);
+        return { ...(await settle(state)), ok: true };
+      })
+    );
     return;
   }
   if (message.type === "status") {
-    reply(status());
+    respond(mutationChain.then(() => statePromise.then(status)));
   }
 });
 
 self.addEventListener("fetch", (event) => {
-  const selected = versionForRequest();
-  if (!selected?.version) {
-    return;
-  }
   event.respondWith(
-    (selected.accountScope
-      ? caches.open(
-          cacheName(selected.version, ACCOUNT_SCOPED, selected.accountScope)
-        )
-      : Promise.resolve(null)
-    )
-      .then((cache) => cache?.match(event.request))
-      .then(
-        (hit) =>
-          hit ??
-          caches
-            .open(cacheName(selected.version, PUBLIC_SCOPED))
-            .then((cache) => cache.match(event.request))
-            .then((publicHit) => publicHit ?? fetch(event.request))
-      )
+    mutationChain
+      .then(() => statePromise)
+      .then((state) => fetchFromPinnedVersion(event.request, state))
   );
 });
 
@@ -123,43 +258,67 @@ self.addEventListener("fetch", (event) => {
  * Serving a request for a non-terminal Run from a staged version is the same
  * fault as activating one, so the answer is always the version that Run was
  * pinned against.
+ *
+ * @param {Request} request
+ * @param {WorkerState} state
  */
-function versionForRequest() {
-  for (const run of runs.values()) {
+function fetchFromPinnedVersion(request, state) {
+  const selected = versionForRequest(state);
+  if (!selected?.version) {
+    return fetch(request);
+  }
+  return (selected.accountScope
+    ? caches.open(
+        cacheName(selected.version, ACCOUNT_SCOPED, selected.accountScope)
+      )
+    : Promise.resolve(null)
+  )
+    .then((cache) => cache?.match(request))
+    .then(
+      (hit) =>
+        hit ??
+        caches
+          .open(cacheName(selected.version, PUBLIC_SCOPED))
+          .then((cache) => cache.match(request))
+          .then((publicHit) => publicHit ?? fetch(request))
+    );
+}
+
+/** @param {WorkerState} state */
+function versionForRequest(state) {
+  for (const run of Object.values(state.runs)) {
     if (!run.terminal) {
       return {
-        version: run.version || activeVersion,
+        version: run.version || state.activeVersion,
         accountScope: run.accountScope
       };
     }
   }
-  return activeVersion
-    ? { version: activeVersion, accountScope: activeAccountScope }
+  return state.activeVersion
+    ? { version: state.activeVersion, accountScope: state.activeAccountScope }
     : null;
 }
 
-/** @param {{ version: string, assets: { url: string, scope?: string }[] }} message */
-async function pin(message) {
+/** @param {{ version: string, assets: { url: string, scope?: string }[] }} message @param {WorkerState} state */
+async function pin(message, state) {
   const accountAssets = (message.assets ?? []).filter(
     (asset) => asset.scope !== PUBLIC_SCOPED
   );
-  const accountScope = message.accountScope ?? activeAccountScope;
+  const accountScope = message.accountScope ?? state.activeAccountScope;
   if (accountAssets.length > 0 && !ACCOUNT_SCOPE_PATTERN.test(accountScope ?? "")) {
     throw new Error("Account-scoped package needs an account scope.");
   }
-  const nonTerminal = [...runs.values()].some((run) => !run.terminal);
+  const nonTerminal = Object.values(state.runs).some((run) => !run.terminal);
   if (
     nonTerminal &&
     accountScope &&
-    activeAccountScope &&
-    accountScope !== activeAccountScope
+    state.activeAccountScope &&
+    accountScope !== state.activeAccountScope
   ) {
     throw new Error("A non-terminal Run blocks an account cache switch.");
   }
   const accountCache = accountAssets.length
-    ? await caches.open(
-        cacheName(message.version, ACCOUNT_SCOPED, accountScope)
-      )
+    ? await caches.open(cacheName(message.version, ACCOUNT_SCOPED, accountScope))
     : null;
   const publicCache = await caches.open(
     cacheName(message.version, PUBLIC_SCOPED)
@@ -171,44 +330,42 @@ async function pin(message) {
     }
     await cache.add(new Request(asset.url, { cache: "reload" }));
   }
-  activeVersion ??= message.version;
-  activeAccountScope ??= accountScope;
+  state.activeVersion ??= message.version;
+  state.activeAccountScope ??= accountScope;
   return { ok: true, version: message.version };
 }
 
-/**
- * Decides whether the staged version may take over, and evicts only what
- * nothing references any more.
- */
-async function settle() {
-  const nonTerminal = [...runs.values()].filter((run) => !run.terminal);
-  const undurable = [...runs.values()].filter(
+/** @param {WorkerState} state */
+async function settle(state) {
+  const nonTerminal = Object.values(state.runs).filter((run) => !run.terminal);
+  const undurable = Object.values(state.runs).filter(
     (run) => run.terminal && !run.durable
   );
 
-  if (staged?.blocked && nonTerminal.length > 0) {
+  if (state.staged?.blocked && nonTerminal.length > 0) {
     // A version blocked for security cannot be activated and cannot be played
     // through either. Pausing preserves Active Run Recovery; the Explorer
     // reconnects rather than continuing under rules that changed underneath.
-    return { ...status(), paused: true };
+    return { ...status(state), paused: true };
   }
   if (nonTerminal.length > 0 || undurable.length > 0) {
-    return { ...status(), paused: false };
+    return { ...status(state), paused: false };
   }
-  if (staged && !staged.blocked) {
-    activeVersion = staged.version;
-    staged = null;
+  if (state.staged && !state.staged.blocked) {
+    state.activeVersion = state.staged.version;
+    state.staged = null;
   }
-  await evictUnreferenced();
-  return { ...status(), paused: false };
+  await evictUnreferenced(state);
+  return { ...status(state), paused: false };
 }
 
-async function evictUnreferenced() {
+/** @param {WorkerState} state */
+async function evictUnreferenced(state) {
   const referenced = new Set(
-    [...runs.values()].map((run) => run.version).filter(Boolean)
+    Object.values(state.runs).map((run) => run.version).filter(Boolean)
   );
-  if (activeVersion) {
-    referenced.add(activeVersion);
+  if (state.activeVersion) {
+    referenced.add(state.activeVersion);
   }
   for (const name of await caches.keys()) {
     if (!name.startsWith(PIN_PREFIX)) {
@@ -220,13 +377,8 @@ async function evictUnreferenced() {
   }
 }
 
-/**
- * Sign-out removes the account-scoped half of every pinned version. The public
- * shell, fonts, and other non-account assets may stay: they carry nothing that
- * belongs to the Explorer who signed out, and another account can neither
- * reuse nor inspect anything that does.
- */
-async function dropAccountScoped() {
+/** @param {WorkerState} state */
+async function dropAccountScoped(state) {
   for (const name of await caches.keys()) {
     if (
       name.startsWith(PIN_PREFIX) &&
@@ -236,28 +388,27 @@ async function dropAccountScoped() {
       await caches.delete(name);
     }
   }
-  activeAccountScope = null;
-  // Every Run entry that still blocks a staged activation — non-terminal, or
-  // terminal with no durable verification package yet — keeps its pin, so a
+  state.activeAccountScope = null;
+  // Every Run entry that still blocks a staged activation â€” non-terminal, or
+  // terminal with no durable verification package yet â€” keeps its pin, so a
   // sign-out cannot let a staged version activate underneath a Run that is
   // still being played. Only entries nothing references any more are dropped.
-  //
-  // The assets are a separate matter: callers must mark Guest-safe assets as
-  // public and provide an account scope for every account-private asset.
-  for (const [runId, run] of runs) {
-    if (run.terminal && run.durable) {
-      runs.delete(runId);
+  for (const [runId, run] of Object.entries(state.runs)) {
+    if (run.terminal ? run.durable : run.accountScope) {
+      delete state.runs[runId];
     }
   }
   return { ok: true };
 }
 
-function status() {
+/** @param {WorkerState} state */
+function status(state) {
   return {
-    activeVersion,
-    stagedVersion: staged?.version ?? null,
-    accountScope: activeAccountScope,
-    nonTerminalRuns: [...runs.values()].filter((run) => !run.terminal).length
+    activeVersion: state.activeVersion,
+    stagedVersion: state.staged?.version ?? null,
+    accountScope: state.activeAccountScope,
+    nonTerminalRuns: Object.values(state.runs).filter((run) => !run.terminal)
+      .length
   };
 }
 

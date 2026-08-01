@@ -128,6 +128,27 @@ function fixtureAdapter() {
       elapsed_ms: 7600,
       achieved_at: "2026-07-26T12:00:00.000Z"
     },
+    offline_run_receipts: {
+      run_id: "offline_run_01MOSS",
+      seed: "MOSS-WATCH-11",
+      level_id: "trail-scout",
+      labyrinth_number: 4,
+      ruleset_revision: "echo-hush-v1",
+      content_pack_hash: "b".repeat(64),
+      issued_at: "2026-08-01T00:00:00.000Z",
+      play_expires_at: "2026-08-08T00:00:00.000Z",
+      submission_expires_at: "2026-08-10T00:00:00.000Z"
+    },
+    offline_pending_submissions: {
+      run_id: "offline_run_01MOSS",
+      accepted: true,
+      outcome: "won",
+      score: 900,
+      moves: 12,
+      elapsed_ms: 30000,
+      applied_at: "2026-08-01T00:02:00.000Z",
+      submitted_at: "2026-08-01T00:01:00.000Z"
+    },
     user_roles: { role: "moderator" }
   };
   return {
@@ -237,6 +258,24 @@ describe("buildUserExport", () => {
         achieved_at: "2026-07-26T12:00:00.000Z"
       })
     ]);
+    expect(exported.data.offline_continuity).toEqual({
+      receipts: [
+        expect.objectContaining({
+          run_id: "offline_run_01MOSS",
+          content_pack_hash: "b".repeat(64)
+        })
+      ],
+      submissions: [
+        expect.objectContaining({
+          run_id: "offline_run_01MOSS",
+          outcome: "won",
+          score: 900
+        })
+      ]
+    });
+    expect(JSON.stringify(exported.data.offline_continuity)).not.toMatch(
+      /actionLog|question|option|prompt/i
+    );
     expect(exported.data.role).toBe("moderator");
   });
 
@@ -258,6 +297,10 @@ describe("buildUserExport", () => {
     expect(exported.data.access_settings).toBeNull();
     expect(exported.data.verified_daily_results).toEqual([]);
     expect(exported.data.verified_daily_best_results).toEqual([]);
+    expect(exported.data.offline_continuity).toEqual({
+      receipts: [],
+      submissions: []
+    });
     expect(exported.data.role).toBe("player");
     expect(JSON.stringify(exported)).not.toContain("Moss Runner");
   });
@@ -276,7 +319,7 @@ describe("buildUserExport", () => {
     // Personal sections plus four Classroom-scoped sections, the two
     // Explorer-keyed Class Expedition definer readers, and the Constellation
     // contribution receipt reader.
-    expect(adapter.queries).toHaveLength(19);
+    expect(adapter.queries).toHaveLength(21);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -352,7 +395,7 @@ describe("exportUserSnapshot", () => {
     expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
     // Context plus every section read between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(18);
+    expect(pool.statements).toHaveLength(20);
     expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });

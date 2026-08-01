@@ -33,6 +33,10 @@ const client = {
     record: { progress: { questId: "quest_cloud_123" }, revision: 1 }
   })),
   submitScore: vi.fn(async () => ({})),
+  submitOfflineRun: vi.fn(async () => ({
+    status: "accepted",
+    duplicate: false
+  })),
   submitVerifiedDaily: vi.fn(async () => ({
     verification: "verified-replay-v1",
     bestResult: "created",
@@ -299,6 +303,33 @@ describe("Player Profile dialog", () => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
       expect(onIdentityEnd).toHaveBeenCalledOnce();
     });
+  });
+
+  it("warns before signing out when an offline result is unverified", async () => {
+    const onAuthenticationChange = vi.fn();
+    const onIdentityEnd = vi.fn();
+    localStorage.setItem(
+      "echo-maze:offline-run-record:v1",
+      JSON.stringify({ verification: "unverified", outcome: "won" })
+    );
+    const originalConfirm = globalThis.confirm;
+    const confirm = vi.fn(() => false);
+    globalThis.confirm = confirm;
+    try {
+      createPlayerController({ onAuthenticationChange, onIdentityEnd });
+      await vi.waitFor(() => {
+        expect(onAuthenticationChange).toHaveBeenCalledWith(true);
+      });
+      /** @type {HTMLButtonElement} */ (
+        document.getElementById("player-sign-out")
+      ).click();
+
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+      expect(clerkBrowser.signOut).not.toHaveBeenCalled();
+      expect(onIdentityEnd).not.toHaveBeenCalled();
+    } finally {
+      globalThis.confirm = originalConfirm;
+    }
   });
 
   it("reports when Clerk removes the active account identity", async () => {
