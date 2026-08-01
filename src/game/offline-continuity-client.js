@@ -109,7 +109,11 @@ export function createOfflineContinuityClient({
     if (!receiptVerifier) {
       return { valid: false, reason: "unconfigured" };
     }
-    return receiptVerifier.verify(receipt);
+    try {
+      return await receiptVerifier.verify(receipt);
+    } catch {
+      return { valid: false, reason: "receipt" };
+    }
   }
 
   /** @param {OfflineAssetPackage} assetPackage */
@@ -137,10 +141,18 @@ export function createOfflineContinuityClient({
     } catch {
       return { ok: false, reason: "device" };
     }
-    const issued = await playerController.issueOfflineReceipt(
-      run,
-      deviceInstallationNonce
-    );
+    let issued;
+    try {
+      issued = await playerController.issueOfflineReceipt(
+        run,
+        deviceInstallationNonce
+      );
+    } catch {
+      return { ok: false, reason: "issue" };
+    }
+    if (!issued || typeof issued !== "object") {
+      return { ok: false, reason: "issue" };
+    }
     const verification = await verifyReceipt(issued.receipt);
     if (!verification.valid) {
       return { ok: false, reason: "receipt", verification };
@@ -151,7 +163,12 @@ export function createOfflineContinuityClient({
     if (!rememberDeviceBinding(run.runId, issued.receipt)) {
       return { ok: false, reason: "device", verification };
     }
-    const pin = await pinAssetPackage(issued.assetPackage);
+    let pin;
+    try {
+      pin = await pinAssetPackage(issued.assetPackage);
+    } catch {
+      return { ok: false, reason: "pin", verification };
+    }
     if (
       !pin ||
       typeof pin !== "object" ||

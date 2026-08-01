@@ -85,6 +85,10 @@ describe("Offline Run Continuity migration", () => {
     expect(sql).toContain(
       [
         "  WHERE submission.run_id = p_run_id",
+        "    AND submission.player_id IS NOT DISTINCT FROM NULLIF(",
+        "      current_setting('echo_maze.explorer_id', true),",
+        "      ''",
+        "    )",
         "    AND (",
         "      submission.idempotency_key = p_idempotency_key",
         "      OR submission.accepted",

@@ -24,6 +24,7 @@ const REASONS = Object.freeze({
     "This Run cannot be verified offline. Reconnect to continue safely.",
   package: "The offline package is unavailable. Reconnect to prepare this Run.",
   quota: "This device could not save the offline package. Reconnect to continue.",
+  unknown: "Reconnect to verify this Run before continuing offline.",
   storage: "Offline storage is unavailable. Reconnect to continue safely.",
   worker: "Offline pinning is unavailable. Reconnect to continue safely.",
   expired: "Offline play for this Run has ended. Reconnect to continue."
@@ -46,7 +47,8 @@ export function createOfflineContinuityView({ section, button, label, note }) {
     button.hidden = !offer.offered;
     note.textContent = offer.offered
       ? "This Run can keep going without a connection."
-      : REASONS[/** @type {keyof typeof REASONS} */ (offer.reason ?? "")] ?? "";
+      : REASONS[/** @type {keyof typeof REASONS} */ (offer.reason ?? "")] ??
+        REASONS.unknown;
   }
 
   /** @param {VerificationState} state */

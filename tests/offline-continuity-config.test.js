@@ -17,7 +17,7 @@ describe("Offline Continuity server configuration", () => {
     expect(loadOfflineContinuityConfig({})).toBeNull();
     expect(
       loadOfflineContinuityConfig({
-        OFFLINE_DEVICE_HASH_SECRET: "server-only-secret-01",
+        OFFLINE_DEVICE_HASH_SECRET: "server-only-secret-01-with-entropy",
         OFFLINE_CONTENT_PACK_HASH: "a".repeat(64),
         OFFLINE_ASSET_PACKAGE: ASSET_PACKAGE
       })
@@ -29,7 +29,7 @@ describe("Offline Continuity server configuration", () => {
     });
     expect(() =>
       loadOfflineContinuityConfig({
-        OFFLINE_DEVICE_HASH_SECRET: "server-only-secret-01"
+        OFFLINE_DEVICE_HASH_SECRET: "server-only-secret-01-with-entropy"
       })
     ).toThrow("configuration is incomplete");
   });
@@ -45,7 +45,7 @@ describe("Offline Continuity server configuration", () => {
 
   it("derives only a one-way device hash from a bounded nonce", () => {
     const nonce = "installation_nonce_01MOSS";
-    const secret = "server-only-secret-01";
+    const secret = "server-only-secret-01-with-entropy";
     expect(validateOfflineDeviceInstallationNonce(nonce)).toBe(nonce);
     expect(deriveOfflineDeviceHash(nonce, secret)).toBe(
       createHmac("sha256", secret).update(nonce).digest("hex")

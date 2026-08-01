@@ -118,6 +118,7 @@ function loadServiceWorker({
         this.url = url;
       }
     },
+    setTimeout,
     console
   };
   scope.self = {

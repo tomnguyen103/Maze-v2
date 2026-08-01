@@ -98,9 +98,9 @@ export function createOfflineContinuityBridge(
     return loadRuntime().then((runtime) => runtime.continueRun());
   }
 
-  elements.offlineContinue.addEventListener("click", () => {
+  elements.offlineContinue.onclick = () => {
     void continueRun().catch(() => {});
-  });
+  };
 
   /** @param {Parameters<OfflineContinuityRuntime["prepare"]>[0]} locator */
   function prepare(locator) {
@@ -133,7 +133,12 @@ export function createOfflineContinuityBridge(
     boot: () => loadRuntime().then((runtime) => runtime.boot()),
     reconcile: () => loadRuntime().then((runtime) => runtime.reconcile()),
     online: () => loadRuntime().then((runtime) => runtime.online()),
-    signOut: () => loadRuntime().then((runtime) => runtime.signOut()),
+    signOut: () =>
+      loadRuntime()
+        .then((runtime) => runtime.signOut())
+        .finally(() => {
+          runtimePromise = null;
+        }),
     prepare,
     continueRun,
     recordTransition,

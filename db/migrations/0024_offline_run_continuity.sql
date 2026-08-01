@@ -144,6 +144,10 @@ GRANT SELECT ON TABLE offline_pending_submissions TO echo_maze_runtime;
 -- Records what the server signed. Returns FALSE when a receipt for this Run
 -- already exists: one Run may hold exactly one receipt, so a repeated
 -- admission cannot mint a second and cannot extend the first.
+-- Application calls set echo_maze.explorer_id in transaction-local context
+-- before reaching these predicates. The unscoped prune function below is the
+-- maintenance exception; an empty context must not widen a signed-in read or
+-- write to another Explorer's rows.
 CREATE FUNCTION issue_offline_run_receipt(
   p_run_id TEXT,
   p_device_installation_hash CHAR,
@@ -381,6 +385,10 @@ BEGIN
   SELECT submission.* INTO v_existing
   FROM public.offline_pending_submissions AS submission
   WHERE submission.run_id = p_run_id
+    AND submission.player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND (
       submission.idempotency_key = p_idempotency_key
       OR submission.accepted

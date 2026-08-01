@@ -105,7 +105,10 @@ export function createOfflineWorkerClient({
       const needsAccountScope = normalized.assets.some(
         (asset) => asset.scope === "account"
       );
-      if (needsAccountScope && !validAccountScope(accountScope)) {
+      if (
+        (needsAccountScope || accountScope !== null) &&
+        !validAccountScope(accountScope)
+      ) {
         return {
           ok: false,
           reason: "account-scope"
@@ -127,6 +130,9 @@ export function createOfflineWorkerClient({
      * }} state
      */
     setRunState(state) {
+      if (state.accountScope != null && !validAccountScope(state.accountScope)) {
+        return Promise.resolve({ ok: false, reason: "account-scope" });
+      }
       return message({
         type: "run-state",
         runId: state.runId,

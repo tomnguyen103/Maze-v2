@@ -407,6 +407,7 @@ export function createOfflineContinuityController({
         actionLog: createRunActionLogV2()
       });
     } catch {
+      discardDetailedState(target);
       return { ok: false, reason: "quota" };
     }
 
@@ -657,7 +658,8 @@ export function createOfflineContinuityController({
     for (const key of [
       OFFLINE_RECEIPT_KEY,
       OFFLINE_CONTENT_PACK_KEY,
-      OFFLINE_ACTION_LOG_KEY
+      OFFLINE_ACTION_LOG_KEY,
+      OFFLINE_DEVICE_BINDING_KEY
     ]) {
       try {
         if (target.removeItem) {
@@ -681,15 +683,6 @@ export function createOfflineContinuityController({
           cleared = false;
         }
       }
-    }
-    try {
-      if (target.removeItem) {
-        target.removeItem(OFFLINE_DEVICE_BINDING_KEY);
-      } else {
-        target.setItem(OFFLINE_DEVICE_BINDING_KEY, "");
-      }
-    } catch {
-      cleared = false;
     }
     return cleared;
   }
@@ -804,10 +797,10 @@ export function createOfflineContinuityController({
       Boolean(actionLog) &&
       typeof record.terminalAt === "string";
 
-    /** @param {"accepted" | "rejected" | "expired" | "invalid"} status @param {string} reason */
-    async function finalize(status, reason) {
+    /** @param {"accepted" | "rejected" | "expired" | "invalid"} status @param {string} reason @param {boolean} duplicate */
+    async function finalize(status, reason, duplicate = false) {
       const reconciliation = reconcileOfflineRun({
-        outcome: { status, duplicate: false }
+        outcome: { status, duplicate }
       });
       const nextRecord = outcomeOnlyRecord(
         record,
@@ -837,11 +830,11 @@ export function createOfflineContinuityController({
       };
     }
 
-    if (!packageReady || !submitOfflineRun) {
-      return finalize(
-        "invalid",
-        packageReady ? "unavailable" : "local-package"
-      );
+    if (!submitOfflineRun) {
+      return { status: "pending", retry: true, reason: "unavailable" };
+    }
+    if (!packageReady) {
+      return finalize("invalid", "local-package");
     }
 
     const verifiedReceipt = /** @type {OfflineReceipt} */ (receipt);
@@ -874,7 +867,7 @@ export function createOfflineContinuityController({
         reason: "response"
       };
     }
-    return finalize(outcome.status, outcome.status);
+    return finalize(outcome.status, outcome.status, outcome.duplicate);
   }
 
   /** @param {{ run: OfflineRunIdentity, reason?: string }} input */

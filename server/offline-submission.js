@@ -31,7 +31,7 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *   verifyReceipt: (receipt: unknown) => (
  *     { valid: true } | { valid: false, reason: string }
  *   ),
- *   loadReceipt: (runId: string, deviceInstallationHash: string, playerId?: string) => Promise<{
+ *   loadReceipt: (runId: string, deviceInstallationHash: string) => Promise<{
  *     runId: string,
  *     playerId: string | null,
  *     deviceInstallationHash: string,
@@ -141,8 +141,7 @@ export function createOfflineSubmissionService({
       }
       const stored = await loadReceipt(
         submission.receipt.binding.runId,
-        submission.deviceInstallationHash,
-        submission.playerId
+        submission.deviceInstallationHash
       );
       if (!stored) {
         return { status: "invalid", duplicate: false, reason: "unknown-run" };

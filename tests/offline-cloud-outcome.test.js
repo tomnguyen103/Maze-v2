@@ -95,4 +95,27 @@ describe("Offline replay cloud boundary", () => {
     expect(test.playerStore.submitScore).not.toHaveBeenCalled();
     expect(test.questProgressStore.save).not.toHaveBeenCalled();
   });
+
+  it("rejects a receipt bound to a different account before any cloud write", async () => {
+    const test = harness();
+    await expect(
+      test.apply({
+        runId: RECEIPT.runId,
+        playerId: "user_other",
+        receipt: RECEIPT,
+        result: {
+          status: "won",
+          score: 900,
+          wardensDefeated: 2,
+          echoesCollected: 3,
+          moves: 12,
+          elapsedMs: 30000
+        }
+      })
+    ).rejects.toThrow("Offline replay account binding is invalid.");
+
+    expect(test.playerStore.submitScore).not.toHaveBeenCalled();
+    expect(test.questProgressStore.save).not.toHaveBeenCalled();
+    expect(test.learningJournalStore.saveJournal).not.toHaveBeenCalled();
+  });
 });

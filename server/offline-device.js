@@ -18,7 +18,7 @@ export function validateOfflineDeviceInstallationNonce(value) {
 /** @param {string} nonce @param {string} secret */
 export function deriveOfflineDeviceHash(nonce, secret) {
   validateOfflineDeviceInstallationNonce(nonce);
-  if (typeof secret !== "string" || secret.length < 16) {
+  if (typeof secret !== "string" || secret.length < 32) {
     throw new Error("Offline device hash secret is invalid.");
   }
   return createHmac("sha256", secret).update(nonce, "utf8").digest("hex");

@@ -22,8 +22,8 @@ export function loadOfflineContinuityConfig(env = process.env) {
   const deviceHashSecret = /** @type {string} */ (
     env.OFFLINE_DEVICE_HASH_SECRET
   );
-  if (deviceHashSecret.length < 16) {
-    throw new Error("OFFLINE_DEVICE_HASH_SECRET must be at least 16 characters.");
+  if (deviceHashSecret.length < 32) {
+    throw new Error("OFFLINE_DEVICE_HASH_SECRET must be at least 32 characters.");
   }
   const contentPackHash = /** @type {string} */ (env.OFFLINE_CONTENT_PACK_HASH);
   if (!CONTENT_PACK_HASH_PATTERN.test(contentPackHash)) {

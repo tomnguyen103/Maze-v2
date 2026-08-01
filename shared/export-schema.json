@@ -122,11 +122,73 @@
           "properties": {
             "receipts": {
               "type": "array",
-              "items": { "type": "object" }
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "run_id",
+                  "seed",
+                  "level_id",
+                  "labyrinth_number",
+                  "ruleset_revision",
+                  "content_pack_hash",
+                  "issued_at",
+                  "play_expires_at",
+                  "submission_expires_at"
+                ],
+                "properties": {
+                  "run_id": { "type": "string" },
+                  "seed": { "type": "string" },
+                  "level_id": {
+                    "enum": ["bright-start", "trail-scout", "maze-master"]
+                  },
+                  "labyrinth_number": { "type": "integer" },
+                  "ruleset_revision": { "type": "string" },
+                  "content_pack_hash": { "type": "string" },
+                  "issued_at": { "type": "string", "format": "date-time" },
+                  "play_expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "submission_expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
             },
             "submissions": {
               "type": "array",
-              "items": { "type": "object" }
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "run_id",
+                  "accepted",
+                  "outcome",
+                  "score",
+                  "moves",
+                  "elapsed_ms",
+                  "applied_at",
+                  "submitted_at"
+                ],
+                "properties": {
+                  "run_id": { "type": "string" },
+                  "accepted": { "type": "boolean" },
+                  "outcome": { "enum": ["won", "lost"] },
+                  "score": { "type": "integer" },
+                  "moves": { "type": "integer" },
+                  "elapsed_ms": { "type": "integer" },
+                  "applied_at": {
+                    "type": ["string", "null"],
+                    "format": "date-time"
+                  },
+                  "submitted_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
             }
           }
         },

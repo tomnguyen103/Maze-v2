@@ -74,6 +74,9 @@ The deletion transaction explicitly removes and verifies the signed-in
 Explorer Access Settings and Classroom Membership records.
 Verified Daily submissions and best rows cascade from the deleted Player
 Profile and are included in the deletion verification.
+Offline Run receipts and pending-submission ledger rows are also deleted and
+verified before account deletion completes; pending rows cascade from their
+receipt. Guest rows have no account owner and are not part of account deletion.
 Removing one Classroom Membership also removes that Explorer's Quest Progress
 and Lantern Journal for that Classroom. Its derived progress counts cascade
 with the Membership. Personal Play remains.
@@ -86,6 +89,10 @@ with the Membership. Personal Play remains.
   Classroom name when needed, and event time.
 - Rate-limit counters are dead weight after their window;
   `npm run prune:rate-limits` clears them.
+- Offline Run receipts and pending-submission ledger rows are bounded by the
+  stored submission expiry. The continuity maintenance job prunes expired
+  receipts, and the database cascade removes their pending rows; no expired
+  receipt or pending submission is retained as an archive.
 - Daily Trail Constellation aggregates and contribution receipts are hard-deleted
   48 hours after their Daily ends. `npm run prune:constellation` performs the
   deletion; every Constellation read filters on the same expiry instant, so an

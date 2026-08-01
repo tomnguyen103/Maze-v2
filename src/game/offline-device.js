@@ -3,11 +3,10 @@ export const OFFLINE_DEVICE_NONCE_KEY =
 
 /** @param {{ randomUUID?: () => string } | undefined} [cryptoLike] */
 export function createOfflineDeviceInstallationNonce(cryptoLike = globalThis.crypto) {
-  const randomUUID = cryptoLike?.randomUUID;
-  if (typeof randomUUID !== "function") {
+  if (!cryptoLike || typeof cryptoLike.randomUUID !== "function") {
     throw new Error("Offline Continuity needs a secure device identifier.");
   }
-  return randomUUID();
+  return cryptoLike.randomUUID();
 }
 
 /**

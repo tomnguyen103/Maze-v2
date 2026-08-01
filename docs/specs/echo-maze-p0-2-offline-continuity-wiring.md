@@ -6,8 +6,8 @@ Parent issue: [#150](https://github.com/tomnguyen103/Maze-v2/issues/150)
 
 Echo Maze already contains the signed receipt, deterministic replay, service
 worker, offline Practice, and local scrub mechanisms for Offline Run
-Continuity, but the running application does not connect them. An Explorer can
-therefore not take an already-authorized Quest Run through **Continue Offline**
+Continuity, but the running application does not connect them. An Explorer
+therefore cannot take an already-authorized Quest Run through **Continue Offline**
 and return with a replay-verified result. The current gaps also leave account
 state, suffixed Practice pins, worker restarts, exports, and expired receipts
 without the end-to-end privacy boundary promised by ADRs 0034–0036.

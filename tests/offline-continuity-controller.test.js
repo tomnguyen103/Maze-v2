@@ -407,6 +407,7 @@ describe("offline continuity controller", () => {
     const controller = createOfflineContinuityController({
       storage,
       receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
       accountScope: "user_offline_01",
       getDeviceInstallationHash: () => "device-hash"
     });
@@ -422,6 +423,7 @@ describe("offline continuity controller", () => {
     const copied = createOfflineContinuityController({
       storage,
       receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
       accountScope: "user_offline_01",
       getDeviceInstallationHash: () => "other-device"
     });
@@ -452,6 +454,7 @@ describe("offline continuity controller", () => {
     const controller = createOfflineContinuityController({
       storage,
       receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
       accountScope: "user_offline_01"
     });
 
@@ -475,15 +478,22 @@ describe("offline continuity controller", () => {
     });
     const identity = createRunIdentity(run);
     const values = new Map();
+    let writes = 0;
     const storage = {
       getItem: /** @param {string} key */ (key) => values.get(key) ?? null,
-      setItem: () => {
-        throw new Error("QuotaExceededError");
-      }
+      setItem: /** @param {string} key @param {string} value */ (key, value) => {
+        writes += 1;
+        if (writes > 2) {
+          throw new Error("QuotaExceededError");
+        }
+        values.set(key, value);
+      },
+      removeItem: /** @param {string} key */ (key) => values.delete(key)
     };
     const controller = createOfflineContinuityController({
       storage,
       receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
       accountScope: "user_offline_01"
     });
 

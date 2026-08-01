@@ -15,6 +15,7 @@ const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const STATE_DB_NAME = "echo-maze-offline-v1";
 const STATE_STORE_NAME = "state";
 const STATE_KEY = "runtime";
+const STATE_WAIT_MS = 2000;
 
 /**
  * @typedef {{
@@ -248,9 +249,16 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    mutationChain
-      .then(() => statePromise)
-      .then((state) => fetchFromPinnedVersion(event.request, state))
+    Promise.race([
+      mutationChain.then(() => statePromise),
+      new Promise((resolve) =>
+        setTimeout(() => resolve(null), STATE_WAIT_MS)
+      )
+    ])
+      .then((state) =>
+        fetchFromPinnedVersion(event.request, state ?? emptyState())
+      )
+      .catch(() => fetch(event.request))
   );
 });
 
@@ -305,7 +313,10 @@ async function pin(message, state) {
     (asset) => asset.scope !== PUBLIC_SCOPED
   );
   const accountScope = message.accountScope ?? state.activeAccountScope;
-  if (accountAssets.length > 0 && !ACCOUNT_SCOPE_PATTERN.test(accountScope ?? "")) {
+  if (
+    (accountAssets.length > 0 || accountScope !== null) &&
+    !ACCOUNT_SCOPE_PATTERN.test(accountScope ?? "")
+  ) {
     throw new Error("Account-scoped package needs an account scope.");
   }
   const nonTerminal = Object.values(state.runs).some((run) => !run.terminal);
@@ -389,10 +400,8 @@ async function dropAccountScoped(state) {
     }
   }
   state.activeAccountScope = null;
-  // Every Run entry that still blocks a staged activation â€” non-terminal, or
-  // terminal with no durable verification package yet â€” keeps its pin, so a
-  // sign-out cannot let a staged version activate underneath a Run that is
-  // still being played. Only entries nothing references any more are dropped.
+  // Sign-out drops account-scoped entries. Guest non-terminal entries and
+  // terminal entries without a durable verification package keep their pins.
   for (const [runId, run] of Object.entries(state.runs)) {
     if (run.terminal ? run.durable : run.accountScope) {
       delete state.runs[runId];

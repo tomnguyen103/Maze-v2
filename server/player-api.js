@@ -806,6 +806,10 @@ export function createPlayerApi(env = process.env) {
         void unavailableQuestProgressHandler(request, response, next);
         return;
       }
+      if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
+        void offlineReceiptHandler(request, response, next);
+        return;
+      }
       if (OFFLINE_SUBMISSION_PATHS.has(pathname)) {
         void offlineSubmissionHandler(request, response, next);
         return;
