@@ -7,14 +7,14 @@ import {
 
 const EXPECTED = {
   testFiles: 147,
-  tests: 1321
+  tests: 1324
 };
 
 function summary(overrides = {}) {
   return {
     testFiles: 147,
-    tests: 1321,
-    passed: 1303,
+    tests: 1324,
+    passed: 1306,
     failed: 0,
     skipped: 18,
     ...overrides
@@ -25,7 +25,7 @@ describe("Vitest gate validation", () => {
   it("parses the file and test totals from Vitest's summary", () => {
     expect(
       parseVitestSummary(
-        "Test Files  139 passed | 8 skipped (147)\nTests  1303 passed | 18 skipped (1321)"
+        "Test Files  139 passed | 8 skipped (147)\nTests  1306 passed | 18 skipped (1324)"
       )
     ).toEqual(summary());
   });
@@ -34,9 +34,9 @@ describe("Vitest gate validation", () => {
     expect(
       parseVitestSummary(
         "\u001b[32m Test Files\u001b[0m  139 passed | 8 skipped (147)\n" +
-          "\u001b[32m      Tests\u001b[0m  1303 passed | 18 skipped (1321)"
+          "\u001b[32m      Tests\u001b[0m  1306 passed | 18 skipped (1324)"
       )
-    ).toEqual(summary({ tests: 1321, passed: 1303 }));
+    ).toEqual(summary({ tests: 1324, passed: 1306 }));
   });
 
   it("rejects filters and overrides on the canonical full-suite run", () => {
@@ -59,6 +59,17 @@ describe("Vitest gate validation", () => {
     ).toThrow("Worker exited unexpectedly");
   });
 
+  it("fails when the runner captures worker loss before output retention", () => {
+    expect(() =>
+      assertVitestGate({
+        summary: summary(),
+        output: "",
+        expected: EXPECTED,
+        workerLossDetected: true
+      })
+    ).toThrow("Worker exited unexpectedly");
+  });
+
   it("fails when the run reports fewer tests than the expected manifest", () => {
     expect(() =>
       assertVitestGate({
@@ -66,7 +77,27 @@ describe("Vitest gate validation", () => {
         output: "",
         expected: EXPECTED
       })
-    ).toThrow("expected 1321 tests, received 1262");
+    ).toThrow("expected 1324 tests, received 1262");
+  });
+
+  it("fails when Vitest reports any failed tests", () => {
+    expect(() =>
+      assertVitestGate({
+        summary: summary({ failed: 1, passed: 1304 }),
+        output: "",
+        expected: EXPECTED
+      })
+    ).toThrow("Vitest reported 1 failed tests.");
+  });
+
+  it("fails when passed, failed, and skipped do not account for the total", () => {
+    expect(() =>
+      assertVitestGate({
+        summary: summary({ passed: 1300 }),
+        output: "",
+        expected: EXPECTED
+      })
+    ).toThrow("accounted for 1318");
   });
 
   it("accepts a complete run with the expected file and test totals", () => {
@@ -74,8 +105,8 @@ describe("Vitest gate validation", () => {
       assertVitestGate({ summary: summary(), output: "", expected: EXPECTED })
     ).toEqual({
       testFiles: 147,
-      tests: 1321,
-      passed: 1303,
+      tests: 1324,
+      passed: 1306,
       skipped: 18
     });
   });

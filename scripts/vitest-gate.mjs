@@ -3,6 +3,13 @@ import { stripVTControlCharacters } from "node:util";
 const WORKER_LOSS_PATTERN = /worker exited unexpectedly/i;
 
 /**
+ * @param {string} output
+ */
+export function containsWorkerLoss(output) {
+  return WORKER_LOSS_PATTERN.test(stripVTControlCharacters(output));
+}
+
+/**
  * Keep `npm test` as an unfilterable full-suite gate. Focused development runs
  * use `npm run test:focused -- <file or filter>` instead.
  *
@@ -70,10 +77,15 @@ function parseSummaryLine(output, label) {
 }
 
 /**
- * @param {{ summary: VitestSummary, output: string, expected: { testFiles: number, tests: number } }} input
+ * @param {{ summary: VitestSummary, output: string, expected: { testFiles: number, tests: number }, workerLossDetected?: boolean }} input
  */
-export function assertVitestGate({ summary, output, expected }) {
-  if (WORKER_LOSS_PATTERN.test(stripVTControlCharacters(output))) {
+export function assertVitestGate({
+  summary,
+  output,
+  expected,
+  workerLossDetected = false
+}) {
+  if (workerLossDetected || containsWorkerLoss(output)) {
     throw new Error(
       "Vitest Worker exited unexpectedly; the test gate cannot trust this run."
     );

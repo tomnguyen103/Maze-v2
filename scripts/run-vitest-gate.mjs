@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertCanonicalGateArgs,
   assertVitestGate,
+  containsWorkerLoss,
   parseVitestSummary
 } from "./vitest-gate.mjs";
 
@@ -26,8 +27,10 @@ function runVitest() {
     );
 
     let output = "";
+    let workerLossDetected = false;
     const retainOutput = (chunk) => {
       const text = chunk.toString();
+      workerLossDetected ||= containsWorkerLoss(text);
       output = `${output}${text}`.slice(-1024 * 1024);
     };
 
@@ -42,7 +45,9 @@ function runVitest() {
     child.once("error", rejectRun);
     // `exit` can fire before stdout/stderr have flushed the final summary.
     // Wait for `close` so the parser sees the complete reporter output.
-    child.once("close", (code, signal) => resolveRun({ code, signal, output }));
+    child.once("close", (code, signal) =>
+      resolveRun({ code, signal, output, workerLossDetected })
+    );
   });
 }
 
@@ -54,7 +59,8 @@ try {
   const gate = assertVitestGate({
     summary,
     output: result.output,
-    expected
+    expected,
+    workerLossDetected: result.workerLossDetected
   });
 
   if (result.code !== 0 || result.signal) {

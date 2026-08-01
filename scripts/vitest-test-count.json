@@ -1,5 +1,5 @@
 {
   "testFiles": 147,
-  "tests": 1321,
+  "tests": 1324,
   "source": "Full Vitest run on 2026-08-01 after adding the canonical Vitest gate regression tests; update deliberately when tests change."
 }
