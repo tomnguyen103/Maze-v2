@@ -4130,11 +4130,11 @@ async function finishRun() {
   const classPlayLoading = loadClassExpeditionPlay();
   if (classPlayLoading && activeRunLocator) {
     const classPlay = await classPlayLoading;
-    const verdict = await classPlay?.recordOutcome(
+    const verdict = (await classPlay?.recordOutcome(
       activeRunLocator.runId,
       finishedLabyrinthNumber,
       won
-    );
+    )) ?? "skipped";
     classroom = verdict !== "skipped";
     if (verdict === "removed") {
       // Authoritative Membership removal: stop here and persist no Class
