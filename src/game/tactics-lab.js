@@ -139,6 +139,7 @@ export function listTacticsDrills() {
 /**
  * @param {string} drillId
  * @param {string} [twistRevision]
+ * @returns {TacticsLabSession}
  */
 export function createTacticsLabSession(drillId, twistRevision) {
   const drill = DRILL_BY_ID.get(drillId);

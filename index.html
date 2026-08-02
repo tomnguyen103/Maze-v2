@@ -757,6 +757,73 @@
           <p id="practice-catalog-summary"></p>
         </div>
         <div class="practice-objectives" id="practice-objectives"></div>
+        <div class="practice-catalog__tools">
+          <button class="control-button" id="practice-tactics-open" type="button">
+            Open Warden Tactics Lab
+          </button>
+          <p>Four fixed, unscored drills for reading Warden behavior before a live Run.</p>
+        </div>
+      </section>
+      <section
+        class="practice-tactics"
+        id="practice-tactics"
+        aria-labelledby="practice-tactics-title"
+        hidden
+      >
+        <div class="practice-tactics__heading">
+          <p class="section-label">Optional / unscored</p>
+          <h3 id="practice-tactics-title" tabindex="-1">Warden Tactics Lab</h3>
+        </div>
+        <p class="practice-tactics__intro" id="practice-tactics-intro">
+          Read the pattern, make a legal move, and leave whenever you are ready. Nothing here changes your Run.
+        </p>
+        <div class="practice-tactics__catalog" id="practice-tactics-catalog"></div>
+        <section class="practice-tactics__twists" id="practice-tactics-twists" hidden>
+          <div class="practice-tactics__subheading">
+            <h4>Choose a Trail Twist</h4>
+            <p>Each card uses its accepted regional ruleset.</p>
+          </div>
+          <div class="practice-tactics__twist-list" id="practice-tactics-twist-list"></div>
+        </section>
+        <section class="practice-tactics__session" id="practice-tactics-session" hidden>
+          <p class="section-label" id="practice-tactics-progress"></p>
+          <h4 id="practice-tactics-drill-title"></h4>
+          <p id="practice-tactics-objective"></p>
+          <p class="practice-tactics__rule" id="practice-tactics-rule"></p>
+          <p
+            class="practice-tactics__status"
+            id="practice-tactics-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <div class="practice-tactics__report" id="practice-tactics-report"></div>
+          <div class="practice-tactics__moves" aria-label="Tactics Lab movement controls">
+            <button class="direction-button" data-tactics-move="up" type="button">Move up</button>
+            <button class="direction-button" data-tactics-move="left" type="button">Move left</button>
+            <button class="direction-button" data-tactics-move="down" type="button">Move down</button>
+            <button class="direction-button" data-tactics-move="right" type="button">Move right</button>
+            <button class="control-button" id="practice-tactics-pulse" type="button">Use Pulse</button>
+          </div>
+          <section class="practice-tactics__challenge" id="practice-tactics-challenge" hidden>
+            <p class="section-label">Reviewed Question</p>
+            <p id="practice-tactics-question"></p>
+            <div class="practice-tactics__choices" id="practice-tactics-choices"></div>
+            <div class="practice-tactics__support">
+              <button class="control-button" id="practice-tactics-hint" type="button">Show Hint</button>
+              <p id="practice-tactics-hint-copy" aria-live="polite" hidden></p>
+            </div>
+            <button class="control-button" id="practice-tactics-skip" type="button">Skip Question</button>
+          </section>
+          <div class="practice-tactics__actions">
+            <button class="control-button" id="practice-tactics-restart" type="button">Restart Drill</button>
+            <button class="control-button" id="practice-tactics-back" type="button">Back to Drills</button>
+          </div>
+        </section>
+        <div class="practice-tactics__footer">
+          <button class="control-button" id="practice-tactics-exit" type="button">
+            Back to Workshop
+          </button>
+        </div>
       </section>
       <section class="practice-trail" id="practice-trail" hidden>
         <div class="practice-trail__heading">

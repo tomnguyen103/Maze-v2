@@ -65,6 +65,7 @@ export function createLanternTrailView({
     progress: required("practice-progress", HTMLElement),
     question: required("practice-question", HTMLElement),
     skip: required("practice-skip", HTMLButtonElement),
+    tacticsOpen: required("practice-tactics-open", HTMLButtonElement),
     title: required("practice-title", HTMLElement),
     trail: required("practice-trail", HTMLElement)
   };
@@ -78,6 +79,8 @@ export function createLanternTrailView({
   let origin = "play";
   /** @type {HTMLElement | null} */
   let returnTarget = null;
+  /** @type {ReturnType<typeof import("./tactics-lab-view.js").createTacticsLabView> | null} */
+  let tacticsLabView = null;
 
   elements.objectives.addEventListener("click", (event) => {
     const button =
@@ -117,12 +120,16 @@ export function createLanternTrailView({
   elements.next.addEventListener("click", () => advance(false));
   elements.keep.addEventListener("click", () => advance(true));
   elements.choose.addEventListener("click", renderCatalog);
+  elements.tacticsOpen.addEventListener("click", () => {
+    void openTacticsLab();
+  });
   elements.close.addEventListener("click", () => closeTo(origin));
   elements.journal.addEventListener("click", () => closeTo("journal"));
   elements.atlas.addEventListener("click", () => closeTo("atlas"));
   elements.dialog.addEventListener("close", () => {
     const nextDestination = destination;
     const target = returnTarget;
+    tacticsLabView?.reset();
     session = null;
     catalogSelection = null;
     returnTarget = null;
@@ -216,6 +223,34 @@ export function createLanternTrailView({
     elements.journal.hidden = false;
     elements.atlas.hidden = false;
     elements.title.focus({ preventScroll: true });
+  }
+
+  async function openTacticsLab() {
+    session = null;
+    clearTrailPresentation();
+    elements.catalog.hidden = true;
+    elements.trail.hidden = true;
+    elements.completion.hidden = true;
+    elements.journal.hidden = true;
+    elements.atlas.hidden = true;
+    elements.close.hidden = true;
+    try {
+      if (!tacticsLabView) {
+        const module = await import("./tactics-lab-view.js");
+        tacticsLabView = module.createTacticsLabView({
+          onExit: () => {
+            renderCatalog();
+            elements.tacticsOpen.focus({ preventScroll: true });
+          }
+        });
+      }
+      tacticsLabView.show();
+    } catch {
+      renderCatalog();
+      elements.feedback.textContent =
+        "Warden Tactics Lab is unavailable. Try again.";
+      elements.tacticsOpen.focus({ preventScroll: true });
+    }
   }
 
   /**
@@ -340,6 +375,7 @@ export function createLanternTrailView({
   }
 
   function clearTrailPresentation() {
+    tacticsLabView?.hide();
     elements.catalogSummary.textContent = "";
     elements.objectives.replaceChildren();
     elements.progress.textContent = "";
@@ -358,6 +394,9 @@ export function createLanternTrailView({
     elements.keep.hidden = true;
     elements.next.disabled = false;
     elements.keep.disabled = false;
+    elements.journal.hidden = false;
+    elements.atlas.hidden = false;
+    elements.close.hidden = false;
   }
 
   function currentQuestion() {
