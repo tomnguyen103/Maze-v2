@@ -10,17 +10,18 @@ The core product is coherent and substantially implemented. The next work is not
 
 ## Repository state
 
-- `origin/main` includes merged PR #192 at `2680874` (including PR #152 at
-  `a37dffa` and PR #158 at `69f4cd6`).
-- Quest II PR #197 is the only open product PR. Its local gate, browser matrix,
-  Vercel preview, and local review are green; its CodeRabbit review is parked
-  under the documented temporary rate limit before merge.
+- `origin/main` includes merged Quest II PR #197 at `618aba1` (including PR
+  #192 at `2680874`, PR #152 at `a37dffa`, and PR #158 at `69f4cd6`).
+- No product PRs remain open. PR #197's local gate, browser matrix, local
+  review, and final CodeRabbit review are complete; CodeRabbit reported no
+  actionable comments.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The deployed demo currently reports `2680874` (the Postcards merge); PR #197
-  remains a preview-only change until it merges.
+- The deployed demo currently reports `2680874` (the Postcards deployment); the
+  Quest II merge is present in the repository but has not changed this demo
+  deployment's reported version.
 - GitHub Actions are disabled. Local validation is the CI gate.
-- CodeGraph index is present and current: 372 files, 3,636 nodes, 8,104 edges.
+- CodeGraph index is present and current: 400 files, 3,905 nodes, 8,676 edges.
 
 ## Shipped product surface
 
@@ -48,6 +49,7 @@ Milestones 1–5 shipped through PRs #102, #115, #123, #133, #148, and #149. Cur
 - explicit Trail Compass intention;
 - Classroom Expedition Debrief and privacy-thresholded Class Constellation;
 - seed-only Echo Postcards;
+- Quest II Living Regions with five new authored arcs and reviewed content;
 - health, readiness, telemetry, privacy, and export foundations.
 
 The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the primary historical release record. The [frozen expedition roadmap](../plans/echo-maze-next-expedition-roadmap.md) remains the contract for gameplay, privacy, content, and performance constraints.
@@ -55,7 +57,7 @@ The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the pr
 ## Live deployment snapshot
 
 Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
-`origin/main` Postcards merge:
+`origin/main` Quest II merge; the deployed demo still reports `2680874`:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
@@ -71,17 +73,12 @@ Current deployment is a working demo/test surface, not proof of production readi
 
 ## Current blockers
 
-### Quest II remains the only repo-controlled roadmap item in review
+### No remaining repo-controlled roadmap item
 
-PR #197 implements the Quest II Living Regions contract, reviewed content,
-identity propagation, authored storylets, Atlas/player path, and replay/offline
-boundaries. Its local and browser evidence is green, but the PR is not counted
-as delivered until its required CodeRabbit review clears and the PR merges.
-Issues [#193](https://github.com/tomnguyen103/Maze-v2/issues/193),
-[#194](https://github.com/tomnguyen103/Maze-v2/issues/194),
-[#195](https://github.com/tomnguyen103/Maze-v2/issues/195), and
-[#196](https://github.com/tomnguyen103/Maze-v2/issues/196) remain open until
-that merge closeout.
+Quest II Living Regions is delivered in PR #197 (`618aba1`), and the related
+issues are closed. No repo-controlled roadmap requirement remains in Todo or
+Partial; the remaining work is release-only verification and authorized
+operations described below.
 
 ### Offline Run Continuity wiring is merged; external release proof remains
 
