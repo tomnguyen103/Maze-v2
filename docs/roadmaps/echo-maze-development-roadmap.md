@@ -87,7 +87,7 @@ Definition of done: a real browser completes the entire journey. Unit coverage a
 
 Choose Demo or Production profile. For Production:
 
-- apply and verify migrations `0018`–`0025`;
+- apply and verify migrations `0018`–`0029`;
 - generate and deploy receipt keys;
 - verify `/api/ready` is healthy;
 - verify Verified Daily routes;

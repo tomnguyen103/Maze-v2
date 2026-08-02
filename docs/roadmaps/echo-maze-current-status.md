@@ -10,13 +10,16 @@ The core product is coherent and substantially implemented. The next work is not
 
 ## Repository state
 
-- `origin/main` includes merged PR #152 at `a37dffa` and merged PR #158 at
-  `69f4cd6`.
+- `origin/main` includes merged Quest II PR #197 at `618aba1` (including PR
+  #192 at `2680874`, PR #152 at `a37dffa`, and PR #158 at `69f4cd6`).
+- No product PRs remain open. PR #197's local gate, browser matrix, local
+  review, and final CodeRabbit review are complete; CodeRabbit reported no
+  actionable comments.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The deployed demo still reflects the pre-P0.2 merge surface.
+- The deployed demo currently reports `618aba1` after the Quest II deployment.
 - GitHub Actions are disabled. Local validation is the CI gate.
-- CodeGraph index is present and current: 372 files, 3,636 nodes, 8,104 edges.
+- CodeGraph index is present and current: 405 files, 3,999 nodes, 8,749 edges.
 
 ## Shipped product surface
 
@@ -37,27 +40,43 @@ Milestones 1–5 shipped through PRs #102, #115, #123, #133, #148, and #149. Cur
 - Active Run Recovery;
 - Offline Run Continuity wiring is merged in `origin/main`; the production key,
   migration, and deployment boundaries remain external;
+- Echo Fossil Atlas contract, continuity, and terminal player path;
+- unscored Warden Tactics Lab;
+- reviewed Echo Lens packs;
+- Quiet Expedition presentation and semantic route;
+- explicit Trail Compass intention;
+- Classroom Expedition Debrief and privacy-thresholded Class Constellation;
+- seed-only Echo Postcards;
+- Quest II Living Regions with five new authored arcs and reviewed content;
 - health, readiness, telemetry, privacy, and export foundations.
 
 The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the primary historical release record. The [frozen expedition roadmap](../plans/echo-maze-next-expedition-roadmap.md) remains the contract for gameplay, privacy, content, and performance constraints.
 
 ## Live deployment snapshot
 
-Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02:
+Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
+`origin/main` Quest II deployment:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds; version still reports the pre-P0.2 `a37dffa` surface. |
-| `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`. |
+| `/api/health` | 200 | Deployment responds and reports version `618aba1`. |
+| `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`, so production readiness is unavailable. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
-| Verified Daily endpoints | 500 | Service reports Verified Daily unavailable. |
-| `/sw.js` | 200 | The deployed worker is still the pre-#158 surface; merged wiring is not deployed yet. |
+| `/api/daily/leaderboard`, `/api/daily/constellation` | 500 | Verified Daily read services remain unavailable; `/api/daily/scores` correctly rejects a GET with 405 because it is a write path. |
+| `/sw.js` | 200 | The deployed worker responds from the current demo surface. |
 
 Current deployment is a working demo/test surface, not proof of production readiness.
 
 ## Current blockers
+
+### No remaining repo-controlled roadmap item
+
+Quest II Living Regions is delivered in PR #197 (`618aba1`), and the related
+issues are closed. No repo-controlled roadmap requirement remains in Todo or
+Partial; the remaining work is release-only verification and authorized
+operations described below.
 
 ### Offline Run Continuity wiring is merged; external release proof remains
 
@@ -78,7 +97,7 @@ check for this change.
 
 ### External release setup remains deferred
 
-- Database migrations `0018` through `0025` require authorized application and smoke testing.
+- Database migrations `0018` through `0029` require authorized application and smoke testing.
 - Offline receipt keys need generation and deployment.
 - Verified Daily needs live configuration and route verification.
 - Stripe is not activated.
