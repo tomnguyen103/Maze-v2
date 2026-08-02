@@ -30,3 +30,7 @@ after the contract tests pass.
 Red receipt (2026-08-02, before implementation):
 `tests/echo-fossils.test.js` failed at line 2 because
 `../src/game/quest-fossils.js` did not exist (`Cannot find module`).
+
+Green receipt (2026-08-02):
+`npx vitest run tests/echo-fossils.test.js tests/quest-atlas.test.js tests/quest-atlas-view.test.js`
+passed: 3 files, 24 tests.
