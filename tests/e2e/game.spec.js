@@ -5996,6 +5996,72 @@ test("plays nonvisually with Trail Compass and reveals no hidden state", async (
   await recordEvidenceScreenshot(page, testInfo, 4, "trail-compass");
 });
 
+test("enters Quiet Expedition without changing the Personal Run", async ({
+  page
+}) => {
+  await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  const runBeforeSettings = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:active-run:v1")
+  );
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", {
+    name: "Explorer Access Settings"
+  });
+  await expect(settings).toBeVisible();
+  await settings.locator("#access-quiet-expedition").click();
+  await expect(page.locator("#access-trail-compass")).toBeChecked();
+  await expect(page.locator("#access-reader-type")).toBeChecked();
+  await expect(page.locator("#access-reduced-effects")).toBeChecked();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-access-quiet",
+    "on"
+  );
+  await expect(
+    page.locator("#access-settings-status")
+  ).toContainText("Quiet Expedition previewing");
+
+  const runDuringPreview = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:active-run:v1")
+  );
+  expect(runDuringPreview).toBe(runBeforeSettings);
+  await settings.locator("#access-settings-save").click();
+  await expect(settings).not.toBeVisible();
+
+  const compass = page.getByRole("region", {
+    name: "Describe the revealed trail"
+  });
+  await expect(compass).toBeVisible();
+  await expect(page.locator("#trail-compass-mode")).toHaveText(
+    "Quiet Expedition"
+  );
+  await page.locator("#compass-describe").click();
+  await expect(page.locator("#live-region")).toContainText(/row \d+, column \d+/);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
+  await page.locator("#atlas-close").click();
+  await page.getByRole("button", { name: "Journal", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "What you have practiced" })
+  ).toBeVisible();
+  await page.locator("#journal-close").click();
+  await page.getByRole("button", { name: "Workshop", exact: true }).click();
+  const workshop = page.getByRole("dialog", {
+    name: "Lantern Trail Workshop"
+  });
+  await expect(workshop).toBeVisible();
+  await workshop.locator("#practice-objectives button").first().click();
+  await expect(workshop.locator("#practice-trail")).toBeVisible();
+  await workshop.locator("#practice-close").click();
+
+  const runAfterSettings = await page.evaluate(() =>
+    localStorage.getItem("echo-maze:active-run:v1")
+  );
+  expect(runAfterSettings).toBe(runBeforeSettings);
+});
+
 test("keeps Read Aloud honest without a local voice and shows the six-field settings", async ({
   page
 }, testInfo) => {

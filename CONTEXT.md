@@ -307,6 +307,13 @@ revealed entities, and regional Trail Twist state without exposing Fog-hidden
 state.
 _Avoid_: Echo Sonar, Pulse, maze solver, hidden-state scan, simplified mode
 
+**Quiet Expedition**:
+An explicit presentation preset for Personal Play that combines the Trail
+Compass, reader-friendly Question text, and reduced visual effects into one
+calm, low-distraction way to play. It changes how the existing journey is
+presented, never its rules, score, timing, access, or learning outcome.
+_Avoid_: Quiet mode, easy mode, accessibility profile, hidden assist
+
 **Classroom**:
 A Clerk-backed learning group in which one or more Teachers can invite Students
 and view privacy-minimized learning progress.

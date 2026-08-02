@@ -1,3 +1,5 @@
+import { isQuietExpeditionSettings } from "./quiet-expedition.js";
+
 export const ACCESS_SETTINGS_STORAGE_KEY =
   "echo-maze:explorer-access-settings:v1";
 
@@ -82,6 +84,9 @@ export function applyAccessSettings(
     : "system";
   root.dataset.accessCompass = normalized.trailCompassEnabled
     ? "trail"
+    : "off";
+  root.dataset.accessQuiet = isQuietExpeditionSettings(normalized)
+    ? "on"
     : "off";
 }
 

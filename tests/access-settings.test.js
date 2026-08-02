@@ -28,6 +28,8 @@ describe("Explorer Access Settings", () => {
     document.documentElement.removeAttribute("data-access-effects");
     document.documentElement.removeAttribute("data-access-marks");
     document.documentElement.removeAttribute("data-access-type");
+    document.documentElement.removeAttribute("data-access-compass");
+    document.documentElement.removeAttribute("data-access-quiet");
   });
 
   it("uses the locked design defaults for absent or corrupted storage", () => {
@@ -119,7 +121,8 @@ describe("Explorer Access Settings", () => {
       accessContrast: "strong",
       accessEffects: "reduced",
       accessMarks: "large",
-      accessType: "reader"
+      accessType: "reader",
+      accessQuiet: "off"
     });
 
     applyAccessSettings(DEFAULT_ACCESS_SETTINGS, document.documentElement);
@@ -127,7 +130,8 @@ describe("Explorer Access Settings", () => {
       accessContrast: "default",
       accessEffects: "system",
       accessMarks: "default",
-      accessType: "default"
+      accessType: "default",
+      accessQuiet: "off"
     });
   });
 });
@@ -188,7 +192,19 @@ describe("Explorer Access Settings v2", () => {
       document.documentElement
     );
     expect(document.documentElement.dataset.accessCompass).toBe("trail");
+    expect(document.documentElement.dataset.accessQuiet).toBe("off");
+    applyAccessSettings(
+      {
+        ...DEFAULT_ACCESS_SETTINGS,
+        readerFriendlyQuestions: true,
+        reducedEffects: true,
+        trailCompassEnabled: true
+      },
+      document.documentElement
+    );
+    expect(document.documentElement.dataset.accessQuiet).toBe("on");
     applyAccessSettings(DEFAULT_ACCESS_SETTINGS, document.documentElement);
     expect(document.documentElement.dataset.accessCompass).toBe("off");
+    expect(document.documentElement.dataset.accessQuiet).toBe("off");
   });
 });

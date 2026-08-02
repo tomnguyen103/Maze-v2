@@ -3,6 +3,7 @@ import {
   loadAccessSettings,
   saveAccessSettings
 } from "./access-settings.js";
+import { createQuietExpeditionSettings } from "./quiet-expedition.js";
 
 /**
  * @typedef {ReturnType<typeof loadAccessSettings>} AccessSettings
@@ -43,6 +44,10 @@ export function createAccessSettingsView({
       "access-narration-pace",
       HTMLSelectElement
     ),
+    quietPreset: requiredElement(
+      "access-quiet-expedition",
+      HTMLButtonElement
+    ),
     reset: requiredElement("access-settings-reset", HTMLButtonElement),
     status: requiredElement("access-settings-status", HTMLElement),
     title: requiredElement("access-settings-title", HTMLElement)
@@ -57,6 +62,13 @@ export function createAccessSettingsView({
   elements.form.addEventListener("change", () => {
     elements.status.textContent = "Previewing. Save to keep these settings.";
     onApply(readControls(elements));
+  });
+  elements.quietPreset.addEventListener("click", () => {
+    const preset = createQuietExpeditionSettings(readControls(elements));
+    syncControls(preset);
+    onApply(preset);
+    elements.status.textContent =
+      "Quiet Expedition previewing. Save to keep this calm presentation.";
   });
   elements.form.addEventListener("submit", async (event) => {
     event.preventDefault();
