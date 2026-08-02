@@ -387,13 +387,14 @@ export function createQuestionService(options = {}) {
 
   /** @param {QuestionRequest} request @returns {Promise<QuestionResult>} */
   async function generateQuestion(request) {
-    const provider = selectProvider(env);
     const encounterKey =
       `${request.questId ?? "quest-i"}:${request.levelId}:${request.seed}:${request.wardenId}`;
     const previousQuestion = previousQuestions.get(encounterKey);
     const reviewed = await resolveReviewedQuestion(request);
     const reviewedQuestion = reviewed.question;
-    if (request.challengeKind === "gate-warden") {
+    const isQuestII =
+      getQuestContentPackId(request.questId) === QUEST_II_CONTENT_PACK_ID;
+    if (isQuestII || request.challengeKind === "gate-warden") {
       const result = {
         question: reviewedQuestion,
         source: /** @type {"bundled"} */ ("bundled"),
@@ -402,6 +403,7 @@ export function createQuestionService(options = {}) {
       rememberPreviousQuestion(encounterKey, result.question);
       return result;
     }
+    const provider = selectProvider(env);
 
     try {
       if (now() >= providerRetryAt && provider === "ollama") {

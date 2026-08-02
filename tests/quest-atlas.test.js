@@ -9,6 +9,8 @@ import {
   createEchoFossil,
   createFossilCollection
 } from "../src/game/quest-fossils.js";
+import { getRegionTheme } from "../src/game/region-theme.js";
+import { getQuestIIRegions } from "../src/game/quest-content.js";
 import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
 
 const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
@@ -184,6 +186,13 @@ describe("Echo Atlas projection", () => {
         gameplayTie: "windways-v1:windway-used"
       }
     });
+    const questIIRegions = getQuestIIRegions();
+    expect(atlas.regions.map((region) => region.motif)).toEqual(
+      questIIRegions.map((region) => region.motif)
+    );
+    expect(atlas.regions.map((region) => getRegionTheme(region.id)?.motif)).toEqual(
+      questIIRegions.map((region) => region.motif)
+    );
     expect(
       atlas.regions.flatMap((region) => region.nodes)
         .every((node) => node.storylet?.id)

@@ -64,7 +64,8 @@ import {
   getNextQuestContentPackId,
   getQuestContentPackId,
   getQuestContentPackLabel,
-  getQuestIIStoryletLogEntry
+  getQuestIIStoryletLogEntry,
+  QUEST_II_CONTENT_PACK_ID
 } from "./game/quest-content.js";
 import {
   isSameQuestIdentity,
@@ -1894,7 +1895,10 @@ async function startRun(locator, daily = null, recoveredRun = null) {
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
   );
-  if (!daily && getQuestContentPackId(questProgress.questId) === "quest-ii") {
+  if (
+    !daily &&
+    getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID
+  ) {
     addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
   }
   if (elements.resultDialog.open) {

@@ -50,9 +50,11 @@ describe("Quest Questions", () => {
       questId: "quest_ii_service_test_123"
     };
     const publishedQuestion = vi.fn(async () => null);
-    const fetchImpl = vi.fn();
+    const fetchImpl = vi.fn(() => {
+      throw new Error("Quest II provider access must not occur");
+    });
     const service = createQuestionService({
-      env: { QUESTION_PROVIDER: "bundled" },
+      env: { QUESTION_PROVIDER: "gemini", GEMINI_API_KEY: "test-key" },
       fetchImpl,
       questionBank: { publishedQuestion }
     });

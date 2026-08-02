@@ -110,6 +110,24 @@ describe("offline continuity controller", () => {
     await expect(
       controller.prepare({
         run: identity,
+        receipt: createReceipt({ ...identity, questId: undefined }),
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: { ...identity, questId: undefined },
+        receipt,
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: identity,
         receipt,
         assetPackage: createAssetPackage(),
         verified: true
@@ -183,7 +201,10 @@ describe("offline continuity controller", () => {
       wardenCount: 0,
       ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
     });
-    const identity = createRunIdentity(run);
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_terminal_123"
+    };
     const controller = createOfflineContinuityController({
       storage,
       workerClient: {
@@ -221,6 +242,7 @@ describe("offline continuity controller", () => {
       record: {
         runId: identity.runId,
         playerId: "user_offline_01",
+        questId: identity.questId,
         verification: "pending",
         outcome: "won",
         playAuthorityOpen: true
@@ -233,6 +255,7 @@ describe("offline continuity controller", () => {
     expect(record).toMatchObject({
       runId: identity.runId,
       outcome: "won",
+      questId: identity.questId,
       verification: "pending"
     });
     expect(JSON.stringify(storage.dump())).not.toMatch(
@@ -251,7 +274,10 @@ describe("offline continuity controller", () => {
       wardenCount: 0,
       ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
     });
-    const identity = createRunIdentity(run);
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_retry_123"
+    };
     const worker = {
       setRunState: async () => ({ ok: true }),
       release: vi.fn(async () => ({ ok: true }))
@@ -312,6 +338,7 @@ describe("offline continuity controller", () => {
     expect(storage.getItem(OFFLINE_RECEIPT_KEY)).toBeNull();
     expect(storage.getItem(OFFLINE_CONTENT_PACK_KEY)).toBeNull();
     expect(JSON.parse(storage.getItem(OFFLINE_RUN_RECORD_KEY) ?? "{}")).toMatchObject({
+      questId: identity.questId,
       verification: "verified",
       label: ""
     });

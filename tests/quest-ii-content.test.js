@@ -97,6 +97,12 @@ describe("Quest II Living Regions content contract", () => {
     expect(
       new Set(questions.map((question) => question.reviewedRevisionId)).size
     ).toBe(60);
+    expect(
+      questions.every(
+        (question) =>
+          new Set(question.choices.map((choice) => choice.label)).size === 3
+      )
+    ).toBe(true);
     expect(questions.every((question) => question.id.startsWith("quest-ii-"))).toBe(
       true
     );
@@ -126,6 +132,20 @@ describe("Quest II Living Regions content contract", () => {
   });
 
   it("includes one reviewed Gate Warden capstone for every region and Level", () => {
+    const catalog = LEVELS.flatMap((levelId) => getQuestIIQuestionSet(levelId));
+    expect(catalog).toHaveLength(75);
+    expect(new Set(catalog.map((question) => question.id)).size).toBe(75);
+    expect(
+      new Set(catalog.map((question) => question.reviewedRevisionId)).size
+    ).toBe(75);
+    expect(
+      catalog.every(
+        (question) =>
+          new Set(question.choices.map((choice) => choice.label)).size ===
+          question.choices.length
+      )
+    ).toBe(true);
+
     for (const levelId of LEVELS) {
       const set = getQuestIIQuestionSet(levelId);
       const capstones = set.filter((question) =>
@@ -138,6 +158,17 @@ describe("Quest II Living Regions content contract", () => {
         capstones.every((question) => question.reviewedRevisionId)
       ).toBe(true);
       expect(new Set(capstones.map((question) => question.id)).size).toBe(5);
+      for (const capstone of capstones) {
+        const region = getQuestIIRegions().find(
+          (candidate) => candidate.id === capstone.difficultyBand
+        );
+        expect(region).toBeDefined();
+        expect(capstone.prompt).toMatch(/^Gate Warden challenge:/u);
+        expect(capstone.prompt).not.toContain(`Gate Warden at ${region?.name}`);
+        expect(
+          capstone.prompt.split(region?.name ?? "").length - 1
+        ).toBeLessThanOrEqual(1);
+      }
     }
   });
 });

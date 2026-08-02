@@ -1,5 +1,5 @@
 {
-  "testFiles": 173,
-  "tests": 1460,
-  "source": "Full Vitest run on 2026-08-02 after adding the privacy-reviewed Class Constellation slice and Echo Postcard contract; update deliberately when tests change."
+  "testFiles": 174,
+  "tests": 1474,
+  "source": "Full Vitest run on 2026-08-02 after rebasing Quest II onto current main and adding reviewed Quest II boundary regression coverage; update deliberately when tests change."
 }

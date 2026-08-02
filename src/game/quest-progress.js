@@ -1,7 +1,4 @@
-import {
-  QUEST_LABYRINTH_COUNT,
-  getQuestLevel
-} from "../questions/quest-levels.js";
+import { getQuestLevel } from "../questions/quest-levels.js";
 import {
   DEFAULT_LEARNING_DECK_ID,
   DEFAULT_LEARNING_DECK_REVISION,
@@ -9,6 +6,7 @@ import {
   isPublishedLearningDeckRevision
 } from "../questions/learning-deck-identity.js";
 import { createQuestId } from "./quest-content.js";
+import { QUEST_LABYRINTH_COUNT } from "./quest-constants.js";
 
 const QUEST_PROGRESS_KEY = "echo-maze:quest-progress:v1";
 const MAX_QUESTION_HISTORY = 5000;

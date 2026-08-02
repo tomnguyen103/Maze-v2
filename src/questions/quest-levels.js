@@ -1,3 +1,7 @@
+import { QUEST_LABYRINTH_COUNT } from "../game/quest-constants.js";
+
+export { QUEST_LABYRINTH_COUNT };
+
 /** @typedef {"bright-start" | "trail-scout" | "maze-master"} QuestLevelId */
 /**
  * @typedef {{
@@ -23,7 +27,6 @@
  * }} QuestLevel
  */
 
-export const QUEST_LABYRINTH_COUNT = 20;
 export const DIFFICULTY_BANDS = Object.freeze([
   "foundation",
   "developing",

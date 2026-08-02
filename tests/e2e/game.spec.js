@@ -616,6 +616,31 @@ async function stubClipboard(page) {
   });
 }
 
+/** @param {import("@playwright/test").Page} page */
+async function captureClipboard(page) {
+  await page.evaluate(() => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+  });
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function readCapturedClipboard(page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    )
+    .toMatch(/^https?:\/\//);
+  return page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")));
+}
+
 /**
  * @param {import("@playwright/test").Page} page
  * @param {() => ReturnType<typeof getBundledQuestion>} getCurrentQuestion
@@ -2793,6 +2818,7 @@ test("round-trips an exact Region ruleset through share and active recovery iden
     "/?seed=RULESET-SHARE&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
 
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 13 of 20 · Atlas Region: Advanced · Trail Twist: Tide Doors"
@@ -2811,7 +2837,7 @@ test("round-trips an exact Region ruleset through share and active recovery iden
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("advanced");
   expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
@@ -2873,6 +2899,7 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
     "/?seed=WIND-VIEW-34&level=trail-scout&labyrinth=5&region=developing&rules=windways-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
 
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Developing"
@@ -2931,7 +2958,7 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("developing");
   expect(copied.searchParams.get("rules")).toBe("windways-v1");
@@ -3032,6 +3059,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
     "/?seed=BRIDGE-VIEW-9&level=trail-scout&labyrinth=9&region=capable&rules=echo-bridges-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Capable"
   );
@@ -3144,7 +3172,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("capable");
   expect(copied.searchParams.get("rules")).toBe("echo-bridges-v1");
@@ -3239,6 +3267,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
     "/?seed=TIDE-VIEW-13&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Advanced"
   );
@@ -3302,7 +3331,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("advanced");
   expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
@@ -3401,6 +3430,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
     `/?seed=${seed}&level=trail-scout&labyrinth=17&region=mastery&rules=warden-bells-v1`
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Mastery"
   );
@@ -3522,7 +3552,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("mastery");
   expect(copied.searchParams.get("rules")).toBe("warden-bells-v1");

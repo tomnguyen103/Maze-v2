@@ -557,6 +557,7 @@ export function createOfflineContinuityController({
       rulesetRevision:
         run.rulesetRevision ?? receipt.binding.rulesetRevision,
       contentPackHash: run.contentPackHash,
+      ...(typeof run.questId === "string" ? { questId: run.questId } : {}),
       outcome: terminal,
       score: Math.max(0, Math.round(terminalRun.score)),
       moves: Math.max(0, Math.round(terminalRun.moves)),
@@ -716,6 +717,9 @@ export function createOfflineContinuityController({
       labyrinthNumber: record.labyrinthNumber,
       rulesetRevision: record.rulesetRevision,
       contentPackHash: record.contentPackHash,
+      ...(typeof record.questId === "string"
+        ? { questId: record.questId }
+        : {}),
       outcome: record.outcome,
       score: record.score,
       moves: record.moves,
@@ -812,7 +816,10 @@ export function createOfflineContinuityController({
       levelId: record.levelId,
       labyrinthNumber: record.labyrinthNumber,
       rulesetRevision: record.rulesetRevision,
-      contentPackHash: record.contentPackHash
+      contentPackHash: record.contentPackHash,
+      ...(typeof record.questId === "string"
+        ? { questId: record.questId }
+        : {})
     };
     const run = /** @type {OfflineRunIdentity} */ (runCandidate);
     const packageReady =

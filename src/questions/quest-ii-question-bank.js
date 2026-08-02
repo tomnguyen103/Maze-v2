@@ -286,7 +286,7 @@ function masterCard({ id, band, rank, scene, region, template, bandIndex }) {
       id,
       prompt: `${scene.name} sorts ${total} ${scene.item} at ${region.name}. How many are ${numerator}/${denominator} of the total?`,
       answer: String(answer),
-      wrongOne: String(groups),
+      wrongOne: String(answer + 1),
       wrongTwo: String(total),
       hint: "Find one equal part first, then take the needed parts.",
       explanation: `One ${denominator}th is ${groups}; ${numerator} parts make ${answer}.`,
@@ -306,7 +306,7 @@ function masterCard({ id, band, rank, scene, region, template, bandIndex }) {
       prompt: `${scene.name} prepares ${trays} trays with ${perTray} ${scene.item} each at ${region.name}, then removes ${removed}. How many remain?`,
       answer: String(answer),
       wrongOne: String(trays * perTray),
-      wrongTwo: String(answer + removed),
+      wrongTwo: String(answer - 1),
       hint: "Multiply for the trays before subtracting.",
       explanation: `${trays} times ${perTray} is ${trays * perTray}; minus ${removed} leaves ${answer}.`,
       bandId: band.id,
@@ -360,7 +360,7 @@ function getQuestIICapstone({ levelId, bandId, bandIndex, rank, region, scene, t
   const capstone = normalizeQuestion({
     ...base,
     id,
-    prompt: `Gate Warden at ${region.name}: ${base.prompt}`
+    prompt: `Gate Warden challenge: ${base.prompt}`
   });
   return normalizeQuestion({
     ...capstone,

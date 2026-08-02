@@ -7,6 +7,7 @@ import {
 } from "../questions/quest-levels.js";
 import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
+import { REGION_MOTIFS } from "./region-metadata.js";
 import {
   getQuestContentPackId,
   getQuestIIRegions,
@@ -31,10 +32,9 @@ import {
  * }} QuestProgressLike */
 /** @typedef {ReturnType<typeof normalizeFossilCollection>} FossilCollection */
 
-/** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
+/** @type {Readonly<Record<string, { fieldNotes: readonly string[] }>>} */
 const REGION_METADATA = Object.freeze({
   foundation: Object.freeze({
-    motif: "Lantern moss and quiet stone",
     fieldNotes: Object.freeze([
       "Mosslight wakes along the first quiet stones.",
       "The Bramblewatch keeps its universal Patrol marks.",
@@ -43,7 +43,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   developing: Object.freeze({
-    motif: "Rising wind and bright trail ribbons",
     fieldNotes: Object.freeze([
       "Windcall ribbons point from each Windway source to its landing.",
       "The Kitewatch keeps universal Warden marks clear in the rising wind.",
@@ -52,7 +51,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   capable: Object.freeze({
-    motif: "Joined arches and clear blue spans",
     fieldNotes: Object.freeze([
       "Each sealed Echo Bridge marks a shortcut waiting to open.",
       "A recovered Echo opens its paired Bridge for Explorer and Warden.",
@@ -61,7 +59,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   advanced: Object.freeze({
-    motif: "Sea-glass channels and alternating tide marks",
     fieldNotes: Object.freeze([
       "Visible Tide Doors begin open, then alternate together after each successful Move or Pulse.",
       "Explorer and Warden share the same Tide Door phase for the whole action.",
@@ -70,7 +67,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   mastery: Object.freeze({
-    motif: "Beacon bells and resonant stone",
     fieldNotes: Object.freeze([
       "One-use Signal Bells wait on visible passages across Bellroot Summit.",
       "Ring an adjacent Bell to lure only revealed ordinary Wardens for one action.",
@@ -142,7 +138,7 @@ export function projectQuestAtlas(
       learningMove: questIIRegion?.learningMove ?? null,
       trailTwistRevision: questIIRegion?.trailTwistRevision ?? null,
       wardenGuild: theme?.wardenGuild ?? null,
-      motif: metadata.motif,
+      motif: REGION_MOTIFS[band.id],
       rangeLabel: `Labyrinths ${start}-${end}`,
       sigilRestored,
       sigilLabel: sigilRestored

@@ -5,6 +5,9 @@
  * simulation or ruleset identity.
  */
 
+import { QUEST_LABYRINTH_COUNT } from "./quest-constants.js";
+import { REGION_MOTIFS } from "./region-metadata.js";
+
 export const QUEST_I_CONTENT_PACK_ID = "quest-i";
 export const QUEST_II_CONTENT_PACK_ID = "quest-ii";
 export const QUEST_CONTENT_PACK_IDS = Object.freeze([
@@ -199,11 +202,11 @@ const REGION_STORYLETS = Object.freeze({
 /** @type {readonly QuestIIRegion[]} */
 const QUEST_II_REGIONS = Object.freeze(
   [
-    ["foundation", "Hushline Orchard", "Lantern moss and quiet stone", "echo-hush-v1", "Notice a changed rhythm"],
-    ["developing", "Windthread Steps", "Rising wind and bright trail ribbons", "windways-v1", "Compare movement choices"],
-    ["capable", "Bridgewake Basin", "Joined arches and clear blue spans", "echo-bridges-v1", "Connect two observations"],
-    ["advanced", "Tideglass Causeway", "Sea-glass channels and alternating tide marks", "tide-doors-v1", "Plan before committing"],
-    ["mastery", "Bellroot Nightline", "Beacon bells and resonant stone", "warden-bells-v1", "Apply the full pattern"]
+    ["foundation", "Hushline Orchard", REGION_MOTIFS.foundation, "echo-hush-v1", "Notice a changed rhythm"],
+    ["developing", "Windthread Steps", REGION_MOTIFS.developing, "windways-v1", "Compare movement choices"],
+    ["capable", "Bridgewake Basin", REGION_MOTIFS.capable, "echo-bridges-v1", "Connect two observations"],
+    ["advanced", "Tideglass Causeway", REGION_MOTIFS.advanced, "tide-doors-v1", "Plan before committing"],
+    ["mastery", "Bellroot Nightline", REGION_MOTIFS.mastery, "warden-bells-v1", "Apply the full pattern"]
   ].map(([id, name, motif, trailTwistRevision, learningMove], regionIndex) => {
     const start = regionIndex * 4 + 1;
     const regionKey = /** @type {keyof typeof REGION_STORYLETS} */ (id);
@@ -285,8 +288,14 @@ export function getQuestIIRegions() {
  * @returns {QuestIIStorylet}
  */
 export function getQuestIIStorylet(labyrinthNumber) {
-  if (!Number.isInteger(labyrinthNumber) || labyrinthNumber < 1 || labyrinthNumber > 20) {
-    throw new RangeError("Quest II Labyrinth Number must be between 1 and 20.");
+  if (
+    !Number.isInteger(labyrinthNumber) ||
+    labyrinthNumber < 1 ||
+    labyrinthNumber > QUEST_LABYRINTH_COUNT
+  ) {
+    throw new RangeError(
+      `Quest II Labyrinth Number must be between 1 and ${QUEST_LABYRINTH_COUNT}.`
+    );
   }
   const region = QUEST_II_REGIONS.find((candidate) =>
     candidate.labyrinthNumbers.includes(labyrinthNumber)
