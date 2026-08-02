@@ -1,5 +1,5 @@
 {
-  "testFiles": 172,
-  "tests": 1454,
-  "source": "Full Vitest run on 2026-08-02 after adding the privacy-reviewed Class Constellation slice; update deliberately when tests change."
+  "testFiles": 173,
+  "tests": 1460,
+  "source": "Full Vitest run on 2026-08-02 after adding the privacy-reviewed Class Constellation slice and Echo Postcard contract; update deliberately when tests change."
 }

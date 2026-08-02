@@ -884,7 +884,7 @@ test("shows a recovery action when gameplay code cannot load", async ({ page }) 
   expect(retryUrl.searchParams.get("labyrinth")).toBe("3");
 });
 
-test("copies an explicit share link without changing normal gameplay URL", async ({
+test("copies an Echo Postcard without changing normal gameplay URL", async ({
   page
 }) => {
   await page.goto("/play");
@@ -903,7 +903,10 @@ test("copies an explicit share link without changing normal gameplay URL", async
     });
   });
 
-  await page.getByRole("button", { name: /Copy share link/i }).click();
+  await page.getByRole("button", { name: /Copy Echo Postcard/i }).click();
+  await expect(page.locator("#event-ribbon")).toContainText(
+    "Echo Postcard copied"
+  );
 
   expect(new URL(page.url()).pathname).toBe("/play");
   expect(new URL(page.url()).search).toBe("");
@@ -911,12 +914,27 @@ test("copies an explicit share link without changing normal gameplay URL", async
     await page.evaluate(() => Reflect.get(window, "__copiedShareLink"))
   );
   expect(shareLink.pathname).toBe("/play");
+  expect(shareLink.searchParams.get("postcard")).toBe("1");
   expect(shareLink.searchParams.get("seed")).toBe(seed);
   expect(shareLink.searchParams.get("level")).toBe("trail-scout");
   expect(shareLink.searchParams.get("labyrinth")).toBe("1");
+  expect([...shareLink.searchParams.keys()]).toEqual([
+    "postcard",
+    "seed",
+    "level",
+    "labyrinth",
+    "region",
+    "rules"
+  ]);
+  expect(shareLink.search).not.toMatch(
+    /identity|profile|score|route|action|answer|prompt|timestamp|runId|replay|token|user/i
+  );
 
   await page.goto(`${shareLink.pathname}${shareLink.search}`);
   await expect(page.locator("#seed-value")).toHaveText(seed ?? "");
+  await expect(page.locator("#event-ribbon")).toContainText(
+    "Echo Postcard opened"
+  );
   const firstAccessRunId = await page.evaluate(() => {
     const locator = JSON.parse(
       localStorage.getItem("echo-maze:active-run:v1") ?? "null"

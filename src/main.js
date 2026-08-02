@@ -364,8 +364,8 @@ const dailyRequest = resolveDailyRequest(
   new URL(window.location.href).searchParams.get("daily")
 );
 const locationSeed = seedFromLocation();
-const sharedParametersNeedNotice =
-  locationSeed !== null && hasInvalidSharedParameters();
+/** @type {{ seed: string, levelId: string, labyrinthNumber: number, atlasRegionId: string, rulesetRevision: string } | null} */
+let echoPostcardRequest = null;
 const storedQuestProgress = loadQuestProgress();
 const normalizedLocationSeed =
   locationSeed === null ? null : normalizeSeed(locationSeed);
@@ -1575,11 +1575,13 @@ elements.seedCopy.addEventListener("click", async () => {
       showEvent("Daily link copied. It contains only the public UTC date.");
       return;
     }
-    await navigator.clipboard.writeText(createShareLink());
-    announce("Share link copied.");
-    showEvent("Share link copied. Send it to another Explorer.");
+    await navigator.clipboard.writeText(await createEchoPostcardLink());
+    announce("Echo Postcard copied.");
+    showEvent(
+      "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
+    );
   } catch {
-    announce(`Share link copy failed. Current seed ${run.seed}.`);
+    announce(`Echo Postcard copy failed. Current seed ${run.seed}.`);
   }
 });
 
@@ -2001,6 +2003,12 @@ async function initializeRunEntry() {
   }
   if (locationSeed !== null || activeRunLocator !== null) {
     const locator = activeRunLocator;
+    if (new URL(window.location.href).searchParams.get("postcard") === "1") {
+      const { parseEchoPostcard } = await import("./game/echo-postcard.js");
+      echoPostcardRequest = parseEchoPostcard(new URL(window.location.href));
+    }
+    const sharedParametersNeedNotice =
+      locationSeed !== null && hasInvalidSharedParameters();
     await startSharedRun(
       normalizedLocationSeed ?? locator?.seed ?? run.seed,
       currentLevel.id,
@@ -2462,6 +2470,14 @@ async function startSharedRun(
   if (showAdjustedNotice) {
     announce("This share link was adjusted to a safe Labyrinth.");
     showEvent("This share link was adjusted to a safe Labyrinth.");
+  }
+  if (echoPostcardRequest) {
+    announce(
+      "Echo Postcard opened. This is normal play from a seed-only invitation."
+    );
+    showEvent(
+      "Echo Postcard opened. No Explorer identity, result, or route was shared."
+    );
   }
   if (activeRunRecoveryUnavailableReported) {
     reportActiveRunRecoveryUnavailable(true);
@@ -4103,7 +4119,7 @@ function updateInterface() {
     ? "Copy Daily Link"
     : activeFirstLight
       ? "Practice seed"
-      : "Copy Share Link";
+      : "Copy Echo Postcard";
   elements.seedCopy.disabled = activeFirstLight;
   elements.time.textContent = formatTime(run.elapsedMs);
   elements.moves.textContent = String(run.moves).padStart(3, "0");
@@ -4803,6 +4819,17 @@ function createShareLink(
   url.searchParams.set("region", ruleset.atlasRegionId);
   url.searchParams.set("rules", ruleset.revision);
   return url.toString();
+}
+
+async function createEchoPostcardLink() {
+  const { createEchoPostcardUrl } = await import("./game/echo-postcard.js");
+  return createEchoPostcardUrl({
+    origin: window.location.origin,
+    seed: run.seed,
+    levelId: currentLevel.id,
+    labyrinthNumber: currentLabyrinthNumber,
+    ruleset: run.ruleset
+  });
 }
 
 function seedFromLocation() {
