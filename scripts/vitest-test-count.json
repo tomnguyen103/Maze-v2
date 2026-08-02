@@ -1,5 +1,5 @@
 {
-  "testFiles": 159,
-  "tests": 1396,
-  "source": "Full Vitest run on 2026-08-02 after Offline Continuity forward migration, Quest binding, worker reload cleanup, Hint replay, replay-boundary, compact-summary, and Mixed Gate Warden regression tests."
+  "testFiles": 160,
+  "tests": 1403,
+  "source": "Full Vitest run on 2026-08-02 after adding the Echo Fossil Atlas contract and Atlas projection tests on current main; update deliberately when tests change."
 }

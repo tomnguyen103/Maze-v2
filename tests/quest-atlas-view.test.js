@@ -4,6 +4,11 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { projectQuestAtlas } from "../src/game/quest-atlas.js";
 import {
+  addEchoFossil,
+  createEchoFossil,
+  createFossilCollection
+} from "../src/game/quest-fossils.js";
+import {
   createQuestAtlasView,
   renderQuestAtlasSummary
 } from "../src/game/quest-atlas-view.js";
@@ -103,6 +108,44 @@ describe("Echo Atlas view", () => {
     );
     expect(document.getElementById("result-atlas")?.textContent)
       .toContain("Number Trail");
+  });
+
+  it("shows a reviewed fossil stamp and note only on its completed landmark", () => {
+    const progress = advanceQuest(
+      createQuestProgress("trail-scout", 4, "quest_atlas_fossil_123")
+    );
+    const fossil = createEchoFossil({
+      questId: progress.questId,
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      outcome: "escaped",
+      fossilId: "fossil_00000000-0000-4000-8000-000000000403"
+    });
+    const atlas = projectQuestAtlas(progress, {
+      fossilCollection: addEchoFossil(
+        createFossilCollection(progress.questId),
+        fossil
+      )
+    });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    createQuestAtlasView().show(atlas, trigger);
+    expect(document.querySelector(
+      "[data-atlas-landmark='foundation-4'] [data-fossil-mark]"
+    )).not.toBeNull();
+    /** @type {HTMLButtonElement | null} */ (
+      document.querySelector("[data-atlas-landmark='foundation-4']")
+    )?.click();
+    expect(document.querySelector("[data-atlas-fossils]")?.textContent)
+      .toContain("The first Gate Warden yields to a steady trail.");
+    expect(document.querySelector("[data-visual-stamp='foundation-lantern-mark']"))
+      .not.toBeNull();
+    /** @type {HTMLButtonElement | null} */ (
+      document.querySelector("[data-atlas-landmark='foundation-1']")
+    )?.click();
+    expect(document.querySelector("[data-atlas-fossils]")).toBeNull();
   });
 
   it("removes landmark press movement when reduced motion is requested", () => {

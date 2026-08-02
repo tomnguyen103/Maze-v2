@@ -4,6 +4,11 @@ import {
   advanceQuest,
   createQuestProgress
 } from "../src/game/quest-progress.js";
+import {
+  addEchoFossil,
+  createEchoFossil,
+  createFossilCollection
+} from "../src/game/quest-fossils.js";
 import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
 
 const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
@@ -11,6 +16,32 @@ const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
 );
 
 describe("Echo Atlas projection", () => {
+  it("does not project fossil memories from another Quest", () => {
+    const progress = createQuestProgress(
+      "trail-scout",
+      5,
+      "quest_current_atlas"
+    );
+    const otherQuestFossil = createEchoFossil({
+      questId: "quest_other_atlas",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      outcome: "escaped",
+      fossilId: "fossil_00000000-0000-4000-8000-000000000102"
+    });
+    const otherQuestCollection = addEchoFossil(
+      createFossilCollection("quest_other_atlas"),
+      otherQuestFossil
+    );
+
+    const atlas = projectQuestAtlas(progress, {
+      fossilCollection: otherQuestCollection
+    });
+
+    expect(atlas.fossilCount).toBe(0);
+    expect(atlas.regions[0].nodes[3].fossils).toEqual([]);
+  });
+
   it("projects five regions and twenty non-color-only node states", () => {
     const progress = createQuestProgress("trail-scout");
     const atlas = projectQuestAtlas(progress);

@@ -156,6 +156,47 @@
   font-weight: 600;
 }
 
+.atlas-detail__fossils {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 2px solid var(--color-line);
+  background: var(--color-stone);
+}
+
+.atlas-detail__fossils h4 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.atlas-detail__fossil-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.atlas-detail__fossil-list li {
+  min-width: 0;
+}
+
+.atlas-fossil-stamp {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--color-signal-deep);
+  color: var(--color-accent-ink);
+  background: var(--color-signal-bright);
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  font-weight: 700;
+}
+
+.atlas-detail__fossil-list p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink-muted);
+}
+
 .atlas-detail__availability {
   color: var(--color-ink-muted);
 }
@@ -343,6 +384,17 @@
   line-height: 1;
 }
 
+.atlas-landmark .atlas-node__fossil {
+  display: inline-block;
+  width: fit-content;
+  padding: 0 var(--space-1);
+  color: var(--color-accent-ink);
+  background: var(--color-signal-bright);
+  font-family: var(--font-utility);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
 .atlas-landmark .atlas-node__state-mark {
   position: absolute;
   right: var(--space-1);
@@ -461,8 +513,12 @@
     order: 3;
   }
 
-  .atlas-detail__availability {
+  .atlas-detail__fossils {
     order: 4;
+  }
+
+  .atlas-detail__availability {
+    order: 5;
   }
 }
 
