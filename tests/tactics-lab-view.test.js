@@ -88,4 +88,32 @@ describe("Warden Tactics Lab view", () => {
     expect(document.getElementById("practice-tactics-twist-list")?.textContent)
       .toContain("Warden Bells");
   });
+
+  it("does not use network or browser persistence while a drill runs", () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    localStorage.setItem("tactics-test-before", "unchanged");
+    const before = Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    );
+
+    const view = createTacticsLabView();
+    view.show();
+    document.querySelector("[data-tactics-drill='hunt']")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    document.getElementById("practice-tactics-pulse")?.click();
+
+    const after = Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(after).toEqual(before);
+    localStorage.removeItem("tactics-test-before");
+    vi.unstubAllGlobals();
+  });
 });
