@@ -58,7 +58,11 @@ function classroomStore() {
     issueRunGrant: vi.fn(async () => ({})),
     recordRunOutcome: vi.fn(async () => true),
     listOwnGrants: vi.fn(async () => []),
-    progressForExpedition: vi.fn(async () => ({}))
+    progressForExpedition: vi.fn(async () => ({})),
+    constellationForExpedition: vi.fn(async () => ({
+      published: false,
+      markers: []
+    }))
   };
 }
 

@@ -21,7 +21,7 @@ const MAX_BODY_BYTES = 8 * 1024;
 const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPEDITION_SUBPATH_PATTERN =
-  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|progress|grants|grants\/outcome)$/;
+  /^\/api\/classrooms\/org_[A-Za-z0-9_-]{3,120}\/expeditions\/(exped_[A-Za-z0-9_-]{3,120})\/(status|license|capacity|progress|constellation|grants|grants\/outcome)$/;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -199,13 +199,13 @@ function advisoryCompletionDate(value) {
  *       domain: string,
  *       autoJoinEnabled: boolean
  *     }>,
-     *     progressForTeacher: (
-     *       userId: string,
-     *       classroomId: string
-     *     ) => Promise<{
-     *       progress: Record<string, unknown>[],
-     *       truncated: boolean
-     *     }>,
+ *     progressForTeacher: (
+ *       userId: string,
+ *       classroomId: string
+ *     ) => Promise<{
+ *       progress: Record<string, unknown>[],
+ *       truncated: boolean
+ *     }>,
  *     listExpeditions: (
  *       userId: string,
  *       classroomId: string
@@ -255,6 +255,11 @@ function advisoryCompletionDate(value) {
  *       expeditionId: string
  *     ) => Promise<Record<string, unknown>[]>,
  *     progressForExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>,
+ *     constellationForExpedition: (
  *       userId: string,
  *       classroomId: string,
  *       expeditionId: string
@@ -655,6 +660,24 @@ export function createClassroomHandler({
           }
           sendJson(response, 200, {
             progress: await store.progressForExpedition(
+              userId,
+              selectedClassroomId,
+              expeditionId
+            )
+          });
+          return;
+        }
+        if (subResource === "constellation") {
+          if (request.method !== "GET") {
+            response.setHeader("allow", "GET");
+            sendJson(response, 405, {
+              error: "Use GET for the Class Constellation."
+            });
+            return;
+          }
+          await store.requireTeacher(userId, selectedClassroomId);
+          sendJson(response, 200, {
+            constellation: await store.constellationForExpedition(
               userId,
               selectedClassroomId,
               expeditionId

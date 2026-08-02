@@ -80,6 +80,10 @@ function expeditionStore() {
         { labyrinthNumber: 4, completedCount: 1 }
       ]
     })),
+    constellationForExpedition: vi.fn(async () => ({
+      published: false,
+      markers: []
+    })),
     issueRunGrant: vi.fn(async (_userId, _classroomId, _expeditionId, input) => ({
       runId: input.runId,
       status: "issued",
@@ -120,6 +124,10 @@ describe("Class Expedition API", () => {
       for (const [path, method] of [
         ["/api/classrooms/org_class_1/expeditions", "GET"],
         ["/api/classrooms/org_class_1/expeditions", "POST"],
+        [
+          "/api/classrooms/org_class_1/expeditions/exped_abc123/constellation",
+          "GET"
+        ],
         [
           "/api/classrooms/org_class_1/expeditions/exped_abc123/status",
           "POST"
@@ -343,6 +351,11 @@ describe("Class Expedition API", () => {
         { method: "GET" }
       );
       expect(status.status).toBe(405);
+      const constellation = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/constellation`,
+        { method: "POST" }
+      );
+      expect(constellation.status).toBe(405);
     });
   });
 

@@ -179,6 +179,58 @@
   color: var(--color-ink-muted);
 }
 
+.classroom-expedition-card__constellation {
+  margin-block: var(--space-4);
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--color-line-soft);
+}
+
+.classroom-constellation__status {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--color-ink-muted);
+  font-size: 0.86rem;
+}
+
+.classroom-constellation__markers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.classroom-constellation-marker {
+  min-width: 0;
+  padding: var(--space-2);
+  border: 2px solid var(--color-line);
+  background: var(--color-stone);
+}
+
+.classroom-constellation-marker h4,
+.classroom-constellation-marker p {
+  margin: 0;
+}
+
+.classroom-constellation-marker h4 {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+}
+
+.classroom-constellation-marker p {
+  margin-block-start: var(--space-1);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.classroom-constellation-marker[data-band="glowing"] {
+  background: var(--color-signal);
+}
+
+.classroom-constellation-marker[data-band="bright"] {
+  background: var(--color-gate);
+}
+
 .classroom-expedition-card[data-expedition-status="closed"] {
   border-style: dashed;
 }
@@ -479,6 +531,10 @@
 
   .classroom-heading h1 {
     font-size: clamp(1.8rem, 11vw, 2.6rem);
+  }
+
+  .classroom-constellation__markers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -1,6 +1,7 @@
 import { ClassroomAccessDeniedError } from "./classroom-context.js";
 import { InputError } from "./player-validation.js";
 import { withTenantContext } from "./tenant-context.js";
+import { projectClassConstellation } from "../shared/class-constellation.js";
 
 /**
  * A Grant request that is well-formed and authorized but conflicts with the
@@ -276,6 +277,54 @@ export function createClassExpeditionStore(pool) {
           completedCount: Number(row.completed_count)
         }))
       };
+    },
+
+    /**
+     * Teacher-only, thresholded milestone projection. The SQL reader returns
+     * only eligible aggregate rows; this method turns those internal counts
+     * into the band-only response shape before the route serializes it.
+     *
+     * @param {string} userId
+     * @param {string} classroomId
+     * @param {string} expeditionId
+     */
+    async constellationForExpedition(userId, classroomId, expeditionId) {
+      const projection = await withTenantContext(
+        pool,
+        { explorerId: userId, classroomId },
+        async (database) => {
+          const result = await database.query(
+            "SELECT * FROM read_class_expedition_constellation($1, $2)",
+            [classroomId, expeditionId]
+          );
+          if (result.rows.length === 0) {
+            // The constellation reader deliberately returns no rows for a
+            // forming cohort. Reuse the existing Teacher reader to distinguish
+            // that safe state from a denied Classroom or Expedition.
+            const authorization = await database.query(
+              "SELECT labyrinth_number FROM read_class_expedition_progress($1, $2)",
+              [classroomId, expeditionId]
+            );
+            if (authorization.rows.length === 0) {
+              throw new ClassroomAccessDeniedError();
+            }
+            return projectClassConstellation({
+              escapedStudentCount: 0,
+              markers: []
+            });
+          }
+          return projectClassConstellation({
+            escapedStudentCount: Number(
+              result.rows[0]?.escaped_student_count ?? 0
+            ),
+            markers: result.rows.map((row) => ({
+              labyrinthNumber: Number(row.labyrinth_number),
+              contributorCount: Number(row.completed_count)
+            }))
+          });
+        }
+      );
+      return projection;
     },
 
     /**

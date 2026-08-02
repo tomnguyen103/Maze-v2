@@ -26,7 +26,7 @@ Organization and Membership events commit through the durable inbox.
 ## Database release order
 
 Apply migrations 0014 through 0017 with `DATABASE_ADMIN_URL`, in that order.
-Continue the full migration sequence through 0027, then apply 0028:
+Continue the full migration sequence through 0027, then apply 0028 and 0029:
 
 - 0014 adds nullable Classroom scope, a non-login tenant owner, transaction-local
   context, and forced RLS while preserving Personal Play.
@@ -36,10 +36,14 @@ Continue the full migration sequence through 0027, then apply 0028:
 - 0017 adds the forced-RLS Verified Classroom Domain mapping and bounded
   register/read/lookup functions used by domain auto-join.
 - 0028 replaces that read with a thresholded Classroom-wide objective
-  aggregate for the Classroom Expedition debrief. Quiesce `/class` traffic
-  while applying the migration and deploying the matching release, or retain
-  an expand/contract-compatible `read_classroom_progress` function until old
-  `/class` processes drain.
+ aggregate for the Classroom Expedition debrief. Quiesce `/class` traffic
+ while applying the migration and deploying the matching release, or retain
+ an expand/contract-compatible `read_classroom_progress` function until old
+ `/class` processes drain.
+- 0029 adds the bounded Teacher-only Class Constellation reader. It derives
+  four thresholded milestone bands from terminal Class Run Grant aggregates;
+  it does not add a route table or personal retention path. Apply it before
+  deploying the matching `/class` release.
 
 The application login named by `DATABASE_URL` must inherit
 `echo_maze_runtime`. It must not be superuser, tenant-table owner, or hold
@@ -57,6 +61,8 @@ release.
 - Student invitations for database-authoritative Teachers; and
 - thresholded Classroom-wide objective signals and reviewed next-step activity
   cards for Teachers; and
+- a forming or band-only Class Constellation for Teachers on eligible Class
+  Expeditions; and
 - private reflection prompts for Students after they escape a Labyrinth.
 
 The API surfaces are:
@@ -67,6 +73,7 @@ The API surfaces are:
 - `GET /api/classrooms/:id/progress`
 - `GET /api/classrooms/:id/domain`
 - `PUT /api/classrooms/:id/domain`
+- `GET /api/classrooms/:id/expeditions/:expeditionId/constellation`
 
 Creation is limited to 3/hour per signed-in user and invitations to 20/hour.
 Clerk also applies provider limits. UI visibility is never authorization:
@@ -86,6 +93,14 @@ Journal JSON.
 Student reflection prompts are rendered in the Student's own Expedition card.
 They are read-only prompts: no response field is persisted or sent to a
 Teacher endpoint.
+
+Class Constellation is deliberately not a route view. It is Teacher-only and
+returns only the forming state or four fixed milestone labels with Quiet,
+Glowing, or Bright bands. The 20-Student publication gate and 5-Student
+milestone gate are the Daily aggregate thresholds; exact counts, names,
+provider identifiers, Run IDs, answers, prompts, timestamps, ranking, and
+diagnosis remain absent from the projection. The separate privacy record is
+`docs/adr/0043-class-expedition-constellation-aggregate-only.md`.
 
 `learning_journals` stays behind its Explorer-only forced-RLS policy. Migration
 0016 derives count rows whenever a Classroom Journal changes; the runtime has
@@ -116,6 +131,10 @@ Membership is removed.
   migrations 0016 and 0028 are applied. Fewer than three responses for an
   objective intentionally stay hidden. Do not grant Teacher access to raw
   Journals.
+- Class Constellation forming: confirm migration 0029 is applied and that at
+  least 20 distinct Students have escaped one assigned Labyrinth. Individual
+  milestones remain hidden below five escaped Students by design; do not
+  expose the underlying Grant rows to the Classroom UI.
 - Provider outage: creation/invitation returns a bounded safe error. Existing
   Personal Play and synchronized Class Play remain available.
 - Database context failure: the transaction rolls back and its local Explorer

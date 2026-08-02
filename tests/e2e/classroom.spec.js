@@ -236,6 +236,16 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
             students: [{ username: "Moss", labyrinthNumber: 8 }]
           }
         }),
+        getClassExpeditionConstellation: async () => ({
+          constellation: {
+            published: true,
+            markers: [
+              { labyrinthNumber: 5, band: "quiet" },
+              { labyrinthNumber: 6, band: "glowing" },
+              { labyrinthNumber: 8, band: "bright" }
+            ]
+          }
+        }),
         getClassExpeditionCapacity: async () => ({
           capacity: {
             seatsTotal: 30,
@@ -286,6 +296,14 @@ test("shows Class Expedition tools to Teachers and Students with counts only", a
   await expect(teacherPanel).toContainText("6 started");
   await expect(teacherPanel).toContainText("1 finished the Region");
   await expect(teacherPanel).toContainText("6 of 30 seats assigned");
+  const constellation = teacherPanel.locator(
+    "[data-class-constellation='true']"
+  );
+  await expect(constellation).toContainText("Density bands only");
+  await expect(
+    constellation.locator(".classroom-constellation-marker")
+  ).toHaveCount(3);
+  await expect(constellation).not.toContainText(/count|student|route/i);
   // Scoped to the Expedition list and matching the name the progress fixture
   // actually serves, so this fails if a Student's identity ever renders.
   await expect(

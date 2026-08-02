@@ -92,7 +92,7 @@ export function projectConstellation({ publishedContributors, markers }) {
       kind: marker.kind,
       x: marker.x,
       y: marker.y,
-      band: band(marker.contributorCount, peak)
+      band: constellationBand(marker.contributorCount, peak)
     }))
   };
 }
@@ -108,7 +108,7 @@ export function projectConstellation({ publishedContributors, markers }) {
  * @param {number} peak
  * @returns {ConstellationBand}
  */
-function band(count, peak) {
+export function constellationBand(count, peak) {
   if (count * 3 >= peak * 2) {
     return "bright";
   }
