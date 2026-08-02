@@ -135,7 +135,7 @@ export function createOfflineCloudOutcomeApplier({
     const descriptors =
       summaries.length > 0
         ? summaries.flatMap((summary) => {
-            const question = journalQuestionForSummary(summary);
+            const question = journalQuestionForSummary(summary, receipt.questId);
             if (
               !question ||
               !Number.isSafeInteger(summary.count) ||
@@ -213,8 +213,19 @@ export function createOfflineCloudOutcomeApplier({
  * the Question id or its child-facing content.
  *
  * @param {{ questId?: string, challengeKind?: "gate-warden", topicId: string, learningObjectiveId: string, difficultyBand: string }} summary
+ * @param {string} [receiptQuestId]
  */
-function journalQuestionForSummary(summary) {
+function journalQuestionForSummary(summary, receiptQuestId) {
+  const summaryQuestId =
+    typeof summary.questId === "string" ? summary.questId : undefined;
+  if (
+    summaryQuestId !== undefined &&
+    receiptQuestId !== undefined &&
+    summaryQuestId !== receiptQuestId
+  ) {
+    return null;
+  }
+  const questId = summaryQuestId ?? receiptQuestId;
   const placement =
     JOURNAL_LEVEL_BY_BAND[
       /** @type {keyof typeof JOURNAL_LEVEL_BY_BAND} */ (
@@ -225,7 +236,7 @@ function journalQuestionForSummary(summary) {
     return null;
   }
   const questII =
-    getQuestContentPackId(summary.questId) === QUEST_II_CONTENT_PACK_ID;
+    getQuestContentPackId(questId) === QUEST_II_CONTENT_PACK_ID;
   const questionCount =
     summary.challengeKind === "gate-warden" ? 1 : questII ? 20 : 8;
   for (let questionOrdinal = 0; questionOrdinal < questionCount; questionOrdinal += 1) {
@@ -235,7 +246,7 @@ function journalQuestionForSummary(summary) {
       wardenId: 0,
       labyrinthNumber: placement.labyrinthNumber,
       questionOrdinal,
-      ...(summary.questId ? { questId: summary.questId } : {}),
+      ...(typeof questId === "string" ? { questId } : {}),
       ...(summary.challengeKind
         ? { challengeKind: summary.challengeKind }
         : {})

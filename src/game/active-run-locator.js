@@ -2,7 +2,7 @@ import { QUEST_LABYRINTH_COUNT } from "../questions/quest-levels.js";
 import { normalizeRunRuleset } from "./run-ruleset.js";
 
 const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
-const QUEST_ID_PATTERN = /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/;
+const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
 
 /**
  * @typedef {{

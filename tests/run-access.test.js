@@ -62,6 +62,24 @@ describe("browser Run Access identity", () => {
     ).toBe(true);
   });
 
+  it("preserves mixed-case Quest IDs across Run Access", () => {
+    const locator = {
+      version: 3,
+      runId: "access_existing",
+      pending: false,
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1",
+      questId: "quest_01MOSS123"
+    };
+
+    expect(withRunAccessId(locator, () => "unused").questId).toBe(
+      locator.questId
+    );
+  });
+
   it("recognizes only the same admitted Run as a free-warning bypass", () => {
     const admitted = {
       version: 3,

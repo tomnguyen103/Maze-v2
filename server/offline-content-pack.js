@@ -81,34 +81,34 @@ export function createOfflineContentPack(hash, publishedQuestions = []) {
         );
       }
       const questIICapstone =
-        /^(?:quest-ii:)?quest-ii-capstone-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)(?::|$)/.exec(
+        /^(?:quest-ii:)?(quest-ii-capstone-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery))(?::.*)?$/.exec(
           revisionId
         );
       if (questIICapstone) {
         return bundledQuestion(
           /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (
-            questIICapstone[1]
+            questIICapstone[2]
           ),
-          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[2])],
+          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[3])],
           "gate-warden",
-          revisionId,
-          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[2])] - 1,
+          questIICapstone[1],
+          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[3])] - 1,
           "quest_ii_offline_revision_123"
         );
       }
       const questIIGenerated =
-        /^(?:quest-ii:)?quest-ii-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)-(\d+)(?::|$)/.exec(
+        /^(?:quest-ii:)?(quest-ii-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)-(\d+))(?::.*)?$/.exec(
           revisionId
         );
       if (questIIGenerated) {
         return bundledQuestion(
           /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (
-            questIIGenerated[1]
+            questIIGenerated[2]
           ),
-          BANDS[/** @type {keyof typeof BANDS} */ (questIIGenerated[2])],
+          BANDS[/** @type {keyof typeof BANDS} */ (questIIGenerated[3])],
           "warden",
-          revisionId,
-          Number(questIIGenerated[3]),
+          questIIGenerated[1],
+          Number(questIIGenerated[4]),
           "quest_ii_offline_revision_123"
         );
       }

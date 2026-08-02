@@ -191,4 +191,37 @@ describe("Offline content pack", () => {
       );
     }
   });
+
+  it("normalizes Quest II revision aliases before generated lookup", () => {
+    const pack = createOfflineContentPack("b".repeat(64));
+    const questions = [
+      getBundledQuestion({
+        questId: "quest_ii_offline_test_123",
+        levelId: "bright-start",
+        seed: "QUEST-II-OFFLINE-ALIASES",
+        wardenId: 0,
+        labyrinthNumber: 1,
+        questionOrdinal: 0
+      }),
+      getBundledQuestion({
+        questId: "quest_ii_offline_test_123",
+        levelId: "bright-start",
+        seed: "QUEST-II-OFFLINE-ALIASES",
+        wardenId: 0,
+        labyrinthNumber: 1,
+        questionOrdinal: 0,
+        challengeKind: "gate-warden"
+      })
+    ];
+
+    for (const question of questions) {
+      expect(pack.questionForRevision(question.id)?.id).toBe(question.id);
+      expect(pack.questionForRevision(`quest-ii:${question.id}`)?.id).toBe(
+        question.id
+      );
+      expect(pack.questionForRevision(`${question.id}:legacy-suffix`)?.id).toBe(
+        question.id
+      );
+    }
+  });
 });

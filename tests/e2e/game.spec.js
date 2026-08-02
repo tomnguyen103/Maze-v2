@@ -1317,7 +1317,6 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
     questionRequests.push(request);
     const requestedQuestId =
       typeof request.questId === "string" ? request.questId : "";
-    expect(requestedQuestId).toMatch(/^quest_ii_/iu);
     servedQuestion = getBundledQuestion({
       questId: requestedQuestId,
       levelId: "trail-scout",
@@ -1387,6 +1386,9 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
   await page.locator(`[data-answer="${answerId}"]`).click();
   await expect(challenge).not.toBeVisible();
   expect(questionRequests.length).toBeGreaterThan(0);
+  for (const request of questionRequests) {
+    expect(String(request.questId)).toMatch(/^quest_ii_/iu);
+  }
 
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
@@ -1408,6 +1410,32 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
   );
   await expect(atlas.locator("[data-atlas-storylet-tie]")).toContainText(
     "echo-hush-v1:gate-warden"
+  );
+});
+
+test("emits the Quest II region-arrival storylet at a region entry", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_ii_region_arrival_123",
+      levelId: "bright-start",
+      labyrinthNumber: 1,
+      completedLabyrinths: 0,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  });
+
+  await page.goto("/?seed=QUEST-II-ARRIVAL&level=bright-start&labyrinth=1");
+  await expectGameReady(page);
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(1);
+  await expect(page.locator("#story-log [data-kind='region']")).toContainText(
+    "A softer footfall"
   );
 });
 

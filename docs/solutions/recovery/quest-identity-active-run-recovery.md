@@ -45,5 +45,5 @@ coverage records the identity and rejects a mismatched Quest (`tests/active-run-
 When an identity record gains an optional binding field, update three seams
 together: storage validation, equality comparison, and every reload/start path
 that reconstructs the identity. A unit test for the stored record should be
-paired with a browser reload test because persistence can strip fields that
-are present in the in-memory locator.
+paired with a browser reload test because legacy persisted envelopes may omit
+fields that are present in the in-memory locator.

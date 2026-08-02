@@ -1,7 +1,7 @@
 import { normalizeRunRuleset } from "./run-ruleset.js";
 
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
-const QUEST_ID_PATTERN = /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/;
+const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
 
 function defaultIdFactory() {
   if (globalThis.crypto?.randomUUID) {

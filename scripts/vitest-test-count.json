@@ -1,5 +1,5 @@
 {
   "testFiles": 174,
-  "tests": 1488,
-  "source": "Full Vitest run on 2026-08-02 after Quest II identity and legacy continuity regression coverage; update deliberately when tests change."
+  "tests": 1492,
+  "source": "Full Vitest run on 2026-08-02 after Quest II identity, alias, and safe storylet regression coverage; update deliberately when tests change."
 }

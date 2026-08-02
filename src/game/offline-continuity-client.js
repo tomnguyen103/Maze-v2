@@ -15,7 +15,7 @@ import { OFFLINE_DEVICE_BINDING_KEY } from "./offline-local-scrub.js";
  * @param {{
  *   playerController: {
  *     issueOfflineReceipt: (
- *       run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string },
+ *       run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string },
  *       deviceInstallationNonce: string
  *     ) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
  *   },
@@ -150,7 +150,7 @@ export function createOfflineContinuityClient({
    * never reaches the worker, and a failed pin is returned to the caller so
    * online play is not presented as offline-ready.
    *
-   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} run
+   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }} run
    */
   async function issueAndPin(run) {
     if (!receiptVerifier) {

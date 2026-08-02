@@ -181,7 +181,7 @@ describe("Offline replay cloud boundary", () => {
     expect(test.learningJournalStore.saveJournal.mock.calls[0][1].events).toHaveLength(2);
   });
 
-  it("rehydrates Quest II Journal summaries with their own ordinary and capstone IDs", async () => {
+  it("rehydrates identity-less Quest II Journal summaries from the receipt", async () => {
     const questId = "quest_ii_cloud_summary_123";
     const receipt = {
       ...RECEIPT,
@@ -221,7 +221,6 @@ describe("Offline replay cloud boundary", () => {
         elapsedMs: 30000,
         journalSummary: [
           {
-            questId,
             topicId: ordinary.topicId,
             learningObjectiveId: ordinary.learningObjectiveId,
             difficultyBand: ordinary.difficultyBand,
@@ -229,7 +228,6 @@ describe("Offline replay cloud boundary", () => {
             count: 1
           },
           {
-            questId,
             challengeKind: "gate-warden",
             topicId: capstone.topicId,
             learningObjectiveId: capstone.learningObjectiveId,
@@ -249,6 +247,51 @@ describe("Offline replay cloud boundary", () => {
     );
     expect(events[0].questionId).not.toMatch(/^scout-/u);
     expect(events[1].questionId).toBe(capstone.id);
+  });
+
+  it("ignores a Journal summary bound to a different Quest than the receipt", async () => {
+    const questId = "quest_ii_cloud_summary_123";
+    const receipt = {
+      ...RECEIPT,
+      questId,
+      labyrinthNumber: 5,
+      rulesetRevision: "windways-v1"
+    };
+    const test = harness(receipt);
+    const question = getBundledQuestion({
+      questId,
+      levelId: "trail-scout",
+      seed: "offline-journal-summary",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4
+    });
+
+    await test.apply({
+      runId: receipt.runId,
+      playerId: receipt.playerId,
+      receipt,
+      result: {
+        status: "lost",
+        score: 120,
+        wardensDefeated: 0,
+        echoesCollected: 1,
+        moves: 12,
+        elapsedMs: 30000,
+        journalSummary: [
+          {
+            questId: "quest_ii_other_summary_456",
+            topicId: question.topicId,
+            learningObjectiveId: question.learningObjectiveId,
+            difficultyBand: question.difficultyBand,
+            outcome: "correct",
+            count: 1
+          }
+        ]
+      }
+    });
+
+    expect(test.learningJournalStore.saveJournal).not.toHaveBeenCalled();
   });
 
   it("rejects a receipt bound to a different account before any cloud write", async () => {

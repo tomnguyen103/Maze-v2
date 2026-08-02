@@ -20,13 +20,15 @@ The first pre-push invocation produced a partial Vitest child-process result on
 the Windows workstation. The exact OS-level trigger was not reproducible: a
 standalone `npm run test` immediately afterward completed with the expected
 `166 passed | 8 skipped` file summary and `1470 passed | 18 skipped` test
-summary. This was therefore a transient worker/process failure, not a failing
-test assertion or a source regression.
+summary. The successful rerun makes the evidence consistent with a transient
+worker/process failure; no test assertion failure was observed, and the first
+failure does not establish that no source regression was involved.
 
 The repository intentionally runs Vitest in one thread with file parallelism
 disabled because the default Windows fork pool has lost workers before
-(`vite.config.mjs:24-29`). The gate also rejects worker-loss markers and any
-missing or incomplete manifest summary (`scripts/vitest-gate.mjs:88-112`).
+(`vite.config.mjs:24-29`). The gate reports missing or incomplete manifest
+summaries at `scripts/vitest-gate.mjs:41-45` and rejects worker-loss markers
+and other completeness failures at `scripts/vitest-gate.mjs:88-112`.
 
 ## Recovery
 

@@ -1829,6 +1829,15 @@ async function openCampfireResume() {
   });
 }
 
+/** @param {number} labyrinthNumber @returns {ReturnType<typeof getQuestIIStorylet> | null} */
+function questIIStoryletFor(labyrinthNumber) {
+  try {
+    return getQuestIIStorylet(labyrinthNumber);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {{
  *   version: 2 | 3,
@@ -1900,11 +1909,12 @@ async function startRun(locator, daily = null, recoveredRun = null) {
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
   );
-  if (
+  const questIIStorylet =
     !daily &&
-    getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID &&
-    getQuestIIStorylet(currentLabyrinthNumber).eventKind === "region-arrival"
-  ) {
+    getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID
+      ? questIIStoryletFor(currentLabyrinthNumber)
+      : null;
+  if (questIIStorylet?.eventKind === "region-arrival") {
     addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
   }
   if (elements.resultDialog.open) {
@@ -3632,12 +3642,19 @@ function transition(action) {
     ) {
       addStory(eventMessage, eventType);
     }
+    const questIIStorylet =
+      !activeFirstLight &&
+      activeDaily === null &&
+      getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID
+        ? questIIStoryletFor(currentLabyrinthNumber)
+        : null;
     if (
       !activeFirstLight &&
       activeDaily === null &&
       getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID &&
+      questIIStorylet &&
       isQuestIIStoryletTriggered(
-        getQuestIIStorylet(currentLabyrinthNumber),
+        questIIStorylet,
         eventType,
         run.event.message
       )

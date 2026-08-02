@@ -411,7 +411,8 @@ describe("Player Profile dialog", () => {
       runId: "access_01J1MOSSWATCH",
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      questId: "quest_ii_player_controller_123"
     };
 
     await expect(

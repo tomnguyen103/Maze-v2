@@ -9,6 +9,7 @@ import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-sel
 
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} OfflineRunIdentity */
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, contentPackHash?: string, questId?: string }} OfflineRunLocator */
+/** @typedef {OfflineRunLocator & { questId: string }} OfflineRunWithQuestId */
 /** @typedef {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} OfflineAssetPackage */
 /** @typedef {import("../../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt */
 /** @typedef {ReturnType<typeof createOfflineContinuityRuntime>} OfflineContinuityRuntime */
@@ -30,7 +31,7 @@ import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-sel
      *   playerController: {
      *     getAuthenticatedUserId: () => string | null,
      *     auth?: () => boolean,
-     *     issueOfflineReceipt: (run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }, nonce: string) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
+     *     issueOfflineReceipt: (run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }, nonce: string) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
      *     retryLanternJournalSync: () => Promise<void>,
      *     submitOfflineRun: (submission: {
  *       idempotencyKey: string,
@@ -291,7 +292,7 @@ export function createOfflineContinuityRuntime({
     });
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} locator */
+  /** @param {OfflineRunWithQuestId} locator */
   async function prepare(locator) {
     setAccountScope(playerController.getAuthenticatedUserId());
     active = false;
@@ -318,7 +319,7 @@ export function createOfflineContinuityRuntime({
     }
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} locator */
+  /** @param {OfflineRunWithQuestId} locator */
   async function prepareInternal(locator) {
     try {
       const result = await client.issueAndPin(locator);
