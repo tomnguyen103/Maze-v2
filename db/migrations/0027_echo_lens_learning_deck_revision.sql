@@ -21,9 +21,9 @@ ALTER TABLE cloud_quest_progress
     OR (
       learning_deck_id = 'number-trail'
       AND learning_deck_revision =
-        'deck:number-trail:v1:d583663a8c0590f497042439ce82d2f7'
+        'deck:number-trail:v1:af582a7a6a5cb39d1b949fa3de900644'
     )
-  );
+  ) NOT VALID;
 
 ALTER TABLE class_expeditions
   DROP CONSTRAINT IF EXISTS class_expeditions_learning_deck_check,
@@ -41,8 +41,20 @@ ALTER TABLE class_expeditions
     OR (
       learning_deck_id = 'number-trail'
       AND learning_deck_revision =
-        'deck:number-trail:v1:d583663a8c0590f497042439ce82d2f7'
+        'deck:number-trail:v1:af582a7a6a5cb39d1b949fa3de900644'
     )
-  );
+  ) NOT VALID;
+
+COMMIT;
+
+-- Validate after the short schema-change transaction. PostgreSQL can check
+-- existing rows while allowing normal reads and writes to continue.
+BEGIN;
+
+ALTER TABLE cloud_quest_progress
+  VALIDATE CONSTRAINT cloud_quest_progress_learning_deck_check;
+
+ALTER TABLE class_expeditions
+  VALIDATE CONSTRAINT class_expeditions_learning_deck_check;
 
 COMMIT;

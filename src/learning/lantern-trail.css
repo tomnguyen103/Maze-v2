@@ -62,6 +62,186 @@
   background: var(--color-echo-soft);
 }
 
+.practice-catalog__tools {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.practice-catalog__tools p {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.practice-catalog__tools > .control-button {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.practice-tactics__heading,
+.practice-tactics__subheading {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-block: var(--space-3);
+  border-block: 2px solid var(--color-ink);
+}
+
+.practice-tactics__heading h3,
+.practice-tactics__subheading h4,
+.practice-tactics__session h4 {
+  margin: 0;
+}
+
+.practice-tactics__heading p,
+.practice-tactics__subheading p,
+.practice-tactics__intro,
+.practice-tactics__session > p {
+  margin: 0;
+}
+
+.practice-tactics__intro {
+  margin-block: var(--space-4);
+  color: var(--color-ink-muted);
+}
+
+.practice-tactics__catalog,
+.practice-tactics__twist-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.practice-tactics-card,
+.practice-tactics-twist {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 4.25rem;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.practice-tactics-card:hover,
+.practice-tactics-card:active,
+.practice-tactics-twist:hover,
+.practice-tactics-twist:active {
+  border-color: var(--color-echo);
+  background: var(--color-echo-soft);
+}
+
+.practice-tactics-card span,
+.practice-tactics-twist span {
+  min-width: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.practice-tactics__twists {
+  margin-top: var(--space-4);
+}
+
+.practice-tactics__session {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-ink);
+}
+
+.practice-tactics__rule,
+.practice-tactics__status,
+.practice-tactics__report,
+.practice-tactics__challenge {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
+}
+
+.practice-tactics__status {
+  border-color: var(--color-signal);
+  background: var(--color-signal-bright);
+}
+
+.practice-tactics__report {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.practice-tactics__report strong {
+  font-family: var(--font-utility);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.practice-tactics__moves,
+.practice-tactics__actions,
+.practice-tactics__support {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.practice-tactics__challenge {
+  display: grid;
+  gap: var(--space-3);
+  border-color: var(--color-warden);
+  background: var(--color-warden-soft);
+}
+
+.practice-tactics__challenge > p:not(.section-label) {
+  margin: 0;
+}
+
+.practice-tactics__choices {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.practice-tactics__choice {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  text-align: left;
+}
+
+.practice-tactics__support p {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.practice-tactics__footer {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.practice-tactics__footer > button {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+html .practice-tactics[hidden],
+html .practice-tactics__twists[hidden],
+html .practice-tactics__session[hidden] {
+  display: none;
+}
+
 .practice-support {
   display: grid;
   justify-items: start;
@@ -117,7 +297,9 @@
   }
 
   .practice-dialog__destinations > *,
-  .practice-trail__actions > * {
+  .practice-trail__actions > *,
+  .practice-tactics__moves > *,
+  .practice-tactics__actions > * {
     flex: 1 1 100%;
   }
 }

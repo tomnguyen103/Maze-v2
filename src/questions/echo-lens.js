@@ -1,4 +1,4 @@
-const LENS_KINDS = new Set([
+export const LENS_KINDS = new Set([
   "number-line",
   "array",
   "fraction-bar",

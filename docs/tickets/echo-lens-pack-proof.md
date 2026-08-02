@@ -26,14 +26,14 @@ headroom, and the local/review gates for the Echo Lens pack.
   covers `number-line`, `array`, `fraction-bar`, `word-highlight`, `pattern`,
   and `diagram`; the published report has `boundCount=6` and
   `unsupportedCount=0` for the covered fixture set.
-- The Number Trail publication is `deck:number-trail:v1:d583663a8c0590f497042439ce82d2f7`.
+- The Number Trail publication is `deck:number-trail:v1:af582a7a6a5cb39d1b949fa3de900644`.
   Existing pins to `deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105`
   resolve to an exact historical artifact without the later Lens entries.
   Migration `0027_echo_lens_learning_deck_revision.sql` accepts both immutable
   revisions; it is not applied to a live database in this change.
-- Full Vitest: 166 files, 1406 passed, 18 skipped (1424 total). Full browser
-  matrix: 234 passed, 22 skipped (256 total), including desktop/mobile,
+- Full Vitest: 168 files, 1417 passed, 18 skipped (1435 total). Full browser
+  matrix: 236 passed, 22 skipped (258 total), including desktop/mobile,
   keyboard, reduced-motion, and 200% text coverage for the new Practice Lens.
-- Bundle check: `game JavaScript: 29.24 KB gzip / 30 KB`.
+- Bundle check: `game JavaScript: 29.25 KB gzip / 30 KB`.
 - The remaining review bullets above are release gates for the PR and are not
   claimed complete by this local receipt.

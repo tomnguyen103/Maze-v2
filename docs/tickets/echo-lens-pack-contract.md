@@ -26,5 +26,5 @@ truthfully leaves unsupported revisions without a Lens.
 ## Verification receipt
 
 Before implementation, record the observed failing content-coverage test and
-failure line in the commit body or ticket closing comment. The first green
+failure line in the commit body or ticket-closing comment. The first green
 receipt must include the exact pack count and primitive-kind coverage.

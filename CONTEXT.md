@@ -152,6 +152,19 @@ The readable tactic a Warden currently follows: Patrol, Hunt, Intercept, or the
 one-action Lured state created only by a Warden Bell Trail Twist.
 _Avoid_: Difficulty level, random behavior, AI state
 
+**Tactics Lab**:
+An optional Workshop surface with fixed, unscored drills that teach the
+existing Warden modes and Trail Twists through the production game engine.
+It is current-tab only and never changes Quest, score, Journal, Profile,
+records, access, or learner state.
+_Avoid_: Tutorial gate, difficulty selector, hidden assessment, practice score
+
+**Tactics Drill**:
+One authored Patrol, Hunt, Intercept, or Trail Twist scenario in the Tactics
+Lab. It uses reviewed copy and deterministic production rules, then discards
+its session state when the Lab closes or reloads.
+_Avoid_: Warden test, generated scenario, adaptive exercise
+
 **Vitality**:
 The Explorer's remaining capacity to survive contact with Wardens.
 _Avoid_: Hit points, health, lives

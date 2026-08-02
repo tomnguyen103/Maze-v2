@@ -1,19 +1,10 @@
-import { normalizeEchoLens } from "./echo-lens.js";
+import { LENS_KINDS, normalizeEchoLens } from "./echo-lens.js";
 import { normalizeQuestion } from "./question-contract.js";
 import {
   createReviewedQuestionRevisionId,
   reviewedQuestionContentDigest
 } from "./reviewed-question-revision.js";
 import { reviewedContentDigest } from "./reviewed-content-hash.js";
-
-const SUPPORTED_LENS_KINDS = Object.freeze([
-  "number-line",
-  "array",
-  "fraction-bar",
-  "word-highlight",
-  "pattern",
-  "diagram"
-]);
 
 /** @type {Readonly<Record<string, unknown>>} */
 const REVIEWED_ECHO_LENSES = Object.freeze({
@@ -62,7 +53,7 @@ const REVIEWED_ECHO_LENSES = Object.freeze({
       "Split the bar into two equal parts.",
       "Make two equal copies of the top and bottom."
     ]),
-    visual: Object.freeze({ numerator: 1, denominator: 2 })
+    visual: Object.freeze({ numerator: 2, denominator: 4 })
   }),
   "bundled-content:bright-foundation-4:ba36e0007e473e5bcbeecb800f9f15db": Object.freeze({
     version: 1,
@@ -167,8 +158,9 @@ export function getReviewedEchoLensCoverage(reviewedQuestions) {
   const publishedKinds = entries.map((entry) => entry.lens.kind);
   if (
     new Set(publishedKinds).size !== publishedKinds.length ||
-    publishedKinds.length !== SUPPORTED_LENS_KINDS.length ||
-    SUPPORTED_LENS_KINDS.some((kind) => !publishedKinds.includes(kind))
+    publishedKinds.length !== LENS_KINDS.size ||
+    publishedKinds.some((kind) => !LENS_KINDS.has(kind)) ||
+    [...LENS_KINDS].some((kind) => !publishedKinds.includes(kind))
   ) {
     throw new Error("Echo Lens pack does not cover every reviewed primitive.");
   }

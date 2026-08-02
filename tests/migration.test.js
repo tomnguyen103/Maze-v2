@@ -230,6 +230,11 @@ describe("Run Access migration", () => {
         }))
       )
     );
+    expect(sql.match(/\bNOT VALID\b/g)).toHaveLength(2);
+    expect(sql.match(/\bVALIDATE CONSTRAINT\b/g)).toHaveLength(2);
+    expect(sql.indexOf("VALIDATE CONSTRAINT")).toBeGreaterThan(
+      sql.indexOf("COMMIT;")
+    );
   });
 
   it("creates an append-only hash-chained audit log without raw addresses", async () => {
