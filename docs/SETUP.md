@@ -67,6 +67,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 26. `db/migrations/0026_echo_fossil_collections.sql`
 27. `db/migrations/0027_echo_lens_learning_deck_revision.sql`
 28. `db/migrations/0028_classroom_expedition_debrief.sql`
+29. `db/migrations/0029_class_expedition_constellation.sql`
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.
@@ -103,6 +104,14 @@ Deploy the privilege boundary in this order during a maintenance window:
    applying the migration and deploying, or retain an
    expand/contract-compatible `read_classroom_progress` function until old
    `/class` processes drain.
+   objective aggregate used by `/class`. Quiesce `/class` traffic while
+   applying the migration and deploying, or retain an
+   expand/contract-compatible `read_classroom_progress` function until old
+   `/class` processes drain.
+10. After migration 0028, apply migration 0029 immediately before deploying
+   the Class Constellation release. It adds only the bounded Teacher reader
+   over terminal Class Run Grant aggregates; it does not create a route or
+   personal retention table.
 
 Configure the Clerk webhook endpoint to deliver `user.created`, `user.updated`,
 `user.deleted`,

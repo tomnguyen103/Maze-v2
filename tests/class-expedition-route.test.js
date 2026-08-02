@@ -80,6 +80,10 @@ function expeditionStore() {
         { labyrinthNumber: 4, completedCount: 1 }
       ]
     })),
+    constellationForExpedition: vi.fn(async () => ({
+      published: false,
+      markers: []
+    })),
     issueRunGrant: vi.fn(async (_userId, _classroomId, _expeditionId, input) => ({
       runId: input.runId,
       status: "issued",
