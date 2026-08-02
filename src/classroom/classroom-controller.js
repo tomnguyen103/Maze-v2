@@ -98,6 +98,10 @@ const CLASSROOM_ID_PATTERN = /^org_[A-Za-z0-9_-]{3,120}$/;
  *       classroomId: string,
  *       expeditionId: string
  *     ) => Promise<{ progress?: Record<string, unknown> }>,
+ *     getClassExpeditionConstellation: (
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<{ constellation?: Record<string, unknown> }>,
  *     purchaseClassExpeditionLicense: (
  *       classroomId: string,
  *       expeditionId: string,
@@ -1057,11 +1061,37 @@ export async function renderClassroom(root, dependencies = {}) {
       capacityLine.textContent = "Checking seats and License…";
       const progressLine = document.createElement("p");
       progressLine.className = "classroom-expedition-card__progress";
+      const constellationPanel = document.createElement("section");
+      constellationPanel.className =
+        "classroom-expedition-card__constellation";
+      constellationPanel.dataset.classConstellation = "true";
+      const constellationLabel = document.createElement("p");
+      constellationLabel.className = "section-label";
+      constellationLabel.textContent = "Class Constellation";
+      const constellationStatus = document.createElement("p");
+      constellationStatus.className = "classroom-constellation__status";
+      constellationStatus.setAttribute("role", "status");
+      constellationStatus.textContent = "Checking shared milestones...";
+      const constellationMarkers = document.createElement("div");
+      constellationMarkers.className = "classroom-constellation__markers";
+      constellationMarkers.setAttribute("aria-busy", "true");
+      constellationPanel.append(
+        constellationLabel,
+        constellationStatus,
+        constellationMarkers
+      );
       progressLine.textContent = "Checking class progress…";
       const actions = document.createElement("div");
       actions.className = "classroom-form__row";
       actions.append(toggle);
-      card.append(heading, facts, progressLine, capacityLine, actions);
+      card.append(
+        heading,
+        facts,
+        progressLine,
+        constellationPanel,
+        capacityLine,
+        actions
+      );
       void (async () => {
         try {
           const result = await client.getClassExpeditionProgress(
@@ -1089,6 +1119,57 @@ export async function renderClassroom(root, dependencies = {}) {
         } catch {
           progressLine.textContent =
             "Class progress counts are unavailable right now.";
+        }
+      })();
+      void (async () => {
+        try {
+          const result = await client.getClassExpeditionConstellation(
+            entry.id,
+            String(record.id)
+          );
+          const constellation =
+            result.constellation && typeof result.constellation === "object"
+              ? result.constellation
+              : {};
+          constellationMarkers.removeAttribute("aria-busy");
+          constellationMarkers.replaceChildren();
+          if (constellation.published !== true) {
+            constellationStatus.textContent =
+              "Paths are still forming. Shared milestones appear after enough independent Class Play escapes.";
+            return;
+          }
+          const markers = Array.isArray(constellation.markers)
+            ? constellation.markers
+            : [];
+          constellationStatus.textContent =
+            "Shared milestone view. Density bands only; this is not an individual replay.";
+          for (const marker of markers) {
+            if (!marker || typeof marker !== "object") continue;
+            const value = /** @type {Record<string, unknown>} */ (marker);
+            const labyrinthNumber = Number(value.labyrinthNumber);
+            const band = String(value.band);
+            if (
+              !Number.isInteger(labyrinthNumber) ||
+              !["quiet", "glowing", "bright"].includes(band)
+            ) {
+              continue;
+            }
+            const item = document.createElement("article");
+            item.className = "classroom-constellation-marker";
+            item.dataset.band = band;
+            const title = document.createElement("h4");
+            title.textContent = `Labyrinth ${labyrinthNumber}`;
+            const bandLabel = document.createElement("p");
+            bandLabel.textContent =
+              band.charAt(0).toUpperCase() + band.slice(1);
+            item.append(title, bandLabel);
+            constellationMarkers.append(item);
+          }
+        } catch {
+          constellationMarkers.removeAttribute("aria-busy");
+          constellationMarkers.replaceChildren();
+          constellationStatus.textContent =
+            "Class Constellation is unavailable right now.";
         }
       })();
       void (async () => {

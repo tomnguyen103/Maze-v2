@@ -125,6 +125,10 @@ describe("Class Expedition API", () => {
         ["/api/classrooms/org_class_1/expeditions", "GET"],
         ["/api/classrooms/org_class_1/expeditions", "POST"],
         [
+          "/api/classrooms/org_class_1/expeditions/exped_abc123/constellation",
+          "GET"
+        ],
+        [
           "/api/classrooms/org_class_1/expeditions/exped_abc123/status",
           "POST"
         ]
@@ -347,6 +351,11 @@ describe("Class Expedition API", () => {
         { method: "GET" }
       );
       expect(status.status).toBe(405);
+      const constellation = await fetch(
+        `${origin}/api/classrooms/org_class_1/expeditions/exped_abc123/constellation`,
+        { method: "POST" }
+      );
+      expect(constellation.status).toBe(405);
     });
   });
 

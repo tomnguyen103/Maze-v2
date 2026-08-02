@@ -84,6 +84,9 @@ function workspaceClient() {
         labyrinths: []
       }
     })),
+    getClassExpeditionConstellation: vi.fn(async () => ({
+      constellation: { published: false, markers: [] }
+    })),
     createClassExpedition: vi.fn(async (_classroomId, input) => ({
       expedition: {
         id: "exped_created_1",
@@ -481,6 +484,65 @@ describe("Classroom workspace", () => {
       expect(root.textContent).toContain("L4: 2");
     });
     expect(root.textContent).not.toContain("Moss");
+  });
+
+  it("shows forming and band-only Class Constellation states", async () => {
+    const client = workspaceClient();
+    client.listClassrooms.mockResolvedValue({
+      classrooms: [
+        { id: "org_class_1", name: "Comet Crew", role: "teacher" }
+      ]
+    });
+    client.listClassExpeditions.mockResolvedValue({
+      expeditions: [
+        {
+          id: "exped_live_1",
+          classroomId: "org_class_1",
+          atlasRegion: 1,
+          levelId: "bright-start",
+          learningDeckId: "mixed-trail",
+          learningDeckRevision:
+            "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+          status: "open",
+          completionDate: null
+        }
+      ]
+    });
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+    await vi.waitFor(() =>
+      expect(root.textContent).toContain("Paths are still forming")
+    );
+
+    client.getClassExpeditionConstellation.mockResolvedValue({
+      constellation: {
+        published: true,
+        markers: [
+          { labyrinthNumber: 1, band: "quiet" },
+          { labyrinthNumber: 4, band: "bright" }
+        ]
+      }
+    });
+    root.replaceChildren();
+    await renderClassroom(root, { clerk: signedInClerk(), client });
+    await vi.waitFor(() =>
+      expect(root.textContent).toContain("Density bands only")
+    );
+    expect(
+      root.querySelectorAll(
+        ".classroom-constellation-marker[data-band='quiet']"
+      )
+    ).toHaveLength(1);
+    expect(
+      root.querySelectorAll(
+        ".classroom-constellation-marker[data-band='bright']"
+      )
+    ).toHaveLength(1);
+    const constellation = root.querySelector(
+      "[data-class-constellation='true']"
+    );
+    expect(constellation?.textContent).not.toMatch(
+      /student|user_|count|percent|route/i
+    );
   });
 
   it("offers the sponsor test-mode License purchase until the License is paid", async () => {
