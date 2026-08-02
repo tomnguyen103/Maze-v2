@@ -218,8 +218,7 @@ describe("Classroom workspace", () => {
       progress: [
         {
           studentId: "user_student_1",
-          studentName: "Moss",
-          objectiveId: "addition-within-20",
+          objectiveId: "bright-combine-groups",
           correct: 3,
           wrong: 1,
           hints: 0,
@@ -245,7 +244,7 @@ describe("Classroom workspace", () => {
     });
 
     await vi.waitFor(() => {
-      expect(root.textContent).toContain("addition within 20");
+      expect(root.textContent).toContain("bright combine groups");
       expect(root.textContent).toContain("3 correct");
     });
     expect(root.textContent).not.toContain("What is 2 + 2?");
@@ -543,8 +542,7 @@ describe("Classroom workspace", () => {
     });
     client.getClassroomProgress.mockResolvedValue({
       progress: [{
-        studentName: "Moss",
-        objectiveId: "addition-within-20",
+        objectiveId: "bright-combine-groups",
         correct: 1,
         wrong: 0,
         hints: 0,
@@ -562,7 +560,7 @@ describe("Classroom workspace", () => {
       expect(client.getClassroomProgress).toHaveBeenCalledWith("org_class_1");
       expect(client.getClassroomProgress).toHaveBeenCalledWith("org_class_2");
     });
-    expect(root.textContent).toContain("first 500");
+    expect(root.textContent).toContain("first 100");
     expect(
       root.querySelectorAll("input[name='email']")
     ).toHaveLength(2);
@@ -594,8 +592,7 @@ describe("Classroom workspace", () => {
     });
     second.resolve({
       progress: [{
-        studentName: "Fresh Counts",
-        objectiveId: "addition-within-20",
+        objectiveId: "bright-combine-groups",
         correct: 4,
         wrong: 0,
         hints: 0,
@@ -605,13 +602,12 @@ describe("Classroom workspace", () => {
       truncated: false
     });
     await vi.waitFor(() => {
-      expect(root.textContent).toContain("Fresh Counts");
+      expect(root.textContent).toContain("4 correct");
     });
 
     first.resolve({
       progress: [{
-        studentName: "Stale Counts",
-        objectiveId: "addition-within-20",
+        objectiveId: "bright-combine-groups",
         correct: 1,
         wrong: 0,
         hints: 0,
@@ -623,8 +619,7 @@ describe("Classroom workspace", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(root.textContent).toContain("Fresh Counts");
-    expect(root.textContent).not.toContain("Stale Counts");
+    expect(root.textContent).toContain("4 correct");
   });
 
   it("keeps the email fallback when clipboard access is unavailable", async () => {

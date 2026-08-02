@@ -25,7 +25,8 @@ Organization and Membership events commit through the durable inbox.
 
 ## Database release order
 
-Apply migrations 0014 through 0017 with `DATABASE_ADMIN_URL`, in that order:
+Apply migrations 0014 through 0017 with `DATABASE_ADMIN_URL`, in that order.
+Continue the full migration sequence through 0027, then apply 0028:
 
 - 0014 adds nullable Classroom scope, a non-login tenant owner, transaction-local
   context, and forced RLS while preserving Personal Play.
@@ -34,6 +35,9 @@ Apply migrations 0014 through 0017 with `DATABASE_ADMIN_URL`, in that order:
 - 0016 adds a trigger-maintained count projection and the bounded Teacher read.
 - 0017 adds the forced-RLS Verified Classroom Domain mapping and bounded
   register/read/lookup functions used by domain auto-join.
+- 0028 replaces that read with a thresholded Classroom-wide objective
+  aggregate for the Classroom Expedition debrief. Apply it before deploying
+  the matching `/class` release.
 
 The application login named by `DATABASE_URL` must inherit
 `echo_maze_runtime`. It must not be superuser, tenant-table owner, or hold
@@ -49,7 +53,9 @@ release.
 - Classroom creation for signed-in Explorers;
 - Verified Classroom Domain registration for synchronized Teachers;
 - Student invitations for database-authoritative Teachers; and
-- per-Student/per-objective counts for Teachers.
+- thresholded Classroom-wide objective signals and reviewed next-step activity
+  cards for Teachers; and
+- private reflection prompts for Students after they begin an Expedition.
 
 The API surfaces are:
 
@@ -69,14 +75,21 @@ and allows one Classroom owner per domain.
 
 ## Privacy boundary
 
-Teacher progress contains Student display name, objective id, and correct,
-wrong, Hint, Skip, and total counts. It contains no prompts, selected answers,
-answer text, Question timestamps, or raw Journal JSON.
+Teacher progress contains objective id and Classroom-wide correct, wrong, Hint,
+Skip, and total counts only after an objective reaches three responses. It
+contains no Student name or provider identifier, ranking, prompts, selected
+answers, answer text, Question timestamps, route history, diagnosis, or raw
+Journal JSON.
+
+Student reflection prompts are rendered in the Student's own Expedition card.
+They are read-only prompts: no response field is persisted or sent to a
+Teacher endpoint.
 
 `learning_journals` stays behind its Explorer-only forced-RLS policy. Migration
 0016 derives count rows whenever a Classroom Journal changes; the runtime has
-no direct read grant on that projection. One fixed-shape definer function
-returns at most 500 rows for the selected Classroom after a Teacher check.
+no direct read grant on that projection. Migration 0028's fixed-shape definer
+function rolls those rows up by objective, hides totals below three, and
+returns at most 100 signals for the selected Classroom after a Teacher check.
 
 Removing a Membership cascades that Explorer's Class Play Quest Progress,
 Journal, Score Entries, and derived counts. Account deletion removes all
@@ -98,7 +111,9 @@ Membership is removed.
 - Invitation denied: confirm the caller is a synchronized Teacher and that
   Clerk Organizations are enabled.
 - Counts absent: confirm the Student used Class Play for that Classroom and
-  migration 0016 is applied. Do not grant Teacher access to raw Journals.
+  migrations 0016 and 0028 are applied. Fewer than three responses for an
+  objective intentionally stay hidden. Do not grant Teacher access to raw
+  Journals.
 - Provider outage: creation/invitation returns a bounded safe error. Existing
   Personal Play and synchronized Class Play remain available.
 - Database context failure: the transaction rolls back and its local Explorer

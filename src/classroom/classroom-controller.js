@@ -3,6 +3,10 @@ import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
 import { getPublishedLearningDeckOptions } from "../questions/learning-deck-catalog.js";
 import {
+  buildPrivateReflectionPrompts,
+  buildReviewedNextStepCards
+} from "./classroom-debrief.js";
+import {
   createQuestProgress,
   saveQuestProgress
 } from "../game/quest-progress.js";
@@ -153,8 +157,9 @@ export async function renderClassroom(root, dependencies = {}) {
           <h1>Choose where this Quest belongs.</h1>
         </div>
         <p>
-          Personal Play stays yours. Class Play shares only objective counts
-          with your Teacher—never prompts, answers, or question timelines.
+          Personal Play stays yours. Class Play shares only thresholded,
+          Classroom-wide objective signals with your Teacher—never prompts,
+          answers, identities, or question timelines.
         </p>
       </header>
       <p class="classroom-status" id="classroom-status" role="status" aria-live="polite">
@@ -544,6 +549,13 @@ export async function renderClassroom(root, dependencies = {}) {
       navigate("/play");
     });
     card.append(heading, facts, start);
+    const reflectionPrompts = buildPrivateReflectionPrompts({
+      escapedCount: escaped,
+      regionComplete: escaped >= 4
+    });
+    if (reflectionPrompts.length > 0) {
+      card.append(privateReflectionCard(reflectionPrompts));
+    }
     return card;
   }
 
@@ -730,13 +742,17 @@ export async function renderClassroom(root, dependencies = {}) {
       <div class="classroom-progress">
         <div class="classroom-progress__heading">
           <div>
-            <p class="section-label">Objective progress</p>
-            <h3>Student practice counts</h3>
+            <p class="section-label">Expedition debrief</p>
+            <h3>Classroom objective signals</h3>
           </div>
           <button class="control-button" data-action="refresh-progress" type="button">
             Refresh counts
           </button>
         </div>
+        <p class="classroom-domain__copy">
+          Signals appear only after three or more Classroom responses. Reviewed
+          next-step activities stay supportive and never diagnose a Student.
+        </p>
         <div class="classroom-progress__content" aria-busy="true">
           ${loadingMarkup()}
         </div>
@@ -1158,8 +1174,8 @@ export async function renderClassroom(root, dependencies = {}) {
           progressContent.innerHTML = `
             <div class="classroom-empty">
               <p class="section-label">No counts yet</p>
-              <h3>Class Play practice has not synced yet.</h3>
-              <p>Counts appear after Students answer Warden challenges.</p>
+              <h3>Class Play practice has not reached the privacy threshold yet.</h3>
+              <p>Objective signals appear after three or more Classroom responses.</p>
             </div>
           `;
           return;
@@ -1169,11 +1185,38 @@ export async function renderClassroom(root, dependencies = {}) {
         for (const row of progress) {
           list.append(progressCard(row));
         }
+        const nextSteps = buildReviewedNextStepCards(progress);
+        if (nextSteps.length > 0) {
+          const nextStepSection = document.createElement("section");
+          nextStepSection.className = "classroom-debrief__next-steps";
+          const nextStepLabel = document.createElement("p");
+          nextStepLabel.className = "section-label";
+          nextStepLabel.textContent = "Reviewed next steps";
+          const nextStepHeading = document.createElement("h3");
+          nextStepHeading.textContent = "Activities ready for your next session";
+          const nextStepList = document.createElement("div");
+          nextStepList.className = "next-step-list";
+          for (const nextStep of nextSteps) {
+            const card = document.createElement("article");
+            card.className = "next-step-card";
+            const title = document.createElement("h4");
+            title.textContent = nextStep.title;
+            const topic = document.createElement("p");
+            topic.className = "next-step-card__topic";
+            topic.textContent = nextStep.topicLabel;
+            const activity = document.createElement("p");
+            activity.textContent = nextStep.activity;
+            card.append(title, topic, activity);
+            nextStepList.append(card);
+          }
+          nextStepSection.append(nextStepLabel, nextStepHeading, nextStepList);
+          progressContent.append(nextStepSection);
+        }
         if (result.truncated === true) {
           const note = document.createElement("p");
           note.className = "classroom-inline-note";
           note.textContent =
-            "Showing the first 500 Student and objective count rows. Narrow the Classroom roster before using this view for a complete review.";
+            "Showing the first 100 thresholded objective signals. Refresh after more Classroom practice syncs.";
           progressContent.append(note);
         }
         progressContent.append(list);
@@ -1259,9 +1302,8 @@ function normalizeClassrooms(value) {
 function progressCard(row) {
   const card = document.createElement("article");
   card.className = "progress-card";
-  const student = document.createElement("h4");
-  student.textContent =
-    typeof row.studentName === "string" ? row.studentName : "Explorer";
+  const heading = document.createElement("h4");
+  heading.textContent = "Classroom objective signal";
   const objective = document.createElement("p");
   objective.className = "progress-card__objective";
   objective.textContent =
@@ -1279,8 +1321,31 @@ function progressCard(row) {
     item.textContent = `${Number(value) || 0} ${label}`;
     counts.append(item);
   }
-  card.append(student, objective, counts);
+  card.append(heading, objective, counts);
   return card;
+}
+
+/** @param {string[]} prompts */
+function privateReflectionCard(prompts) {
+  const section = document.createElement("section");
+  section.className = "classroom-reflection";
+  section.dataset.privateReflection = "true";
+  const label = document.createElement("p");
+  label.className = "section-label";
+  label.textContent = "Private reflection";
+  const heading = document.createElement("h5");
+  heading.textContent = "Think about your Expedition";
+  const note = document.createElement("p");
+  note.textContent =
+    "These prompts stay on this device. No answers are sent to your Teacher.";
+  const list = document.createElement("ul");
+  for (const prompt of prompts) {
+    const item = document.createElement("li");
+    item.textContent = prompt;
+    list.append(item);
+  }
+  section.append(label, heading, note, list);
+  return section;
 }
 
 function loadingMarkup() {

@@ -66,6 +66,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 25. `db/migrations/0025_offline_run_continuity_forward.sql`
 26. `db/migrations/0026_echo_fossil_collections.sql`
 27. `db/migrations/0027_echo_lens_learning_deck_revision.sql`
+28. `db/migrations/0028_classroom_expedition_debrief.sql`
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.
@@ -95,6 +96,10 @@ Deploy the privilege boundary in this order during a maintenance window:
 8. Apply migration 0017 before deploying Verified Classroom Domain registration
    or enabling Google auto-join. It adds one forced-RLS domain mapping per
    Classroom and exposes only bounded definer functions to the runtime.
+9. After the full migration sequence reaches 0027, apply migration 0028
+   immediately before deploying the Classroom Expedition Debrief release. It
+   replaces the Teacher progress reader with the thresholded, Classroom-wide
+   objective aggregate used by `/class`.
 
 Configure the Clerk webhook endpoint to deliver `user.created`, `user.updated`,
 `user.deleted`,

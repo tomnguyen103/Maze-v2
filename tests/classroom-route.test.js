@@ -42,7 +42,6 @@ function classroomStore() {
     })),
     progressForTeacher: vi.fn(async () => ({
       progress: [{
-        studentName: "Moss",
         objectiveId: "addition-within-20",
         correct: 3,
         wrong: 1,
@@ -140,7 +139,6 @@ describe("Classroom API", () => {
         classroomId: "org_class_1",
         progress: [
           {
-            studentName: "Moss",
             objectiveId: "addition-within-20",
             correct: 3,
             wrong: 1,
@@ -155,6 +153,7 @@ describe("Classroom API", () => {
         /prompt|answer|questionId|eventId|timestamp|updatedAt/i
       );
       expect(JSON.stringify(body)).not.toContain("user_student_1");
+      expect(JSON.stringify(body)).not.toContain("Moss");
     });
 
     expect(store.progressForTeacher).toHaveBeenCalledWith(
