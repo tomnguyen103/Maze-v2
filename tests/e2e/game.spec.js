@@ -3945,6 +3945,85 @@ test("completes a fixed three-plus-two Lantern Trail outside the Run", async ({
   await expect(page.getByRole("button", { name: "Clear Journal" })).toBeDisabled();
 });
 
+for (const { name: viewportName, viewport } of [
+  { name: "desktop", viewport: { width: 1280, height: 900 } },
+  { name: "mobile", viewport: { width: 390, height: 844 } }
+]) {
+  test(`shows a reviewed Echo Lens after a Practice answer on ${viewportName}`, async ({
+    page
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize(viewport);
+    await page.goto("/?seed=ECHO-LENS-PRACTICE&level=bright-start");
+    await expectGameReady(page);
+    await page.getByRole("button", { name: "Workshop", exact: true }).click();
+
+    const practice = page.getByRole("dialog", {
+      name: "Lantern Trail Workshop"
+    });
+    await expect(practice).toBeVisible();
+    await practice.locator(
+      '[data-practice-objective="bright-combine-groups"]'
+    ).click();
+
+    const trail = createLanternTrail({
+      levelId: "bright-start",
+      difficultyBand: "foundation",
+      learningObjectiveId: "bright-combine-groups"
+    });
+    const question = trail.questions[0];
+    expect(question.id).toBe("bright-foundation-0");
+    const correctLabel = question.choices.find(
+      (choice) => choice.id === question.answerId
+    )?.label;
+    if (!correctLabel) throw new Error("Reviewed Practice answer was missing.");
+
+    await expect(page.locator("#practice-question")).toHaveText(
+      question.prompt
+    );
+    const lens = page.locator("#practice-echo-lens");
+    await expect(lens).toBeHidden();
+    const beforeAnswer = await page.evaluate(() => ({
+      score: document.getElementById("player-score")?.textContent,
+      vitality: document.getElementById("vitality-count")?.textContent,
+      moves: document.getElementById("moves-value")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }));
+
+    await practice.getByRole("button", { name: correctLabel, exact: true }).click();
+    await expect(page.locator("#practice-feedback")).toContainText("Nice work");
+    await expect(lens).toHaveAttribute("open", "");
+    await expect(lens).toContainText("See one more");
+    await expect(lens).toContainText("Start at 1.");
+    await expect(lens.locator('[data-lens-kind="number-line"]')).toBeVisible();
+    await expect(practice.getByRole("button", { name: "Next Lantern" })).toBeFocused();
+    expect(
+      await page.evaluate(() => ({
+        score: document.getElementById("player-score")?.textContent,
+        vitality: document.getElementById("vitality-count")?.textContent,
+        moves: document.getElementById("moves-value")?.textContent,
+        storage: Object.fromEntries(
+          Object.keys(localStorage)
+            .filter((key) => !key.startsWith("echo-maze:lantern-journal"))
+            .sort()
+            .map((key) => [key, localStorage.getItem(key)])
+        )
+      }))
+    ).toEqual(beforeAnswer);
+
+    await practice.getByRole("button", { name: "Next Lantern" }).click();
+    await expect(lens).toBeHidden();
+    await expect(page.locator("#practice-question")).toHaveText(
+      trail.questions[1].prompt
+    );
+  });
+}
+
 test("opens Workshop catalog and transfers paused play to Journal or Atlas", async ({
   page
 }) => {

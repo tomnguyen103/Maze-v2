@@ -88,6 +88,35 @@ describe("published Learning Deck revisions", () => {
     }
   });
 
+  it("keeps the prior Number Trail publication exact for existing Quest pins", () => {
+    const current = getPublishedLearningDeckRevision("number-trail");
+    const historical = getPublishedLearningDeckRevision(
+      "number-trail",
+      "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
+    );
+    if (!current || !historical) {
+      throw new Error("Number Trail publication fixtures are missing.");
+    }
+
+    const currentQuestion = current.regions
+      .flatMap((region) => region.normalQuestions)
+      .find((question) => question.id === "master-foundation-1");
+    const historicalQuestion = historical.regions
+      .flatMap((region) => region.normalQuestions)
+      .find((question) => question.id === "master-foundation-1");
+    expect(currentQuestion?.echoLens?.kind).toBe("array");
+    expect(historicalQuestion?.echoLens).toBeUndefined();
+    expect(historical.revisionId).toBe(
+      "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
+    );
+    expect(historical).not.toBe(current);
+    expect(getPublishedLearningDeckRevision(
+      "number-trail",
+      historical.revisionId
+    )).toBe(historical);
+    expect(validateLearningDeckRevision(historical)).toBe(true);
+  });
+
   it("clears every focused coverage and deck-matched Capstone gate", () => {
     const focusedRevisions = getPublishedLearningDeckRevisions().filter(
       ({ kind }) => kind === "focused"
