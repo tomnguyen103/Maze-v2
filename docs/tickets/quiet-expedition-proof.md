@@ -26,8 +26,22 @@ roadmap coverage ledger and release evidence with real local/browser results.
 
 ## Verification receipt
 
-Red receipt: the first full `npm run check` reached the Vitest gate with 161
-passed / 8 skipped files and 1,417 passed / 18 skipped tests, then failed with
-`Vitest expected 168 test files, received 169.` The manifest must be refreshed
-to the observed 169-file / 1,435-test run before the final green receipt is
-recorded.
+Red receipts: the Quiet-only run reached the Vitest gate with 161 passed / 8
+skipped files and 1,417 passed / 18 skipped tests, then failed with
+`Vitest expected 168 test files, received 169.` After merging the reviewed Echo
+Lens pack, the combined run reached 161 passed / 8 skipped files and 1,420
+passed / 18 skipped tests, then failed with `Vitest expected 1,435 tests,
+received 1,438.` The tracked manifest is now refreshed to the observed
+169-file / 1,438-test combined run; the final green receipt is recorded below.
+
+Green receipt (2026-08-02, after merging PR #175):
+
+- `npm run check`: lint and typecheck passed; Vitest reported 161 passed / 8
+  skipped files and 1,420 passed / 18 skipped tests (1,438 total); build
+  passed; bundle budgets passed with game JavaScript at 29.33 KB gzip / 30 KB.
+- `npm run test:e2e`: 238 passed / 22 intentional skips (260 total) across
+  desktop and mobile browser profiles, including Quiet Expedition, keyboard,
+  reduced-motion, 200%-text, narrow-fold, semantic, privacy, and existing
+  Echo Lens journeys.
+- The local Standards/Spec and Security & Reliability review found no
+  unresolved real findings; CodeRabbit remains the required remote PR gate.

@@ -1,5 +1,5 @@
 {
   "testFiles": 169,
-  "tests": 1435,
-  "source": "Full Vitest run on 2026-08-02 after adding Quiet Expedition preset and player-path proof; update deliberately when tests change."
+  "tests": 1438,
+  "source": "Full Vitest run on 2026-08-02 after merging the Echo Fossil Atlas player path, Warden Tactics Lab, reviewed Echo Lens pack, and Quiet Expedition player-path proof; update deliberately when tests change."
 }

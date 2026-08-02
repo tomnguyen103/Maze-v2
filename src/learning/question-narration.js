@@ -38,7 +38,8 @@ const SURFACES = Object.freeze([
       "practice-question",
       "practice-choices",
       "practice-hint",
-      "practice-feedback"
+      "practice-feedback",
+      "practice-echo-lens-content"
     ])
   }),
   Object.freeze({

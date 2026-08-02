@@ -81,6 +81,16 @@ const DECK_DEFINITIONS = Object.freeze(
   )
 );
 
+// The first Number Trail publication already included the original Bright
+// Start number-line Lens. The later pack adds the other reviewed Lens entries;
+// reconstructing the prior artifact keeps existing Quest pins immutable while
+// allowing new Quests to use the current publication.
+const HISTORICAL_REVISION_LENS_ALLOWLIST = /** @type {Readonly<Record<string, readonly string[]>>} */ (Object.freeze({
+  "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105": Object.freeze([
+    "bright-foundation-0"
+  ])
+}));
+
 /**
  * Freeze the authored publication graph so callers cannot mutate a published
  * revision after it becomes Quest or Classroom identity.
@@ -553,7 +563,7 @@ export function validateLearningDeckRevision(rawRevision) {
   });
   if (
     revision.revisionId !== expectedRevisionId ||
-    revision.revisionId !== definition.revisionId
+    !definition.publishedRevisionIds.includes(revision.revisionId)
   ) {
     throw new Error("Learning Deck revision does not match its exact content.");
   }
@@ -562,6 +572,8 @@ export function validateLearningDeckRevision(rawRevision) {
 
 /** @type {Map<string, LearningDeckRevision>} */
 const PUBLISHED_REVISION_CACHE = new Map();
+/** @type {Map<string, LearningDeckRevision>} */
+const HISTORICAL_REVISION_CACHE = new Map();
 
 /** @param {(typeof DECK_DEFINITIONS)[number]} definition */
 function getOrBuildPublishedRevision(definition) {
@@ -573,6 +585,71 @@ function getOrBuildPublishedRevision(definition) {
   validateLearningDeckRevision(revision);
   const published = deepFreeze(revision);
   PUBLISHED_REVISION_CACHE.set(definition.deckId, published);
+  return published;
+}
+
+/**
+ * Rebuild a historical publication from the same authored source while
+ * removing only Lens entries that did not exist in that publication. This is
+ * safe here because the publication hash proves the resulting artifact is the
+ * exact prior revision; an unsupported historical id is never substituted
+ * with the current content.
+ *
+ * @param {(typeof DECK_DEFINITIONS)[number]} definition
+ * @param {string} revisionId
+ */
+function getOrBuildHistoricalRevision(definition, revisionId) {
+  const keepLensQuestionIds =
+    HISTORICAL_REVISION_LENS_ALLOWLIST[revisionId];
+  if (!keepLensQuestionIds) {
+    return null;
+  }
+  const cacheKey = `${definition.deckId}:${revisionId}`;
+  const cached = HISTORICAL_REVISION_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const current = getOrBuildPublishedRevision(definition);
+  const regions = current.regions.map((region) => ({
+    ...region,
+    normalQuestions: region.normalQuestions.map((question) => {
+      if (
+        !question.echoLens ||
+        keepLensQuestionIds.includes(question.id)
+      ) {
+        return question;
+      }
+      const withoutLens = { ...question };
+      delete withoutLens.echoLens;
+      withoutLens.reviewedRevisionId = createReviewedQuestionRevisionId(
+        withoutLens,
+        "bundled"
+      );
+      return withoutLens;
+    })
+  }));
+  const historical = {
+    ...current,
+    revisionId,
+    regions
+  };
+  const expectedRevisionId = learningDeckRevisionId({
+    deckId: historical.deckId,
+    label: historical.label,
+    status: historical.status,
+    kind: historical.kind,
+    normalQuestionSource: historical.normalQuestionSource,
+    regions: historical.regions
+  });
+  if (expectedRevisionId !== revisionId) {
+    throw new Error(
+      `${definition.label} historical content changed; publish ${expectedRevisionId}.`
+    );
+  }
+  validateLearningDeckRevision(historical);
+  const published = deepFreeze(historical);
+  HISTORICAL_REVISION_CACHE.set(cacheKey, published);
   return published;
 }
 
@@ -597,11 +674,15 @@ export function getPublishedLearningDeckRevision(deckId, revisionId) {
   const definition = option ? getDeckDefinition(option.deckId) : undefined;
   if (
     !definition ||
-    (revisionId !== undefined && revisionId !== definition.revisionId)
+    (revisionId !== undefined &&
+      !definition.publishedRevisionIds.includes(revisionId))
   ) {
     return null;
   }
-  return getOrBuildPublishedRevision(definition);
+  if (revisionId === undefined || revisionId === definition.revisionId) {
+    return getOrBuildPublishedRevision(definition);
+  }
+  return getOrBuildHistoricalRevision(definition, revisionId);
 }
 
 export function getLearningDeckCoverageReport() {

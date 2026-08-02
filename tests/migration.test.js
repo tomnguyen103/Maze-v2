@@ -198,7 +198,7 @@ describe("Run Access migration", () => {
     const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
       readFile(
         new URL(
-          "../db/migrations/0020_learning_deck_quest_identity.sql",
+          "../db/migrations/0027_echo_lens_learning_deck_revision.sql",
           import.meta.url
         ),
         "utf8"
@@ -213,14 +213,27 @@ describe("Run Access migration", () => {
         /learning_deck_id = '([a-z-]+)'\s+AND learning_deck_revision =\s+'([^']+)'/g
       )
     ].map(([, deckId, revisionId]) => ({ deckId, revisionId }));
+    const uniqueConstrained = [
+      ...new Map(
+        constrained.map((entry) => [
+          `${entry.deckId}:${entry.revisionId}`,
+          entry
+        ])
+      ).values()
+    ];
 
-    expect(constrained).toEqual(
+    expect(uniqueConstrained).toEqual(
       getPublishedLearningDeckOptions().flatMap((option) =>
         option.publishedRevisionIds.map((revisionId) => ({
           deckId: option.deckId,
           revisionId
         }))
       )
+    );
+    expect(sql.match(/\bNOT VALID\b/g)).toHaveLength(2);
+    expect(sql.match(/\bVALIDATE CONSTRAINT\b/g)).toHaveLength(2);
+    expect(sql.indexOf("VALIDATE CONSTRAINT")).toBeGreaterThan(
+      sql.indexOf("COMMIT;")
     );
   });
 
@@ -817,7 +830,13 @@ describe("Class Expedition migration", () => {
 
   it("accepts exactly the published Deck revisions the roster publishes", async () => {
     const [sql, { getPublishedLearningDeckOptions }] = await Promise.all([
-      readFile(migrationUrl, "utf8"),
+      readFile(
+        new URL(
+          "../db/migrations/0027_echo_lens_learning_deck_revision.sql",
+          import.meta.url
+        ),
+        "utf8"
+      ),
       import("../src/questions/learning-deck-catalog.js")
     ]);
 
@@ -826,8 +845,16 @@ describe("Class Expedition migration", () => {
         /learning_deck_id = '([a-z-]+)'\s+AND learning_deck_revision =\s+'([^']+)'/g
       )
     ].map(([, deckId, revisionId]) => ({ deckId, revisionId }));
+    const uniqueConstrained = [
+      ...new Map(
+        constrained.map((entry) => [
+          `${entry.deckId}:${entry.revisionId}`,
+          entry
+        ])
+      ).values()
+    ];
 
-    expect(constrained).toEqual(
+    expect(uniqueConstrained).toEqual(
       getPublishedLearningDeckOptions().flatMap((option) =>
         option.publishedRevisionIds.map((revisionId) => ({
           deckId: option.deckId,
