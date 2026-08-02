@@ -1,5 +1,5 @@
 {
-  "testFiles": 160,
-  "tests": 1403,
-  "source": "Full Vitest run on 2026-08-02 after adding the Echo Fossil Atlas contract and Atlas projection tests on current main; update deliberately when tests change."
+  "testFiles": 164,
+  "tests": 1415,
+  "source": "Full Vitest run on 2026-08-02 after adding the Echo Fossil continuity boundary tests on current main; update deliberately when tests change."
 }

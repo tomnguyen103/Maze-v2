@@ -1,7 +1,7 @@
 # Ticket: Echo Fossil account continuity and privacy boundary
 
-Spec: #159  
-PR batch: D  
+Spec: #159
+PR batch: D
 Blocked by: #160
 
 ## Slice
