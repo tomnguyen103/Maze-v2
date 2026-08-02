@@ -106,11 +106,20 @@ function renderAtlas(
       ? `Gate Warden here at Labyrinth ${atlas.nextMilestoneNumber}.`
       : `Gate Warden in ${atlas.labyrinthsToNextMilestone} Labyrinths at ` +
         `Labyrinth ${atlas.nextMilestoneNumber}.`;
+  const fossilGuidance = atlas.fossilStatus === "unavailable"
+    ? "Fossil memory sync unavailable; local play continues."
+    : atlas.fossilStatus === "syncing"
+      ? "Fossil memories syncing."
+      : atlas.fossilCount === 0
+        ? "No Echo Fossil memories yet."
+        : `${atlas.fossilCount} Echo Fossil ${
+            atlas.fossilCount === 1 ? "memory" : "memories"
+          } kept.`;
   elements.progress.textContent =
     `${atlas.learningDeckLabel}. ` +
     `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped. ` +
     `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored. ` +
-    milestoneGuidance;
+    `${fossilGuidance} ${milestoneGuidance}`;
   const shell = document.createElement("div");
   shell.className = "atlas-shell";
   const toolbar = document.createElement("div");
@@ -214,6 +223,22 @@ function renderAtlas(
             button.append(milestoneMark);
           }
           button.append(label);
+          if (node.fossilCount > 0) {
+            const fossilMark = document.createElement("span");
+            fossilMark.className = "atlas-node__fossil";
+            fossilMark.dataset.fossilMark = "";
+            fossilMark.setAttribute("aria-hidden", "true");
+            fossilMark.textContent = node.fossilCount === 1
+              ? "Fossil"
+              : `${node.fossilCount} Fossils`;
+            button.append(fossilMark);
+            button.setAttribute(
+              "aria-label",
+              `${node.accessibleLabel}, ${node.fossilCount} Echo ${
+                node.fossilCount === 1 ? "Fossil" : "Fossils"
+              }`
+            );
+          }
           item.append(button);
           buttons.push(button);
           return item;
@@ -472,6 +497,33 @@ function renderDetail(
   note.className = "atlas-detail__note";
   note.textContent = node.fieldNote;
   detail.replaceChildren(kicker, title, state, facts, note);
+  if (node.fossils.length > 0) {
+    const fossilSection = document.createElement("section");
+    fossilSection.className = "atlas-detail__fossils";
+    fossilSection.dataset.atlasFossils = "";
+    const fossilHeading = document.createElement("h4");
+    fossilHeading.textContent = node.fossils.length === 1
+      ? "Echo Fossil"
+      : "Echo Fossils";
+    const fossilList = document.createElement("ul");
+    fossilList.className = "atlas-detail__fossil-list";
+    for (const fossil of node.fossils) {
+      const fossilItem = document.createElement("li");
+      fossilItem.dataset.atlasFossil = fossil.fossilId;
+      const stamp = document.createElement("span");
+      stamp.className = "atlas-fossil-stamp";
+      stamp.dataset.visualStamp = fossil.visualStampId;
+      stamp.textContent = fossil.wardenOutcome === "escaped-the-wardens"
+        ? "Trail kept — escaped"
+        : "Trail kept — defeated";
+      const fossilNote = document.createElement("p");
+      fossilNote.textContent = fossil.fieldNote;
+      fossilItem.append(stamp, fossilNote);
+      fossilList.append(fossilItem);
+    }
+    fossilSection.append(fossilHeading, fossilList);
+    detail.append(fossilSection);
+  }
   if (node.current) {
     const action = controlButton("Continue Quest");
     action.classList.add("primary-button");

@@ -7,6 +7,10 @@ import {
 } from "../questions/quest-levels.js";
 import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
+import {
+  fossilsForLabyrinth,
+  normalizeFossilCollection
+} from "./quest-fossils.js";
 
 /** @typedef {"completed" | "current" | "ahead" | "milestone" | "completed-milestone"} AtlasNodeState */
 /** @typedef {{
@@ -16,8 +20,10 @@ import { getRegionTheme } from "./region-theme.js";
  *   learningDeckRevision: string,
  *   labyrinthNumber: number,
  *   completedLabyrinths: number,
+ *   questId: string,
  *   complete: boolean
  * }} QuestProgressLike */
+/** @typedef {ReturnType<typeof normalizeFossilCollection>} FossilCollection */
 
 /** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
 const REGION_METADATA = Object.freeze({
@@ -72,11 +78,19 @@ const REGION_METADATA = Object.freeze({
  * Project the complete Echo Atlas without storing or changing Quest Progress.
  *
  * @param {QuestProgressLike} progress
- * @param {{ watchTrailLandmarkIds?: ReadonlySet<string> }} [options]
+ * @param {{
+ *   watchTrailLandmarkIds?: ReadonlySet<string>,
+ *   fossilCollection?: unknown,
+ *   fossilStatus?: "ready" | "syncing" | "unavailable"
+ * }} [options]
  */
 export function projectQuestAtlas(
   progress,
-  { watchTrailLandmarkIds = new Set() } = {}
+  {
+    watchTrailLandmarkIds = new Set(),
+    fossilCollection: fossilCollectionInput,
+    fossilStatus
+  } = {}
 ) {
   const level = getQuestLevel(progress.levelId);
   // Resolved by Deck, not by revision: a Quest keeps the revision it pinned,
@@ -86,6 +100,10 @@ export function projectQuestAtlas(
     throw new Error("Quest Progress has an unavailable Learning Deck.");
   }
   const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
+  const normalizedFossilCollection = normalizeFossilCollection(fossilCollectionInput);
+  const fossilCollection = normalizedFossilCollection?.questId === progress.questId
+    ? normalizedFossilCollection
+    : null;
   const regions = DIFFICULTY_BANDS.map((_, regionIndex) => {
     const start = regionIndex * 4 + 1;
     const end = start + 3;
@@ -99,7 +117,8 @@ export function projectQuestAtlas(
         band,
         metadata.fieldNotes[offset],
         level.questionGuide,
-        retainedLandmarkIds
+        retainedLandmarkIds,
+        fossilCollection
       )
     );
     const sigilRestored = progress.completedLabyrinths >= end;
@@ -135,6 +154,8 @@ export function projectQuestAtlas(
       : progress.labyrinthNumber,
     completedLabyrinths: progress.completedLabyrinths,
     restoredSigils: regions.filter((region) => region.sigilRestored).length,
+    fossilStatus: fossilStatus ?? "unavailable",
+    fossilCount: fossilCollection?.fossils.length ?? 0,
     nextMilestoneNumber,
     labyrinthsToNextMilestone: nextMilestoneNumber === null
       ? null
@@ -151,6 +172,7 @@ export function projectQuestAtlas(
  * @param {string} fieldNote
  * @param {string} learningFocus
  * @param {ReadonlySet<string>} retainedLandmarkIds
+ * @param {FossilCollection} fossilCollection
  */
 function projectNode(
   progress,
@@ -158,7 +180,8 @@ function projectNode(
   band,
   fieldNote,
   learningFocus,
-  retainedLandmarkIds
+  retainedLandmarkIds,
+  fossilCollection
 ) {
   const id = `${band.id}-${labyrinthNumber}`;
   const milestone = isGateWardenMilestone(labyrinthNumber);
@@ -176,6 +199,9 @@ function projectNode(
         ? "current"
         : "ahead";
   const stateLabel = atlasStateLabel({ completed, current, milestone });
+  const nodeFossils = completed
+    ? fossilsForLabyrinth(fossilCollection, labyrinthNumber)
+    : [];
 
   return {
     id,
@@ -187,6 +213,8 @@ function projectNode(
     completed,
     current,
     watchTrailAvailable: completed && retainedLandmarkIds.has(id),
+    fossils: nodeFossils,
+    fossilCount: nodeFossils.length,
     milestone,
     state,
     stateLabel,

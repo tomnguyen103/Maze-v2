@@ -404,3 +404,24 @@ The post-escape privacy-thresholded projection of aggregate route density from
 each signed-in Explorer's first verified escape for one Daily Shared Labyrinth.
 It never contains or exposes a personal trail.
 _Avoid_: route history, individual replay, live player map, reward
+
+**Echo Fossil**:
+One reviewed, coarse memory of a terminal Personal Labyrinth outcome in the
+active Quest. It contains the Atlas Region motif, a coarse journey state, a
+Warden outcome, one reviewed field note, and one visual stamp. It never stores
+prompt text, selected answers, Question IDs, raw route, timer, Vitality, score,
+or inferred ability.
+_Avoid_: reward, currency, inventory item, answer history, replay
+
+**Fossil Collection**:
+The bounded set of Echo Fossils for one Quest ID. It is personal memory, not a
+second source of Quest Progress, and a new Quest starts a new collection.
+Fossils are written to cloud storage only at the existing Labyrinth boundary;
+account selection may read the account's collection to restore the Atlas.
+_Avoid_: historical archive, gradebook, leaderboard, progression track
+
+**Fossil Atlas**:
+The Echo Atlas projection with completed-landmark fossil stamps and reviewed
+fossil notes. It reads Quest Progress and the current Fossil Collection but
+cannot mutate either source.
+_Avoid_: map unlock, paid map, hidden learner profile, route viewer
