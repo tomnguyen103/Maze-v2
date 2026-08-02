@@ -876,13 +876,13 @@ async function showQuestAtlas(trigger, { resumePausedRun = false } = {}) {
         })
       );
     }
-    const [atlasView, { projectQuestAtlas }] = await Promise.all([
+    const [atlasView, { projectAtlas }] = await Promise.all([
       atlasViewPromise,
       import("./game/quest-atlas.js")
     ]);
     const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
-    atlasView.show(projectQuestAtlas(questProgress, {
-      watchTrailLandmarkIds
+    atlasView.show(await projectAtlas(questProgress, {
+      watchTrailLandmarkIds,
     }), trigger);
   } catch {
     atlasViewPromise = null;
@@ -3142,7 +3142,8 @@ function loadQuestContinuityController(loadKind = "initial") {
           playerController.saveCloudQuestProgress(progress, revision),
         onConflict: showQuestConflict,
         onProgress: receiveCloudQuestProgress,
-        onStatus: renderQuestSyncStatus
+        onStatus: renderQuestSyncStatus,
+        fossils: playerController
       });
       return questContinuityController;
     }).catch(() => {
@@ -4125,6 +4126,7 @@ async function finishRun() {
   const runId = activeRunLocator?.runId;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
+  let classroom = false;
   const classPlayLoading = loadClassExpeditionPlay();
   if (classPlayLoading && activeRunLocator) {
     const classPlay = await classPlayLoading;
@@ -4133,6 +4135,7 @@ async function finishRun() {
       finishedLabyrinthNumber,
       won
     );
+    classroom = verdict !== "skipped";
     if (verdict === "removed") {
       // Authoritative Membership removal: stop here and persist no Class
       // result. Personal Play remains untouched.
@@ -4193,9 +4196,6 @@ async function finishRun() {
     if (won) {
       saveNextBoundaryLocator();
     }
-    void loadQuestContinuityController("terminal").then((controller) =>
-      controller?.queueBoundary(questProgress) ?? false
-    );
   }
   window.history.replaceState({}, "", "/play");
 
@@ -4211,6 +4211,14 @@ async function finishRun() {
       latestRunAccess?.state === "free" &&
       latestRunAccess.freeRunsRemaining === 1
   };
+  void loadQuestContinuityController("terminal").then((controller) =>
+    controller?.queueTerminal(
+      questProgress,
+      classroom,
+      !wasOffline,
+      run.seed
+    ) ?? false
+  );
   const questComplete = won && terminal.progress.complete;
   const sigilMilestone =
     won &&

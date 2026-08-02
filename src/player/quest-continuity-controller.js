@@ -3,6 +3,7 @@ import {
   mergeSameQuestProgress,
   reconcileQuestProgress
 } from "../game/quest-continuity.js";
+import { setFossilSnapshotReader } from "../game/fossil-atlas-state.js";
 import { normalizeQuestProgress } from "../game/quest-progress.js";
 
 const PENDING_KEY = "echo-maze:quest-sync-pending:v1";
@@ -20,7 +21,8 @@ const STALE_SYNC = Symbol("stale-sync");
  *   storage?: QuestStorage,
  *   onConflict?: (conflict: { local: QuestProgress, cloud: CloudQuest }) => void,
  *   onProgress?: (progress: QuestProgress, source: "cloud" | "merged") => void,
- *   onStatus?: (status: "local" | "syncing" | "saved" | "offline" | "conflict") => void
+ *   onStatus?: (status: "local" | "syncing" | "saved" | "offline" | "conflict") => void,
+ *   fossils?: Parameters<typeof import("../game/fossil-runtime.js").createFossilRuntime>[0]["playerController"]
  * }} dependencies
  */
 export function createQuestContinuityController({
@@ -29,7 +31,8 @@ export function createQuestContinuityController({
   storage = globalThis.localStorage,
   onConflict = () => {},
   onProgress = () => {},
-  onStatus = () => {}
+  onStatus = () => {},
+  fossils
 }) {
   /** @type {string | null} */
   let authenticatedUserId = null;
@@ -38,8 +41,22 @@ export function createQuestContinuityController({
   /** @type {{ local: QuestProgress, cloud: CloudQuest } | null} */
   let conflict = null;
   let syncChain = Promise.resolve(false);
+  const fossilRuntime = fossils
+    ? import("../game/fossil-runtime.js").then(({ createFossilRuntime }) =>
+        createFossilRuntime({
+          playerController: fossils
+        })
+      )
+        .catch(() => null)
+    : Promise.resolve(null);
+  setFossilSnapshotReader(() =>
+    fossilRuntime.then((runtime) => runtime?.getSnapshot())
+  );
 
   return {
+    getSnapshot: () => fossilRuntime.then(
+      (runtime) => runtime?.getSnapshot()
+    ),
     /** @param {string | null} nextUserId */
     setAuthenticated(nextUserId) {
       const normalizedUserId =
@@ -52,6 +69,22 @@ export function createQuestContinuityController({
       accountDeleted = false;
       conflict = null;
       onStatus("local");
+    },
+    /**
+     * @param {QuestProgress} progress
+     * @param {boolean} classroom
+     * @param {boolean} sync
+     * @param {string} seed
+     */
+    async queueTerminal(progress, classroom, sync, seed) {
+      await fossilRuntime.then((runtime) =>
+        runtime?.recordLatestTerminal(classroom, seed)
+      ).catch(() => null);
+      if (!sync) {
+        onStatus("local");
+        return false;
+      }
+      return this.queueBoundary(progress);
     },
     /** @param {QuestProgress} progress */
     queueBoundary(progress) {

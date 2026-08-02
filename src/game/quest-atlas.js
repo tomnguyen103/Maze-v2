@@ -7,6 +7,7 @@ import {
 } from "../questions/quest-levels.js";
 import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
+import { getFossilSnapshot } from "./fossil-atlas-state.js";
 import {
   fossilsForLabyrinth,
   normalizeFossilCollection
@@ -163,6 +164,17 @@ export function projectQuestAtlas(
     totalLabyrinths: QUEST_LABYRINTH_COUNT,
     regions
   };
+}
+
+/**
+ * @param {QuestProgressLike} progress
+ * @param {{ watchTrailLandmarkIds?: ReadonlySet<string> }} [options]
+ */
+export async function projectAtlas(progress, options = {}) {
+  return projectQuestAtlas(progress, {
+    ...options,
+    snapshot: await getFossilSnapshot()
+  });
 }
 
 /**

@@ -1203,6 +1203,109 @@ test("lazy Atlas keeps semantic map and list parity across a URL reload", async 
   );
 });
 
+test("shows quest-scoped Echo Fossil stamps and notes across Atlas controls", async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const questId = "quest_echo_fossil_e2e_1";
+  const fossil = {
+    version: 1,
+    fossilId: "fossil_00000000-0000-4000-8000-000000000101",
+    questId,
+    labyrinthNumber: 4,
+    atlasRegionId: "foundation",
+    regionMotif: "Lantern moss and quiet stone",
+    journeyState: "gate-milestone",
+    wardenOutcome: "escaped-the-wardens",
+    fieldNoteId: "foundation-escaped-v1",
+    fieldNote: "The first Gate Warden yields to a steady trail.",
+    visualStampId: "foundation-lantern-mark"
+  };
+  await page.addInitScript(({ questId: storedQuestId, fossil: storedFossil }) => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: storedQuestId,
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+    localStorage.setItem(
+      `echo-maze:echo-fossils:guest:${encodeURIComponent(storedQuestId)}:v1`,
+      JSON.stringify({
+        version: 1,
+        questId: storedQuestId,
+        fossils: [storedFossil]
+      })
+    );
+  }, { questId, fossil });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#atlas-progress")).toContainText(
+    "1 Echo Fossil memory kept."
+  );
+  const stampedLandmark = atlas.locator(
+    "[data-atlas-landmark='foundation-4']"
+  );
+  await expect(stampedLandmark).toHaveAttribute(
+    "aria-label",
+    /1 Echo Fossil/
+  );
+  await expect(stampedLandmark.locator("[data-fossil-mark]")).toHaveText(
+    "Fossil"
+  );
+  await expect(
+    atlas.locator("[data-atlas-landmark='foundation-3'] [data-fossil-mark]")
+  ).toHaveCount(0);
+
+  await stampedLandmark.focus();
+  await page.keyboard.press("Enter");
+  await expect(stampedLandmark).toHaveAttribute("aria-pressed", "true");
+  const fossilDetails = atlas.locator("[data-atlas-fossils]");
+  await expect(fossilDetails).toContainText("Trail kept");
+  await expect(fossilDetails).toContainText(
+    "The first Gate Warden yields to a steady trail."
+  );
+
+  await expect.poll(() => page.evaluate(() => {
+    const canvas = document.querySelector("[data-atlas-canvas]");
+    if (!(canvas instanceof HTMLElement)) {
+      return null;
+    }
+    const style = getComputedStyle(canvas);
+    return {
+      reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      transitionProperty: style.transitionProperty,
+      transitionDurationSeconds: Number.parseFloat(style.transitionDuration)
+    };
+  })).toMatchObject({
+    reducedMotion: true,
+    transitionProperty: "opacity",
+    transitionDurationSeconds: expect.any(Number)
+  });
+  expect(await page.locator("[data-atlas-canvas]").evaluate((canvas) =>
+    Number.parseFloat(getComputedStyle(canvas).transitionDuration)
+  )).toBeLessThan(0.001);
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(
+    atlas.locator("[data-atlas-landmark='foundation-3']")
+  ).toBeFocused();
+  await atlas.getByRole("button", { name: "List view" }).click();
+  await expect(atlas.locator("[data-atlas-landmarks]")).toHaveAttribute(
+    "data-view",
+    "list"
+  );
+});
+
 test("keeps a Run paused when Atlas is activated twice while loading", async ({
   page
 }) => {
