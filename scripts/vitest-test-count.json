@@ -1,5 +1,5 @@
 {
-  "testFiles": 168,
-  "tests": 1432,
-  "source": "Full Vitest run on 2026-08-02 after merging the Echo Fossil Atlas player path and adding the Warden Tactics Lab contract, view, and Intercept coverage; update deliberately when tests change."
+  "testFiles": 169,
+  "tests": 1435,
+  "source": "Full Vitest run on 2026-08-02 after adding Quiet Expedition preset and player-path proof; update deliberately when tests change."
 }

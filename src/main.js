@@ -1640,6 +1640,7 @@ function syncTrailCompass() {
   trailCompassPromise ??= import("./game/trail-compass.js")
     .then((module) => {
       if (!trailCompassActive) {
+        trailCompassPromise = undefined;
         return null;
       }
       trailCompassController = module.createTrailCompass({
@@ -1649,7 +1650,10 @@ function syncTrailCompass() {
       });
       return trailCompassController;
     })
-    .catch(() => null);
+    .catch(() => {
+      trailCompassPromise = undefined;
+      return null;
+    });
 }
 
 function loadClassExpeditionPlay() {

@@ -76,6 +76,11 @@
   color: var(--color-ink-muted);
 }
 
+.practice-catalog__tools > .control-button {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .practice-tactics__heading,
 .practice-tactics__subheading {
   display: grid;

@@ -26,6 +26,8 @@ roadmap coverage ledger and release evidence with real local/browser results.
 
 ## Verification receipt
 
-Before implementation, record the failing integrated test names and failure
-lines. The first green receipt must name desktop/mobile totals, unit totals,
-bundle headroom, and the local/review gates.
+Red receipt: the first full `npm run check` reached the Vitest gate with 161
+passed / 8 skipped files and 1,417 passed / 18 skipped tests, then failed with
+`Vitest expected 168 test files, received 169.` The manifest must be refreshed
+to the observed 169-file / 1,435-test run before the final green receipt is
+recorded.
