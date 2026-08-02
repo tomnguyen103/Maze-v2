@@ -1,7 +1,7 @@
 # Echo Fossil Atlas ? feature specification
 
-Status: ready for implementation, PR batch D  
-Roadmap: P1.1 Echo Fossil Atlas  
+Status: ready for implementation, PR batch D
+Roadmap: P1.1 Echo Fossil Atlas
 Dependency: P0.2 Offline Run Continuity merge
 
 ## Player problem and intended feeling

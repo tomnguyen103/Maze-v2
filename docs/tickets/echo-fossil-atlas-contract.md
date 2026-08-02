@@ -1,7 +1,7 @@
 # Ticket: Echo Fossil contract, catalog, and Atlas projection
 
-Spec: #159  
-PR batch: D  
+Spec: #159
+PR batch: D
 Blocked by: none
 
 ## Slice
