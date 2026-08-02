@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { normalizeQuestion } from "../server/question-service.js";
+import {
+  getReviewedEchoLens,
+  getReviewedEchoLensCoverage
+} from "../src/questions/reviewed-echo-lenses.js";
+import { reviewedQuestionContentDigest } from "../src/questions/reviewed-question-revision.js";
 
 const LEVELS = ["bright-start", "trail-scout", "maze-master"];
 
@@ -178,6 +183,94 @@ describe("reviewed Question progression", () => {
       title: "See one more"
     });
     expect(unsupported.echoLens).toBeUndefined();
+  });
+
+  it("reports one exact reviewed entry for every Echo Lens primitive", () => {
+    const reviewedRequests = [
+      {
+        levelId: "bright-start",
+        labyrinthNumber: 1,
+        questionOrdinal: 0
+      },
+      {
+        levelId: "maze-master",
+        labyrinthNumber: 1,
+        questionOrdinal: 1
+      },
+      {
+        levelId: "maze-master",
+        labyrinthNumber: 1,
+        questionOrdinal: 2
+      },
+      {
+        levelId: "bright-start",
+        labyrinthNumber: 1,
+        questionOrdinal: 4
+      },
+      {
+        levelId: "bright-start",
+        labyrinthNumber: 1,
+        questionOrdinal: 3
+      },
+      {
+        levelId: "trail-scout",
+        labyrinthNumber: 9,
+        questionOrdinal: 5
+      }
+    ];
+    const reviewedQuestions = reviewedRequests.map((request) =>
+      getBundledQuestion({
+        ...request,
+        seed: "ECHO-LENS-COVERAGE",
+        wardenId: 0
+      })
+    );
+    const unsupported = getBundledQuestion({
+      levelId: "bright-start",
+      seed: "ECHO-LENS-COVERAGE",
+      wardenId: 0,
+      labyrinthNumber: 1,
+      questionOrdinal: 1
+    });
+    const coverage = getReviewedEchoLensCoverage([
+      ...reviewedQuestions,
+      unsupported
+    ]);
+
+    expect(coverage.publishedCount).toBe(6);
+    expect(coverage.boundCount).toBe(6);
+    expect(coverage.unsupportedCount).toBe(1);
+    expect(coverage.coveredKinds).toEqual([
+      "number-line",
+      "array",
+      "fraction-bar",
+      "word-highlight",
+      "pattern",
+      "diagram"
+    ]);
+    expect(
+      coverage.entries.map((entry) => entry.reviewedRevisionId)
+    ).toEqual(reviewedQuestions.map((question) => question.reviewedRevisionId));
+  });
+
+  it("does not carry a published Lens across edited Question content", () => {
+    const reviewed = getBundledQuestion({
+      levelId: "bright-start",
+      seed: "ECHO-LENS-EDIT",
+      wardenId: 0,
+      labyrinthNumber: 1,
+      questionOrdinal: 0
+    });
+    const edited = {
+      ...reviewed,
+      prompt: `${reviewed.prompt} Explain your count.`
+    };
+    const editedKey =
+      `bundled-content:${edited.id}:` +
+      reviewedQuestionContentDigest(edited, null);
+
+    expect(editedKey).not.toContain("7e84039805bc7a7268351b3a130d62d0");
+    expect(getReviewedEchoLens(editedKey)).toBeNull();
   });
 
   it("ships one validated Gate Warden capstone per Level and Band", () => {

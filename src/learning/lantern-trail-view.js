@@ -9,6 +9,7 @@ import {
 } from "./lantern-trail.js";
 import { evaluatePracticeAnswer } from "./lantern-journal-ui.js";
 import { ensureQuestionNarration } from "./question-narration.js";
+import { normalizeQuestion } from "../questions/question-contract.js";
 
 const LEVEL_LABELS = Object.freeze({
   "bright-start": "Bright Start",
@@ -22,6 +23,9 @@ const BAND_LABELS = Object.freeze({
   advanced: "Advanced",
   mastery: "Mastery"
 });
+
+/** @type {Promise<typeof import("./echo-lens-view.js") | null> | null} */
+let echoLensViewPromise = null;
 
 /**
  * @param {{
@@ -62,6 +66,11 @@ export function createLanternTrailView({
     next: required("practice-next", HTMLButtonElement),
     objectiveLabel: required("practice-objective-label", HTMLElement),
     objectives: required("practice-objectives", HTMLElement),
+    practiceEchoLens: required("practice-echo-lens", HTMLDetailsElement),
+    practiceEchoLensContent: required(
+      "practice-echo-lens-content",
+      HTMLElement
+    ),
     progress: required("practice-progress", HTMLElement),
     question: required("practice-question", HTMLElement),
     skip: required("practice-skip", HTMLButtonElement),
@@ -78,6 +87,7 @@ export function createLanternTrailView({
   let origin = "play";
   /** @type {HTMLElement | null} */
   let returnTarget = null;
+  let echoLensRequestId = 0;
 
   elements.objectives.addEventListener("click", (event) => {
     const button =
@@ -263,6 +273,7 @@ export function createLanternTrailView({
     elements.keep.disabled = false;
     elements.next.hidden = true;
     elements.keep.hidden = true;
+    clearPracticeEchoLens();
     elements.catalog.hidden = true;
     elements.completion.hidden = true;
     elements.trail.hidden = false;
@@ -310,6 +321,7 @@ export function createLanternTrailView({
       next.index < next.trail.requiredQuestionCount - 1 ||
       next.index >= next.trail.questions.length - 1;
     elements.next.focus({ preventScroll: true });
+    void showPracticeEchoLens(question);
   }
 
   /** @param {boolean} keepPracticing */
@@ -328,6 +340,7 @@ export function createLanternTrailView({
 
   function renderCompletion() {
     if (!session) return;
+    clearPracticeEchoLens();
     elements.completionCopy.textContent =
       `You practiced ${session.index + 1} reviewed Questions. ` +
       "No score, rank, reward, or Quest progress was created.";
@@ -340,6 +353,7 @@ export function createLanternTrailView({
   }
 
   function clearTrailPresentation() {
+    clearPracticeEchoLens();
     elements.catalogSummary.textContent = "";
     elements.objectives.replaceChildren();
     elements.progress.textContent = "";
@@ -358,6 +372,67 @@ export function createLanternTrailView({
     elements.keep.hidden = true;
     elements.next.disabled = false;
     elements.keep.disabled = false;
+  }
+
+  /** @param {ReturnType<typeof createLanternTrail>["questions"][number]} rawQuestion */
+  async function showPracticeEchoLens(rawQuestion) {
+    let question;
+    try {
+      question = normalizeQuestion(rawQuestion);
+    } catch {
+      return;
+    }
+    if (!question.reviewedRevisionId || !question.echoLens) return;
+
+    const requestId = ++echoLensRequestId;
+    if (!echoLensViewPromise) {
+      echoLensViewPromise = import("./echo-lens-view.js").catch(() => null);
+    }
+    const view = await echoLensViewPromise;
+    if (
+      requestId !== echoLensRequestId ||
+      !session ||
+      currentQuestion().reviewedRevisionId !== question.reviewedRevisionId
+    ) {
+      return;
+    }
+    if (view) {
+      view.renderEchoLensContent(
+        elements.practiceEchoLensContent,
+        question.echoLens
+      );
+      delete elements.practiceEchoLensContent.dataset.presentation;
+    } else {
+      const title = document.createElement("h3");
+      title.className = "echo-lens__title";
+      title.textContent = question.echoLens.title;
+      const reasoning = document.createElement("p");
+      reasoning.className = "echo-lens__reasoning";
+      reasoning.textContent = question.echoLens.reasoning;
+      const steps = document.createElement("ol");
+      steps.className = "echo-lens__steps";
+      for (const step of question.echoLens.steps) {
+        const item = document.createElement("li");
+        item.textContent = step;
+        steps.append(item);
+      }
+      elements.practiceEchoLensContent.replaceChildren(
+        title,
+        reasoning,
+        steps
+      );
+      elements.practiceEchoLensContent.dataset.presentation = "text-only";
+    }
+    elements.practiceEchoLens.hidden = false;
+    elements.practiceEchoLens.open = true;
+  }
+
+  function clearPracticeEchoLens() {
+    echoLensRequestId += 1;
+    elements.practiceEchoLens.open = false;
+    elements.practiceEchoLens.hidden = true;
+    elements.practiceEchoLensContent.replaceChildren();
+    delete elements.practiceEchoLensContent.dataset.presentation;
   }
 
   function currentQuestion() {

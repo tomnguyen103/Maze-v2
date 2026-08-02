@@ -27,9 +27,10 @@ const OPTIONS = Object.freeze([
     label: "Number Trail",
     kind: /** @type {"focused"} */ ("focused"),
     description: "Mostly Number Questions, then Mixed Trail when they run out.",
-    revisionId: "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+    revisionId: "deck:number-trail:v1:d583663a8c0590f497042439ce82d2f7",
     publishedRevisionIds: Object.freeze([
-      "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105"
+      "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+      "deck:number-trail:v1:d583663a8c0590f497042439ce82d2f7"
     ])
   }),
 ]);
@@ -47,7 +48,8 @@ export function getPublishedLearningDeckOption(deckId, revisionId) {
     OPTIONS.find(
       (option) =>
         option.deckId === deckId &&
-        (revisionId === undefined || option.revisionId === revisionId)
+        (revisionId === undefined ||
+          option.publishedRevisionIds.includes(revisionId))
     ) ?? null
   );
 }
