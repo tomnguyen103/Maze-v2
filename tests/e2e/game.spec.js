@@ -4007,6 +4007,16 @@ test("opens the unscored Warden Tactics Lab from Workshop", async ({ page }) => 
   await expect(page.locator("#practice-tactics-progress")).toContainText("0 moves");
 
   await page.getByRole("button", { name: "Back to Drills" }).click();
+  await page.locator("[data-tactics-drill='hunt']").click();
+  await page.locator("[data-tactics-move='right']").click();
+  await expect(page.locator("#practice-tactics-report")).toContainText("Hunt");
+
+  await page.getByRole("button", { name: "Back to Drills" }).click();
+  await page.locator("[data-tactics-drill='intercept']").click();
+  await page.locator("[data-tactics-move='down']").click();
+  await expect(page.locator("#practice-tactics-report")).toContainText("Intercept");
+
+  await page.getByRole("button", { name: "Back to Drills" }).click();
   await page.locator("[data-tactics-drill='trail-twists']").click();
   await expect(page.locator("[data-tactics-twist]")).toHaveCount(5);
   await expect(page.locator("#practice-tactics-twist-list")).toContainText("Echo Hush");

@@ -1,9 +1,9 @@
 # Ticket: Warden Tactics Lab contract and deterministic drill catalog
 
-Parent spec: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)  
-Ticket issue: [#167](https://github.com/tomnguyen103/Maze-v2/issues/167)  
-Spec: `docs/specs/echo-maze-warden-tactics-lab.md`  
-PR batch: E  
+Parent spec: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)
+Ticket issue: [#167](https://github.com/tomnguyen103/Maze-v2/issues/167)
+Spec: `docs/specs/echo-maze-warden-tactics-lab.md`
+PR batch: E
 Blocked by: none
 
 ## Slice

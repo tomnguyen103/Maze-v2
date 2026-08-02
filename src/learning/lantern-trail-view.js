@@ -9,6 +9,7 @@ import {
 } from "./lantern-trail.js";
 import { evaluatePracticeAnswer } from "./lantern-journal-ui.js";
 import { ensureQuestionNarration } from "./question-narration.js";
+import { createTacticsLabView } from "./t.js";
 
 const LEVEL_LABELS = Object.freeze({
   "bright-start": "Bright Start",
@@ -79,7 +80,7 @@ export function createLanternTrailView({
   let origin = "play";
   /** @type {HTMLElement | null} */
   let returnTarget = null;
-  /** @type {ReturnType<typeof import("./tactics-lab-view.js").createTacticsLabView> | null} */
+  /** @type {ReturnType<typeof createTacticsLabView> | null} */
   let tacticsLabView = null;
 
   elements.objectives.addEventListener("click", (event) => {
@@ -225,7 +226,7 @@ export function createLanternTrailView({
     elements.title.focus({ preventScroll: true });
   }
 
-  async function openTacticsLab() {
+  function openTacticsLab() {
     session = null;
     clearTrailPresentation();
     elements.catalog.hidden = true;
@@ -236,8 +237,7 @@ export function createLanternTrailView({
     elements.close.hidden = true;
     try {
       if (!tacticsLabView) {
-        const module = await import("./tactics-lab-view.js");
-        tacticsLabView = module.createTacticsLabView({
+        tacticsLabView = createTacticsLabView({
           onExit: () => {
             renderCatalog();
             elements.tacticsOpen.focus({ preventScroll: true });

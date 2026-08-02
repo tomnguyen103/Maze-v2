@@ -68,7 +68,7 @@ const DRILLS = Object.freeze([
     id: "intercept",
     title: "Read Intercept",
     objective: "See how an eligible Warden predicts your last direction.",
-    seed: "TACTICS-INTERCEPT-V1",
+    seed: "TACTICS-INTERCEPT-007",
     ruleset: CLASSIC_RULESET_REVISION,
     steps: Object.freeze([
       Object.freeze({
@@ -161,7 +161,11 @@ export function createTacticsLabSession(drillId, twistRevision) {
   const seed = selectedTwist
     ? `${drill.seed}-${selectedTwist}`
     : drill.seed;
-  const run = createRun(seed, { ...SESSION_CONFIG, ruleset });
+  const run = createRun(seed, {
+    ...SESSION_CONFIG,
+    wardenCount: drillId === "intercept" ? 2 : SESSION_CONFIG.wardenCount,
+    ruleset
+  });
   return Object.freeze({
     version: 1,
     drillId,

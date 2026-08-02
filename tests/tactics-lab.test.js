@@ -61,6 +61,17 @@ describe("Warden Tactics Lab contract", () => {
     }
   });
 
+  it("makes the Intercept card exercise the production eligible Warden", () => {
+    const afterMove = applyTacticsLabAction(
+      createTacticsLabSession("intercept"),
+      { type: "move", direction: "down" }
+    );
+
+    expect(afterMove.run.wardens).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 1, mode: "intercept" })])
+    );
+  });
+
   it("rejects unknown actions and restarts the same deterministic session", () => {
     const session = createTacticsLabSession("intercept");
     const advanced = applyTacticsLabAction(session, { type: "pulse" });

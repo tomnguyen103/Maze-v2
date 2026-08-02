@@ -318,10 +318,9 @@ function closestButton(event, selector) {
 
 /** @param {string | undefined} message */
 function safeEventMessage(message) {
-  return (message ?? "Choose a move to read the Warden report.").replace(
-    /\s*You earned \d+ score\./gi,
-    ""
-  );
+  return (message ?? "Choose a move to read the Warden report.")
+    .replace(/\s*(?:,?\s*and\s+)?you earned\b[^.]*\bscore\.\s*/gi, " ")
+    .trim();
 }
 
 /** @param {string} status */

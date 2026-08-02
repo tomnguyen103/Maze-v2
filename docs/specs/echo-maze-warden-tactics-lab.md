@@ -1,8 +1,8 @@
 # Warden Tactics Lab - feature specification
 
-Status: ready for implementation, PR batch E  
-Parent issue: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)  
-Roadmap: P1.2 Warden Tactics Lab  
+Status: ready for implementation, PR batch E
+Parent issue: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)
+Roadmap: P1.2 Warden Tactics Lab
 Dependency: P1.1 Echo Fossil Atlas merge
 
 ## Player problem and intended feeling

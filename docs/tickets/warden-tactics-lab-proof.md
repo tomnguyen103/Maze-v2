@@ -1,9 +1,9 @@
 # Ticket: Warden Tactics Lab privacy, regression, and release proof
 
-Parent spec: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)  
-Ticket issue: [#169](https://github.com/tomnguyen103/Maze-v2/issues/169)  
-Spec: `docs/specs/echo-maze-warden-tactics-lab.md`  
-PR batch: E  
+Parent spec: [#166](https://github.com/tomnguyen103/Maze-v2/issues/166)
+Ticket issue: [#169](https://github.com/tomnguyen103/Maze-v2/issues/169)
+Spec: `docs/specs/echo-maze-warden-tactics-lab.md`
+PR batch: E
 Blocked by: #167, #168
 
 ## Slice
