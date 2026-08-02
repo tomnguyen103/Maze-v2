@@ -307,6 +307,14 @@ revealed entities, and regional Trail Twist state without exposing Fog-hidden
 state.
 _Avoid_: Echo Sonar, Pulse, maze solver, hidden-state scan, simplified mode
 
+**Practice Intention**:
+An Explorer's explicit choice at the New Quest picker: Review, Explore, or
+Challenge. It explains which reviewed Level and Learning Deck choice the
+Explorer wants to make, never infers ability, and never changes a Run silently.
+It is a transient choice, not account data, a score, a difficulty profile, or
+gameplay state.
+_Avoid_: adaptive mode, mastery score, recommendation, hidden difficulty
+
 **Quiet Expedition**:
 An explicit presentation preset for Personal Play that combines the Trail
 Compass, reader-friendly Question text, and reduced visual effects into one

@@ -2453,6 +2453,10 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink-muted);
 }
 
+#practice-intention-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .learning-deck-picker {
   min-width: 0;
   margin: var(--space-5) 0 0;
@@ -3012,6 +3016,10 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .level-cards {
+    grid-template-columns: 1fr;
+  }
+
+  #practice-intention-options {
     grid-template-columns: 1fr;
   }
 
