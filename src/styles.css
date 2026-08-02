@@ -858,31 +858,9 @@ kbd {
 
 html[data-access-compass="trail"] .trail-compass {
   display: flex;
-  flex-direction: column;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-block-start: var(--space-3);
-}
-
-.trail-compass__heading {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.trail-compass__heading strong {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-}
-
-.trail-compass p {
-  max-width: 38rem;
-  margin: 0;
-  color: var(--color-ink-muted);
-  font-size: 0.88rem;
-}
-
-.trail-compass__heading + p {
-  margin-block-end: var(--space-1);
 }
 
 /* Matches the enabling rule's specificity so [hidden] still wins over it.
@@ -898,30 +876,6 @@ html .trail-compass[hidden] {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.access-settings-preset {
-  display: grid;
-  gap: var(--space-2);
-  margin-block-start: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone);
-}
-
-.access-settings-preset h3,
-.access-settings-preset p {
-  margin: 0;
-}
-
-.access-settings-preset h3 {
-  font-family: var(--font-display);
-}
-
-.access-settings-preset p {
-  color: var(--color-ink-muted);
-  font-size: 0.88rem;
 }
 
 .access-setting--select select {
