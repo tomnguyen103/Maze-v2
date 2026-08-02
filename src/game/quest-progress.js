@@ -8,6 +8,7 @@ import {
   getPublishedLearningDeckRevisionId,
   isPublishedLearningDeckRevision
 } from "../questions/learning-deck-identity.js";
+import { createQuestId } from "./quest-content.js";
 
 const QUEST_PROGRESS_KEY = "echo-maze:quest-progress:v1";
 const MAX_QUESTION_HISTORY = 5000;
@@ -289,14 +290,6 @@ export function normalizeQuestProgress(value) {
     nextQuestionOrdinal: Number(candidate.nextQuestionOrdinal),
     complete: candidate.complete
   };
-}
-
-function createQuestId() {
-  const randomId = globalThis.crypto?.randomUUID?.();
-  if (randomId) {
-    return `quest_${randomId}`;
-  }
-  return `quest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
 }
 
 /** @param {unknown} value */

@@ -1,6 +1,10 @@
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { getPublishedLearningDeckRevisions } from "../src/questions/learning-decks.js";
 import { selectReviewedDeckQuestion } from "../src/questions/learning-deck-selection.js";
+import {
+  getQuestContentPackId,
+  QUEST_II_CONTENT_PACK_ID
+} from "../src/game/quest-content.js";
 
 /** @typedef {ReturnType<typeof import("../src/questions/question-contract.js").normalizeQuestion>} WardenQuestion */
 /** @typedef {{
@@ -76,6 +80,38 @@ export function createOfflineContentPack(hash, publishedQuestions = []) {
           revisionId
         );
       }
+      const questIICapstone =
+        /^(?:quest-ii:)?quest-ii-capstone-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)(?::|$)/.exec(
+          revisionId
+        );
+      if (questIICapstone) {
+        return bundledQuestion(
+          /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (
+            questIICapstone[1]
+          ),
+          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[2])],
+          "gate-warden",
+          revisionId,
+          0,
+          "quest_ii_offline_revision_123"
+        );
+      }
+      const questIIGenerated =
+        /^(?:quest-ii:)?quest-ii-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)-(\d+)(?::|$)/.exec(
+          revisionId
+        );
+      if (questIIGenerated) {
+        return bundledQuestion(
+          /** @type {"bright-start" | "trail-scout" | "maze-master"} */ (
+            questIIGenerated[1]
+          ),
+          BANDS[/** @type {keyof typeof BANDS} */ (questIIGenerated[2])],
+          "warden",
+          revisionId,
+          Number(questIIGenerated[3]),
+          "quest_ii_offline_revision_123"
+        );
+      }
       const generated = /^(bright|scout|master)-(foundation|developing|capable|advanced|mastery)-(\d+)$/.exec(
         revisionId
       );
@@ -108,6 +144,7 @@ export function createOfflineContentPack(hash, publishedQuestions = []) {
  * replace a focused or Mixed card with another valid card from the pack.
  *
  * @param {{
+ *   questId?: string,
  *   seed: string,
  *   levelId: string,
  *   labyrinthNumber: number,
@@ -153,6 +190,7 @@ export function createOfflineQuestionSequence(
             : "warden"
         );
         const request = {
+          ...(receipt.questId ? { questId: receipt.questId } : {}),
           levelId: receipt.levelId,
           seed: receipt.seed,
           wardenId: challenge.wardenId,
@@ -164,11 +202,19 @@ export function createOfflineQuestionSequence(
           learningDeckRevision: receipt.learningDeckRevision,
           usedQuestionIds: [...usedQuestionIds]
         };
-        const selected = selectReviewedDeckQuestion(request);
+        const questII =
+          getQuestContentPackId(receipt.questId) === QUEST_II_CONTENT_PACK_ID;
+        const selected = questII
+          ? {
+              question: getBundledQuestion(request),
+              source: /** @type {"mixed"} */ ("mixed")
+            }
+          : selectReviewedDeckQuestion(request);
         if (!selected) {
           continue;
         }
         const question =
+          !questII &&
           challengeKind !== "gate-warden" &&
           (selected.source === "mixed" || selected.source === "mixed-fallback")
             ? publishedBySlot.get(
@@ -222,13 +268,15 @@ function indexQuestion(index, question) {
  * @param {"warden" | "gate-warden"} challengeKind
  * @param {string} revisionId
  * @param {number} [questionOrdinal]
+ * @param {string} [questId]
  */
 function bundledQuestion(
   levelId,
   labyrinthNumber,
   challengeKind,
   revisionId,
-  questionOrdinal = 0
+  questionOrdinal = 0,
+  questId
 ) {
   try {
     const question = getBundledQuestion({
@@ -237,7 +285,8 @@ function bundledQuestion(
       wardenId: questionOrdinal,
       labyrinthNumber,
       challengeKind,
-      questionOrdinal
+      questionOrdinal,
+      ...(questId ? { questId } : {})
     });
     return question.id === revisionId || question.reviewedRevisionId === revisionId
       ? question

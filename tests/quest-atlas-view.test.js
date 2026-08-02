@@ -110,6 +110,36 @@ describe("Echo Atlas view", () => {
       .toContain("Number Trail");
   });
 
+  it("renders Quest II arc and storylet labels in the Atlas inspector", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    view.show(
+      projectQuestAtlas(
+        createQuestProgress("trail-scout", 6, "quest_ii_atlas_view")
+      ),
+      trigger
+    );
+
+    expect(document.getElementById("atlas-progress")?.textContent)
+      .toContain("Quest II · Living Regions");
+    expect(document.querySelector("[data-atlas-region='developing']")
+      ?.textContent).toContain("Windthread Steps");
+
+    document.querySelector("[data-atlas-landmark='developing-6']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector("[data-atlas-storylet='quest-ii-developing-6']"))
+      .not.toBeNull();
+    expect(document.querySelector("[data-atlas-storylet-title]")?.textContent)
+      .toBe("A longer step");
+    expect(document.querySelector("[data-atlas-detail]")?.textContent)
+      .toContain("variation beat");
+    expect(document.querySelector("[data-atlas-storylet-tie]")?.textContent)
+      .toContain("windways-v1:windway-used");
+  });
+
   it("shows a reviewed fossil stamp and note only on its completed landmark", () => {
     const progress = advanceQuest(
       createQuestProgress("trail-scout", 4, "quest_atlas_fossil_123")

@@ -5,6 +5,11 @@ import {
 } from "../src/questions/learning-objectives.js";
 import { normalizeQuestion } from "../src/questions/question-contract.js";
 import { getQuestLevel } from "../src/questions/quest-levels.js";
+import { getBundledQuestion } from "../src/questions/question-bank.js";
+import {
+  getQuestContentPackId,
+  QUEST_II_CONTENT_PACK_ID
+} from "../src/game/quest-content.js";
 
 export { normalizeQuestion };
 
@@ -19,7 +24,8 @@ export { normalizeQuestion };
  *   challengeKind?: "warden" | "gate-warden",
  *   learningDeckId?: string | null,
  *   learningDeckRevision?: string | null,
- *   usedQuestionIds?: readonly string[]
+ *   usedQuestionIds?: readonly string[],
+ *   questId?: string
  * }} QuestionRequest
  * @typedef {{
  *   id: string,
@@ -329,6 +335,13 @@ export function createQuestionService(options = {}) {
    * }>}
    */
   async function resolveReviewedQuestion(request) {
+    if (getQuestContentPackId(request.questId) === QUEST_II_CONTENT_PACK_ID) {
+      return {
+        question: getBundledQuestion(request),
+        fromDatabase: false,
+        deckSource: /** @type {"mixed"} */ ("mixed")
+      };
+    }
     const selection = selectReviewedDeckQuestion(request);
     const bundled = selection.question;
     // A focused Deck revision is itself the publishing authority for its own
@@ -376,7 +389,7 @@ export function createQuestionService(options = {}) {
   async function generateQuestion(request) {
     const provider = selectProvider(env);
     const encounterKey =
-      `${request.levelId}:${request.seed}:${request.wardenId}`;
+      `${request.questId ?? "quest-i"}:${request.levelId}:${request.seed}:${request.wardenId}`;
     const previousQuestion = previousQuestions.get(encounterKey);
     const reviewed = await resolveReviewedQuestion(request);
     const reviewedQuestion = reviewed.question;
@@ -495,7 +508,7 @@ export function createQuestionService(options = {}) {
 function questionKey(request) {
   // Deck identity is part of the key: two Decks at the same Run coordinates
   // ask different reviewed Questions and must never share a cache entry.
-  return `${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}:${request.learningDeckId ?? "mixed-trail"}:${request.learningDeckRevision ?? ""}`;
+  return `${request.questId ?? "quest-i"}:${request.levelId}:${request.seed}:${request.wardenId}:${request.attempt}:${request.labyrinthNumber}:${request.questionOrdinal}:${request.challengeKind ?? "warden"}:${request.learningDeckId ?? "mixed-trail"}:${request.learningDeckRevision ?? ""}`;
 }
 
 /**

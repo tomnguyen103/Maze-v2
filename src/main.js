@@ -60,6 +60,13 @@ import {
   saveQuestProgress
 } from "./game/quest-progress.js";
 import {
+  createQuestId,
+  getNextQuestContentPackId,
+  getQuestContentPackId,
+  getQuestContentPackLabel,
+  getQuestIIStoryletLogEntry
+} from "./game/quest-content.js";
+import {
   isSameQuestIdentity,
   selectDeferredQuestProgress
 } from "./game/quest-continuity.js";
@@ -1887,6 +1894,9 @@ async function startRun(locator, daily = null, recoveredRun = null) {
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
   );
+  if (!daily && getQuestContentPackId(questProgress.questId) === "quest-ii") {
+    addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
+  }
   if (elements.resultDialog.open) {
     elements.resultDialog.close();
   }
@@ -2702,7 +2712,7 @@ async function startNewQuest(
   const nextProgress = createQuestProgress(
     selectedLevel.id,
     1,
-    undefined,
+    createQuestId(getNextQuestContentPackId(questProgress)),
     learningDeck
   );
   const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
@@ -2772,7 +2782,7 @@ async function startRecordedLabyrinth(
     createQuestProgress(
       levelId,
       labyrinthNumber,
-      undefined,
+      createQuestId(getQuestContentPackId(questProgress.questId)),
       learningDeckForNewQuest(questProgress)
     )
   );
@@ -3894,6 +3904,7 @@ async function loadChallengeQuestion() {
     return;
   }
   const challengeSnapshot = {
+    questId: questProgress.questId,
     levelId: currentLevel.id,
     seed: run.seed,
     wardenId: run.challenge.wardenId,
@@ -3962,6 +3973,7 @@ async function loadChallengeQuestion() {
           labyrinthNumber: request.labyrinthNumber,
           questionOrdinal: request.questionOrdinal,
           challengeKind: request.challengeKind,
+          questId: questProgress.questId,
           learningDeckId: questProgress.learningDeckId,
           learningDeckRevision: questProgress.learningDeckRevision,
           usedQuestionIds: questProgress.usedQuestionIds
@@ -4097,10 +4109,11 @@ function updateInterface() {
     const questLevelPrefix = document.createElement("span");
     questLevelPrefix.dataset.questLabelPrefix = "";
     questLevelPrefix.textContent = `Quest Level ${currentLevel.number} · `;
+    const contentPackLabel = getQuestContentPackLabel(questProgress.questId);
     elements.questLevelName.replaceChildren(
       questLevelPrefix,
       document.createTextNode(
-        `${currentLevel.name} · ${currentLearningDeckOption().label}`
+        `${contentPackLabel}${currentLevel.name} · ${currentLearningDeckOption().label}`
       )
     );
   }

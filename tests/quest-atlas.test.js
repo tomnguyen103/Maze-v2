@@ -160,6 +160,36 @@ describe("Echo Atlas projection", () => {
     ).toBe(true);
   });
 
+  it("projects Quest II arcs and semantic storylets into every Atlas node", () => {
+    const atlas = projectQuestAtlas(
+      createQuestProgress("trail-scout", 6, "quest_ii_atlas_contract")
+    );
+
+    expect(atlas).toMatchObject({
+      contentPackId: "quest-ii",
+      contentPackLabel: "Quest II · Living Regions"
+    });
+    expect(atlas.regions[1]).toMatchObject({
+      arcName: "Windthread Steps",
+      learningMove: "Compare movement choices",
+      trailTwistRevision: "windways-v1"
+    });
+    expect(atlas.regions[1].nodes[1]).toMatchObject({
+      labyrinthNumber: 6,
+      fieldNote: expect.stringContaining("Windway can carry"),
+      storylet: {
+        id: "quest-ii-developing-6",
+        beat: "variation",
+        title: "A longer step",
+        gameplayTie: "windways-v1:windway-used"
+      }
+    });
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .every((node) => node.storylet?.id)
+    ).toBe(true);
+  });
+
   it("projects the selected immutable Learning Deck without changing Region rules", () => {
     if (!NUMBER_TRAIL) {
       throw new Error("Published Number Trail fixture is missing.");

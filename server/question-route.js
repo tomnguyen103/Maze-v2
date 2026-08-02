@@ -9,6 +9,18 @@ import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-
 const LEVEL_IDS = new Set(QUEST_LEVELS.map((level) => level.id));
 const CHALLENGE_KINDS = new Set(["warden", "gate-warden"]);
 const SEED_PATTERN = /^[a-z0-9-]{1,32}$/i;
+const QUEST_ID_PATTERN = /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/i;
+
+/** @param {string | null} value @returns {string | undefined} */
+function parseQuestId(value) {
+  if (!value) {
+    return undefined;
+  }
+  if (!QUEST_ID_PATTERN.test(value)) {
+    throw new Error("Quest ID is not valid.");
+  }
+  return value;
+}
 
 /**
  * @param {string | null} value
@@ -89,6 +101,8 @@ export function parseQuestionRequest(url) {
     throw new Error("Challenge kind is not supported.");
   }
 
+  const questId = parseQuestId(url.searchParams.get("quest"));
+
   return {
     levelId,
     seed,
@@ -111,7 +125,8 @@ export function parseQuestionRequest(url) {
       url.searchParams.get("deck"),
       url.searchParams.get("deckRevision")
     ),
-    usedQuestionIds: []
+    usedQuestionIds: [],
+    ...(questId ? { questId } : {})
   };
 }
 
@@ -135,6 +150,7 @@ export function parseQuestionBody(body) {
     ["labyrinthNumber", "labyrinth"],
     ["questionOrdinal", "question"],
     ["challengeKind", "challenge"],
+    ["questId", "quest"],
     ["learningDeckId", "deck"],
     ["learningDeckRevision", "deckRevision"]
   ]) {
@@ -210,7 +226,8 @@ export function createQuestionRateLimiter(options = {}) {
  *   wardenId: number,
  *   attempt: number,
  *   labyrinthNumber: number,
- *   questionOrdinal: number
+ *   questionOrdinal: number,
+ *   questId?: string
  * }) => Promise<unknown> }} questionService
  * @param {{
  *   maxRequests?: number,

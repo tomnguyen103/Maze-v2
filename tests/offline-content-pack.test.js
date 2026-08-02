@@ -7,6 +7,9 @@ import { selectReviewedDeckQuestion } from "../src/questions/learning-deck-selec
 import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
 import { getPublishedLearningDeckRevision } from "../src/questions/learning-decks.js";
 
+const MIXED_TRAIL_REVISION =
+  "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92";
+
 describe("Offline content pack", () => {
   it("resolves only the server-generated reviewed revision ids", () => {
     const pack = createOfflineContentPack("b".repeat(64));
@@ -144,5 +147,25 @@ describe("Offline content pack", () => {
     expect(pack.questionForRevision(capstone?.reviewedRevisionId ?? "")).toBe(
       region.capstoneQuestion
     );
+  });
+
+  it("keeps Quest II receipts on the Quest II reviewed sequence", () => {
+    const receipt = {
+      questId: "quest_ii_offline_test_123",
+      seed: "QUEST-II-OFFLINE",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      learningDeckId: "mixed-trail",
+      learningDeckRevision: MIXED_TRAIL_REVISION,
+      initialQuestionOrdinal: 0,
+      initialUsedQuestionIds: []
+    };
+    const sequence = createOfflineQuestionSequence(receipt);
+    const question = sequence?.next({
+      challenge: { wardenId: 0, attempt: 0, kind: "warden" }
+    });
+
+    expect(question?.id).toMatch(/^quest-ii-/);
+    expect(question?.reviewedRevisionId).toMatch(/^quest-ii:/);
   });
 });

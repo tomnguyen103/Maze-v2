@@ -1,6 +1,10 @@
 import { getLearningMetadata } from "./learning-objectives.js";
 import { getBundledQuestion } from "./question-bank.js";
 import {
+  getQuestContentPackId,
+  QUEST_II_CONTENT_PACK_ID
+} from "../game/quest-content.js";
+import {
   getPublishedLearningDeckOption
 } from "./learning-deck-catalog.js";
 import { getLabyrinthConfig } from "./quest-levels.js";
@@ -33,6 +37,7 @@ const NUMBER_TRAIL_TOPICS = new Set([
  *   challengeKind: "warden" | "gate-warden",
  *   labyrinthNumber: number,
  *   questionOrdinal: number,
+ *   questId?: string,
  *   learningDeckId?: string | null,
  *   learningDeckRevision?: string | null
  * }} request
@@ -41,6 +46,12 @@ const NUMBER_TRAIL_TOPICS = new Set([
  */
 export function selectOfflineLearningDeckQuestion(request, usedQuestionIds) {
   const used = new Set(usedQuestionIds);
+  if (getQuestContentPackId(request.questId) === QUEST_II_CONTENT_PACK_ID) {
+    const question = getBundledQuestion(request);
+    return used.has(question.id)
+      ? null
+      : { question, source: /** @type {"mixed"} */ ("mixed") };
+  }
   const deckId = request.learningDeckId ?? null;
   if (!deckId) {
     return mixedSelection(request, used);

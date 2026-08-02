@@ -8,7 +8,7 @@ import {
 } from "../src/game/offline-local-scrub.js";
 import { createOfflineContinuityController } from "../src/game/offline-continuity-controller.js";
 
-/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string }} TestRunIdentity */
+/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} TestRunIdentity */
 
 function createStorage() {
   /** @type {Map<string, string>} */
@@ -52,6 +52,7 @@ function createReceipt(identity) {
       labyrinthNumber: identity.labyrinthNumber,
       rulesetRevision: identity.rulesetRevision,
       contentPackHash: identity.contentPackHash,
+      ...(identity.questId ? { questId: identity.questId } : {}),
       issuedAt: "2026-08-01T12:00:00.000Z",
       playExpiresAt: "2026-08-08T12:00:00.000Z",
       submissionExpiresAt: "2026-08-10T12:00:00.000Z"
@@ -71,6 +72,51 @@ function createAssetPackage() {
 }
 
 describe("offline continuity controller", () => {
+  it("keeps the signed Quest identity bound during offline recovery", async () => {
+    const storage = createStorage();
+    const run = createRun("OFFLINE-CONTROLLER-QUEST-II", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "echo-hush-v1" }
+    });
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_controller_123"
+    };
+    const receipt = createReceipt(identity);
+    const controller = createOfflineContinuityController({
+      storage,
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
+      accountScope: "user_offline_01"
+    });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt: {
+          ...receipt,
+          binding: {
+            ...receipt.binding,
+            questId: "quest_ii_other_456"
+          }
+        },
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt,
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("persists a receipt-bound v2 log and recovers it after a controller restart", async () => {
     const storage = createStorage();
     const run = createRun("OFFLINE-CONTROLLER-SEED", {

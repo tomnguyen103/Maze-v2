@@ -7,7 +7,7 @@ import {
 } from "./offline-local-scrub.js";
 import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-selection.js";
 
-/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string }} OfflineRunIdentity */
+/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} OfflineRunIdentity */
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, contentPackHash?: string }} OfflineRunLocator */
 /** @typedef {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} OfflineAssetPackage */
 /** @typedef {import("../../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt */
@@ -109,7 +109,7 @@ export function createOfflineContinuityRuntime({
   /** @type {OfflineRunIdentity | null} */
   let runIdentity = null;
   let active = false;
-  /** @type {{ learningDeckId: string, learningDeckRevision: string } | null} */
+  /** @type {{ questId?: string, learningDeckId: string, learningDeckRevision: string } | null} */
   let offlineDeckBinding = null;
   let recordingUnavailable = false;
   let preparationRunId = "";
@@ -136,7 +136,10 @@ export function createOfflineContinuityRuntime({
       levelId: locator.levelId,
       labyrinthNumber: locator.labyrinthNumber,
       rulesetRevision: locator.rulesetRevision ?? getRun().ruleset.revision,
-      contentPackHash: receipt.binding.contentPackHash
+      contentPackHash: receipt.binding.contentPackHash,
+      ...(typeof receipt.binding.questId === "string"
+        ? { questId: receipt.binding.questId }
+        : {})
     });
   }
 
@@ -413,6 +416,9 @@ export function createOfflineContinuityRuntime({
     return typeof binding.learningDeckId === "string" &&
       typeof binding.learningDeckRevision === "string"
       ? {
+          ...(typeof binding.questId === "string"
+            ? { questId: binding.questId }
+            : {}),
           learningDeckId: binding.learningDeckId,
           learningDeckRevision: binding.learningDeckRevision
         }
@@ -568,7 +574,7 @@ export function createOfflineContinuityRuntime({
   }
 
   /**
-   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number, learningDeckId?: string, learningDeckRevision?: string }} snapshot
+   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number, questId?: string, learningDeckId?: string, learningDeckRevision?: string }} snapshot
    * @param {string[]} usedQuestionIds
    */
   function selectQuestion(snapshot, usedQuestionIds) {

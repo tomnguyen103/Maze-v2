@@ -142,4 +142,24 @@ describe("offline Learning Deck selection", () => {
       )
     ).toBeNull();
   });
+
+  it("selects the Quest II static card family before Deck selection", () => {
+    const request = {
+      questId: "quest_ii_offline_deck_test_123",
+      learningDeckId: "mixed-trail",
+      learningDeckRevision: MIXED_TRAIL_REVISION,
+      levelId: "bright-start",
+      seed: "OFFLINE-QUEST-II-DECK",
+      wardenId: 0,
+      attempt: 0,
+      labyrinthNumber: 1,
+      questionOrdinal: 0,
+      challengeKind: /** @type {const} */ ("warden")
+    };
+
+    const selected = selectOfflineLearningDeckQuestion(request, []);
+
+    expect(selected?.source).toBe("mixed");
+    expect(selected?.question.id).toMatch(/^quest-ii-/);
+  });
 });

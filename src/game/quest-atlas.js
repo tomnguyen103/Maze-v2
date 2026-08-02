@@ -7,6 +7,11 @@ import {
 } from "../questions/quest-levels.js";
 import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
+import {
+  getQuestContentPackId,
+  getQuestIIRegions,
+  QUEST_II_CONTENT_PACK_ID
+} from "./quest-content.js";
 import { getFossilSnapshot } from "./fossil-atlas-state.js";
 import {
   fossilsForLabyrinth,
@@ -100,6 +105,9 @@ export function projectQuestAtlas(
   if (!learningDeck) {
     throw new Error("Quest Progress has an unavailable Learning Deck.");
   }
+  const contentPackId = getQuestContentPackId(progress.questId);
+  const questIIRegions =
+    contentPackId === QUEST_II_CONTENT_PACK_ID ? getQuestIIRegions() : [];
   const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
   const normalizedFossilCollection = normalizeFossilCollection(fossilCollectionInput);
   const fossilCollection = normalizedFossilCollection?.questId === progress.questId
@@ -111,15 +119,17 @@ export function projectQuestAtlas(
     const band = getDifficultyBand(start);
     const metadata = REGION_METADATA[band.id];
     const theme = getRegionTheme(band.id);
+    const questIIRegion = questIIRegions[regionIndex] ?? null;
     const nodes = Array.from({ length: 4 }, (_, offset) =>
       projectNode(
         progress,
         start + offset,
         band,
-        metadata.fieldNotes[offset],
+        questIIRegion?.storylets[offset]?.body ?? metadata.fieldNotes[offset],
         level.questionGuide,
         retainedLandmarkIds,
-        fossilCollection
+        fossilCollection,
+        questIIRegion?.storylets[offset] ?? null
       )
     );
     const sigilRestored = progress.completedLabyrinths >= end;
@@ -128,6 +138,9 @@ export function projectQuestAtlas(
       index: regionIndex,
       label: band.label,
       themeName: theme?.name ?? band.label,
+      arcName: questIIRegion?.name ?? null,
+      learningMove: questIIRegion?.learningMove ?? null,
+      trailTwistRevision: questIIRegion?.trailTwistRevision ?? null,
       wardenGuild: theme?.wardenGuild ?? null,
       motif: metadata.motif,
       rangeLabel: `Labyrinths ${start}-${end}`,
@@ -135,6 +148,18 @@ export function projectQuestAtlas(
       sigilLabel: sigilRestored
         ? `${theme?.sigilName ?? "Sigil"} restored`
         : `${theme?.sigilName ?? "Sigil"} restores at Labyrinth ${end}`,
+      ...(questIIRegion
+        ? {
+            storylets: questIIRegion.storylets.map((storylet) => ({
+              id: storylet.id,
+              labyrinthNumber: storylet.labyrinthNumber,
+              beat: storylet.beat,
+              title: storylet.title,
+              body: storylet.body,
+              gameplayTie: storylet.gameplayTie
+            }))
+          }
+        : {}),
       nodes
     };
   });
@@ -145,6 +170,11 @@ export function projectQuestAtlas(
   return {
     version: 2,
     levelId: progress.levelId,
+    contentPackId,
+    contentPackLabel:
+      contentPackId === QUEST_II_CONTENT_PACK_ID
+        ? "Quest II · Living Regions"
+        : "Quest I",
     learningDeckId: learningDeck.deckId,
     // The revision this Quest pinned, not whatever the Deck publishes now.
     learningDeckRevision: progress.learningDeckRevision,
@@ -187,6 +217,14 @@ export async function projectAtlas(progress, options = {}) {
  * @param {string} learningFocus
  * @param {ReadonlySet<string>} retainedLandmarkIds
  * @param {FossilCollection} fossilCollection
+ * @param {{
+ *   id: string,
+ *   beat: string,
+ *   title: string,
+ *   body: string,
+ *   gameplayTie: string,
+ *   eventKind: string
+ * } | null} storylet
  */
 function projectNode(
   progress,
@@ -195,7 +233,8 @@ function projectNode(
   fieldNote,
   learningFocus,
   retainedLandmarkIds,
-  fossilCollection
+  fossilCollection,
+  storylet
 ) {
   const id = `${band.id}-${labyrinthNumber}`;
   const milestone = isGateWardenMilestone(labyrinthNumber);
@@ -224,6 +263,16 @@ function projectNode(
     difficultyBand: band.label,
     fieldNote,
     learningFocus,
+    storylet: storylet
+      ? {
+          id: storylet.id,
+          beat: storylet.beat,
+          title: storylet.title,
+          body: storylet.body,
+          gameplayTie: storylet.gameplayTie,
+          eventKind: storylet.eventKind
+        }
+      : null,
     completed,
     current,
     watchTrailAvailable: completed && retainedLandmarkIds.has(id),

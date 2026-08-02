@@ -1265,6 +1265,128 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   );
 });
 
+test("presents Quest II storylets and reviewed Warden cards across the player path", async ({
+  page
+}) => {
+  const questId = "quest_ii_browser_living_regions";
+  const seed = "QUEST-II-BROWSER";
+  await page.addInitScript((storedQuestId) => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: storedQuestId,
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      completedLabyrinths: 3,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, questId);
+  /** @type {Record<string, unknown>[]} */
+  const questionRequests = [];
+  /** @type {ReturnType<typeof getBundledQuestion> | null} */
+  let servedQuestion = null;
+  await page.route("**/api/question**", async (route) => {
+    const request = questionRequestOf(route.request());
+    questionRequests.push(request);
+    const requestedQuestId =
+      typeof request.questId === "string" ? request.questId : "";
+    expect(requestedQuestId).toMatch(/^quest_ii_/iu);
+    servedQuestion = getBundledQuestion({
+      questId: requestedQuestId,
+      levelId: "trail-scout",
+      seed,
+      wardenId: Number(request.wardenId ?? 0),
+      attempt: Number(request.attempt ?? 0),
+      labyrinthNumber: 4,
+      questionOrdinal: Number(request.questionOrdinal ?? 0),
+      challengeKind: request.challengeKind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ question: servedQuestion, source: "bundled" })
+    });
+  });
+
+  const planSeedRun = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 4),
+    ruleset: getQuestRunRuleset(4)
+  });
+  await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
+  await expectGameReady(page);
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  await expect(page.locator("#story-log [data-kind='region']")).toContainText(
+    "Hushline Orchard"
+  );
+  const maze = page.getByLabel(/Interactive maze/);
+  await maze.focus();
+  const challenge = page.locator("#challenge-dialog");
+  let simulatedRun = planSeedRun;
+  for (let step = 0; step < 120; step += 1) {
+    if (simulatedRun.status === "challenge") {
+      await expect(challenge).toBeVisible({ timeout: 15_000 });
+      break;
+    }
+    const target =
+      simulatedRun.echoes.find((echo) => !echo.collected) ?? simulatedRun.gate;
+    const direction = pathTo(simulatedRun, target)[0];
+    if (!direction) {
+      throw new Error("Expected a path to a Quest II Warden or Echo.");
+    }
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    simulatedRun = applyAction(simulatedRun, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+    if (await challenge.isVisible()) {
+      break;
+    }
+  }
+
+  await expect(challenge).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#challenge-question")).toBeFocused();
+  await expect(page.locator("#challenge-question")).toContainText(
+    "Hushline Orchard"
+  );
+  await expect(page.locator("#challenge-source")).toContainText(
+    "trusty question card"
+  );
+  if (!servedQuestion) {
+    throw new Error("Expected the Quest II reviewed question to be served.");
+  }
+  const answerId = /** @type {ReturnType<typeof getBundledQuestion>} */ (
+    servedQuestion
+  ).answerId;
+  await page.locator(`[data-answer="${answerId}"]`).click();
+  await expect(challenge).not.toBeVisible();
+  expect(questionRequests.length).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#atlas-progress")).toContainText(
+    "Quest II · Living Regions"
+  );
+  await expect(atlas.locator("[data-atlas-region='foundation']"))
+    .toContainText("Hushline Orchard");
+  const storyletNode = atlas.locator(
+    "[data-atlas-landmark='foundation-4']"
+  );
+  await storyletNode.focus();
+  await page.keyboard.press("Enter");
+  await expect(atlas.locator("[data-atlas-storylet='quest-ii-foundation-4']"))
+    .toBeVisible();
+  await expect(atlas.locator("[data-atlas-storylet-title]")).toHaveText(
+    "The orchard answers"
+  );
+  await expect(atlas.locator("[data-atlas-storylet-tie]")).toContainText(
+    "echo-hush-v1:gate-warden"
+  );
+});
+
 test("lazy Atlas keeps semantic map and list parity across a URL reload", async ({
   page
 }) => {

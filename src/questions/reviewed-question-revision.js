@@ -77,7 +77,7 @@ export function reviewedQuestionCoreDigest(rawQuestion) {
 
 /**
  * @param {unknown} rawQuestion
- * @param {"bundled" | "learning-deck"} namespace
+ * @param {"bundled" | "learning-deck" | "quest-ii"} namespace
  * @param {unknown} [echoLens]
  */
 export function createReviewedQuestionRevisionId(

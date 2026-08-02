@@ -44,6 +44,30 @@ const REQUEST = {
 const PROVIDER_QUESTION = getBundledQuestion(REQUEST);
 
 describe("Quest Questions", () => {
+  it("anchors Quest II to its reviewed static catalog before database fallback", async () => {
+    const request = {
+      ...REQUEST,
+      questId: "quest_ii_service_test_123"
+    };
+    const publishedQuestion = vi.fn(async () => null);
+    const fetchImpl = vi.fn();
+    const service = createQuestionService({
+      env: { QUESTION_PROVIDER: "bundled" },
+      fetchImpl,
+      questionBank: { publishedQuestion }
+    });
+
+    const result = await service.getQuestion(request);
+
+    expect(result).toMatchObject({
+      source: "bundled",
+      learningDeckSource: "mixed",
+      question: getBundledQuestion(request)
+    });
+    expect(publishedQuestion).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("maps each Quest Level to a Run configuration and Question guide", () => {
     expect(QUEST_LEVELS.map((level) => level.id)).toEqual([
       "bright-start",
@@ -434,6 +458,24 @@ describe("Quest Questions", () => {
       learningDeckRevision: null,
       usedQuestionIds: []
     });
+    expect(
+      parseQuestionRequest(
+        new URL(
+          "http://local/api/question?level=bright-start&seed=STORY-17&warden=2&attempt=1&labyrinth=5&question=7&quest=quest_ii_route_test_123"
+        )
+      ).questId
+    ).toBe("quest_ii_route_test_123");
+    expect(
+      parseQuestionBody({
+        levelId: "bright-start",
+        seed: "STORY-17",
+        wardenId: 2,
+        attempt: 1,
+        labyrinthNumber: 5,
+        questionOrdinal: 7,
+        questId: "quest_ii_route_test_123"
+      }).questId
+    ).toBe("quest_ii_route_test_123");
     expect(
       parseQuestionRequest(
         new URL(

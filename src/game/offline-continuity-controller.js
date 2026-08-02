@@ -34,7 +34,8 @@ const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision: string,
- *   contentPackHash: string
+ *   contentPackHash: string,
+ *   questId?: string
  * }} OfflineRunIdentity
  * @typedef {{
  *   runId: string,
@@ -71,7 +72,8 @@ function isRunIdentity(value) {
     typeof value.levelId === "string" &&
     Number.isInteger(value.labyrinthNumber) &&
     typeof value.rulesetRevision === "string" &&
-    typeof value.contentPackHash === "string"
+    typeof value.contentPackHash === "string" &&
+    (value.questId === undefined || typeof value.questId === "string")
   );
 }
 
@@ -83,7 +85,8 @@ function sameRunIdentity(left, right) {
     left.levelId === right.levelId &&
     left.labyrinthNumber === right.labyrinthNumber &&
     left.rulesetRevision === right.rulesetRevision &&
-    left.contentPackHash === right.contentPackHash
+    left.contentPackHash === right.contentPackHash &&
+    left.questId === right.questId
   );
 }
 
@@ -99,6 +102,8 @@ function isReceipt(value) {
     Number.isInteger(value.binding.labyrinthNumber) &&
     typeof value.binding.rulesetRevision === "string" &&
     typeof value.binding.contentPackHash === "string" &&
+    (value.binding.questId === undefined ||
+      typeof value.binding.questId === "string") &&
     typeof value.binding.playExpiresAt === "string" &&
     typeof value.binding.submissionExpiresAt === "string"
   );
@@ -112,7 +117,10 @@ function receiptMatchesRun(receipt, run) {
     receipt.binding.levelId === run.levelId &&
     receipt.binding.labyrinthNumber === run.labyrinthNumber &&
     receipt.binding.rulesetRevision === run.rulesetRevision &&
-    receipt.binding.contentPackHash === run.contentPackHash
+    receipt.binding.contentPackHash === run.contentPackHash &&
+    (run.questId === undefined
+      ? receipt.binding.questId === undefined
+      : receipt.binding.questId === run.questId)
   );
 }
 
@@ -605,7 +613,10 @@ export function createOfflineContinuityController({
       labyrinthNumber: run.labyrinthNumber,
       rulesetRevision:
         run.rulesetRevision ?? receipt.binding.rulesetRevision,
-      contentPackHash: run.contentPackHash ?? receipt.binding.contentPackHash
+      contentPackHash: run.contentPackHash ?? receipt.binding.contentPackHash,
+      ...(typeof receipt.binding.questId === "string"
+        ? { questId: receipt.binding.questId }
+        : {})
     });
     const binding = validateBinding(recoveredRun, receipt);
     if (!binding.ok) {
