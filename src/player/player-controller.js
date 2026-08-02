@@ -212,12 +212,12 @@ export function createPlayerController({
       }
       return clerkBrowser.openSignUp();
     },
-    /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
+    /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} run */
     async authorizeRun(run) {
       return client.authorizeRun(run);
     },
     /**
-     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }} run
      * @param {string} deviceInstallationNonce
      */
     async issueOfflineReceipt(run, deviceInstallationNonce) {

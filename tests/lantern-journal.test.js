@@ -79,6 +79,45 @@ describe("Lantern Journal", () => {
     ).toBeNull();
   });
 
+  it("records Quest II Warden and Gate Warden outcomes under reviewed IDs", () => {
+    const questQuestion = getBundledQuestion({
+      questId: "quest_ii_journal_test_123",
+      levelId: "trail-scout",
+      seed: "QUEST-II-JOURNAL",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4
+    });
+    const capstone = getBundledQuestion({
+      questId: "quest_ii_journal_test_123",
+      levelId: "trail-scout",
+      seed: "QUEST-II-JOURNAL",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4,
+      challengeKind: "gate-warden"
+    });
+
+    let journal = recordLearningOutcome(
+      createLanternJournal(),
+      questQuestion,
+      "correct",
+      () => EVENT_IDS[0]
+    );
+    journal = recordLearningOutcome(
+      journal,
+      capstone,
+      "hint",
+      () => EVENT_IDS[1]
+    );
+
+    expect(journal.events.map((event) => event.questionId)).toEqual([
+      "quest-ii-trail-scout-developing-4",
+      "quest-ii-capstone-trail-scout-developing"
+    ]);
+    expect(normalizeLanternJournal(journal)).toEqual(journal);
+  });
+
   it("aggregates repeated outcomes deterministically by learning objective", () => {
     let journal = createLanternJournal();
     journal = recordLearningOutcome(

@@ -7,9 +7,10 @@ import {
   OFFLINE_RECEIPT_PATH
 } from "../server/offline-receipt-route.js";
 
-/** @type {{ runId: string, seed: string, levelId: "trail-scout", labyrinthNumber: number }} */
+/** @type {{ runId: string, questId: string, seed: string, levelId: "trail-scout", labyrinthNumber: number }} */
 const RUN = {
   runId: "access_01J1MOSSWATCH",
+  questId: "quest_01MOSS123",
   seed: "MOSS-WATCH-11",
   levelId: "trail-scout",
   labyrinthNumber: 4
@@ -214,6 +215,31 @@ describe("Offline Continuity receipt route", () => {
       learningDeckId: "number-trail",
       initialQuestionOrdinal: 7
     });
+  });
+
+  it("rejects a Run whose active Quest ID is stale", async () => {
+    const harness = createHarness({
+      questProgress: {
+        ...DEFAULT_QUEST_PROGRESS,
+        questId: "quest_ii_current_123"
+      }
+    });
+    const result = response();
+
+    await harness.handler(
+      request({
+        ...RUN,
+        questId: "quest_ii_stale_123",
+        deviceInstallationNonce: "installation_nonce_01MOSS"
+      }),
+      result.output
+    );
+
+    expect(result.output.statusCode).toBe(409);
+    expect(result.body()).toEqual({
+      error: "The Quest Progress is not ready for Offline Continuity."
+    });
+    expect(harness.issueReceipt).not.toHaveBeenCalled();
   });
 
   it("does not disclose a receipt to a second device on an idempotent retry", async () => {

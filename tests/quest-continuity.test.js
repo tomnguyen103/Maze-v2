@@ -113,6 +113,21 @@ describe("Quest Continuity", () => {
     });
   });
 
+  it("keeps Quest II identities exact at the cloud reconciliation boundary", () => {
+    const local = progressAt(4, "quest_ii_local_123");
+    const cloud = {
+      progress: progressAt(4, "quest_ii_cloud_456"),
+      revision: 2,
+      updatedAt: "2026-08-02T00:00:00.000Z"
+    };
+
+    expect(reconcileQuestProgress(local, cloud)).toEqual({
+      kind: "conflict",
+      local,
+      cloud
+    });
+  });
+
   it("rejects corrupted records that reuse a Quest ID across Quest Levels", () => {
     expect(() =>
       mergeSameQuestProgress(

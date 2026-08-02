@@ -60,6 +60,16 @@ import {
   saveQuestProgress
 } from "./game/quest-progress.js";
 import {
+  createQuestId,
+  getNextQuestContentPackId,
+  getQuestContentPackId,
+  getQuestContentPackLabel,
+  getQuestIIStorylet,
+  getQuestIIStoryletLogEntry,
+  isQuestIIStoryletTriggered,
+  QUEST_II_CONTENT_PACK_ID
+} from "./game/quest-content.js";
+import {
   isSameQuestIdentity,
   selectDeferredQuestProgress
 } from "./game/quest-continuity.js";
@@ -1474,6 +1484,7 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 
   if (button.dataset.recordAction === "replay") {
+    const record = runRecords[Number(button.dataset.recordIndex)];
     await startRecordedLabyrinth(
       button.dataset.level ?? "trail-scout",
       Number(button.dataset.labyrinth ?? 1),
@@ -1481,7 +1492,8 @@ elements.runRecords.addEventListener("click", async (event) => {
       {
         atlasRegionId: button.dataset.region,
         revision: button.dataset.ruleset
-      }
+      },
+      record?.questId
     );
     return;
   }
@@ -1817,6 +1829,15 @@ async function openCampfireResume() {
   });
 }
 
+/** @param {number} labyrinthNumber @returns {ReturnType<typeof getQuestIIStorylet> | null} */
+function questIIStoryletFor(labyrinthNumber) {
+  try {
+    return getQuestIIStorylet(labyrinthNumber);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {{
  *   version: 2 | 3,
@@ -1826,7 +1847,8 @@ async function openCampfireResume() {
  *   levelId: string,
  *   labyrinthNumber: number,
  *   atlasRegionId?: string,
- *   rulesetRevision?: string
+ *   rulesetRevision?: string,
+ *   questId?: string
  * }} locator
  * @param {ReturnType<typeof createDailyContract> | null} [daily]
  * @param {ReturnType<typeof createRun> | null} [recoveredRun]
@@ -1887,6 +1909,14 @@ async function startRun(locator, daily = null, recoveredRun = null) {
       : `Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT} begins. Recover every Echo.`,
     "start"
   );
+  const questIIStorylet =
+    !daily &&
+    getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID
+      ? questIIStoryletFor(currentLabyrinthNumber)
+      : null;
+  if (questIIStorylet?.eventKind === "region-arrival") {
+    addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
+  }
   if (elements.resultDialog.open) {
     elements.resultDialog.close();
   }
@@ -2217,7 +2247,10 @@ function loadOfflineContinuityBridge() {
       createOfflineContinuityBridge(
         playerController,
         elements.challengeSource,
-        () => activeRunLocator,
+        () =>
+          activeRunLocator
+            ? { ...activeRunLocator, questId: questProgress.questId }
+            : null,
         () => run,
         () => activeFirstLight,
         () => activeDaily !== null,
@@ -2268,10 +2301,18 @@ function loadOfflineContinuityBridge() {
  * Continuity. The client verifies the server response before asking the
  * worker to pin anything; a failed preparation never blocks the online Run.
  *
- * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} locator
  */
 function prepareOfflineContinuity(locator) {
-  return loadOfflineContinuityBridge().then((bridge) => bridge.prepare(locator));
+  return loadOfflineContinuityBridge().then((bridge) =>
+    bridge.prepare({
+      ...locator,
+      questId:
+        typeof locator.questId === "string"
+          ? locator.questId
+          : questProgress.questId
+    })
+  );
 }
 
 function clearOfflineActiveRun() {
@@ -2398,18 +2439,24 @@ async function startFreshRun(replaceRunIdentity = false) {
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
-    locator = withRunAccessId(
-      replaceRunIdentity
-        ? {
-            ...activeRunLocator,
-            version: 3,
-            runId: createRunAccessId(),
-            pending: false
-          }
-        : activeRunLocator
-    );
+    locator = {
+      ...withRunAccessId(
+        replaceRunIdentity
+          ? {
+              ...activeRunLocator,
+              version: 3,
+              runId: createRunAccessId(),
+              pending: false
+            }
+          : activeRunLocator
+      ),
+      questId: questProgress.questId
+    };
   } else {
-    locator = createFreshLocator(levelId, labyrinthNumber);
+    locator = {
+      ...createFreshLocator(levelId, labyrinthNumber),
+      questId: questProgress.questId
+    };
   }
   if (!(await authorizeRunLocator(locator))) {
     return false;
@@ -2444,16 +2491,19 @@ async function startSharedRun(
   if (!ruleset) {
     throw new Error("Run ruleset identity is invalid.");
   }
-  const locator = withRunAccessId({
-    version: 3,
-    ...(runId ? { runId } : {}),
-    pending: false,
-    seed,
-    levelId,
-    labyrinthNumber,
-    atlasRegionId: ruleset.atlasRegionId,
-    rulesetRevision: ruleset.revision
-  });
+  const locator = {
+    ...withRunAccessId({
+      version: 3,
+      ...(runId ? { runId } : {}),
+      pending: false,
+      seed,
+      levelId,
+      labyrinthNumber,
+      atlasRegionId: ruleset.atlasRegionId,
+      rulesetRevision: ruleset.revision
+    }),
+    questId: questProgress.questId
+  };
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
@@ -2512,7 +2562,8 @@ function createFreshLocator(levelId, labyrinthNumber) {
         levelId: level.id,
         labyrinthNumber,
         atlasRegionId: ruleset.atlasRegionId,
-        rulesetRevision: ruleset.revision
+        rulesetRevision: ruleset.revision,
+        questId: questProgress.questId
       });
     }
   }
@@ -2529,7 +2580,8 @@ function createFreshLocator(levelId, labyrinthNumber) {
         levelId: level.id,
         labyrinthNumber,
         atlasRegionId: ruleset.atlasRegionId,
-        rulesetRevision: ruleset.revision
+        rulesetRevision: ruleset.revision,
+        questId: questProgress.questId
       });
     }
   }
@@ -2702,25 +2754,31 @@ async function startNewQuest(
   const nextProgress = createQuestProgress(
     selectedLevel.id,
     1,
-    undefined,
+    createQuestId(getNextQuestContentPackId(questProgress)),
     learningDeck
   );
   const ruleset = getQuestRunRuleset(nextProgress.labyrinthNumber);
   const locator = seed
-    ? withRunAccessId({
-        version: 3,
-        runId: createRunAccessId(),
-        pending: false,
-        seed,
-        levelId: nextProgress.levelId,
-        labyrinthNumber: nextProgress.labyrinthNumber,
-        atlasRegionId: ruleset.atlasRegionId,
-        rulesetRevision: ruleset.revision
-      })
-    : createFreshLocator(
-        nextProgress.levelId,
-        nextProgress.labyrinthNumber
-      );
+    ? {
+        ...withRunAccessId({
+          version: 3,
+          runId: createRunAccessId(),
+          pending: false,
+          seed,
+          levelId: nextProgress.levelId,
+          labyrinthNumber: nextProgress.labyrinthNumber,
+          atlasRegionId: ruleset.atlasRegionId,
+          rulesetRevision: ruleset.revision
+        }),
+        questId: nextProgress.questId
+      }
+    : {
+        ...createFreshLocator(
+          nextProgress.levelId,
+          nextProgress.labyrinthNumber
+        ),
+        questId: nextProgress.questId
+      };
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
@@ -2744,38 +2802,46 @@ async function startNewQuest(
  * @param {number} labyrinthNumber
  * @param {string} seed
  * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
+ * @param {string} [recordQuestId]
  */
 async function startRecordedLabyrinth(
   levelId,
   labyrinthNumber,
   seed,
-  rulesetIdentity
+  rulesetIdentity,
+  recordQuestId
 ) {
   const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
   if (!ruleset) {
     throw new Error("Run ruleset identity is invalid.");
   }
-  const locator = withRunAccessId({
-    version: 3,
-    runId: createRunAccessId(),
-    pending: false,
-    seed,
+  const nextProgress = createQuestProgress(
     levelId,
     labyrinthNumber,
-    atlasRegionId: ruleset.atlasRegionId,
-    rulesetRevision: ruleset.revision
-  });
+    createQuestId(
+      typeof recordQuestId === "string"
+        ? getQuestContentPackId(recordQuestId)
+        : getQuestContentPackId(questProgress.questId)
+    ),
+    learningDeckForNewQuest(questProgress)
+  );
+  const locator = {
+    ...withRunAccessId({
+      version: 3,
+      runId: createRunAccessId(),
+      pending: false,
+      seed,
+      levelId,
+      labyrinthNumber,
+      atlasRegionId: ruleset.atlasRegionId,
+      rulesetRevision: ruleset.revision
+    }),
+    questId: nextProgress.questId
+  };
   if (!(await authorizeRunLocator(locator))) {
     return false;
   }
-  questProgress = saveQuestProgress(
-    createQuestProgress(
-      levelId,
-      labyrinthNumber,
-      undefined,
-      learningDeckForNewQuest(questProgress)
-    )
-  );
+  questProgress = saveQuestProgress(nextProgress);
   void loadQuestContinuityController("new-quest").then((controller) =>
     controller?.queueBoundary(questProgress) ?? false
   );
@@ -2858,7 +2924,7 @@ async function canOpenStartChoice() {
 }
 
 /**
- * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} locator
  * @param {boolean} [resumingAdmittedRun]
  */
 async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
@@ -3576,6 +3642,25 @@ function transition(action) {
     ) {
       addStory(eventMessage, eventType);
     }
+    const questIIStorylet =
+      !activeFirstLight &&
+      activeDaily === null &&
+      getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID
+        ? questIIStoryletFor(currentLabyrinthNumber)
+        : null;
+    if (
+      !activeFirstLight &&
+      activeDaily === null &&
+      getQuestContentPackId(questProgress.questId) === QUEST_II_CONTENT_PACK_ID &&
+      questIIStorylet &&
+      isQuestIIStoryletTriggered(
+        questIIStorylet,
+        eventType,
+        run.event.message
+      )
+    ) {
+      addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
+    }
   }
   if (trailCompassActive && trailCompassController) {
     // Trail Compass owns the one polite status per player action, and derives
@@ -3894,6 +3979,7 @@ async function loadChallengeQuestion() {
     return;
   }
   const challengeSnapshot = {
+    questId: questProgress.questId,
     levelId: currentLevel.id,
     seed: run.seed,
     wardenId: run.challenge.wardenId,
@@ -3962,6 +4048,7 @@ async function loadChallengeQuestion() {
           labyrinthNumber: request.labyrinthNumber,
           questionOrdinal: request.questionOrdinal,
           challengeKind: request.challengeKind,
+          questId: questProgress.questId,
           learningDeckId: questProgress.learningDeckId,
           learningDeckRevision: questProgress.learningDeckRevision,
           usedQuestionIds: questProgress.usedQuestionIds
@@ -4035,11 +4122,13 @@ async function loadChallengeQuestion() {
  *   attempt: number,
  *   challengeKind: "warden" | "gate-warden",
  *   labyrinthNumber: number,
- *   questionOrdinal: number
+ *   questionOrdinal: number,
+ *   questId?: string
  * }} request
  */
 function questionRequestIdentifier(request) {
   return [
+    request.questId ?? "quest-i",
     request.levelId,
     request.seed,
     request.wardenId,
@@ -4097,10 +4186,11 @@ function updateInterface() {
     const questLevelPrefix = document.createElement("span");
     questLevelPrefix.dataset.questLabelPrefix = "";
     questLevelPrefix.textContent = `Quest Level ${currentLevel.number} · `;
+    const contentPackLabel = getQuestContentPackLabel(questProgress.questId);
     elements.questLevelName.replaceChildren(
       questLevelPrefix,
       document.createTextNode(
-        `${currentLevel.name} · ${currentLearningDeckOption().label}`
+        `${contentPackLabel}${currentLevel.name} · ${currentLearningDeckOption().label}`
       )
     );
   }
@@ -4994,6 +5084,7 @@ function renderRunRecords() {
       replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
       replay.dataset.region = ruleset.atlasRegionId;
       replay.dataset.ruleset = ruleset.revision;
+      replay.dataset.recordIndex = String(index);
       replay.dataset.recordAction = "replay";
       replay.textContent = "Play This Seed";
       replay.setAttribute("aria-label", `Play seed ${record.seed}`);

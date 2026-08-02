@@ -116,7 +116,7 @@ function renderAtlas(
             atlas.fossilCount === 1 ? "memory" : "memories"
           } kept.`;
   elements.progress.textContent =
-    `${atlas.learningDeckLabel}. ` +
+    `${atlas.contentPackLabel}. ${atlas.learningDeckLabel}. ` +
     `${atlas.completedLabyrinths} of ${atlas.totalLabyrinths} Labyrinths mapped. ` +
     `${atlas.restoredSigils} of ${atlas.regions.length} Sigils restored. ` +
     `${fossilGuidance} ${milestoneGuidance}`;
@@ -171,7 +171,7 @@ function renderAtlas(
       title.textContent = region.label;
       const range = document.createElement("span");
       range.textContent =
-        `${region.themeName} · ${region.rangeLabel} · ${region.motif}`;
+        `${region.arcName ? `${region.arcName} · ` : ""}${region.themeName} · ${region.rangeLabel} · ${region.motif}`;
       heading.append(title, range);
 
       const sigil = document.createElement("p");
@@ -497,6 +497,24 @@ function renderDetail(
   note.className = "atlas-detail__note";
   note.textContent = node.fieldNote;
   detail.replaceChildren(kicker, title, state, facts, note);
+  if (node.storylet) {
+    const storylet = document.createElement("section");
+    storylet.className = "atlas-detail__storylet";
+    storylet.dataset.atlasStorylet = node.storylet.id;
+    const storyletLabel = document.createElement("span");
+    storyletLabel.className = "section-label";
+    storyletLabel.textContent = `${node.storylet.beat} beat`;
+    const storyletTitle = document.createElement("h4");
+    storyletTitle.dataset.atlasStoryletTitle = "";
+    storyletTitle.textContent = node.storylet.title;
+    const storyletBody = document.createElement("p");
+    storyletBody.textContent = node.storylet.body;
+    const storyletTie = document.createElement("p");
+    storyletTie.dataset.atlasStoryletTie = "";
+    storyletTie.textContent = `Gameplay tie: ${node.storylet.gameplayTie}`;
+    storylet.append(storyletLabel, storyletTitle, storyletBody, storyletTie);
+    detail.append(storylet);
+  }
   if (node.fossils.length > 0) {
     const fossilSection = document.createElement("section");
     fossilSection.className = "atlas-detail__fossils";

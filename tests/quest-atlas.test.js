@@ -9,6 +9,8 @@ import {
   createEchoFossil,
   createFossilCollection
 } from "../src/game/quest-fossils.js";
+import { getRegionTheme } from "../src/game/region-theme.js";
+import { getQuestIIRegions } from "../src/game/quest-content.js";
 import { getPublishedLearningDeckOptions } from "../src/questions/learning-deck-catalog.js";
 
 const NUMBER_TRAIL = getPublishedLearningDeckOptions().find(
@@ -157,6 +159,43 @@ describe("Echo Atlas projection", () => {
     expect(
       atlas.regions.flatMap((region) => region.nodes)
         .every((node) => node.fieldNote.length > 0)
+    ).toBe(true);
+  });
+
+  it("projects Quest II arcs and semantic storylets into every Atlas node", () => {
+    const atlas = projectQuestAtlas(
+      createQuestProgress("trail-scout", 6, "quest_ii_atlas_contract")
+    );
+
+    expect(atlas).toMatchObject({
+      contentPackId: "quest-ii",
+      contentPackLabel: "Quest II · Living Regions"
+    });
+    expect(atlas.regions[1]).toMatchObject({
+      arcName: "Windthread Steps",
+      learningMove: "Compare movement choices",
+      trailTwistRevision: "windways-v1"
+    });
+    expect(atlas.regions[1].nodes[1]).toMatchObject({
+      labyrinthNumber: 6,
+      fieldNote: expect.stringContaining("Windway can carry"),
+      storylet: {
+        id: "quest-ii-developing-6",
+        beat: "variation",
+        title: "A longer step",
+        gameplayTie: "windways-v1:windway-used"
+      }
+    });
+    const questIIRegions = getQuestIIRegions();
+    expect(atlas.regions.map((region) => region.motif)).toEqual(
+      questIIRegions.map((region) => region.motif)
+    );
+    expect(atlas.regions.map((region) => getRegionTheme(region.id)?.motif)).toEqual(
+      questIIRegions.map((region) => region.motif)
+    );
+    expect(
+      atlas.regions.flatMap((region) => region.nodes)
+        .every((node) => node.storylet?.id)
     ).toBe(true);
   });
 

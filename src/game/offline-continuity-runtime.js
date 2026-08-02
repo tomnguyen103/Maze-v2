@@ -7,8 +7,9 @@ import {
 } from "./offline-local-scrub.js";
 import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-selection.js";
 
-/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string }} OfflineRunIdentity */
-/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, contentPackHash?: string }} OfflineRunLocator */
+/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} OfflineRunIdentity */
+/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, contentPackHash?: string, questId?: string }} OfflineRunLocator */
+/** @typedef {OfflineRunLocator & { questId: string }} OfflineRunWithQuestId */
 /** @typedef {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} OfflineAssetPackage */
 /** @typedef {import("../../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt */
 /** @typedef {ReturnType<typeof createOfflineContinuityRuntime>} OfflineContinuityRuntime */
@@ -30,7 +31,7 @@ import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-sel
      *   playerController: {
      *     getAuthenticatedUserId: () => string | null,
      *     auth?: () => boolean,
-     *     issueOfflineReceipt: (run: { runId: string, seed: string, levelId: string, labyrinthNumber: number }, nonce: string) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
+     *     issueOfflineReceipt: (run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }, nonce: string) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
      *     retryLanternJournalSync: () => Promise<void>,
      *     submitOfflineRun: (submission: {
  *       idempotencyKey: string,
@@ -41,7 +42,7 @@ import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-sel
  *       actionLog: import("./run-action-log-v2.js").RunActionLogV2
  *     }) => Promise<{ status: "accepted" | "rejected" | "expired" | "invalid", duplicate?: boolean }>
  *   },
- *   getActiveRunLocator: () => { runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string } | null,
+ *   getActiveRunLocator: () => { runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, questId?: string } | null,
  *   getRun: () => ReturnType<typeof import("./game-session.js").createRun>,
  *   isFirstLight: () => boolean,
  *   isDaily: () => boolean,
@@ -109,7 +110,7 @@ export function createOfflineContinuityRuntime({
   /** @type {OfflineRunIdentity | null} */
   let runIdentity = null;
   let active = false;
-  /** @type {{ learningDeckId: string, learningDeckRevision: string } | null} */
+  /** @type {{ questId?: string, learningDeckId: string, learningDeckRevision: string } | null} */
   let offlineDeckBinding = null;
   let recordingUnavailable = false;
   let preparationRunId = "";
@@ -128,7 +129,7 @@ export function createOfflineContinuityRuntime({
     controller.setAccountScope(nextAccountScope);
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string }} locator @param {OfflineReceipt} receipt */
+  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, questId?: string }} locator @param {OfflineReceipt} receipt */
   function offlineRunIdentity(locator, receipt) {
     return /** @type {OfflineRunIdentity} */ ({
       runId: locator.runId,
@@ -136,7 +137,13 @@ export function createOfflineContinuityRuntime({
       levelId: locator.levelId,
       labyrinthNumber: locator.labyrinthNumber,
       rulesetRevision: locator.rulesetRevision ?? getRun().ruleset.revision,
-      contentPackHash: receipt.binding.contentPackHash
+      contentPackHash: receipt.binding.contentPackHash,
+      ...(typeof locator.questId === "string"
+        ? { questId: locator.questId }
+        : {}),
+      ...(typeof receipt.binding.questId === "string"
+        ? { questId: receipt.binding.questId }
+        : {})
     });
   }
 
@@ -152,8 +159,23 @@ export function createOfflineContinuityRuntime({
         identity.runId === locator.runId &&
         identity.seed === locator.seed &&
         identity.levelId === locator.levelId &&
-        identity.labyrinthNumber === locator.labyrinthNumber
+        identity.labyrinthNumber === locator.labyrinthNumber &&
+        questIdentityMatches(identity.questId, locator.questId)
     );
+  }
+
+  /** @param {unknown} left @param {unknown} right */
+  function questIdentityMatches(left, right) {
+    return (
+      left === right ||
+      (left === undefined && !isQuestIIQuestId(right)) ||
+      (right === undefined && !isQuestIIQuestId(left))
+    );
+  }
+
+  /** @param {unknown} value */
+  function isQuestIIQuestId(value) {
+    return typeof value === "string" && /^quest_ii_/iu.test(value);
   }
 
   /** @param {{ ok?: boolean, reason?: string } | null | undefined} result */
@@ -213,7 +235,10 @@ export function createOfflineContinuityRuntime({
       seed: locator.seed,
       levelId: locator.levelId,
       labyrinthNumber: locator.labyrinthNumber,
-      rulesetRevision: locator.rulesetRevision
+      rulesetRevision: locator.rulesetRevision,
+      ...(typeof locator.questId === "string"
+        ? { questId: locator.questId }
+        : {})
     });
     try {
       const recovered = await controller.recover(recoveryLocator);
@@ -267,7 +292,7 @@ export function createOfflineContinuityRuntime({
     });
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator */
+  /** @param {OfflineRunWithQuestId} locator */
   async function prepare(locator) {
     setAccountScope(playerController.getAuthenticatedUserId());
     active = false;
@@ -294,7 +319,7 @@ export function createOfflineContinuityRuntime({
     }
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator */
+  /** @param {OfflineRunWithQuestId} locator */
   async function prepareInternal(locator) {
     try {
       const result = await client.issueAndPin(locator);
@@ -413,6 +438,9 @@ export function createOfflineContinuityRuntime({
     return typeof binding.learningDeckId === "string" &&
       typeof binding.learningDeckRevision === "string"
       ? {
+          ...(typeof binding.questId === "string"
+            ? { questId: binding.questId }
+            : {}),
           learningDeckId: binding.learningDeckId,
           learningDeckRevision: binding.learningDeckRevision
         }
@@ -495,7 +523,10 @@ export function createOfflineContinuityRuntime({
         seed: locator.seed,
         levelId: locator.levelId,
         labyrinthNumber: locator.labyrinthNumber,
-        rulesetRevision: locator.rulesetRevision
+        rulesetRevision: locator.rulesetRevision,
+        ...(typeof locator.questId === "string"
+          ? { questId: locator.questId }
+          : {})
       });
       if (
         recovered.ok !== true ||
@@ -568,7 +599,7 @@ export function createOfflineContinuityRuntime({
   }
 
   /**
-   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number, learningDeckId?: string, learningDeckRevision?: string }} snapshot
+   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number, questId?: string, learningDeckId?: string, learningDeckRevision?: string }} snapshot
    * @param {string[]} usedQuestionIds
    */
   function selectQuestion(snapshot, usedQuestionIds) {

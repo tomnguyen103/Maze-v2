@@ -126,6 +126,27 @@ describe("Offline Continuity Receipt", () => {
     }
   });
 
+  it("keeps legacy Quest I receipt bindings compatible without weakening Quest II", () => {
+    const signer = createOfflineReceiptSigner({
+      privateKey: primary.privateKey,
+      keyId: primary.keyId
+    });
+    const legacyReceipt = signer.issue(binding(), { issuedAt: ISSUED_AT });
+
+    expect(
+      receiptBindingMatches(
+        legacyReceipt,
+        binding({ questId: "quest_legacy_receipt_123" })
+      )
+    ).toBe(true);
+    expect(
+      receiptBindingMatches(
+        legacyReceipt,
+        binding({ questId: "quest_ii_receipt_123" })
+      )
+    ).toBe(false);
+  });
+
   it("refuses to sign a Classroom Run Grant", () => {
     const signer = createOfflineReceiptSigner({
       privateKey: primary.privateKey,

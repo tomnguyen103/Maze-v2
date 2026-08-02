@@ -8,7 +8,7 @@ import {
 } from "../src/game/offline-local-scrub.js";
 import { createOfflineContinuityController } from "../src/game/offline-continuity-controller.js";
 
-/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string }} TestRunIdentity */
+/** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} TestRunIdentity */
 
 function createStorage() {
   /** @type {Map<string, string>} */
@@ -52,6 +52,7 @@ function createReceipt(identity) {
       labyrinthNumber: identity.labyrinthNumber,
       rulesetRevision: identity.rulesetRevision,
       contentPackHash: identity.contentPackHash,
+      ...(identity.questId ? { questId: identity.questId } : {}),
       issuedAt: "2026-08-01T12:00:00.000Z",
       playExpiresAt: "2026-08-08T12:00:00.000Z",
       submissionExpiresAt: "2026-08-10T12:00:00.000Z"
@@ -71,6 +72,102 @@ function createAssetPackage() {
 }
 
 describe("offline continuity controller", () => {
+  it("keeps the signed Quest identity bound during offline recovery", async () => {
+    const storage = createStorage();
+    const run = createRun("OFFLINE-CONTROLLER-QUEST-II", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "echo-hush-v1" }
+    });
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_controller_123"
+    };
+    const receipt = createReceipt(identity);
+    const controller = createOfflineContinuityController({
+      storage,
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
+      accountScope: "user_offline_01"
+    });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt: {
+          ...receipt,
+          binding: {
+            ...receipt.binding,
+            questId: "quest_ii_other_456"
+          }
+        },
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt: createReceipt({ ...identity, questId: undefined }),
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: { ...identity, questId: undefined },
+        receipt,
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt,
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      controller.recover({ ...identity, questId: "quest_ii_other_456" })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+  });
+
+  it("accepts a legacy Quest I receipt that predates Quest identity", async () => {
+    const storage = createStorage();
+    const run = createRun("OFFLINE-CONTROLLER-QUEST-I", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
+    });
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_legacy_controller_123"
+    };
+    const controller = createOfflineContinuityController({
+      storage,
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
+      accountScope: "user_offline_01"
+    });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt: createReceipt({ ...identity, questId: undefined }),
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("persists a receipt-bound v2 log and recovers it after a controller restart", async () => {
     const storage = createStorage();
     const run = createRun("OFFLINE-CONTROLLER-SEED", {
@@ -137,7 +234,10 @@ describe("offline continuity controller", () => {
       wardenCount: 0,
       ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
     });
-    const identity = createRunIdentity(run);
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_terminal_123"
+    };
     const controller = createOfflineContinuityController({
       storage,
       workerClient: {
@@ -175,6 +275,7 @@ describe("offline continuity controller", () => {
       record: {
         runId: identity.runId,
         playerId: "user_offline_01",
+        questId: identity.questId,
         verification: "pending",
         outcome: "won",
         playAuthorityOpen: true
@@ -187,6 +288,7 @@ describe("offline continuity controller", () => {
     expect(record).toMatchObject({
       runId: identity.runId,
       outcome: "won",
+      questId: identity.questId,
       verification: "pending"
     });
     expect(JSON.stringify(storage.dump())).not.toMatch(
@@ -205,7 +307,10 @@ describe("offline continuity controller", () => {
       wardenCount: 0,
       ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
     });
-    const identity = createRunIdentity(run);
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_ii_retry_123"
+    };
     const worker = {
       setRunState: async () => ({ ok: true }),
       release: vi.fn(async () => ({ ok: true }))
@@ -266,6 +371,7 @@ describe("offline continuity controller", () => {
     expect(storage.getItem(OFFLINE_RECEIPT_KEY)).toBeNull();
     expect(storage.getItem(OFFLINE_CONTENT_PACK_KEY)).toBeNull();
     expect(JSON.parse(storage.getItem(OFFLINE_RUN_RECORD_KEY) ?? "{}")).toMatchObject({
+      questId: identity.questId,
       verification: "verified",
       label: ""
     });

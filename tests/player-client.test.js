@@ -377,6 +377,7 @@ describe("player client", () => {
     });
     const run = {
       runId: "access_01J1MOSSWATCH",
+      questId: "quest_ii_client_test_123",
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
       labyrinthNumber: 4
@@ -414,7 +415,8 @@ describe("player client", () => {
       runId: "access_01J1MOSSWATCH",
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
-      labyrinthNumber: 4
+      labyrinthNumber: 4,
+      questId: "quest_ii_player_client_123"
     };
     await expect(client.authorizeGuestRun(run)).resolves.toMatchObject({
       allowed: true

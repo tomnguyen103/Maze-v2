@@ -65,6 +65,7 @@ describe("composed player API", () => {
         method: "POST",
         body: JSON.stringify({
           runId: "access_01J1MOSSWATCH",
+          questId: "quest_01MOSS123",
           seed: "MOSS-WATCH-11",
           levelId: "trail-scout",
           labyrinthNumber: 4

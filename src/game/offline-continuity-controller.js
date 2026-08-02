@@ -34,7 +34,8 @@ const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision: string,
- *   contentPackHash: string
+ *   contentPackHash: string,
+ *   questId?: string
  * }} OfflineRunIdentity
  * @typedef {{
  *   runId: string,
@@ -42,7 +43,8 @@ const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision?: string,
- *   contentPackHash?: string
+ *   contentPackHash?: string,
+ *   questId?: string
  * }} OfflineRunLocator
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -71,7 +73,8 @@ function isRunIdentity(value) {
     typeof value.levelId === "string" &&
     Number.isInteger(value.labyrinthNumber) &&
     typeof value.rulesetRevision === "string" &&
-    typeof value.contentPackHash === "string"
+    typeof value.contentPackHash === "string" &&
+    (value.questId === undefined || typeof value.questId === "string")
   );
 }
 
@@ -83,7 +86,8 @@ function sameRunIdentity(left, right) {
     left.levelId === right.levelId &&
     left.labyrinthNumber === right.labyrinthNumber &&
     left.rulesetRevision === right.rulesetRevision &&
-    left.contentPackHash === right.contentPackHash
+    left.contentPackHash === right.contentPackHash &&
+    questIdentityMatches(left.questId, right.questId)
   );
 }
 
@@ -99,6 +103,8 @@ function isReceipt(value) {
     Number.isInteger(value.binding.labyrinthNumber) &&
     typeof value.binding.rulesetRevision === "string" &&
     typeof value.binding.contentPackHash === "string" &&
+    (value.binding.questId === undefined ||
+      typeof value.binding.questId === "string") &&
     typeof value.binding.playExpiresAt === "string" &&
     typeof value.binding.submissionExpiresAt === "string"
   );
@@ -112,8 +118,23 @@ function receiptMatchesRun(receipt, run) {
     receipt.binding.levelId === run.levelId &&
     receipt.binding.labyrinthNumber === run.labyrinthNumber &&
     receipt.binding.rulesetRevision === run.rulesetRevision &&
-    receipt.binding.contentPackHash === run.contentPackHash
+    receipt.binding.contentPackHash === run.contentPackHash &&
+    questIdentityMatches(receipt.binding.questId, run.questId)
   );
+}
+
+/** @param {unknown} left @param {unknown} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined && !isQuestIIQuestId(right)) ||
+    (right === undefined && !isQuestIIQuestId(left))
+  );
+}
+
+/** @param {unknown} value */
+function isQuestIIQuestId(value) {
+  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /** @param {unknown} value @returns {RunActionLogV2 | null} */
@@ -549,6 +570,7 @@ export function createOfflineContinuityController({
       rulesetRevision:
         run.rulesetRevision ?? receipt.binding.rulesetRevision,
       contentPackHash: run.contentPackHash,
+      ...(typeof run.questId === "string" ? { questId: run.questId } : {}),
       outcome: terminal,
       score: Math.max(0, Math.round(terminalRun.score)),
       moves: Math.max(0, Math.round(terminalRun.moves)),
@@ -605,7 +627,12 @@ export function createOfflineContinuityController({
       labyrinthNumber: run.labyrinthNumber,
       rulesetRevision:
         run.rulesetRevision ?? receipt.binding.rulesetRevision,
-      contentPackHash: run.contentPackHash ?? receipt.binding.contentPackHash
+      contentPackHash: run.contentPackHash ?? receipt.binding.contentPackHash,
+      ...(typeof run.questId === "string"
+        ? { questId: run.questId }
+        : typeof receipt.binding.questId === "string"
+          ? { questId: receipt.binding.questId }
+          : {})
     });
     const binding = validateBinding(recoveredRun, receipt);
     if (!binding.ok) {
@@ -705,6 +732,9 @@ export function createOfflineContinuityController({
       labyrinthNumber: record.labyrinthNumber,
       rulesetRevision: record.rulesetRevision,
       contentPackHash: record.contentPackHash,
+      ...(typeof record.questId === "string"
+        ? { questId: record.questId }
+        : {}),
       outcome: record.outcome,
       score: record.score,
       moves: record.moves,
@@ -801,7 +831,10 @@ export function createOfflineContinuityController({
       levelId: record.levelId,
       labyrinthNumber: record.labyrinthNumber,
       rulesetRevision: record.rulesetRevision,
-      contentPackHash: record.contentPackHash
+      contentPackHash: record.contentPackHash,
+      ...(typeof record.questId === "string"
+        ? { questId: record.questId }
+        : {})
     };
     const run = /** @type {OfflineRunIdentity} */ (runCandidate);
     const packageReady =

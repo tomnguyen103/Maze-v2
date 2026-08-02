@@ -6,6 +6,11 @@ import { getLearningMetadata } from "./learning-objectives.js";
 import { normalizeQuestion } from "./question-contract.js";
 import { getReviewedEchoLens } from "./reviewed-echo-lenses.js";
 import {
+  getQuestContentPackId,
+  QUEST_II_CONTENT_PACK_ID
+} from "../game/quest-content.js";
+import { getQuestIIQuestion } from "./quest-ii-question-bank.js";
+import {
   createReviewedQuestionRevisionId,
   reviewedQuestionContentDigest
 } from "./reviewed-question-revision.js";
@@ -33,7 +38,8 @@ import {
  *   attempt?: number,
  *   labyrinthNumber?: number,
  *   questionOrdinal?: number,
- *   challengeKind?: "warden" | "gate-warden"
+ *   challengeKind?: "warden" | "gate-warden",
+ *   questId?: string
  * }} QuestionRequest
  * @typedef {readonly [
  *   string,
@@ -630,8 +636,17 @@ export function getBundledQuestion({
   attempt = 0,
   labyrinthNumber = 1,
   questionOrdinal = attempt,
-  challengeKind = "warden"
+  challengeKind = "warden",
+  questId
 }, options = {}) {
+  if (getQuestContentPackId(questId) === QUEST_II_CONTENT_PACK_ID) {
+    return getQuestIIQuestion({
+      levelId,
+      labyrinthNumber,
+      questionOrdinal,
+      challengeKind
+    });
+  }
   const level = getQuestLevel(levelId);
   const band = getDifficultyBand(labyrinthNumber);
   const ordinal = Math.max(0, Math.trunc(questionOrdinal));

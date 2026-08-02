@@ -116,7 +116,7 @@ export function receiptBindingMatches(receipt, claim) {
   return Boolean(
     binding &&
       binding.runId === claim.runId &&
-      (claim.questId === undefined || binding.questId === claim.questId) &&
+      questIdentityMatches(binding.questId, claim.questId) &&
       binding.deviceInstallationHash === claim.deviceInstallationHash &&
       binding.seed === claim.seed &&
       binding.levelId === claim.levelId &&
@@ -133,6 +133,20 @@ export function receiptBindingMatches(receipt, claim) {
         JSON.stringify(binding.initialUsedQuestionIds ?? []) ===
           JSON.stringify(claim.initialUsedQuestionIds))
   );
+}
+
+/** @param {unknown} left @param {unknown} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined && !isQuestIIQuestId(right)) ||
+    (right === undefined && !isQuestIIQuestId(left))
+  );
+}
+
+/** @param {unknown} value */
+function isQuestIIQuestId(value) {
+  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /**

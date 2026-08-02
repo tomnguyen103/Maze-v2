@@ -26,7 +26,8 @@ export const ACTIVE_RUN_RECOVERY_MAX_BYTES = 256 * 1024;
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
  *   labyrinthNumber: number,
  *   atlasRegionId: string,
- *   rulesetRevision: string
+ *   rulesetRevision: string,
+ *   questId?: string
  * }} RecoveryIdentity
  * @typedef {
  *   | { type: "move", direction: "up" | "right" | "down" | "left", elapsedMs: number }
@@ -53,8 +54,10 @@ const LEGACY_IDENTITY_KEYS = [
 const IDENTITY_KEYS = [
   ...LEGACY_IDENTITY_KEYS,
   "atlasRegionId",
-  "rulesetRevision"
+  "rulesetRevision",
+  "questId"
 ];
+const REQUIRED_IDENTITY_KEYS = IDENTITY_KEYS.filter((key) => key !== "questId");
 const ENVELOPE_KEYS = [
   "version",
   "identity",
@@ -765,7 +768,9 @@ function normalizeIdentity(value) {
   if (
     (candidate.version === 2 &&
       !hasOnlyKeys(value, LEGACY_IDENTITY_KEYS)) ||
-    (candidate.version === 3 && !hasOnlyKeys(value, IDENTITY_KEYS))
+    (candidate.version === 3 &&
+      !hasOnlyKeys(value, REQUIRED_IDENTITY_KEYS) &&
+      !hasOnlyKeys(value, IDENTITY_KEYS))
   ) {
     return null;
   }
@@ -793,7 +798,10 @@ function normalizeIdentity(value) {
     ) ||
     !Number.isInteger(candidate.labyrinthNumber) ||
     Number(candidate.labyrinthNumber) < 1 ||
-    Number(candidate.labyrinthNumber) > 20
+    Number(candidate.labyrinthNumber) > 20 ||
+    (candidate.questId !== undefined &&
+      (typeof candidate.questId !== "string" ||
+        !/^(?:quest|legacy)_[a-z0-9_-]{7,92}$/iu.test(candidate.questId)))
   ) {
     return null;
   }
@@ -807,7 +815,10 @@ function normalizeIdentity(value) {
     ),
     labyrinthNumber: Number(candidate.labyrinthNumber),
     atlasRegionId: ruleset.atlasRegionId,
-    rulesetRevision: ruleset.revision
+    rulesetRevision: ruleset.revision,
+    ...(typeof candidate.questId === "string"
+      ? { questId: candidate.questId }
+      : {})
   };
 }
 
@@ -858,8 +869,23 @@ function sameIdentity(left, right) {
     left.levelId === right.levelId &&
     left.labyrinthNumber === right.labyrinthNumber &&
     left.atlasRegionId === right.atlasRegionId &&
-    left.rulesetRevision === right.rulesetRevision
+    left.rulesetRevision === right.rulesetRevision &&
+    questIdentityMatches(left.questId, right.questId)
   );
+}
+
+/** @param {unknown} left @param {unknown} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined && !isQuestIIQuestId(right)) ||
+    (right === undefined && !isQuestIIQuestId(left))
+  );
+}
+
+/** @param {unknown} value */
+function isQuestIIQuestId(value) {
+  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /** @param {number} elapsedMs */

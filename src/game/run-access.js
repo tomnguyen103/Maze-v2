@@ -1,6 +1,7 @@
 import { normalizeRunRuleset } from "./run-ruleset.js";
 
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
+const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
 
 function defaultIdFactory() {
   if (globalThis.crypto?.randomUUID) {
@@ -27,7 +28,8 @@ export function createRunAccessId(idFactory = defaultIdFactory) {
  *   levelId: string,
  *   labyrinthNumber: number,
  *   atlasRegionId?: string,
- *   rulesetRevision?: string
+ *   rulesetRevision?: string,
+ *   questId?: string
  * }} locator
  * @param {() => string} [idFactory]
  * @returns {{
@@ -38,7 +40,8 @@ export function createRunAccessId(idFactory = defaultIdFactory) {
  *   levelId: string,
  *   labyrinthNumber: number,
  *   atlasRegionId: string,
- *   rulesetRevision: string
+ *   rulesetRevision: string,
+ *   questId?: string
  * }}
  */
 export function withRunAccessId(locator, idFactory = defaultIdFactory) {
@@ -69,20 +72,38 @@ export function withRunAccessId(locator, idFactory = defaultIdFactory) {
     levelId: locator.levelId,
     labyrinthNumber: locator.labyrinthNumber,
     atlasRegionId: ruleset.atlasRegionId,
-    rulesetRevision: ruleset.revision
+    rulesetRevision: ruleset.revision,
+    ...(typeof locator.questId === "string" && QUEST_ID_PATTERN.test(locator.questId)
+      ? { questId: locator.questId }
+      : {})
   };
 }
 
 /**
- * @param {{ version?: number, runId?: string, pending?: boolean } | null} active
- * @param {{ runId?: string }} candidate
+ * @param {{ version?: number, runId?: string, pending?: boolean, questId?: string } | null} active
+ * @param {{ runId?: string, questId?: string }} candidate
  */
 export function isAdmittedRunResume(active, candidate) {
   return Boolean(
     (active?.version === 2 || active?.version === 3) &&
     active.pending === false &&
-    active.runId === candidate.runId
+    active.runId === candidate.runId &&
+    questIdentityMatches(active.questId, candidate.questId)
   );
+}
+
+/** @param {unknown} left @param {unknown} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined && !isQuestIIQuestId(right)) ||
+    (right === undefined && !isQuestIIQuestId(left))
+  );
+}
+
+/** @param {unknown} value */
+function isQuestIIQuestId(value) {
+  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /**

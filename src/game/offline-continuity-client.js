@@ -15,7 +15,7 @@ import { OFFLINE_DEVICE_BINDING_KEY } from "./offline-local-scrub.js";
  * @param {{
  *   playerController: {
  *     issueOfflineReceipt: (
- *       run: { runId: string, seed: string, levelId: string, labyrinthNumber: number },
+ *       run: { runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string },
  *       deviceInstallationNonce: string
  *     ) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
  *   },
@@ -85,7 +85,7 @@ export function createOfflineContinuityClient({
 
   /**
    * @param {unknown} receipt
-   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} run
    */
   function receiptMatchesRun(receipt, run) {
     if (!receipt || typeof receipt !== "object") {
@@ -101,8 +101,26 @@ export function createOfflineContinuityClient({
         /** @type {Record<string, unknown>} */ (binding).seed === run.seed &&
         /** @type {Record<string, unknown>} */ (binding).levelId === run.levelId &&
         /** @type {Record<string, unknown>} */ (binding).labyrinthNumber ===
-          run.labyrinthNumber
+          run.labyrinthNumber &&
+        questIdentityMatches(
+          /** @type {Record<string, unknown>} */ (binding).questId,
+          run.questId
+        )
     );
+  }
+
+  /** @param {unknown} left @param {unknown} right */
+  function questIdentityMatches(left, right) {
+    return (
+      left === right ||
+      (left === undefined && !isQuestIIQuestId(right)) ||
+      (right === undefined && !isQuestIIQuestId(left))
+    );
+  }
+
+  /** @param {unknown} value */
+  function isQuestIIQuestId(value) {
+    return typeof value === "string" && /^quest_ii_/iu.test(value);
   }
 
   /** @param {unknown} receipt */
@@ -132,7 +150,7 @@ export function createOfflineContinuityClient({
    * never reaches the worker, and a failed pin is returned to the caller so
    * online play is not presented as offline-ready.
    *
-   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }} run
    */
   async function issueAndPin(run) {
     if (!receiptVerifier) {

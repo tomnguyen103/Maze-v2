@@ -414,7 +414,7 @@ export function createPlayerApiClient({
       });
     },
     /**
-     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }} run
      * @param {string} deviceInstallationNonce
      */
     async issueOfflineReceipt(run, deviceInstallationNonce) {

@@ -6,6 +6,10 @@ import {
 import { selectReviewedDeckQuestion } from "../src/questions/learning-deck-selection.js";
 import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
 import { getPublishedLearningDeckRevision } from "../src/questions/learning-decks.js";
+import { getBundledQuestion } from "../src/questions/question-bank.js";
+
+const MIXED_TRAIL_REVISION =
+  "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92";
 
 describe("Offline content pack", () => {
   it("resolves only the server-generated reviewed revision ids", () => {
@@ -144,5 +148,80 @@ describe("Offline content pack", () => {
     expect(pack.questionForRevision(capstone?.reviewedRevisionId ?? "")).toBe(
       region.capstoneQuestion
     );
+  });
+
+  it("keeps Quest II receipts on the Quest II reviewed sequence", () => {
+    const receipt = {
+      questId: "quest_ii_offline_test_123",
+      seed: "QUEST-II-OFFLINE",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      learningDeckId: "mixed-trail",
+      learningDeckRevision: MIXED_TRAIL_REVISION,
+      initialQuestionOrdinal: 0,
+      initialUsedQuestionIds: []
+    };
+    const sequence = createOfflineQuestionSequence(receipt);
+    const question = sequence?.next({
+      challenge: { wardenId: 0, attempt: 0, kind: "warden" }
+    });
+
+    expect(question?.id).toMatch(/^quest-ii-/);
+    expect(question?.reviewedRevisionId).toMatch(/^quest-ii:/);
+  });
+
+  it("reconstructs Quest II Gate Warden revisions from their canonical scene", () => {
+    const pack = createOfflineContentPack("b".repeat(64));
+    for (const labyrinthNumber of [1, 5, 9, 13, 17]) {
+      const expected = getBundledQuestion({
+        questId: "quest_ii_offline_test_123",
+        levelId: "trail-scout",
+        seed: "QUEST-II-OFFLINE-CAPSTONE",
+        wardenId: 0,
+        labyrinthNumber,
+        questionOrdinal: labyrinthNumber - 1,
+        challengeKind: "gate-warden"
+      });
+
+      if (typeof expected.reviewedRevisionId !== "string") {
+        throw new Error("Expected the Quest II capstone revision id.");
+      }
+      expect(pack.questionForRevision(expected.reviewedRevisionId)).toEqual(
+        expected
+      );
+    }
+  });
+
+  it("normalizes Quest II revision aliases before generated lookup", () => {
+    const pack = createOfflineContentPack("b".repeat(64));
+    const questions = [
+      getBundledQuestion({
+        questId: "quest_ii_offline_test_123",
+        levelId: "bright-start",
+        seed: "QUEST-II-OFFLINE-ALIASES",
+        wardenId: 0,
+        labyrinthNumber: 1,
+        questionOrdinal: 0
+      }),
+      getBundledQuestion({
+        questId: "quest_ii_offline_test_123",
+        levelId: "bright-start",
+        seed: "QUEST-II-OFFLINE-ALIASES",
+        wardenId: 0,
+        labyrinthNumber: 1,
+        questionOrdinal: 0,
+        challengeKind: "gate-warden"
+      })
+    ];
+
+    for (const question of questions) {
+      expect(pack.questionForRevision(question.id)?.id).toBe(question.id);
+      expect(pack.questionForRevision(`quest-ii:${question.id}`)?.id).toBe(
+        question.id
+      );
+      expect(pack.questionForRevision(`${question.id}:legacy-suffix`)?.id).toBe(
+        question.id
+      );
+    }
   });
 });

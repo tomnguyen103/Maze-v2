@@ -8,9 +8,15 @@ export const MAX_JOURNAL_EVENTS = 200;
 const OUTCOMES = new Set(["correct", "wrong", "hint", "skip"]);
 const EVENT_ID_PATTERN =
   /^event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const QUESTION_ID_PATTERN =
+const CLASSIC_QUESTION_ID_PATTERN =
   /^(bright|scout|master)-(foundation|developing|capable|advanced|mastery)-([0-9]{1,10})$/;
+const QUEST_II_QUESTION_ID_PATTERN =
+  /^quest-ii-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)-([0-9]{1,10})$/;
+const QUEST_II_CAPSTONE_ID_PATTERN =
+  /^quest-ii-capstone-(bright-start|trail-scout|maze-master)-(foundation|developing|capable|advanced|mastery)$/;
 const JOURNAL_ORDINAL_COUNT = 8;
+const QUEST_II_JOURNAL_ORDINAL_COUNT = 20;
+const JOURNAL_QUEST_II_ID = "quest_ii_journal_validation_123";
 const BAND_ORDER = Object.freeze([
   ["foundation", "Foundation"],
   ["developing", "Developing"],
@@ -148,15 +154,18 @@ function normalizeEvent(value) {
   const event = /** @type {Record<string, unknown>} */ (value);
   const questionId =
     typeof event.questionId === "string" ? event.questionId : "";
-  const questionMatch = QUESTION_ID_PATTERN.exec(questionId);
-  const reviewedQuestion =
-    questionMatch && Number(questionMatch[3]) < JOURNAL_ORDINAL_COUNT
-      ? reviewedQuestionForId(questionId)
-      : null;
+  const parsedQuestionId = parseJournalQuestionId(questionId);
+  const reviewedQuestion = parsedQuestionId
+    ? reviewedQuestionForId(questionId)
+    : null;
+  const canonicalQuestionId = reviewedQuestion
+    ? canonicalJournalQuestionId(reviewedQuestion.id)
+    : null;
   if (
     typeof event.eventId !== "string" ||
     !EVENT_ID_PATTERN.test(event.eventId) ||
     !reviewedQuestion ||
+    canonicalQuestionId !== questionId ||
     typeof event.topicId !== "string" ||
     typeof event.learningObjectiveId !== "string" ||
     !isLearningMetadata(event.topicId, event.learningObjectiveId) ||
@@ -172,7 +181,7 @@ function normalizeEvent(value) {
   }
   return {
     eventId: event.eventId,
-    questionId: reviewedQuestion.id,
+    questionId,
     topicId: event.topicId,
     learningObjectiveId: event.learningObjectiveId,
     difficultyBand: event.difficultyBand,
@@ -189,10 +198,10 @@ function normalizeEvent(value) {
  * }} question
  */
 function journalQuestionId(question) {
-  const match = QUESTION_ID_PATTERN.exec(question.id);
+  const parsedQuestionId = parseJournalQuestionId(question.id);
   const source = reviewedQuestionForId(question.id);
   if (
-    !match ||
+    !parsedQuestionId ||
     !source ||
     source.topicId !== question.topicId ||
     source.learningObjectiveId !== question.learningObjectiveId ||
@@ -200,33 +209,111 @@ function journalQuestionId(question) {
   ) {
     return null;
   }
-  return `${match[1]}-${match[2]}-${
-    Number(match[3]) % JOURNAL_ORDINAL_COUNT
-  }`;
+  return canonicalJournalQuestionId(question.id);
 }
 
 /** @param {string} questionId */
 export function reviewedQuestionForId(questionId) {
-  const match = QUESTION_ID_PATTERN.exec(questionId);
-  if (!match) return null;
-  const levelId =
-    LEVEL_BY_PREFIX[
-      /** @type {keyof typeof LEVEL_BY_PREFIX} */ (match[1])
-    ];
-  const labyrinthNumber =
-    LABYRINTH_BY_BAND[
-      /** @type {keyof typeof LABYRINTH_BY_BAND} */ (match[2])
-    ];
-  const questionOrdinal = Number(match[3]);
-  if (!levelId || !labyrinthNumber || !Number.isSafeInteger(questionOrdinal)) {
+  const parsed = parseJournalQuestionId(questionId);
+  if (!parsed) {
     return null;
   }
   const question = getBundledQuestion({
-    levelId,
+    levelId: parsed.levelId,
     seed: "journal-validation",
     wardenId: 0,
-    labyrinthNumber,
-    questionOrdinal
+    labyrinthNumber: parsed.labyrinthNumber,
+    questionOrdinal: parsed.questionOrdinal,
+    ...(parsed.questId ? { questId: parsed.questId } : {}),
+    ...(parsed.challengeKind ? { challengeKind: parsed.challengeKind } : {})
   });
   return question.id === questionId ? question : null;
+}
+
+/**
+ * @typedef {{
+ *   levelId: string,
+ *   bandId: string,
+ *   labyrinthNumber: number,
+ *   questionOrdinal: number,
+ *   canonicalId: string,
+ *   questId?: string,
+ *   challengeKind?: "gate-warden"
+ * }} ParsedJournalQuestionId
+ */
+
+/** @param {string} questionId @returns {ParsedJournalQuestionId | null} */
+function parseJournalQuestionId(questionId) {
+  const classic = CLASSIC_QUESTION_ID_PATTERN.exec(questionId);
+  if (classic) {
+    const levelId =
+      LEVEL_BY_PREFIX[
+        /** @type {keyof typeof LEVEL_BY_PREFIX} */ (classic[1])
+      ];
+    const bandId = classic[2];
+    const questionOrdinal = Number(classic[3]);
+    const labyrinthNumber =
+      LABYRINTH_BY_BAND[
+        /** @type {keyof typeof LABYRINTH_BY_BAND} */ (bandId)
+      ];
+    return Number.isSafeInteger(questionOrdinal)
+      ? {
+          levelId,
+          bandId,
+          labyrinthNumber,
+          questionOrdinal,
+          canonicalId: `${classic[1]}-${bandId}-${
+            questionOrdinal % JOURNAL_ORDINAL_COUNT
+          }`
+        }
+      : null;
+  }
+
+  const questII = QUEST_II_QUESTION_ID_PATTERN.exec(questionId);
+  if (questII) {
+    const levelId = questII[1];
+    const bandId = questII[2];
+    const questionOrdinal = Number(questII[3]);
+    const labyrinthNumber =
+      LABYRINTH_BY_BAND[
+        /** @type {keyof typeof LABYRINTH_BY_BAND} */ (bandId)
+      ];
+    return Number.isSafeInteger(questionOrdinal)
+      ? {
+          levelId,
+          bandId,
+          labyrinthNumber,
+          questionOrdinal,
+          canonicalId: `quest-ii-${levelId}-${bandId}-${
+            questionOrdinal % QUEST_II_JOURNAL_ORDINAL_COUNT
+          }`,
+          questId: JOURNAL_QUEST_II_ID
+        }
+      : null;
+  }
+
+  const capstone = QUEST_II_CAPSTONE_ID_PATTERN.exec(questionId);
+  if (capstone) {
+    const levelId = capstone[1];
+    const bandId = capstone[2];
+    const labyrinthNumber =
+      LABYRINTH_BY_BAND[
+        /** @type {keyof typeof LABYRINTH_BY_BAND} */ (bandId)
+      ];
+    return {
+      levelId,
+      bandId,
+      labyrinthNumber,
+      questionOrdinal: labyrinthNumber - 1,
+      canonicalId: questionId,
+      questId: JOURNAL_QUEST_II_ID,
+      challengeKind: "gate-warden"
+    };
+  }
+  return null;
+}
+
+/** @param {string} questionId */
+function canonicalJournalQuestionId(questionId) {
+  return parseJournalQuestionId(questionId)?.canonicalId ?? null;
 }

@@ -616,6 +616,31 @@ async function stubClipboard(page) {
   });
 }
 
+/** @param {import("@playwright/test").Page} page */
+async function captureClipboard(page) {
+  await page.evaluate(() => {
+    Reflect.set(window, "__copiedShareLink", "");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (/** @type {string} */ value) => {
+          Reflect.set(window, "__copiedShareLink", String(value));
+        }
+      }
+    });
+  });
+}
+
+/** @param {import("@playwright/test").Page} page */
+async function readCapturedClipboard(page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    )
+    .toMatch(/^https?:\/\//);
+  return page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")));
+}
+
 /**
  * @param {import("@playwright/test").Page} page
  * @param {() => ReturnType<typeof getBundledQuestion>} getCurrentQuestion
@@ -1263,6 +1288,201 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
     "aria-pressed",
     "false"
   );
+});
+
+test("presents Quest II storylets and reviewed Warden cards across the player path", async ({
+  page
+}) => {
+  const questId = "quest_ii_browser_living_regions";
+  const seed = "QUEST-II-BROWSER";
+  await page.addInitScript((storedQuestId) => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: storedQuestId,
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      completedLabyrinths: 3,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, questId);
+  /** @type {Record<string, unknown>[]} */
+  const questionRequests = [];
+  /** @type {ReturnType<typeof getBundledQuestion> | null} */
+  let servedQuestion = null;
+  await page.route("**/api/question**", async (route) => {
+    const request = questionRequestOf(route.request());
+    questionRequests.push(request);
+    const requestedQuestId =
+      typeof request.questId === "string" ? request.questId : "";
+    servedQuestion = getBundledQuestion({
+      questId: requestedQuestId,
+      levelId: "trail-scout",
+      seed,
+      wardenId: Number(request.wardenId ?? 0),
+      attempt: Number(request.attempt ?? 0),
+      labyrinthNumber: 4,
+      questionOrdinal: Number(request.questionOrdinal ?? 0),
+      challengeKind: request.challengeKind === "gate-warden"
+        ? "gate-warden"
+        : "warden"
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ question: servedQuestion, source: "bundled" })
+    });
+  });
+
+  const planSeedRun = createRun(seed, {
+    ...getLabyrinthConfig("trail-scout", 4),
+    ruleset: getQuestRunRuleset(4)
+  });
+  await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
+  await expectGameReady(page);
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(0);
+  const maze = page.getByLabel(/Interactive maze/);
+  await maze.focus();
+  const challenge = page.locator("#challenge-dialog");
+  let simulatedRun = planSeedRun;
+  for (let step = 0; step < 120; step += 1) {
+    if (simulatedRun.status === "challenge") {
+      await expect(challenge).toBeVisible({ timeout: 15_000 });
+      break;
+    }
+    const target =
+      simulatedRun.echoes.find((echo) => !echo.collected) ?? simulatedRun.gate;
+    const direction = pathTo(simulatedRun, target)[0];
+    if (!direction) {
+      throw new Error("Expected a path to a Quest II Warden or Echo.");
+    }
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    simulatedRun = applyAction(simulatedRun, {
+      type: "move",
+      direction: /** @type {"up" | "right" | "down" | "left"} */ (direction)
+    });
+    if (await challenge.isVisible()) {
+      break;
+    }
+  }
+
+  await expect(challenge).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(0);
+  await expect(page.locator("#challenge-question")).toBeFocused();
+  await expect(page.locator("#challenge-question")).toContainText(
+    "Hushline Orchard"
+  );
+  await expect(page.locator("#challenge-source")).toContainText(
+    "trusty question card"
+  );
+  if (!servedQuestion) {
+    throw new Error("Expected the Quest II reviewed question to be served.");
+  }
+  const answerId = /** @type {ReturnType<typeof getBundledQuestion>} */ (
+    servedQuestion
+  ).answerId;
+  await page.locator(`[data-answer="${answerId}"]`).click();
+  await expect(challenge).not.toBeVisible();
+  expect(questionRequests.length).toBeGreaterThan(0);
+  for (const request of questionRequests) {
+    expect(String(request.questId)).toMatch(/^quest_ii_/iu);
+  }
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#atlas-progress")).toContainText(
+    "Quest II · Living Regions"
+  );
+  await expect(atlas.locator("[data-atlas-region='foundation']"))
+    .toContainText("Hushline Orchard");
+  const storyletNode = atlas.locator(
+    "[data-atlas-landmark='foundation-4']"
+  );
+  await storyletNode.focus();
+  await page.keyboard.press("Enter");
+  await expect(atlas.locator("[data-atlas-storylet='quest-ii-foundation-4']"))
+    .toBeVisible();
+  await expect(atlas.locator("[data-atlas-storylet-title]")).toHaveText(
+    "The orchard answers"
+  );
+  await expect(atlas.locator("[data-atlas-storylet-tie]")).toContainText(
+    "echo-hush-v1:gate-warden"
+  );
+});
+
+test("emits the Quest II region-arrival storylet at a region entry", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_ii_region_arrival_123",
+      levelId: "bright-start",
+      labyrinthNumber: 1,
+      completedLabyrinths: 0,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  });
+
+  await page.goto("/?seed=QUEST-II-ARRIVAL&level=bright-start&labyrinth=1");
+  await expectGameReady(page);
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(1);
+  await expect(page.locator("#story-log [data-kind='region']")).toContainText(
+    "A softer footfall"
+  );
+});
+
+test("keeps a Quest II content pack when replaying its saved Run Record", async ({
+  page
+}) => {
+  const questIId = "quest_record_replay_current_123";
+  const questIIId = "quest_ii_record_replay_123";
+  await page.addInitScript(({ questIId, questIIId }) => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: questIId,
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "QUEST-II-RECORD",
+      outcome: "escaped",
+      echoesCollected: 3,
+      echoTotal: 3,
+      questId: questIIId,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
+    }]));
+  }, { questIId, questIIId });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toBeVisible();
+  await records.getByRole("button", {
+    name: "Play seed QUEST-II-RECORD"
+  }).click();
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  expect(await page.evaluate(() => JSON.parse(
+    localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+  ).questId)).toMatch(/^quest_ii_/iu);
 });
 
 test("lazy Atlas keeps semantic map and list parity across a URL reload", async ({
@@ -2671,6 +2891,7 @@ test("round-trips an exact Region ruleset through share and active recovery iden
     "/?seed=RULESET-SHARE&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
 
   await expect(page.locator("#quest-stage")).toHaveText(
     "Labyrinth 13 of 20 · Atlas Region: Advanced · Trail Twist: Tide Doors"
@@ -2689,7 +2910,7 @@ test("round-trips an exact Region ruleset through share and active recovery iden
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("advanced");
   expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
@@ -2751,6 +2972,7 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
     "/?seed=WIND-VIEW-34&level=trail-scout&labyrinth=5&region=developing&rules=windways-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
 
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Developing"
@@ -2809,7 +3031,7 @@ test("carries Region 2 identity from Atlas through Windway play and Watch Trail"
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("developing");
   expect(copied.searchParams.get("rules")).toBe("windways-v1");
@@ -2910,6 +3132,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
     "/?seed=BRIDGE-VIEW-9&level=trail-scout&labyrinth=9&region=capable&rules=echo-bridges-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Capable"
   );
@@ -3022,7 +3245,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("capable");
   expect(copied.searchParams.get("rules")).toBe("echo-bridges-v1");
@@ -3117,6 +3340,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
     "/?seed=TIDE-VIEW-13&level=trail-scout&labyrinth=13&region=advanced&rules=tide-doors-v1"
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Advanced"
   );
@@ -3180,7 +3404,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("advanced");
   expect(copied.searchParams.get("rules")).toBe("tide-doors-v1");
@@ -3279,6 +3503,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
     `/?seed=${seed}&level=trail-scout&labyrinth=17&region=mastery&rules=warden-bells-v1`
   );
   await expectGameReady(page);
+  await captureClipboard(page);
   await expect(page.locator("#quest-stage")).toContainText(
     "Atlas Region: Mastery"
   );
@@ -3400,7 +3625,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
 
   await page.locator("#seed-copy").click();
   const copied = new URL(
-    await page.evaluate(() => String(Reflect.get(window, "__copiedShareLink")))
+    await readCapturedClipboard(page)
   );
   expect(copied.searchParams.get("region")).toBe("mastery");
   expect(copied.searchParams.get("rules")).toBe("warden-bells-v1");

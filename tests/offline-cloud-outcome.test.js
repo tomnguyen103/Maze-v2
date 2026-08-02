@@ -13,12 +13,12 @@ const RECEIPT = {
   rulesetRevision: "echo-hush-v1"
 };
 
-function harness() {
+function harness(receipt = RECEIPT) {
   const playerStore = { submitScore: vi.fn(async () => ({})) };
   let journal = createLanternJournal();
   const progress = /** @type {Parameters<typeof import("../src/game/quest-progress.js").advanceQuest>[0]} */ ({
     version: 2,
-    questId: "quest_01MOSS123",
+    questId: receipt.questId,
     levelId: "trail-scout",
     learningDeckId: "mixed-trail",
     learningDeckRevision: "mixed-trail-v1",
@@ -179,6 +179,119 @@ describe("Offline replay cloud boundary", () => {
 
     expect(test.learningJournalStore.saveJournal).toHaveBeenCalledOnce();
     expect(test.learningJournalStore.saveJournal.mock.calls[0][1].events).toHaveLength(2);
+  });
+
+  it("rehydrates identity-less Quest II Journal summaries from the receipt", async () => {
+    const questId = "quest_ii_cloud_summary_123";
+    const receipt = {
+      ...RECEIPT,
+      questId,
+      labyrinthNumber: 5,
+      rulesetRevision: "windways-v1"
+    };
+    const test = harness(receipt);
+    const ordinary = getBundledQuestion({
+      questId,
+      levelId: "trail-scout",
+      seed: "offline-journal-summary",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4
+    });
+    const capstone = getBundledQuestion({
+      questId,
+      levelId: "trail-scout",
+      seed: "offline-journal-summary",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4,
+      challengeKind: "gate-warden"
+    });
+
+    await test.apply({
+      runId: receipt.runId,
+      playerId: receipt.playerId,
+      receipt,
+      result: {
+        status: "lost",
+        score: 120,
+        wardensDefeated: 0,
+        echoesCollected: 1,
+        moves: 12,
+        elapsedMs: 30000,
+        journalSummary: [
+          {
+            topicId: ordinary.topicId,
+            learningObjectiveId: ordinary.learningObjectiveId,
+            difficultyBand: ordinary.difficultyBand,
+            outcome: "correct",
+            count: 1
+          },
+          {
+            challengeKind: "gate-warden",
+            topicId: capstone.topicId,
+            learningObjectiveId: capstone.learningObjectiveId,
+            difficultyBand: capstone.difficultyBand,
+            outcome: "hint",
+            count: 1
+          }
+        ]
+      }
+    });
+
+    const events = /** @type {{ questionId: string }[]} */ (
+      test.learningJournalStore.saveJournal.mock.calls[0][1].events
+    );
+    expect(events[0].questionId).toMatch(
+      /^quest-ii-trail-scout-developing-[0-9]+$/u
+    );
+    expect(events[0].questionId).not.toMatch(/^scout-/u);
+    expect(events[1].questionId).toBe(capstone.id);
+  });
+
+  it("ignores a Journal summary bound to a different Quest than the receipt", async () => {
+    const questId = "quest_ii_cloud_summary_123";
+    const receipt = {
+      ...RECEIPT,
+      questId,
+      labyrinthNumber: 5,
+      rulesetRevision: "windways-v1"
+    };
+    const test = harness(receipt);
+    const question = getBundledQuestion({
+      questId,
+      levelId: "trail-scout",
+      seed: "offline-journal-summary",
+      wardenId: 0,
+      labyrinthNumber: 5,
+      questionOrdinal: 4
+    });
+
+    await test.apply({
+      runId: receipt.runId,
+      playerId: receipt.playerId,
+      receipt,
+      result: {
+        status: "lost",
+        score: 120,
+        wardensDefeated: 0,
+        echoesCollected: 1,
+        moves: 12,
+        elapsedMs: 30000,
+        journalSummary: [
+          {
+            questId: "quest_ii_other_summary_456",
+            topicId: question.topicId,
+            learningObjectiveId: question.learningObjectiveId,
+            difficultyBand: question.difficultyBand,
+            outcome: "correct",
+            count: 1
+          }
+        ]
+      }
+    });
+
+    expect(test.learningJournalStore.saveJournal).not.toHaveBeenCalled();
   });
 
   it("rejects a receipt bound to a different account before any cloud write", async () => {

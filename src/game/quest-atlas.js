@@ -7,6 +7,12 @@ import {
 } from "../questions/quest-levels.js";
 import { getPublishedLearningDeckOption } from "../questions/learning-deck-catalog.js";
 import { getRegionTheme } from "./region-theme.js";
+import { REGION_MOTIFS } from "./region-metadata.js";
+import {
+  getQuestContentPackId,
+  getQuestIIRegions,
+  QUEST_II_CONTENT_PACK_ID
+} from "./quest-content.js";
 import { getFossilSnapshot } from "./fossil-atlas-state.js";
 import {
   fossilsForLabyrinth,
@@ -26,10 +32,9 @@ import {
  * }} QuestProgressLike */
 /** @typedef {ReturnType<typeof normalizeFossilCollection>} FossilCollection */
 
-/** @type {Readonly<Record<string, { motif: string, fieldNotes: readonly string[] }>>} */
+/** @type {Readonly<Record<string, { fieldNotes: readonly string[] }>>} */
 const REGION_METADATA = Object.freeze({
   foundation: Object.freeze({
-    motif: "Lantern moss and quiet stone",
     fieldNotes: Object.freeze([
       "Mosslight wakes along the first quiet stones.",
       "The Bramblewatch keeps its universal Patrol marks.",
@@ -38,7 +43,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   developing: Object.freeze({
-    motif: "Rising wind and bright trail ribbons",
     fieldNotes: Object.freeze([
       "Windcall ribbons point from each Windway source to its landing.",
       "The Kitewatch keeps universal Warden marks clear in the rising wind.",
@@ -47,7 +51,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   capable: Object.freeze({
-    motif: "Joined arches and clear blue spans",
     fieldNotes: Object.freeze([
       "Each sealed Echo Bridge marks a shortcut waiting to open.",
       "A recovered Echo opens its paired Bridge for Explorer and Warden.",
@@ -56,7 +59,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   advanced: Object.freeze({
-    motif: "Sea-glass channels and alternating tide marks",
     fieldNotes: Object.freeze([
       "Visible Tide Doors begin open, then alternate together after each successful Move or Pulse.",
       "Explorer and Warden share the same Tide Door phase for the whole action.",
@@ -65,7 +67,6 @@ const REGION_METADATA = Object.freeze({
     ])
   }),
   mastery: Object.freeze({
-    motif: "Beacon bells and resonant stone",
     fieldNotes: Object.freeze([
       "One-use Signal Bells wait on visible passages across Bellroot Summit.",
       "Ring an adjacent Bell to lure only revealed ordinary Wardens for one action.",
@@ -100,6 +101,9 @@ export function projectQuestAtlas(
   if (!learningDeck) {
     throw new Error("Quest Progress has an unavailable Learning Deck.");
   }
+  const contentPackId = getQuestContentPackId(progress.questId);
+  const questIIRegions =
+    contentPackId === QUEST_II_CONTENT_PACK_ID ? getQuestIIRegions() : [];
   const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
   const normalizedFossilCollection = normalizeFossilCollection(fossilCollectionInput);
   const fossilCollection = normalizedFossilCollection?.questId === progress.questId
@@ -111,15 +115,17 @@ export function projectQuestAtlas(
     const band = getDifficultyBand(start);
     const metadata = REGION_METADATA[band.id];
     const theme = getRegionTheme(band.id);
+    const questIIRegion = questIIRegions[regionIndex] ?? null;
     const nodes = Array.from({ length: 4 }, (_, offset) =>
       projectNode(
         progress,
         start + offset,
         band,
-        metadata.fieldNotes[offset],
+        questIIRegion?.storylets[offset]?.body ?? metadata.fieldNotes[offset],
         level.questionGuide,
         retainedLandmarkIds,
-        fossilCollection
+        fossilCollection,
+        questIIRegion?.storylets[offset] ?? null
       )
     );
     const sigilRestored = progress.completedLabyrinths >= end;
@@ -128,13 +134,28 @@ export function projectQuestAtlas(
       index: regionIndex,
       label: band.label,
       themeName: theme?.name ?? band.label,
+      arcName: questIIRegion?.name ?? null,
+      learningMove: questIIRegion?.learningMove ?? null,
+      trailTwistRevision: questIIRegion?.trailTwistRevision ?? null,
       wardenGuild: theme?.wardenGuild ?? null,
-      motif: metadata.motif,
+      motif: REGION_MOTIFS[band.id],
       rangeLabel: `Labyrinths ${start}-${end}`,
       sigilRestored,
       sigilLabel: sigilRestored
         ? `${theme?.sigilName ?? "Sigil"} restored`
         : `${theme?.sigilName ?? "Sigil"} restores at Labyrinth ${end}`,
+      ...(questIIRegion
+        ? {
+            storylets: questIIRegion.storylets.map((storylet) => ({
+              id: storylet.id,
+              labyrinthNumber: storylet.labyrinthNumber,
+              beat: storylet.beat,
+              title: storylet.title,
+              body: storylet.body,
+              gameplayTie: storylet.gameplayTie
+            }))
+          }
+        : {}),
       nodes
     };
   });
@@ -145,6 +166,11 @@ export function projectQuestAtlas(
   return {
     version: 2,
     levelId: progress.levelId,
+    contentPackId,
+    contentPackLabel:
+      contentPackId === QUEST_II_CONTENT_PACK_ID
+        ? "Quest II · Living Regions"
+        : "Quest I",
     learningDeckId: learningDeck.deckId,
     // The revision this Quest pinned, not whatever the Deck publishes now.
     learningDeckRevision: progress.learningDeckRevision,
@@ -187,6 +213,14 @@ export async function projectAtlas(progress, options = {}) {
  * @param {string} learningFocus
  * @param {ReadonlySet<string>} retainedLandmarkIds
  * @param {FossilCollection} fossilCollection
+ * @param {{
+ *   id: string,
+ *   beat: string,
+ *   title: string,
+ *   body: string,
+ *   gameplayTie: string,
+ *   eventKind: string
+ * } | null} storylet
  */
 function projectNode(
   progress,
@@ -195,7 +229,8 @@ function projectNode(
   fieldNote,
   learningFocus,
   retainedLandmarkIds,
-  fossilCollection
+  fossilCollection,
+  storylet
 ) {
   const id = `${band.id}-${labyrinthNumber}`;
   const milestone = isGateWardenMilestone(labyrinthNumber);
@@ -224,6 +259,16 @@ function projectNode(
     difficultyBand: band.label,
     fieldNote,
     learningFocus,
+    storylet: storylet
+      ? {
+          id: storylet.id,
+          beat: storylet.beat,
+          title: storylet.title,
+          body: storylet.body,
+          gameplayTie: storylet.gameplayTie,
+          eventKind: storylet.eventKind
+        }
+      : null,
     completed,
     current,
     watchTrailAvailable: completed && retainedLandmarkIds.has(id),
