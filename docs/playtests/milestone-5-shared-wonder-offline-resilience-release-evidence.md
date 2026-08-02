@@ -1,11 +1,11 @@
 # Milestone 5 Shared Wonder and Offline Resilience release evidence
 
-- Evidence date: 2026-07-31
+- Evidence date: 2026-08-02
 - Parent: [#134](https://github.com/tomnguyen103/Maze-v2/issues/134)
 - Release ticket: [#147](https://github.com/tomnguyen103/Maze-v2/issues/147)
 - Batch A branch: `feat/milestone-5-constellation`, merged as `ef66d24`
-- Batch B branch: `feat/milestone-5-offline-continuity`
-- Base: `c51aaa9`
+- Batch B branch: `feat/milestone-5-offline-continuity`, wired by PR #158
+- Base: `69f4cd6` (PR #158 merged to `origin/main`)
 - Scope: device-local engineering evidence only. No live identity, billing,
   provider, database, or player-research claims are made anywhere below.
 
@@ -78,15 +78,15 @@ thresholds and carries no identity, count, or timing, and it now has its own
 rate-limit budget — but a caller who has not escaped can read the published
 band map.
 
-## P0.2 wiring follow-up — current branch evidence (2026-08-01)
+## P0.2 wiring follow-up — merged-main evidence (2026-08-02)
 
 The mechanism-only assessment below is the historical Batch B baseline at
-`b9cfd20`. The follow-up branch `feat/offline-continuity-wiring` closes the
-repo-controlled wiring gaps through the existing player-function boundary and
-keeps production migration, key, and deployment actions outside this record.
+`b9cfd20`. PR #158 closes the repo-controlled wiring gaps through the existing
+player-function boundary and keeps production migration, key, and deployment
+actions outside this record.
 The receipt boundary landed in `e7400f8`; the P0.2 specification is in
 `2aabed7` while the remaining client, replay, privacy, and browser changes are
-implemented on this branch and are pending final review and merge in PR #158.
+implemented and merged in PR #158 as `69f4cd6`.
 
 ### Delivered in the follow-up
 
@@ -105,14 +105,18 @@ implemented on this branch and are pending final review and merge in PR #158.
 - Identity end and account deletion use the shared scrub boundary, including
   suffixed Practice pins and worker account state. Export and maintenance
   paths cover the server-held offline records while reads remain expiry-guarded.
+- Client and server Mixed-deck Gate Warden selection share the same challenge
+  kind, so an offline replay cannot diverge at that boundary.
 
 ### Verification receipt
 
 | Surface | Command or evidence | Result |
 | --- | --- | --- |
-| Local gate | `npm run check` | lint, typecheck, build, and bundle passed; Vitest 157 files / 1351 passed / 18 skipped; game JavaScript 30.00 KB gzip against the 30 KB ceiling |
-| Browser matrix | `npm run test:e2e` | 230 passed, 20 intentional project skips across desktop and mobile |
-| Responsive regression | `npm run test:e2e -- --workers=4 -g "opens Workshop catalog and transfers paused play to Journal or Atlas"` | 2 passed; includes the 200% text overflow guard |
+| Local gate | `npm run check:full` | lint, typecheck, build, bundle, and browser gate passed; Vitest 1,378 passed / 18 skipped across 159 files; game JavaScript 29.99 KB gzip against the 30 KB ceiling |
+| Browser matrix | `npm run test:e2e` | 228 passed, 22 intentional project skips across desktop and mobile |
+| Local review | Installed five-axis code-review checklist over the full PR diff | Clean after fixing the Mixed-deck Gate Warden client/server parity case |
+| CodeRabbit | PR #158 status reported a refill of approximately 36 minutes | >30-minute waiver recorded on the PR; no review-spending trigger issued |
+| Responsive regression | Included in the desktop/mobile Playwright matrix | 200% text and narrow-fold checks passed |
 | Route/replay/privacy | `tests/offline-submission-route.test.js`, `tests/offline-submission-store.test.js`, `tests/offline-cloud-outcome.test.js`, `tests/offline-content-pack.test.js`, `tests/offline-continuity-controller.test.js`, `tests/service-worker.test.js` | Passed in the full gate; no reviewed text or selected option identifier is retained in the reviewed durable/export shapes |
 
 The browser evidence is built-page and fixture-backed for the external
@@ -122,8 +126,9 @@ receipt/key or live migration round-trip.
 
 ### Release boundaries still external
 
-- Migration `0024_offline_run_continuity.sql` has been authored and tested as
-  source, but has not been applied to a live database.
+- Migrations `0024_offline_run_continuity.sql` and
+  `0025_offline_run_continuity_forward.sql` have been authored and tested as
+  source, but have not been applied to a live database.
 - Production receipt private/public key configuration, rotation, and secret
   provisioning remain unset and unauthorized.
 - A deployed production reconnect journey, live `/api/ready` proof, and
@@ -135,17 +140,15 @@ The historical section below is retained so the original Batch B evidence is
 auditable; its mechanism-only conclusions describe the earlier commit, not the
 current follow-up source tree.
 
-## Offline Run Continuity ships as mechanisms, not as a running feature
+## Historical baseline: Offline mechanisms before PR #158
 
-**Read the whole offline section below with this in front of it.** Local review
-found that nothing in the application reaches any of it. There is no HTTP route
-that issues or accepts a receipt; `public/sw.js` is published at `/sw.js` but
-never registered and never receives a `pin`, `run-state`, `stage`, or
-`sign-out` message; no module reads `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS`, so the
-browser verifier is never constructed; sign-out calls
-`clearActiveRunRecoveryForIdentityChange`, which does not call
-`scrubOfflineState`; nothing records a version 2 log during play; and the
-rendered **Continue Offline** control has no click handler.
+**This section is retained as an auditable pre-PR #158 snapshot, not as the
+current repository status.** The baseline review found that nothing in the
+application reached the mechanism modules: the routes were not mounted, the
+worker was not registered, sign-out did not call the scrub path, no live v2 log
+was recorded, and the rendered **Continue Offline** control had no click
+handler. PR #158 closes those repo-controlled gaps; the merged-main evidence
+above is the current status.
 
 What that means, criterion by criterion:
 
@@ -167,9 +170,9 @@ What that means, criterion by criterion:
   key. **Sign-out does not call them**, so the acceptance criterion "Sign-out
   erases every account-scoped local artefact" is **not met in the application**.
 
-The rows below are accurate about what the tests prove. They are not evidence
-that an Explorer can do any of it today. Wiring is a follow-up ticket, and it
-is larger than any single ticket in this batch.
+The rows below are accurate about what the tests proved at that historical
+snapshot. They are not current evidence that an Explorer can do any of it;
+current reachable-path evidence is recorded in the merged-main section above.
 
 ## Offline record — Offline Run Continuity
 
@@ -221,7 +224,7 @@ is larger than any single ticket in this batch.
   uses the stored receipt instants rather than the presented copy, and
   `terminalAt` is not cross-checked against the replayed elapsed time.
 
-## Gate record
+## Historical gate record
 
 Run as separate commands with exit codes checked. No gate output was piped
 through `tail` or any other filter that could mask a failure.
@@ -253,7 +256,7 @@ migrated database. They did not run. The 20 skipped browser cases are
 project-scoped: cases that assert a single-project behaviour skip on the other
 project by design.
 
-## Bundle record
+## Historical bundle record
 
 | Chunk | Measured | Ceiling | Headroom |
 | --- | --- | --- | --- |
@@ -324,29 +327,23 @@ than an error. **A human assistive-technology session remains outstanding.**
 
 None of these were performed, and none can be inferred from anything above.
 
-1. **Live migration application.** Migrations 0018 through 0024 have not been
-   applied to any database. 0023 and 0024 are new in this milestone and are
-   authored, text-tested, and unexecuted. No integration test ran, so the SQL
-   is unverified by execution — this is the largest unverified surface in the
-   milestone.
+1. **Live migration application.** Migrations 0018 through 0025 have not been
+   applied to any database. 0023, 0024, and 0025 are authored, text-tested, and
+   unexecuted. No integration test ran, so the SQL is unverified by execution
+   — this remains the largest unverified surface in the milestone.
 2. **Live Stripe activation.** No billing action, price, or product change was
    made. No USD price is proposed.
 3. **Human assistive-technology session.** Outstanding, as above.
-4. **Service-worker registration in production.** `public/sw.js` ships but is
-   not registered by the application; registration, real caching, and real
-   activation timing are unproven.
-5. **Offline receipt key material.** `OFFLINE_RECEIPT_PRIVATE_KEY`,
-   `OFFLINE_RECEIPT_KEY_ID`, and `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS` are
-   documented and unset. Generating a key pair is **not** what stands between
-   this milestone and a working feature — see the section above. The wiring is.
-6. **Wiring the offline feature.** A follow-up ticket has to add the issue and
-   submission routes, register the service worker and give its message channel
-   a client, bundle the public keys, record a version 2 log during play, call
-   `scrubOfflineState` on sign-out and account deletion, give the Continue
-   Offline control a handler, and add a prune job for expired receipts. Until
-   then the offline modules are dormant.
+4. **Merged P0.2 deployment.** The repository wiring is merged, but the live
+   deployment still reports the pre-#158 version. A deployed reconnect journey,
+   real caching, activation timing, and database-backed export/prune smoke
+   test remain operator work.
+5. **Production receipt-key material.** `OFFLINE_RECEIPT_PRIVATE_KEY`,
+   `OFFLINE_RECEIPT_KEY_ID`, and `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS` remain
+   unset. The merged code accepts injected/local test keys only; no private
+   material was generated or committed.
 
-## Checkpoint ledger
+## Historical checkpoint ledger (before PR #158)
 
 | Roadmap criterion | Status | Evidence |
 | --- | --- | --- |

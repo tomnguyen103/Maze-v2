@@ -1,6 +1,6 @@
 # Echo Maze: Current Status
 
-Status snapshot: 2026-08-01
+Status snapshot: 2026-08-02
 
 ## Verdict
 
@@ -10,12 +10,13 @@ The core product is coherent and substantially implemented. The next work is not
 
 ## Repository state
 
-- `origin/main` includes merged PR #152 at `a37dffa`; the current branch
-  `feat/offline-continuity-wiring` carries the P0.2 implementation for PR #158.
-- PR #158 remains open pending rebase, final local proof, and CodeRabbit review.
+- `origin/main` includes merged PR #152 at `a37dffa` and merged PR #158 at
+  `69f4cd6`.
+- PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
+  gate, clean local review, and merge are recorded on the PR.
 - The deployed demo still reflects the pre-P0.2 merge surface.
 - GitHub Actions are disabled. Local validation is the CI gate.
-- CodeGraph index is present and current: 339 files, 3,253 nodes, 6,898 edges.
+- CodeGraph index is present and current: 372 files, 3,636 nodes, 8,104 edges.
 
 ## Shipped product surface
 
@@ -34,36 +35,36 @@ Milestones 1–5 shipped through PRs #102, #115, #123, #133, #148, and #149. Cur
 - Daily Trail Constellation mechanisms;
 - Cloud Quest Continuity at Labyrinth boundaries;
 - Active Run Recovery;
-- Offline Run Continuity wiring is implemented on the current branch; the
-  production key, migration, and deployment boundaries remain external;
+- Offline Run Continuity wiring is merged in `origin/main`; the production key,
+  migration, and deployment boundaries remain external;
 - health, readiness, telemetry, privacy, and export foundations.
 
 The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the primary historical release record. The [frozen expedition roadmap](../plans/echo-maze-next-expedition-roadmap.md) remains the contract for gameplay, privacy, content, and performance constraints.
 
 ## Live deployment snapshot
 
-Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-01:
+Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds; version reports the pre-P0.2 `b9cfd20` surface. |
+| `/api/health` | 200 | Deployment responds; version still reports the pre-P0.2 `a37dffa` surface. |
 | `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
 | Verified Daily endpoints | 500 | Service reports Verified Daily unavailable. |
-| `/sw.js` | 200 | Service-worker asset is deployed; the current branch also wires registration, but that wiring is not deployed yet. |
+| `/sw.js` | 200 | The deployed worker is still the pre-#158 surface; merged wiring is not deployed yet. |
 
 Current deployment is a working demo/test surface, not proof of production readiness.
 
 ## Current blockers
 
-### Offline Run Continuity wiring is pending merge and external release proof
+### Offline Run Continuity wiring is merged; external release proof remains
 
 PR #158 connects the existing receipt, replay, worker, Practice, export, and
-cleanup mechanisms through the player path. Its local implementation and
-browser evidence are complete; the remaining repo workflow is rebase, review,
-and merge. Production migration application, receipt-key provisioning, live
+cleanup mechanisms through the player path. Its local implementation, local
+review, and desktop/mobile browser evidence are complete and merged as
+`69f4cd6`. Production migration application, receipt-key provisioning, live
 reconnect/export/prune smoke checks, and deployment remain external release
 work tracked from [issue #150](https://github.com/tomnguyen103/Maze-v2/issues/150).
 
@@ -77,12 +78,13 @@ check for this change.
 
 ### External release setup remains deferred
 
-- Database migrations `0018`–`0024` require authorized application and smoke testing.
+- Database migrations `0018` through `0025` require authorized application and smoke testing.
 - Offline receipt keys need generation and deployment.
 - Verified Daily needs live configuration and route verification.
 - Stripe is not activated.
 - Access enforcement is disabled.
-- Manual acceptance testing has not yet been completed.
+- Manual acceptance testing, including the human assistive-technology session,
+  has not yet been completed.
 
 These are release operations, not tasks to perform implicitly during normal feature implementation.
 
@@ -97,4 +99,7 @@ Do not describe the current deployment as production-ready until the second prof
 
 ## Read-only verification note
 
-This snapshot was created from live repository, GitHub, deployment, and source inspection. No tests, builds, browser suites, or source changes were run during the status review itself.
+This snapshot was created from live repository, GitHub, deployment, and source
+inspection. The release-proof update records the separate local gate and
+desktop/mobile browser receipts; no production migration, key, billing, or
+enforcement action was performed.

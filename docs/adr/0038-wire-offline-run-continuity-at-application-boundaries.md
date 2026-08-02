@@ -53,7 +53,7 @@ offline records held for that Explorer. Expired receipt cleanup is exposed as
 the existing authenticated internal maintenance job; reads remain expiry
 guarded so pruning is not the only privacy control.
 
-Receipt keys and migration 0024 remain external release operations. Local
+Receipt keys and migrations 0024-0025 remain external release operations. Local
 tests may use generated ephemeral keys and injected database/route adapters,
 but no private key, live migration, or production enforcement is created by
 this feature.
