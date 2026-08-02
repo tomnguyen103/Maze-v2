@@ -1,4 +1,4 @@
-# Echo Fossil Atlas ? feature specification
+# Echo Fossil Atlas — feature specification
 
 Status: ready for implementation, PR batch D
 Roadmap: P1.1 Echo Fossil Atlas
@@ -7,8 +7,8 @@ Dependency: P0.2 Offline Run Continuity merge
 ## Player problem and intended feeling
 
 After an Explorer escapes or is defeated, the Atlas should preserve a small,
-readable memory of what happened. The intended feeling is ?my journey mattered,?
-not ?the game is grading me? or ?I earned a new resource.?
+readable memory of what happened. The intended feeling is “my journey mattered,”
+not “the game is grading me” or “I earned a new resource.”
 
 ## Scope
 

@@ -80,7 +80,6 @@ const REGION_METADATA = Object.freeze({
  * @param {QuestProgressLike} progress
  * @param {{
  *   watchTrailLandmarkIds?: ReadonlySet<string>,
- *   snapshot?: { collection?: unknown, status?: "ready" | "syncing" | "unavailable" },
  *   fossilCollection?: unknown,
  *   fossilStatus?: "ready" | "syncing" | "unavailable"
  * }} [options]
@@ -89,7 +88,6 @@ export function projectQuestAtlas(
   progress,
   {
     watchTrailLandmarkIds = new Set(),
-    snapshot,
     fossilCollection: fossilCollectionInput,
     fossilStatus
   } = {}
@@ -102,9 +100,7 @@ export function projectQuestAtlas(
     throw new Error("Quest Progress has an unavailable Learning Deck.");
   }
   const retainedLandmarkIds = new Set(watchTrailLandmarkIds);
-  const normalizedFossilCollection = normalizeFossilCollection(
-    snapshot?.collection ?? fossilCollectionInput
-  );
+  const normalizedFossilCollection = normalizeFossilCollection(fossilCollectionInput);
   const fossilCollection = normalizedFossilCollection?.questId === progress.questId
     ? normalizedFossilCollection
     : null;
@@ -158,7 +154,7 @@ export function projectQuestAtlas(
       : progress.labyrinthNumber,
     completedLabyrinths: progress.completedLabyrinths,
     restoredSigils: regions.filter((region) => region.sigilRestored).length,
-    fossilStatus: snapshot?.status ?? fossilStatus ?? "unavailable",
+    fossilStatus: fossilStatus ?? "unavailable",
     fossilCount: fossilCollection?.fossils.length ?? 0,
     nextMilestoneNumber,
     labyrinthsToNextMilestone: nextMilestoneNumber === null
@@ -203,6 +199,9 @@ function projectNode(
         ? "current"
         : "ahead";
   const stateLabel = atlasStateLabel({ completed, current, milestone });
+  const nodeFossils = completed
+    ? fossilsForLabyrinth(fossilCollection, labyrinthNumber)
+    : [];
 
   return {
     id,
@@ -214,12 +213,8 @@ function projectNode(
     completed,
     current,
     watchTrailAvailable: completed && retainedLandmarkIds.has(id),
-    fossils: completed
-      ? fossilsForLabyrinth(fossilCollection, labyrinthNumber)
-      : [],
-    fossilCount: completed
-      ? fossilsForLabyrinth(fossilCollection, labyrinthNumber).length
-      : 0,
+    fossils: nodeFossils,
+    fossilCount: nodeFossils.length,
     milestone,
     state,
     stateLabel,

@@ -514,8 +514,8 @@ function renderDetail(
       stamp.className = "atlas-fossil-stamp";
       stamp.dataset.visualStamp = fossil.visualStampId;
       stamp.textContent = fossil.wardenOutcome === "escaped-the-wardens"
-        ? "Trail kept ? escaped"
-        : "Trail kept ? defeated";
+        ? "Trail kept — escaped"
+        : "Trail kept — defeated";
       const fossilNote = document.createElement("p");
       fossilNote.textContent = fossil.fieldNote;
       fossilItem.append(stamp, fossilNote);
