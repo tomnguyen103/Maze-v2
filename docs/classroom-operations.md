@@ -36,8 +36,10 @@ Continue the full migration sequence through 0027, then apply 0028:
 - 0017 adds the forced-RLS Verified Classroom Domain mapping and bounded
   register/read/lookup functions used by domain auto-join.
 - 0028 replaces that read with a thresholded Classroom-wide objective
-  aggregate for the Classroom Expedition debrief. Apply it before deploying
-  the matching `/class` release.
+  aggregate for the Classroom Expedition debrief. Quiesce `/class` traffic
+  while applying the migration and deploying the matching release, or retain
+  an expand/contract-compatible `read_classroom_progress` function until old
+  `/class` processes drain.
 
 The application login named by `DATABASE_URL` must inherit
 `echo_maze_runtime`. It must not be superuser, tenant-table owner, or hold
@@ -55,7 +57,7 @@ release.
 - Student invitations for database-authoritative Teachers; and
 - thresholded Classroom-wide objective signals and reviewed next-step activity
   cards for Teachers; and
-- private reflection prompts for Students after they begin an Expedition.
+- private reflection prompts for Students after they escape a Labyrinth.
 
 The API surfaces are:
 

@@ -99,7 +99,10 @@ Deploy the privilege boundary in this order during a maintenance window:
 9. After the full migration sequence reaches 0027, apply migration 0028
    immediately before deploying the Classroom Expedition Debrief release. It
    replaces the Teacher progress reader with the thresholded, Classroom-wide
-   objective aggregate used by `/class`.
+   objective aggregate used by `/class`. Quiesce `/class` traffic while
+   applying the migration and deploying, or retain an
+   expand/contract-compatible `read_classroom_progress` function until old
+   `/class` processes drain.
 
 Configure the Clerk webhook endpoint to deliver `user.created`, `user.updated`,
 `user.deleted`,
