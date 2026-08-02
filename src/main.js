@@ -78,6 +78,7 @@ import {
 } from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
+  QUEST_LEVELS,
   getDifficultyBand,
   getLabyrinthConfig,
   getQuestLevel,
@@ -120,6 +121,11 @@ let deferChallengeQuestionForLens = false;
 /** @typedef {ReturnType<typeof import("./game/offline-continuity-bridge.js").createOfflineContinuityBridge>} OfflineContinuityBridge */
 /** @typedef {InstanceType<typeof import("./game/audio.js").EchoAudio>} EchoAudio */
 /** @typedef {typeof import("./game/region-theme.js").getRegionTheme} RegionThemeLookup */
+
+const DEFAULT_PRACTICE_INTENTION = "explore";
+const HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER = Math.max(
+  ...QUEST_LEVELS.map(({ number }) => number)
+);
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
@@ -292,6 +298,18 @@ const elements = {
   learningDeckOptions: requiredElement("learning-deck-options", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
+  practiceIntentionGuidance: requiredElement(
+    "practice-intention-guidance",
+    HTMLElement
+  ),
+  practiceIntentionOptions: requiredElement(
+    "practice-intention-options",
+    HTMLElement
+  ),
+  practiceIntentionStatus: requiredElement(
+    "practice-intention-status",
+    HTMLElement
+  ),
   moves: requiredElement("moves-value", HTMLElement),
   newRun: requiredElement("new-run", HTMLButtonElement),
   pause: requiredElement("pause-run", HTMLButtonElement),
@@ -698,6 +716,9 @@ elements.firstLightReplay.addEventListener("click", () => {
   elements.levelDialog.close();
   startFirstLight();
 });
+elements.practiceIntentionOptions.addEventListener("change", () => {
+  renderPracticeIntentionGuidance();
+});
 elements.levelCards.addEventListener("click", async (event) => {
   const button =
     event.target instanceof Element
@@ -711,7 +732,8 @@ elements.levelCards.addEventListener("click", async (event) => {
     await startNewQuest(
       button.dataset.level,
       undefined,
-      selectedLearningDeckOption()
+      selectedLearningDeckOption(),
+      selectedPracticeIntention()
     )
   ) {
     mustChooseLevel = false;
@@ -2510,6 +2532,49 @@ function renderLearningDeckOptions() {
     .catch(() => {});
 }
 
+function selectedPracticeIntention() {
+  const selected = elements.practiceIntentionOptions.querySelector(
+    "input[name='practice-intention']:checked"
+  );
+  if (!(selected instanceof HTMLInputElement)) {
+    return DEFAULT_PRACTICE_INTENTION;
+  }
+  return selected.value || DEFAULT_PRACTICE_INTENTION;
+}
+
+function renderPracticeIntentionGuidance() {
+  const intention = selectedPracticeIntention();
+  const currentQuestLevel = getQuestLevel(questProgress.levelId);
+  const currentDeck = learningDeckForNewQuest(questProgress);
+  const guidance =
+    intention === "review"
+      ? `Review keeps ${currentQuestLevel.name} and ${currentDeck.label} selected below.`
+      : intention === "challenge"
+        ? currentQuestLevel.number >= HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER
+          ? `Challenge is unavailable: no higher Quest Level is published than ${currentQuestLevel.name}. Choose Explore or Review.`
+          : `Challenge requires a Quest Level above ${currentQuestLevel.name}. Choose it below; nothing changes automatically.`
+        : "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below.";
+  const label =
+    intention === "review"
+      ? "Review"
+      : intention === "challenge"
+        ? "Challenge"
+        : "Explore";
+  elements.practiceIntentionGuidance.textContent = guidance;
+  elements.practiceIntentionStatus.dataset.state = "";
+  elements.practiceIntentionStatus.textContent = `${label} selected. ${guidance}`;
+}
+
+function resetPracticeIntention() {
+  const neutral = elements.practiceIntentionOptions.querySelector(
+    `input[name='practice-intention'][value='${DEFAULT_PRACTICE_INTENTION}']`
+  );
+  if (neutral instanceof HTMLInputElement) {
+    neutral.checked = true;
+  }
+  renderPracticeIntentionGuidance();
+}
+
 function selectedLearningDeckOption() {
   const selected = elements.learningDeckOptions.querySelector(
     "input[name='learning-deck']:checked"
@@ -2590,14 +2655,36 @@ function currentLearningDeckOption() {
  * @param {string} levelId
  * @param {string} [seed]
  * @param {{ deckId: string, label: string, revisionId: string }} [learningDeck]
+ * @param {string} [practiceIntention]
  */
 async function startNewQuest(
   levelId,
   seed,
-  learningDeck = getDefaultLearningDeckOption()
+  learningDeck = getDefaultLearningDeckOption(),
+  practiceIntention = DEFAULT_PRACTICE_INTENTION
 ) {
+  const { validatePracticeIntention } = await import(
+    "./player/practice-intention.js"
+  );
+  const selectedLevel = getQuestLevel(levelId);
+  const currentQuestLevel = getQuestLevel(questProgress.levelId);
+  const currentDeck = learningDeckForNewQuest(questProgress);
+  const intentionValidation = validatePracticeIntention({
+    intention: practiceIntention,
+    selectedLevelNumber: selectedLevel.number,
+    currentLevelNumber: currentQuestLevel.number,
+    selectedDeckId: learningDeck.deckId,
+    currentDeckId: currentDeck.deckId,
+    highestPublishedLevelNumber: HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER
+  });
+  if (!intentionValidation.valid) {
+    elements.practiceIntentionStatus.dataset.state = "error";
+    elements.practiceIntentionStatus.textContent = intentionValidation.message;
+    announce(intentionValidation.message);
+    return false;
+  }
   const nextProgress = createQuestProgress(
-    levelId,
+    selectedLevel.id,
     1,
     undefined,
     learningDeck
@@ -2698,6 +2785,7 @@ async function openLevelPicker(requireChoice = false) {
   }
   mustChooseLevel = requireChoice;
   renderLearningDeckOptions();
+  resetPracticeIntention();
   if (elements.firstLightDialog.open) {
     elements.firstLightDialog.close();
   }

@@ -674,6 +674,155 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
+test("keeps Practice Intention explicit, transient, and rejected before storage", async ({
+  page
+}, testInfo) => {
+  await page.setViewportSize(
+    testInfo.project.name === "mobile"
+      ? { width: 390, height: 844 }
+      : { width: 1440, height: 900 }
+  );
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+
+  const intentionGroup = page.getByRole("group", {
+    name: "Choose a Practice Intention"
+  });
+  await expect(intentionGroup).toBeVisible();
+  await expect(intentionGroup.getByRole("radio")).toHaveCount(3);
+  const explore = intentionGroup.getByRole("radio", { name: /Explore/ });
+  await expect(explore).toBeChecked();
+  await explore.focus();
+  await expect(explore).toBeFocused();
+  await explore.press("ArrowLeft");
+  const review = intentionGroup.getByRole("radio", { name: /Review/ });
+  await expect(review).toBeChecked();
+  await expect(page.locator("#practice-intention-guidance")).toHaveText(
+    /Review keeps .* selected below\./
+  );
+  await review.press("ArrowRight");
+  await expect(explore).toBeChecked();
+  await expect(page.locator("#practice-intention-guidance")).toHaveText(
+    "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below."
+  );
+  expect(
+    await intentionGroup.evaluate((element) =>
+      element.scrollWidth <= element.clientWidth + 1
+    )
+  ).toBe(true);
+
+  await intentionGroup
+    .getByRole("radio", { name: /Review/ })
+    .check();
+  const beforeRejectedReview = await page.evaluate(() =>
+    Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  );
+  await page.getByRole("button", { name: /Bright Start/ }).click();
+  await expect(page.locator("#practice-intention-status")).toHaveText(
+    "Review keeps your current Quest Level and Learning Deck."
+  );
+  expect(
+    await page.evaluate(() =>
+      Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    )
+  ).toEqual(beforeRejectedReview);
+
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "";
+  });
+  await explore.check();
+  await chooseTrailScout(page);
+  await expect(page.locator("#level-dialog")).not.toBeVisible();
+  const beforeRejectedChallenge = await page.evaluate(() =>
+    Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  );
+
+  await page.getByRole("button", { name: "New Quest", exact: true }).click();
+  await expect(intentionGroup).toBeVisible();
+  await intentionGroup
+    .getByRole("radio", { name: /Challenge/ })
+    .check();
+  await page.getByRole("button", { name: /Trail Scout/ }).click();
+  await expect(page.locator("#practice-intention-status")).toHaveText(
+    "Choose a higher Quest Level for Challenge."
+  );
+  expect(
+    await page.evaluate(() =>
+      Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    )
+  ).toEqual(beforeRejectedChallenge);
+
+  const beforeCancel = await page.evaluate(() =>
+    Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#level-dialog")).not.toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    )
+  ).toEqual(beforeCancel);
+  await page.getByRole("button", { name: "New Quest", exact: true }).click();
+  await expect(intentionGroup).toBeVisible();
+  await expect(
+    intentionGroup.getByRole("radio", { name: /Explore/ })
+  ).toBeChecked();
+  const storageEntries = await page.evaluate(() =>
+    Object.entries(localStorage).map(([key, value]) => ({ key, value }))
+  );
+  expect(storageEntries.some(({ key }) => /intention/i.test(key))).toBe(false);
+  expect(
+    storageEntries.some(({ value }) => {
+      /** @param {unknown} candidate @returns {boolean} */
+      const containsIntentionField = (candidate) => {
+        if (candidate && typeof candidate === "object") {
+          return Object.entries(candidate).some(
+            ([key, child]) =>
+              /intention/i.test(key) || containsIntentionField(child)
+          );
+        }
+        return (
+          typeof candidate === "string" &&
+          /(?:practice[-_ ]?intention|\bintention\b)/i.test(candidate)
+        );
+      };
+      try {
+        return containsIntentionField(JSON.parse(value));
+      } catch {
+        return containsIntentionField(value);
+      }
+    })
+  ).toBe(false);
+});
+
 test("locks one published Learning Deck into a new Quest", async ({
   page
 }, testInfo) => {

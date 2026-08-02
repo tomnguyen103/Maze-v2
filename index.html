@@ -437,6 +437,42 @@
         <p>Every path has a different maze and learning challenge. Choose a Learning Deck below, then pick a level to start the Quest. You can change both whenever you start a new quest.</p>
       </div>
       <fieldset
+        class="learning-deck-picker practice-intention-picker"
+        aria-describedby="practice-intention-guidance practice-intention-status"
+      >
+        <legend>Choose a Practice Intention</legend>
+        <p id="practice-intention-guidance">
+          Explore leaves the reviewed Quest Level and Learning Deck choices open.
+          Choose both below.
+        </p>
+        <div
+          class="learning-deck-options practice-intention-options"
+          id="practice-intention-options"
+        >
+          <label class="learning-deck-option practice-intention-option">
+            <input type="radio" name="practice-intention" value="review" />
+            <strong>Review</strong>
+            <span>Revisit your current Quest Level and reviewed Learning Deck.</span>
+          </label>
+          <label class="learning-deck-option practice-intention-option">
+            <input
+              type="radio"
+              name="practice-intention"
+              value="explore"
+              checked
+            />
+            <strong>Explore</strong>
+            <span>Choose any reviewed Quest Level and Learning Deck.</span>
+          </label>
+          <label class="learning-deck-option practice-intention-option">
+            <input type="radio" name="practice-intention" value="challenge" />
+            <strong>Challenge</strong>
+            <span>Opt into a higher Quest Level explicitly.</span>
+          </label>
+        </div>
+        <p id="practice-intention-status" role="status" aria-live="polite"></p>
+      </fieldset>
+      <fieldset
         class="learning-deck-picker"
         aria-describedby="learning-deck-guidance"
       >
