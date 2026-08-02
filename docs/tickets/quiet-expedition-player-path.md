@@ -27,6 +27,11 @@ turns the setting off.
 
 ## Verification receipt
 
-Before implementation, record the failing browser/unit test that proves the
-preset and active-play semantic surface are absent or stale. The first green
-receipt must name desktop and mobile cases plus focus-return coverage.
+The pre-change characterization was the missing `#access-quiet-expedition`
+control and the absent false branch in `syncTrailCompass`; both left the
+requested preset/path unavailable or stale. Green receipt: focused Access
+Settings tests pass (15 tests total), and
+`tests/e2e/game.spec.js` — `enters Quiet Expedition without changing the
+Personal Run` — passes on desktop and mobile (2/2), covering preset preview,
+save, no Run-storage mutation, Compass semantics, Atlas, Journal, and
+Practice.

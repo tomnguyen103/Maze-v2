@@ -41,6 +41,7 @@ describe("Explorer Access Settings dialog", () => {
             <option value="slower">Slower</option>
             <option value="faster">Faster</option>
           </select>
+          <button id="access-quiet-expedition" type="button">Use Quiet Expedition</button>
           <p id="access-settings-status"></p>
           <button id="access-settings-reset" type="button">Reset</button>
           <button id="access-settings-save" type="submit">Save settings</button>
@@ -226,5 +227,34 @@ describe("Trail Compass and narration pace controls", () => {
     expect(
       JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
     ).toMatchObject({ trailCompassEnabled: true, narrationPace: "faster" });
+  });
+
+  it("previews the Quiet Expedition composition without persisting it", () => {
+    const saved = {
+      ...DEFAULT_ACCESS_SETTINGS,
+      highContrast: true,
+      largeMarks: true,
+      narrationPace: "slower"
+    };
+    const storage = createStorage(saved);
+    const onApply = vi.fn();
+    const view = createAccessSettingsView({ storage, onApply });
+    view.show(
+      /** @type {HTMLButtonElement} */ (
+        document.getElementById("settings-trigger")
+      )
+    );
+
+    document.getElementById("access-quiet-expedition")?.click();
+
+    expect(onApply).toHaveBeenLastCalledWith({
+      ...saved,
+      readerFriendlyQuestions: true,
+      reducedEffects: true,
+      trailCompassEnabled: true
+    });
+    expect(
+      JSON.parse(storage.getItem(ACCESS_SETTINGS_STORAGE_KEY) ?? "null")
+    ).toEqual(saved);
   });
 });

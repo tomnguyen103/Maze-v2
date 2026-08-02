@@ -1625,17 +1625,31 @@ let classExpeditionPlayPromise;
 function syncTrailCompass() {
   trailCompassActive =
     document.documentElement.dataset.accessCompass === "trail";
-  if (trailCompassActive) {
-    trailCompassPromise ??= import("./game/trail-compass.js")
-      .then((module) => {
-        trailCompassController = module.createTrailCompass({
-          getRun: () => run,
-          announce,
-          playCue: playAudio
-        });
-      })
-      .catch(() => null);
+  const modeLabel = document.getElementById("trail-compass-mode");
+  if (modeLabel) {
+    modeLabel.textContent =
+      document.documentElement.dataset.accessQuiet === "on"
+        ? "Quiet Expedition"
+        : "Trail Compass";
   }
+  if (!trailCompassActive) {
+    trailCompassController?.hide();
+    return;
+  }
+  trailCompassController?.show();
+  trailCompassPromise ??= import("./game/trail-compass.js")
+    .then((module) => {
+      if (!trailCompassActive) {
+        return null;
+      }
+      trailCompassController = module.createTrailCompass({
+        getRun: () => run,
+        announce,
+        playCue: playAudio
+      });
+      return trailCompassController;
+    })
+    .catch(() => null);
 }
 
 function loadClassExpeditionPlay() {

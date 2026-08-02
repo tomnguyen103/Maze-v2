@@ -188,7 +188,20 @@
               </button>
             </div>
 
-            <div class="trail-compass" id="trail-compass">
+            <div
+              class="trail-compass"
+              id="trail-compass"
+              role="region"
+              aria-labelledby="trail-compass-title"
+              aria-describedby="trail-compass-description"
+            >
+              <div class="trail-compass__heading">
+                <span class="section-label" id="trail-compass-mode">Trail Compass</span>
+                <strong id="trail-compass-title">Describe the revealed trail</strong>
+              </div>
+              <p id="trail-compass-description">
+                The maze picture is optional. Use these controls and your keyboard to follow the same Run rules.
+              </p>
               <button class="control-button" id="compass-describe" type="button">
                 Describe Trail
               </button>
@@ -355,6 +368,16 @@
             </select>
           </label>
         </fieldset>
+        <section class="access-settings-preset" aria-labelledby="quiet-expedition-title">
+          <span class="section-label">Calm path</span>
+          <h3 id="quiet-expedition-title">Quiet Expedition</h3>
+          <p>
+            Preview Trail Compass, reader-friendly Question text, and reduced visual effects together. The same rules, score, and timing remain.
+          </p>
+          <button class="control-button" id="access-quiet-expedition" type="button">
+            Use Quiet Expedition
+          </button>
+        </section>
         <p
           class="access-settings-status"
           id="access-settings-status"
