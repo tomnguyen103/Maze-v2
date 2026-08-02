@@ -20,7 +20,11 @@ const STALE_SYNC = Symbol("stale-sync");
  *   storage?: QuestStorage,
  *   onConflict?: (conflict: { local: QuestProgress, cloud: CloudQuest }) => void,
  *   onProgress?: (progress: QuestProgress, source: "cloud" | "merged") => void,
- *   onStatus?: (status: "local" | "syncing" | "saved" | "offline" | "conflict") => void
+ *   onStatus?: (status: "local" | "syncing" | "saved" | "offline" | "conflict") => void,
+ *   fossilDependencies?: [
+ *     Parameters<typeof import("../game/fossil-runtime.js").createFossilRuntime>[0]["playerController"],
+ *     () => string
+ *   ]
  * }} dependencies
  */
 export function createQuestContinuityController({
@@ -29,7 +33,8 @@ export function createQuestContinuityController({
   storage = globalThis.localStorage,
   onConflict = () => {},
   onProgress = () => {},
-  onStatus = () => {}
+  onStatus = () => {},
+  fossilDependencies
 }) {
   /** @type {string | null} */
   let authenticatedUserId = null;
@@ -38,8 +43,18 @@ export function createQuestContinuityController({
   /** @type {{ local: QuestProgress, cloud: CloudQuest } | null} */
   let conflict = null;
   let syncChain = Promise.resolve(false);
+  const fossilRuntime = fossilDependencies
+    ? import("../game/fossil-runtime.js").then(({ createFossilRuntime }) =>
+        createFossilRuntime({
+          playerController: fossilDependencies[0],
+          getQuestId: fossilDependencies[1]
+        })
+      )
+        .catch(() => null)
+    : Promise.resolve(null);
 
   return {
+    fossils: fossilRuntime,
     /** @param {string | null} nextUserId */
     setAuthenticated(nextUserId) {
       const normalizedUserId =

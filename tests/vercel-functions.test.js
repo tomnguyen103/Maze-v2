@@ -263,6 +263,10 @@ describe("Vercel function budget", () => {
         {
           source: "/api/offline/submission",
           destination: "/api/profile?_offlineRoute=submission"
+        },
+        {
+          source: "/api/echo-fossils",
+          destination: "/api/profile?_fossilRoute=echo-fossils"
         }
       ])
     );
@@ -276,11 +280,21 @@ describe("Vercel function budget", () => {
         "/api/offline/submission",
         503
       ],
+      [
+        "/api/profile?_fossilRoute=echo-fossils&questId=quest_fossil_route_123",
+        "/api/echo-fossils?questId=quest_fossil_route_123",
+        503
+      ],
       // The rewritten value is attacker-controlled: anything unknown must be
       // answered, never fall through to a next?.() that does not exist.
       [
         "/api/profile?_meRoute=../secret",
         "/api/profile?_meRoute=../secret",
+        404
+      ],
+      [
+        "/api/profile?_fossilRoute=../secret",
+        "/api/profile?_fossilRoute=../secret",
         404
       ]
     ]) {

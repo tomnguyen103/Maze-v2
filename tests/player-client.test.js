@@ -466,6 +466,45 @@ describe("player client", () => {
     ]);
   });
 
+  it("keeps Echo Fossil calls personal and Quest-scoped", async () => {
+    const collection = {
+      version: 1,
+      questId: "quest_client_123",
+      fossils: []
+    };
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ collection }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token",
+      getClassroomId: () => "org_should_not_be_sent"
+    });
+
+    await client.getFossils("quest_client_123");
+    await client.saveFossils(collection);
+
+    const calls = /** @type {any[][]} */ (fetchImpl.mock.calls);
+    expect(calls[0][0]).toBe(
+      "/api/echo-fossils?questId=quest_client_123"
+    );
+    expect(calls[1]).toEqual([
+      "/api/echo-fossils",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ collection })
+      })
+    ]);
+    for (const call of calls) {
+      expect(new Headers(call[1].headers).has(
+        "x-echo-maze-classroom-id"
+      )).toBe(false);
+    }
+  });
+
   it("binds only Class Play data calls to the selected Classroom", async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ record: null }), {

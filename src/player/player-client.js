@@ -385,6 +385,19 @@ export function createPlayerApiClient({
         true
       );
     },
+    /** @param {string} questId */
+    async getFossils(questId) {
+      return request(
+        `/api/echo-fossils?questId=${encodeURIComponent(questId)}`
+      );
+    },
+    /** @param {unknown} collection */
+    async saveFossils(collection) {
+      return request("/api/echo-fossils", {
+        method: "PUT",
+        body: JSON.stringify({ collection })
+      });
+    },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeRun(run) {
       return request("/api/access/runs", {

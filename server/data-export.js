@@ -110,6 +110,9 @@ const SECTION_QUERIES = {
   journal: `SELECT journal, clear_generation, created_at, updated_at
     FROM learning_journals
     WHERE clerk_user_id = $1 AND classroom_id IS NULL`,
+  fossil_collection: `SELECT quest_id, collection, created_at, updated_at
+    FROM echo_fossil_collections
+    WHERE player_id = $1`,
   class_journal: `SELECT classroom_id, journal, clear_generation, created_at,
       updated_at
     FROM learning_journals
@@ -202,6 +205,7 @@ export async function buildUserExport(
   const classroomMemberships = await rowsOf("classroom_memberships");
   const personalQuestProgress = await rowsOf("quest_progress");
   const personalJournal = await rowsOf("journal");
+  const fossilCollection = await rowsOf("fossil_collection");
   const accessSettings = await rowsOf("access_settings");
   const verifiedDailyResults = await rowsOf("verified_daily_results");
   const verifiedDailyBestResults = await rowsOf(
@@ -270,6 +274,7 @@ export async function buildUserExport(
       classroom_memberships: classroomMemberships,
       quest_progress: personalQuestProgress[0] ?? null,
       journal: personalJournal[0] ?? null,
+      fossil_collection: fossilCollection[0] ?? null,
       class_quest_progress: classQuestProgress,
       class_journals: classJournals,
       class_run_grants: classRunGrants,

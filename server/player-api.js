@@ -100,6 +100,11 @@ import {
   LEARNING_JOURNAL_PATH
 } from "./learning-journal-route.js";
 import { createLearningJournalStore } from "./learning-journal-store.js";
+import {
+  createEchoFossilHandler,
+  ECHO_FOSSIL_PATH
+} from "./echo-fossil-route.js";
+import { createEchoFossilStore } from "./echo-fossil-store.js";
 import { createPlayerApiHandler } from "./player-route.js";
 import {
   createPermissionGuard,
@@ -181,6 +186,7 @@ const PLAYER_PATHS = new Set([
   DATA_EXPORT_PATH,
   ACCESS_SETTINGS_PATH,
   LEARNING_JOURNAL_PATH,
+  ECHO_FOSSIL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
   ...OFFLINE_RECEIPT_PATHS,
@@ -331,6 +337,7 @@ export function createPlayerApi(env = process.env) {
   const guestDemoStore = createGuestDemoStore(pool);
   const lifetimeStore = createLifetimeStore(pool);
   const learningJournalStore = createLearningJournalStore(pool);
+  const echoFossilStore = createEchoFossilStore(pool);
   const accessSettingsStore = createAccessSettingsStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(pool);
   const userDeletionStore = createUserDeletionStore(pool);
@@ -501,6 +508,11 @@ export function createPlayerApi(env = process.env) {
   });
   const learningJournalHandler = createLearningJournalHandler({
     store: learningJournalStore,
+    getUserId,
+    recordAudit
+  });
+  const echoFossilHandler = createEchoFossilHandler({
+    store: echoFossilStore,
     getUserId,
     recordAudit
   });
@@ -755,6 +767,10 @@ export function createPlayerApi(env = process.env) {
       store: learningJournalStore,
       getUserId: () => null
     });
+    const unavailableEchoFossilHandler = createEchoFossilHandler({
+      store: echoFossilStore,
+      getUserId: () => null
+    });
     const unavailableAccessSettingsHandler = createAccessSettingsHandler({
       store: accessSettingsStore,
       getUserId: () => null
@@ -851,6 +867,10 @@ export function createPlayerApi(env = process.env) {
       }
       if (pathname === LEARNING_JOURNAL_PATH) {
         void unavailableLearningJournalHandler(request, response, next);
+        return;
+      }
+      if (pathname === ECHO_FOSSIL_PATH) {
+        void unavailableEchoFossilHandler(request, response, next);
         return;
       }
       if (pathname === DATA_EXPORT_PATH) {
@@ -978,6 +998,10 @@ export function createPlayerApi(env = process.env) {
         }
         if (pathname === LEARNING_JOURNAL_PATH) {
           void learningJournalHandler(request, response, next);
+          return;
+        }
+        if (pathname === ECHO_FOSSIL_PATH) {
+          void echoFossilHandler(request, response, next);
           return;
         }
         if (pathname === DATA_EXPORT_PATH) {

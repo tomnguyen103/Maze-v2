@@ -46,6 +46,11 @@ export function createUserDeletionStore(pool) {
           [userId]
         );
         await client.query(
+          `DELETE FROM echo_fossil_collections
+           WHERE player_id = $1`,
+          [userId]
+        );
+        await client.query(
           `DELETE FROM players
            WHERE clerk_user_id = $1`,
           [userId]
@@ -123,13 +128,20 @@ export function createUserDeletionStore(pool) {
                   WHERE player_id = $1
                 )
               ) AS offline_run_receipts_deleted,
-              (
-                to_regclass('public.offline_pending_submissions') IS NULL
-                OR NOT EXISTS (
-                  SELECT 1 FROM offline_pending_submissions
-                  WHERE player_id = $1
-                )
-              ) AS offline_pending_submissions_deleted`,
+               (
+                 to_regclass('public.offline_pending_submissions') IS NULL
+                 OR NOT EXISTS (
+                   SELECT 1 FROM offline_pending_submissions
+                   WHERE player_id = $1
+                 )
+               ) AS offline_pending_submissions_deleted,
+               (
+                 to_regclass('public.echo_fossil_collections') IS NULL
+                 OR NOT EXISTS (
+                   SELECT 1 FROM echo_fossil_collections
+                   WHERE player_id = $1
+                 )
+               ) AS echo_fossils_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -171,7 +183,8 @@ const DELETION_ASSERTIONS = Object.freeze([
   "verified_daily_entries_deleted",
   "daily_trail_contributions_deleted",
   "offline_run_receipts_deleted",
-  "offline_pending_submissions_deleted"
+  "offline_pending_submissions_deleted",
+  "echo_fossils_deleted"
 ]);
 
 /** @param {unknown} row */

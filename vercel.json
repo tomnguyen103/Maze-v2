@@ -45,6 +45,10 @@
       "destination": "/api/profile?_offlineRoute=submission"
     },
     {
+      "source": "/api/echo-fossils",
+      "destination": "/api/profile?_fossilRoute=echo-fossils"
+    },
+    {
       "source": "/api/classrooms",
       "destination": "/api/profile?_classroomRoute=root"
     },
