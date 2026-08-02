@@ -133,6 +133,39 @@ describe("offline continuity controller", () => {
         verified: true
       })
     ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      controller.recover({ ...identity, questId: "quest_ii_other_456" })
+    ).resolves.toMatchObject({ ok: false, reason: "binding" });
+  });
+
+  it("accepts a legacy Quest I receipt that predates Quest identity", async () => {
+    const storage = createStorage();
+    const run = createRun("OFFLINE-CONTROLLER-QUEST-I", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
+    });
+    const identity = {
+      ...createRunIdentity(run),
+      questId: "quest_legacy_controller_123"
+    };
+    const controller = createOfflineContinuityController({
+      storage,
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
+      accountScope: "user_offline_01"
+    });
+
+    await expect(
+      controller.prepare({
+        run: identity,
+        receipt: createReceipt({ ...identity, questId: undefined }),
+        assetPackage: createAssetPackage(),
+        verified: true
+      })
+    ).resolves.toMatchObject({ ok: true });
   });
 
   it("persists a receipt-bound v2 log and recovers it after a controller restart", async () => {

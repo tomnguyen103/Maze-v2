@@ -7,6 +7,7 @@ import { createOfflineContinuityClient } from "../src/game/offline-continuity-cl
 
 const RUN = {
   runId: "access_01J1MOSSWATCH",
+  questId: "quest_ii_offline_test_123",
   seed: "MOSS-WATCH-11",
   levelId: "trail-scout",
   labyrinthNumber: 4
@@ -15,6 +16,7 @@ const RECEIPT = {
   schema: "echo-maze-offline-receipt/1",
   binding: {
     runId: RUN.runId,
+    questId: RUN.questId,
     seed: RUN.seed,
     levelId: RUN.levelId,
     labyrinthNumber: RUN.labyrinthNumber,
@@ -130,6 +132,54 @@ describe("Offline Continuity browser boundary", () => {
       ok: false,
       reason: "binding"
     });
+  });
+
+  it("does not pin a receipt bound to another active Quest", async () => {
+    const pin = vi.fn(async () => ({ ok: true }));
+    const issueOfflineReceipt = vi.fn(async () => ({
+      receipt: {
+        ...RECEIPT,
+        binding: { ...RECEIPT.binding, questId: "quest_ii_old_456" }
+      },
+      assetPackage: ASSET_PACKAGE
+    }));
+    const client = createOfflineContinuityClient({
+      playerController: { issueOfflineReceipt },
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      workerClient: { pin },
+      storage: storage(),
+      cryptoLike: cryptoLike()
+    });
+
+    await expect(client.issueAndPin(RUN)).resolves.toMatchObject({
+      ok: false,
+      reason: "binding"
+    });
+    expect(pin).not.toHaveBeenCalled();
+  });
+
+  it("pins a legacy Quest I receipt without a Quest identity", async () => {
+    const legacyRun = { ...RUN, questId: "quest_legacy_client_123" };
+    const pin = vi.fn(async () => ({ ok: true }));
+    const issueOfflineReceipt = vi.fn(async () => ({
+      receipt: {
+        ...RECEIPT,
+        binding: { ...RECEIPT.binding, questId: undefined }
+      },
+      assetPackage: ASSET_PACKAGE
+    }));
+    const client = createOfflineContinuityClient({
+      playerController: { issueOfflineReceipt },
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      workerClient: { pin },
+      storage: storage(),
+      cryptoLike: cryptoLike()
+    });
+
+    await expect(client.issueAndPin(legacyRun)).resolves.toMatchObject({
+      ok: true
+    });
+    expect(pin).toHaveBeenCalledOnce();
   });
 
   it("uses the current account scope when a cached client survives auth changes", async () => {

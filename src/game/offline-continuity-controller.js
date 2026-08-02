@@ -43,7 +43,8 @@ const ACCOUNT_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision?: string,
- *   contentPackHash?: string
+ *   contentPackHash?: string,
+ *   questId?: string
  * }} OfflineRunLocator
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -86,7 +87,7 @@ function sameRunIdentity(left, right) {
     left.labyrinthNumber === right.labyrinthNumber &&
     left.rulesetRevision === right.rulesetRevision &&
     left.contentPackHash === right.contentPackHash &&
-    left.questId === right.questId
+    questIdentityMatches(left.questId, right.questId)
   );
 }
 
@@ -118,10 +119,22 @@ function receiptMatchesRun(receipt, run) {
     receipt.binding.labyrinthNumber === run.labyrinthNumber &&
     receipt.binding.rulesetRevision === run.rulesetRevision &&
     receipt.binding.contentPackHash === run.contentPackHash &&
-    (run.questId === undefined
-      ? receipt.binding.questId === undefined
-      : receipt.binding.questId === run.questId)
+    questIdentityMatches(receipt.binding.questId, run.questId)
   );
+}
+
+/** @param {unknown} left @param {unknown} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined && !isQuestIIQuestId(right)) ||
+    (right === undefined && !isQuestIIQuestId(left))
+  );
+}
+
+/** @param {unknown} value */
+function isQuestIIQuestId(value) {
+  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /** @param {unknown} value @returns {RunActionLogV2 | null} */
@@ -615,9 +628,11 @@ export function createOfflineContinuityController({
       rulesetRevision:
         run.rulesetRevision ?? receipt.binding.rulesetRevision,
       contentPackHash: run.contentPackHash ?? receipt.binding.contentPackHash,
-      ...(typeof receipt.binding.questId === "string"
-        ? { questId: receipt.binding.questId }
-        : {})
+      ...(typeof run.questId === "string"
+        ? { questId: run.questId }
+        : typeof receipt.binding.questId === "string"
+          ? { questId: receipt.binding.questId }
+          : {})
     });
     const binding = validateBinding(recoveredRun, receipt);
     if (!binding.ok) {

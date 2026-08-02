@@ -92,7 +92,7 @@ export function createOfflineContentPack(hash, publishedQuestions = []) {
           BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[2])],
           "gate-warden",
           revisionId,
-          0,
+          BANDS[/** @type {keyof typeof BANDS} */ (questIICapstone[2])] - 1,
           "quest_ii_offline_revision_123"
         );
       }

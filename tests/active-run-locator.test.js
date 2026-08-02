@@ -64,6 +64,24 @@ describe("Active Run Locator", () => {
     expect(loadActiveRunLocator(storage)).toEqual(locator);
   });
 
+  it("round-trips the Quest II identity used by Run admission", () => {
+    const storage = createStorage();
+    const locator = {
+      version: 3,
+      runId: "access_01J1MOSSWATCH",
+      pending: false,
+      seed: "STONE-VAULT-00",
+      levelId: "maze-master",
+      labyrinthNumber: 13,
+      atlasRegionId: "advanced",
+      rulesetRevision: "tide-doors-v1",
+      questId: "quest_ii_locator_123"
+    };
+
+    expect(saveActiveRunLocator(locator, storage)).toEqual(locator);
+    expect(loadActiveRunLocator(storage)).toEqual(locator);
+  });
+
   it("distinguishes a pending admission from an admitted active Run", () => {
     const storage = createStorage();
     const pending = saveActiveRunLocator(

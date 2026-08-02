@@ -5,6 +5,10 @@ import {
 import { createOfflineQuestionSequence } from "./offline-content-pack.js";
 import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
 import { reviewedQuestionForId } from "../src/learning/lantern-journal.js";
+import {
+  getQuestContentPackId,
+  QUEST_II_CONTENT_PACK_ID
+} from "../src/game/quest-content.js";
 
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
 
@@ -32,9 +36,12 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  * without retaining Question ids, selected options, or the detailed replay.
  *
  * @param {ReturnType<typeof verifyOfflineRunReplay> & { journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[] }} result
+ * @param {string | undefined} questId
  */
-function compactReplayResult(result) {
+function compactReplayResult(result, questId) {
   const summary = new Map();
+  const questII =
+    getQuestContentPackId(questId) === QUEST_II_CONTENT_PACK_ID;
   for (const event of result.journalEvents ?? []) {
     const journalQuestion = reviewedQuestionForId(event.questionId);
     if (
@@ -49,13 +56,20 @@ function compactReplayResult(result) {
     ) {
       continue;
     }
+    const challengeKind = /^quest-ii-capstone-/u.test(event.questionId)
+      ? "gate-warden"
+      : undefined;
     const key = JSON.stringify([
+      questId,
       event.topicId,
       event.learningObjectiveId,
       event.difficultyBand,
-      event.outcome
+      event.outcome,
+      challengeKind
     ]);
     const current = summary.get(key) ?? {
+      ...(questII && typeof questId === "string" ? { questId } : {}),
+      ...(challengeKind ? { challengeKind } : {}),
       topicId: event.topicId,
       learningObjectiveId: event.learningObjectiveId,
       difficultyBand: event.difficultyBand,
@@ -134,6 +148,8 @@ function compactReplayResult(result) {
  *         outcome: "correct" | "wrong" | "hint" | "skip"
  *       }[]
  *       journalSummary?: {
+ *         questId?: string,
+ *         challengeKind?: "gate-warden",
  *         topicId: string,
  *         learningObjectiveId: string,
  *         difficultyBand: string,
@@ -159,6 +175,8 @@ function compactReplayResult(result) {
  *           outcome: "correct" | "wrong" | "hint" | "skip"
  *         }[]
  *         journalSummary?: {
+ *           questId?: string,
+ *           challengeKind?: "gate-warden",
  *           topicId: string,
  *           learningObjectiveId: string,
  *           difficultyBand: string,
@@ -414,7 +432,7 @@ export function createOfflineSubmissionService({
         throw error;
       }
 
-      const compactResult = compactReplayResult(result);
+      const compactResult = compactReplayResult(result, stored.questId);
       const cloudResult = {
         ...result,
         ...(compactResult.journalSummary

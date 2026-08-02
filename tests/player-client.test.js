@@ -377,6 +377,7 @@ describe("player client", () => {
     });
     const run = {
       runId: "access_01J1MOSSWATCH",
+      questId: "quest_ii_client_test_123",
       seed: "MOSS-WATCH-11",
       levelId: "trail-scout",
       labyrinthNumber: 4

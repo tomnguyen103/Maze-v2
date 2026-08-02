@@ -1343,9 +1343,7 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
   await page.goto(`/?seed=${seed}&level=trail-scout&labyrinth=4`);
   await expectGameReady(page);
   await expect(page.locator("#quest-level-name")).toContainText("Quest II");
-  await expect(page.locator("#story-log [data-kind='region']")).toContainText(
-    "Hushline Orchard"
-  );
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(0);
   const maze = page.getByLabel(/Interactive maze/);
   await maze.focus();
   const challenge = page.locator("#challenge-dialog");
@@ -1372,6 +1370,7 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
   }
 
   await expect(challenge).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#story-log [data-kind='region']")).toHaveCount(0);
   await expect(page.locator("#challenge-question")).toBeFocused();
   await expect(page.locator("#challenge-question")).toContainText(
     "Hushline Orchard"

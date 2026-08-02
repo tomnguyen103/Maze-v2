@@ -2,6 +2,7 @@ import { QUEST_LABYRINTH_COUNT } from "../questions/quest-levels.js";
 import { normalizeRunRuleset } from "./run-ruleset.js";
 
 const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
+const QUEST_ID_PATTERN = /^(?:quest|legacy)_[a-z0-9_-]{7,92}$/;
 
 /**
  * @typedef {{
@@ -12,7 +13,8 @@ const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
  *   labyrinthNumber: number,
  *   atlasRegionId?: string,
- *   rulesetRevision?: string
+ *   rulesetRevision?: string,
+ *   questId?: string
  * }} ActiveRunLocator
  * @typedef {{
  *   getItem: (key: string) => string | null,
@@ -44,7 +46,7 @@ export function loadActiveRunLocator(storage = globalThis.localStorage) {
 }
 
 /**
- * @param {{ version: number, runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string }} locator
+ * @param {{ version: number, runId?: string, pending?: boolean, seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string, questId?: string }} locator
  * @param {StorageLike | undefined} [storage]
  * @returns {ActiveRunLocator}
  */
@@ -105,6 +107,9 @@ function normalizeLocator(value) {
         !/^[a-zA-Z0-9_-]{12,128}$/.test(candidate.runId) ||
         typeof candidate.pending !== "boolean")) ||
     (version === 3 && !ruleset) ||
+    (candidate.questId !== undefined &&
+      (typeof candidate.questId !== "string" ||
+        !QUEST_ID_PATTERN.test(candidate.questId))) ||
     typeof candidate.seed !== "string" ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(candidate.seed) ||
     candidate.seed.length > 24 ||
@@ -127,6 +132,9 @@ function normalizeLocator(value) {
           atlasRegionId: ruleset.atlasRegionId,
           rulesetRevision: ruleset.revision
         }
+      : {}),
+    ...(typeof candidate.questId === "string"
+      ? { questId: candidate.questId }
       : {})
   };
 }

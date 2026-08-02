@@ -1,5 +1,5 @@
 {
   "testFiles": 174,
-  "tests": 1474,
-  "source": "Full Vitest run on 2026-08-02 after rebasing Quest II onto current main and adding reviewed Quest II boundary regression coverage; update deliberately when tests change."
+  "tests": 1488,
+  "source": "Full Vitest run on 2026-08-02 after Quest II identity and legacy continuity regression coverage; update deliberately when tests change."
 }

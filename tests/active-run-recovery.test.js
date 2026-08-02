@@ -26,7 +26,8 @@ import { buildRunReplayTimeline } from "../src/game/run-replay.js";
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
  *   labyrinthNumber: number,
  *   atlasRegionId?: string,
- *   rulesetRevision?: string
+ *   rulesetRevision?: string,
+ *   questId?: string
  * }} RecoveryLocator
  * @typedef {ReturnType<typeof createActiveRunRecoveryController>} RecoveryController
  */
@@ -467,6 +468,60 @@ function reachGateWardenChallenge(controller) {
 }
 
 describe("Active Run Recovery", () => {
+  it("keeps an optional Quest identity bound through recovery", () => {
+    const storage = createMemoryStorage();
+    const questLocator = {
+      ...RULESET_LOCATOR,
+      questId: "quest_ii_recovery_123"
+    };
+    const controller = createActiveRunRecoveryController({ storage });
+
+    expect(() => controller.begin(questLocator)).not.toThrow();
+    durableTransition(controller, initialRun(questLocator), {
+      type: "move",
+      direction: firstLegalDirection(initialRun(questLocator))
+    });
+    expect(
+      JSON.parse(storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "{}").identity
+    ).toMatchObject({ questId: questLocator.questId });
+
+    const mismatch = createActiveRunRecoveryController({ storage }).load({
+      ...questLocator,
+      questId: "quest_ii_other_456"
+    });
+    expect(mismatch).toMatchObject({ status: "invalid", reason: "corrupt" });
+  });
+
+  it("accepts a legacy Quest I envelope without an identity but not Quest II", () => {
+    const storage = createMemoryStorage();
+    const questOneLocator = {
+      ...RULESET_LOCATOR,
+      questId: "quest_legacy_recovery_123"
+    };
+    const controller = createActiveRunRecoveryController({ storage });
+    controller.begin(questOneLocator);
+    const run = initialRun(questOneLocator);
+    durableTransition(controller, run, {
+      type: "move",
+      direction: firstLegalDirection(run)
+    });
+    const envelope = JSON.parse(
+      storage.getItem(ACTIVE_RUN_RECOVERY_KEY) ?? "{}"
+    );
+    delete envelope.identity.questId;
+    storage.setItem(ACTIVE_RUN_RECOVERY_KEY, JSON.stringify(envelope));
+
+    expect(
+      createActiveRunRecoveryController({ storage }).load(questOneLocator)
+    ).toMatchObject({ status: "recovered" });
+    expect(
+      createActiveRunRecoveryController({ storage }).load({
+        ...questOneLocator,
+        questId: "quest_ii_recovery_123"
+      })
+    ).toMatchObject({ status: "invalid", reason: "corrupt" });
+  });
+
   it("preserves exact Region rules through recovery reconstruction", () => {
     const storage = createMemoryStorage();
     const controller = createActiveRunRecoveryController({ storage });

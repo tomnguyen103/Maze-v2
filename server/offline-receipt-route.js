@@ -2,6 +2,7 @@ import { URL } from "node:url";
 import { classroomIdFromRequest } from "./classroom-context.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { offlineReceiptWindows } from "../shared/offline-receipt.js";
+import { getQuestContentPackId, QUEST_II_CONTENT_PACK_ID } from "../src/game/quest-content.js";
 import { validateOfflineDeviceInstallationNonce } from "./offline-device.js";
 import { validateRunRequest } from "./run-access-route.js";
 
@@ -31,7 +32,7 @@ const MAX_BODY_BYTES = 8 * 1024;
  *   playExpiresAt: string,
  *   submissionExpiresAt: string
  * }} OfflineStoredReceipt */
-/** @typedef {OfflineReceiptFields & { classroomId: string | null }} OfflineReceiptAdmission */
+/** @typedef {OfflineReceiptFields & { classroomId: string | null, questId: string }} OfflineReceiptAdmission */
 
 /** @param {import("node:http").ServerResponse} response */
 function noStore(response) {
@@ -65,8 +66,15 @@ async function readReceiptRequest(request) {
     parsed && typeof parsed === "object"
       ? /** @type {Record<string, unknown>} */ (parsed)
       : {};
+  if (
+    typeof input.questId !== "string" ||
+    !/^(quest|legacy)_[A-Za-z0-9_-]{7,92}$/.test(input.questId)
+  ) {
+    throw new Error("Quest ID is invalid.");
+  }
   return {
     ...validateRunRequest(input),
+    questId: input.questId,
     deviceInstallationNonce: validateOfflineDeviceInstallationNonce(
       input.deviceInstallationNonce
     )
@@ -186,6 +194,7 @@ export function createOfflineReceiptHandler({
       if (
         !progress ||
         typeof progress.questId !== "string" ||
+        progress.questId !== input.questId ||
         progress.levelId !== grant.levelId ||
         Number(progress.labyrinthNumber) !== Number(grant.labyrinthNumber) ||
         typeof progress.learningDeckId !== "string" ||
@@ -237,6 +246,15 @@ export function createOfflineReceiptHandler({
         });
         return;
       }
+      if (
+        stored &&
+        !questIdentityMatches(stored.questId, input.questId)
+      ) {
+        sendJson(response, 409, {
+          error: "The Run is bound to another Quest."
+        });
+        return;
+      }
       if (!stored) {
         sendJson(
           response,
@@ -247,14 +265,13 @@ export function createOfflineReceiptHandler({
         );
         return;
       }
+      const storedQuestId = stored.questId ?? input.questId;
       const receipt = signer.issue(
         {
           runId: stored.runId,
           playerId: stored.playerId,
           classroomId: null,
-          ...(typeof stored.questId === "string"
-            ? { questId: stored.questId }
-            : {}),
+          questId: storedQuestId,
           deviceInstallationHash: stored.deviceInstallationHash,
           seed: stored.seed,
           levelId: /** @type {OfflineLevelId} */ (stored.levelId),
@@ -294,6 +311,17 @@ export function createOfflineReceiptHandler({
       });
     }
   };
+}
+
+/** @param {string | undefined} left @param {string} right */
+function questIdentityMatches(left, right) {
+  return (
+    left === right ||
+    (left === undefined &&
+      getQuestContentPackId(right) !== QUEST_II_CONTENT_PACK_ID) ||
+    (right === undefined &&
+      getQuestContentPackId(left) !== QUEST_II_CONTENT_PACK_ID)
+  );
 }
 
 /** @param {string} [message] */

@@ -99,6 +99,7 @@ export function getQuestIIQuestion({
   const band = getDifficultyBand(labyrinthNumber);
   const ordinal = Math.max(0, Math.trunc(questionOrdinal));
   const scene = QUEST_II_SCENES[ordinal % QUEST_II_SCENES.length];
+  const capstoneScene = QUEST_II_SCENES[band.index * 4];
   const region = getQuestIIRegion(labyrinthNumber);
   const template = ordinal % 4;
   const id = `quest-ii-${level.id}-${band.id}-${ordinal}`;
@@ -111,7 +112,7 @@ export function getQuestIIQuestion({
       bandIndex: band.index,
       rank,
       region,
-      scene,
+      scene: capstoneScene,
       template: (band.index + 2) % 4
     });
   }

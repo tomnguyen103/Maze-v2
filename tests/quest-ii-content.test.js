@@ -6,10 +6,14 @@ import {
   getQuestContentPackId,
   getQuestIIRegions,
   getQuestIIStorylet,
-  getNextQuestContentPackId
+  getNextQuestContentPackId,
+  isQuestIIStoryletTriggered
 } from "../src/game/quest-content.js";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
-import { getQuestIIQuestionSet } from "../src/questions/quest-ii-question-bank.js";
+import {
+  getQuestIIQuestion,
+  getQuestIIQuestionSet
+} from "../src/questions/quest-ii-question-bank.js";
 import { createQuestProgress } from "../src/game/quest-progress.js";
 
 const LEVELS = ["bright-start", "trail-scout", "maze-master"];
@@ -170,5 +174,54 @@ describe("Quest II Living Regions content contract", () => {
         ).toBeLessThanOrEqual(1);
       }
     }
+  });
+
+  it("keeps each Gate Warden card immutable when the request ordinal changes", () => {
+    for (const levelId of LEVELS) {
+      for (const labyrinthNumber of [1, 5, 9, 13, 17]) {
+        const canonical = getQuestIIQuestion({
+          levelId,
+          labyrinthNumber,
+          questionOrdinal: labyrinthNumber - 1,
+          challengeKind: "gate-warden"
+        });
+        const alternateRequest = getQuestIIQuestion({
+          levelId,
+          labyrinthNumber,
+          questionOrdinal: 0,
+          challengeKind: "gate-warden"
+        });
+
+        expect(alternateRequest).toEqual(canonical);
+      }
+    }
+  });
+
+  it("maps each authored storylet to its gameplay boundary", () => {
+    const samples = /** @type {[number, string, string][]} */ ([
+      [2, "echo-collected", "Echo recovered."],
+      [6, "windway-travel", "Windway carried you north."],
+      [11, "echo-bridge-travel", "Echo Bridge carried you across the sealed wall."],
+      [14, "moved", "Moved right. Tide Doors are now open."],
+      [18, "signal-bell-rung", "Signal Bell rang."],
+      [4, "gate-warden-challenge", "The Gate is open but sealed."]
+    ]);
+
+    for (const [labyrinthNumber, eventType, eventMessage] of samples) {
+      expect(
+        isQuestIIStoryletTriggered(
+          getQuestIIStorylet(labyrinthNumber),
+          eventType,
+          eventMessage
+        )
+      ).toBe(true);
+    }
+    expect(
+      isQuestIIStoryletTriggered(
+        getQuestIIStorylet(1),
+        "start",
+        "Labyrinth begins."
+      )
+    ).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import { recordLearningOutcome } from "../src/learning/lantern-journal.js";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { getDifficultyBand } from "../src/questions/quest-levels.js";
 import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
+import { getQuestContentPackId, QUEST_II_CONTENT_PACK_ID } from "../src/game/quest-content.js";
 
 const JOURNAL_LEVEL_BY_BAND = Object.freeze({
   foundation: { levelId: "bright-start", labyrinthNumber: 1 },
@@ -60,7 +61,7 @@ export function createOfflineCloudOutcomeApplier({
    *   runId: string,
    *   playerId: string | null,
    *   receipt: { runId: string, playerId: string | null, questId?: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string },
-   *   result: { status: "won" | "lost", score: number, wardensDefeated: number, echoesCollected: number, moves: number, elapsedMs: number, journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[], journalSummary?: { topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip", count: number }[] }
+   *   result: { status: "won" | "lost", score: number, wardensDefeated: number, echoesCollected: number, moves: number, elapsedMs: number, journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[], journalSummary?: { questId?: string, challengeKind?: "gate-warden", topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip", count: number }[] }
    * }} outcome
    */
   return async function applyOfflineCloudOutcome({
@@ -211,7 +212,7 @@ export function createOfflineCloudOutcomeApplier({
  * summary. The summary deliberately stores learning metadata and counts, not
  * the Question id or its child-facing content.
  *
- * @param {{ topicId: string, learningObjectiveId: string, difficultyBand: string }} summary
+ * @param {{ questId?: string, challengeKind?: "gate-warden", topicId: string, learningObjectiveId: string, difficultyBand: string }} summary
  */
 function journalQuestionForSummary(summary) {
   const placement =
@@ -223,13 +224,21 @@ function journalQuestionForSummary(summary) {
   if (!placement) {
     return null;
   }
-  for (let questionOrdinal = 0; questionOrdinal < 8; questionOrdinal += 1) {
+  const questII =
+    getQuestContentPackId(summary.questId) === QUEST_II_CONTENT_PACK_ID;
+  const questionCount =
+    summary.challengeKind === "gate-warden" ? 1 : questII ? 20 : 8;
+  for (let questionOrdinal = 0; questionOrdinal < questionCount; questionOrdinal += 1) {
     const question = getBundledQuestion({
       levelId: placement.levelId,
       seed: "offline-journal-summary",
       wardenId: 0,
       labyrinthNumber: placement.labyrinthNumber,
-      questionOrdinal
+      questionOrdinal,
+      ...(summary.questId ? { questId: summary.questId } : {}),
+      ...(summary.challengeKind
+        ? { challengeKind: summary.challengeKind }
+        : {})
     });
     if (
       question.topicId === summary.topicId &&

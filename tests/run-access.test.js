@@ -31,6 +31,37 @@ describe("browser Run Access identity", () => {
     expect(withRunAccessId(locator, () => "unused")).toEqual(locator);
   });
 
+  it("preserves Quest identity and does not admit a different content pack", () => {
+    const locator = {
+      version: 3,
+      runId: "access_existing",
+      pending: false,
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1",
+      questId: "quest_ii_access_123"
+    };
+
+    expect(withRunAccessId(locator, () => "unused")).toEqual(locator);
+    expect(
+      isAdmittedRunResume(locator, { ...locator, questId: undefined })
+    ).toBe(false);
+    expect(
+      isAdmittedRunResume(
+        { ...locator, questId: undefined },
+        { ...locator, questId: "quest_ii_access_123" }
+      )
+    ).toBe(false);
+    expect(
+      isAdmittedRunResume(
+        { ...locator, questId: "quest_legacy_access_123" },
+        { ...locator, questId: undefined }
+      )
+    ).toBe(true);
+  });
+
   it("recognizes only the same admitted Run as a free-warning bypass", () => {
     const admitted = {
       version: 3,

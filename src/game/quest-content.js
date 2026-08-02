@@ -318,6 +318,44 @@ export function getQuestIIStoryletLogEntry(labyrinthNumber) {
   return `Quest II · ${region?.name ?? "Living Region"} · ${storylet.title}. ${storylet.body}`;
 }
 
+/**
+ * @param {QuestIIStorylet} storylet
+ * @param {string} eventType
+ * @param {string} eventMessage
+ */
+export function isQuestIIStoryletTriggered(
+  storylet,
+  eventType,
+  eventMessage
+) {
+  if (storylet.eventKind === "region-arrival") {
+    return false;
+  }
+  if (storylet.eventKind === "gate-warden") {
+    return eventType === "gate-warden-challenge";
+  }
+  const gameplayEvent = storylet.gameplayTie.split(":").at(-1);
+  if (gameplayEvent === "echo-collected") {
+    return eventType === "echo-collected";
+  }
+  if (gameplayEvent === "windway-used") {
+    return eventType === "windway-travel";
+  }
+  if (gameplayEvent === "bridge-opened") {
+    return (
+      eventType === "echo-bridge-travel" ||
+      (eventType === "echo-collected" && /Bridge opened\./u.test(eventMessage))
+    );
+  }
+  if (gameplayEvent === "phase-change") {
+    return /Tide Doors are now (?:open|sealed)\./u.test(eventMessage);
+  }
+  if (gameplayEvent === "signal-bell-rung") {
+    return eventType === "signal-bell-rung";
+  }
+  return false;
+}
+
 /** @param {number} labyrinthNumber @returns {QuestIIRegion} */
 export function getQuestIIRegion(labyrinthNumber) {
   const storylet = getQuestIIStorylet(labyrinthNumber);
