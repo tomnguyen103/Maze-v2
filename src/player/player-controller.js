@@ -13,6 +13,7 @@ import {
 import { createClerkBrowser } from "./clerk-browser.js";
 import { createLanternJournal } from "../learning/lantern-journal.js";
 import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
+import { hasUnverifiedOfflineResult } from "../game/offline-local-scrub.js";
 
 /**
  * @typedef {{
@@ -30,7 +31,7 @@ import { loadSelectedClassroom } from "../classroom/classroom-selection.js";
  * @param {{
  *   onPaletteChange?: () => void,
  *   onAuthenticationChange?: (signedIn: boolean) => void,
- *   onIdentityEnd?: () => void,
+ *   onIdentityEnd?: () => void | Promise<unknown>,
  *   onJournalChange?: (journal: ReturnType<typeof import("../learning/lantern-journal.js").createLanternJournal>) => void,
  *   onJournalStatusChange?: (message: string) => void,
  *   getScorePartition?: () => {
@@ -89,10 +90,10 @@ export function createPlayerController({
   const clerkBrowser =
     injectedDependencies?.clerkBrowser ??
     createClerkBrowser({
-      onChange: () => {
-        reportAuthenticationChange();
-        void syncAuthenticatedPlayer();
-      }
+      onChange: () =>
+        clerkAvailable
+          ? syncAuthenticatedPlayer().then(reportAuthenticationChange)
+          : undefined
     });
   let clerkAvailable = false;
   /** @type {Parameters<typeof reducePlayerState>[0]} */
@@ -173,6 +174,9 @@ export function createPlayerController({
     getAuthenticatedUserId() {
       return clerkBrowser.user?.id ?? null;
     },
+    auth() {
+      return clerkAvailable;
+    },
     getApiClient() {
       return client;
     },
@@ -211,6 +215,33 @@ export function createPlayerController({
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeRun(run) {
       return client.authorizeRun(run);
+    },
+    /**
+     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+     * @param {string} deviceInstallationNonce
+     */
+    async issueOfflineReceipt(run, deviceInstallationNonce) {
+      return client.issueOfflineReceipt(run, deviceInstallationNonce);
+    },
+    /**
+     * @param {{
+     *   idempotencyKey: string,
+     *   receipt: import("../../shared/offline-receipt.js").OfflineReceipt,
+     *   deviceInstallationHash: string,
+     *   contentPackHash: string,
+     *   terminalAt: string,
+     *   actionLog: import("../game/run-action-log-v2.js").RunActionLogV2
+     * }} submission
+     * @returns {Promise<{ status: "accepted" | "rejected" | "expired" | "invalid", duplicate?: boolean }>}
+     */
+    async submitOfflineRun(submission) {
+      await clerkBrowser.initialize();
+      if (!clerkBrowser.user) {
+        throw new Error("Sign in again to reconcile this Offline Run.");
+      }
+      return /** @type {Promise<{ status: "accepted" | "rejected" | "expired" | "invalid", duplicate?: boolean }>} */ (
+        client.submitOfflineRun(submission)
+      );
     },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeGuestRun(run) {
@@ -328,6 +359,15 @@ export function createPlayerController({
       }
     });
     elements.signOut.addEventListener("click", async () => {
+      if (
+        hasUnverifiedOfflineResult() &&
+        typeof globalThis.confirm === "function" &&
+        !globalThis.confirm(
+          "This device has an Offline Run that has not been verified. Signing out will erase it. Continue?"
+        )
+      ) {
+        return;
+      }
       await clerkBrowser.signOut();
       await syncAuthenticatedPlayer();
       reportAuthenticationChange();
@@ -414,7 +454,7 @@ export function createPlayerController({
       return;
     }
     if (playerState.userId) {
-      onIdentityEnd();
+      await onIdentityEnd();
     }
     playerState = reducePlayerState(playerState, {
       type: "auth-changed",

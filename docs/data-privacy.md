@@ -20,6 +20,7 @@ give the account holder both halves of their data rights.
 | Classroom Progress Counts | `classroom_progress_counts` | per-Student/per-objective correct, wrong, Hint, Skip, and total counts only |
 | Verified Daily Submissions | `verified_daily_submissions` | current-UTC date, idempotency key, and server-replayed bounded result facts; no action log or Question text |
 | Verified Daily Best | `verified_daily_entries` | one best replay-verified result per Explorer/date; public API exposes username, rank, score, and Moves only |
+| Offline Run Continuity | `offline_run_receipts`, `offline_pending_submissions` | receipt binding, coarse replay outcome facts, and bounded learning-metadata counts only; no device-local action log, selected option, or reviewed Question content |
 
 Guests keep Explorer Access Settings only on their device. Signed-in Explorers
 sync the same four presentation-only choices to their profile. They never enter
@@ -32,12 +33,18 @@ Run, Quest, score, Question, or shared-link state.
 - Returns a versioned envelope conforming to the checked-in contract
   `shared/export-schema.json` (structurally pinned by unit test — the schema
   file itself documents per-section constraints for external consumers):
-  `{ "schema": "echo-maze-export/4", "generated_at": …, "data": { … } }`,
+  `{ "schema": "echo-maze-export/5", "generated_at": …, "data": { … } }`,
   served with `Content-Disposition: attachment`.
 - Every query binds the requesting user id — the builder cannot return
   another Explorer's rows. Classroom Memberships and Personal/Class Play
   Quest Progress and Lantern Journals are included; the snapshot selects each
   database-authoritative Classroom context in turn.
+- `data.offline_continuity.receipts` contains only server-held receipt binding
+  and expiry facts. `data.offline_continuity.submissions` contains only coarse
+  accepted/rejected outcome facts and bounded `journal_summary` learning
+  metadata counts needed to apply Lantern Journal effects idempotently. The
+  device-local Action Log, selected options, Question ids, and reviewed
+  Question content are never export rows.
 - The admin variant, `GET /api/admin/users/:id/export`, reuses the same builder
   under the `export:any` permission, audited as `export.admin` with the target
   Explorer as the resource. Admin-only: a moderator holds `users:read` but not
@@ -69,6 +76,9 @@ The deletion transaction explicitly removes and verifies the signed-in
 Explorer Access Settings and Classroom Membership records.
 Verified Daily submissions and best rows cascade from the deleted Player
 Profile and are included in the deletion verification.
+Offline Run receipts and pending-submission ledger rows are also deleted and
+verified before account deletion completes; pending rows cascade from their
+receipt. Guest rows have no account owner and are not part of account deletion.
 Removing one Classroom Membership also removes that Explorer's Quest Progress
 and Lantern Journal for that Classroom. Its derived progress counts cascade
 with the Membership. Personal Play remains.
@@ -81,6 +91,10 @@ with the Membership. Personal Play remains.
   Classroom name when needed, and event time.
 - Rate-limit counters are dead weight after their window;
   `npm run prune:rate-limits` clears them.
+- Offline Run receipts and pending-submission ledger rows are bounded by the
+  stored submission expiry. The continuity maintenance job prunes expired
+  receipts, and the database cascade removes their pending rows; no expired
+  receipt or pending submission is retained as an archive.
 - Daily Trail Constellation aggregates and contribution receipts are hard-deleted
   48 hours after their Daily ends. `npm run prune:constellation` performs the
   deletion; every Constellation read filters on the same expiry instant, so an

@@ -144,6 +144,10 @@ GRANT SELECT ON TABLE offline_pending_submissions TO echo_maze_runtime;
 -- Records what the server signed. Returns FALSE when a receipt for this Run
 -- already exists: one Run may hold exactly one receipt, so a repeated
 -- admission cannot mint a second and cannot extend the first.
+-- Application calls set echo_maze.explorer_id in transaction-local context
+-- before reaching these predicates. The unscoped prune function below is the
+-- maintenance exception; an empty context must not widen a signed-in read or
+-- write to another Explorer's rows.
 CREATE FUNCTION issue_offline_run_receipt(
   p_run_id TEXT,
   p_device_installation_hash CHAR,
@@ -285,6 +289,7 @@ CREATE FUNCTION record_offline_submission(
 )
 RETURNS TABLE (
   state TEXT,
+  recorded_accepted BOOLEAN,
   recorded_outcome TEXT,
   recorded_score SMALLINT,
   recorded_moves INTEGER,
@@ -325,6 +330,10 @@ BEGIN
       p_elapsed_ms
     FROM public.offline_run_receipts AS receipt
     WHERE receipt.run_id = p_run_id
+      AND receipt.player_id IS NOT DISTINCT FROM NULLIF(
+        current_setting('echo_maze.explorer_id', true),
+        ''
+      )
       AND receipt.submission_expires_at > NOW()
     ON CONFLICT (idempotency_key) DO NOTHING
     RETURNING TRUE INTO v_recorded;
@@ -338,7 +347,8 @@ BEGIN
 
   IF v_recorded THEN
     RETURN QUERY
-      SELECT 'recorded'::TEXT, p_outcome, p_score, p_moves, p_elapsed_ms;
+      SELECT 'recorded'::TEXT, p_accepted, p_outcome, p_score, p_moves,
+        p_elapsed_ms;
     RETURN;
   END IF;
 
@@ -349,6 +359,10 @@ BEGIN
   SELECT TRUE INTO v_live
   FROM public.offline_run_receipts AS receipt
   WHERE receipt.run_id = p_run_id
+    AND receipt.player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND receipt.submission_expires_at > NOW();
 
   -- IS NOT TRUE, not NOT: a SELECT that matches nothing leaves v_live NULL,
@@ -356,8 +370,8 @@ BEGIN
   -- exactly the case it exists to catch.
   IF v_live IS NOT TRUE THEN
     RETURN QUERY
-      SELECT 'no-live-receipt'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
-        NULL::INTEGER;
+      SELECT 'no-live-receipt'::TEXT, NULL::BOOLEAN, NULL::TEXT,
+        NULL::SMALLINT, NULL::INTEGER, NULL::INTEGER;
     RETURN;
   END IF;
 
@@ -373,6 +387,10 @@ BEGIN
   SELECT submission.* INTO v_existing
   FROM public.offline_pending_submissions AS submission
   WHERE submission.run_id = p_run_id
+    AND submission.player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND (
       submission.idempotency_key = p_idempotency_key
       OR submission.accepted
@@ -384,14 +402,14 @@ BEGIN
     -- The key belongs to a different Run. Nothing was written and nothing of
     -- this Run's is readable, so the caller gets no outcome to report.
     RETURN QUERY
-      SELECT 'duplicate'::TEXT, NULL::TEXT, NULL::SMALLINT, NULL::INTEGER,
-        NULL::INTEGER;
+      SELECT 'duplicate'::TEXT, NULL::BOOLEAN, NULL::TEXT, NULL::SMALLINT,
+        NULL::INTEGER, NULL::INTEGER;
     RETURN;
   END IF;
 
   RETURN QUERY
-    SELECT 'duplicate'::TEXT, v_existing.outcome::TEXT, v_existing.score,
-      v_existing.moves, v_existing.elapsed_ms;
+    SELECT 'duplicate'::TEXT, v_existing.accepted, v_existing.outcome::TEXT,
+      v_existing.score, v_existing.moves, v_existing.elapsed_ms;
 END;
 $$;
 
@@ -409,6 +427,10 @@ BEGIN
   UPDATE public.offline_pending_submissions
   SET applied_at = NOW()
   WHERE idempotency_key = p_idempotency_key
+    AND player_id IS NOT DISTINCT FROM NULLIF(
+      current_setting('echo_maze.explorer_id', true),
+      ''
+    )
     AND applied_at IS NULL
   RETURNING TRUE INTO v_applied;
 
@@ -430,6 +452,10 @@ AS $$
       SELECT submission.applied_at IS NULL
       FROM public.offline_pending_submissions AS submission
       WHERE submission.idempotency_key = p_idempotency_key
+        AND submission.player_id IS NOT DISTINCT FROM NULLIF(
+          current_setting('echo_maze.explorer_id', true),
+          ''
+        )
         AND submission.accepted
     ),
     FALSE

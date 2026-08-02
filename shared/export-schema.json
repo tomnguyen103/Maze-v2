@@ -1,12 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "echo-maze-export/4",
+  "$id": "echo-maze-export/5",
   "title": "Echo Maze personal data export",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "generated_at", "data"],
   "properties": {
-    "schema": { "const": "echo-maze-export/4" },
+    "schema": { "const": "echo-maze-export/5" },
     "generated_at": { "type": "string" },
     "data": {
       "type": "object",
@@ -27,6 +27,7 @@
         "access_settings",
         "verified_daily_results",
         "verified_daily_best_results",
+        "offline_continuity",
         "daily_trail_contributions",
         "role"
       ],
@@ -112,6 +113,109 @@
           "description": "Current best replay-verified Daily result for each date, including its achievement time.",
           "type": "array",
           "items": { "type": "object" }
+        },
+        "offline_continuity": {
+          "description": "Server-held Offline Run receipt bindings and coarse submission outcomes. The bounded journal_summary contains only learning metadata and counts; device-local action logs, selected options, and reviewed Question content are never exported.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["receipts", "submissions"],
+          "properties": {
+            "receipts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "run_id",
+                  "seed",
+                  "level_id",
+                  "labyrinth_number",
+                  "ruleset_revision",
+                  "content_pack_hash",
+                  "issued_at",
+                  "play_expires_at",
+                  "submission_expires_at"
+                ],
+                "properties": {
+                  "run_id": { "type": "string" },
+                  "seed": { "type": "string" },
+                  "level_id": {
+                    "enum": ["bright-start", "trail-scout", "maze-master"]
+                  },
+                  "labyrinth_number": { "type": "integer" },
+                  "ruleset_revision": { "type": "string" },
+                  "content_pack_hash": { "type": "string" },
+                  "issued_at": { "type": "string", "format": "date-time" },
+                  "play_expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "submission_expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            },
+            "submissions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "run_id",
+                  "accepted",
+                  "outcome",
+                  "score",
+                  "moves",
+                  "elapsed_ms",
+                  "applied_at",
+                  "submitted_at",
+                  "journal_summary"
+                ],
+                "properties": {
+                  "run_id": { "type": "string" },
+                  "accepted": { "type": "boolean" },
+                  "outcome": { "enum": ["won", "lost"] },
+                  "score": { "type": "integer" },
+                  "moves": { "type": "integer" },
+                  "elapsed_ms": { "type": "integer" },
+                  "applied_at": {
+                    "type": ["string", "null"],
+                    "format": "date-time"
+                  },
+                  "submitted_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "journal_summary": {
+                    "description": "Bounded learning metadata counts retained for idempotent Journal application; no Question ids or content.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "topicId",
+                        "learningObjectiveId",
+                        "difficultyBand",
+                        "outcome",
+                        "count"
+                      ],
+                      "properties": {
+                        "topicId": { "type": "string" },
+                        "learningObjectiveId": { "type": "string" },
+                        "difficultyBand": { "type": "string" },
+                        "outcome": {
+                          "enum": ["correct", "wrong", "hint", "skip"]
+                        },
+                        "count": { "type": "integer", "minimum": 1 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         "daily_trail_contributions": {
           "description": "Daily Trail Constellation contribution receipts: one per canonical UTC Daily this Explorer contributed to. Records that a contribution happened and when, never any position, ordering, or timing within the Run. Rows are hard-deleted 48 hours after their Daily ends, so this section only ever covers the current window.",

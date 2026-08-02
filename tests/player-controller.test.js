@@ -33,6 +33,10 @@ const client = {
     record: { progress: { questId: "quest_cloud_123" }, revision: 1 }
   })),
   submitScore: vi.fn(async () => ({})),
+  submitOfflineRun: vi.fn(async () => ({
+    status: "accepted",
+    duplicate: false
+  })),
   submitVerifiedDaily: vi.fn(async () => ({
     verification: "verified-replay-v1",
     bestResult: "created",
@@ -43,6 +47,10 @@ const client = {
     duplicate: false,
     freeRunsRemaining: 2,
     state: "free"
+  })),
+  issueOfflineReceipt: vi.fn(async () => ({
+    receipt: { binding: { runId: "access_01J1MOSSWATCH" } },
+    assetPackage: { version: "build_01MOSS", assets: [] }
   })),
   getRunAccessConfig: vi.fn(async () => ({ enforcementEnabled: false })),
   getRunAccess: vi.fn(async () => ({
@@ -297,9 +305,43 @@ describe("Player Profile dialog", () => {
     });
   });
 
-  it("reports when Clerk removes the active account identity", async () => {
+  it("warns before signing out when an offline result is unverified", async () => {
     const onAuthenticationChange = vi.fn();
     const onIdentityEnd = vi.fn();
+    localStorage.setItem(
+      "echo-maze:offline-run-record:v1",
+      JSON.stringify({ verification: "unverified", outcome: "won" })
+    );
+    const originalConfirm = globalThis.confirm;
+    const confirm = vi.fn(() => false);
+    globalThis.confirm = confirm;
+    try {
+      createPlayerController({ onAuthenticationChange, onIdentityEnd });
+      await vi.waitFor(() => {
+        expect(onAuthenticationChange).toHaveBeenCalledWith(true);
+      });
+      /** @type {HTMLButtonElement} */ (
+        document.getElementById("player-sign-out")
+      ).click();
+
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+      expect(clerkBrowser.signOut).not.toHaveBeenCalled();
+      expect(onIdentityEnd).not.toHaveBeenCalled();
+    } finally {
+      globalThis.confirm = originalConfirm;
+    }
+  });
+
+  it("reports when Clerk removes the active account identity", async () => {
+    const onAuthenticationChange = vi.fn();
+    /** @type {(value?: unknown) => void} */
+    let releaseIdentityEnd = () => {};
+    const onIdentityEnd = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseIdentityEnd = resolve;
+        })
+    );
     createPlayerController({ onAuthenticationChange, onIdentityEnd });
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenCalledWith(true);
@@ -308,6 +350,9 @@ describe("Player Profile dialog", () => {
     clerkBrowser.user = null;
     clerkOnChange();
 
+    await vi.waitFor(() => expect(onIdentityEnd).toHaveBeenCalledOnce());
+    expect(onAuthenticationChange).toHaveBeenLastCalledWith(true);
+    releaseIdentityEnd();
     await vi.waitFor(() => {
       expect(onAuthenticationChange).toHaveBeenLastCalledWith(false);
       expect(onIdentityEnd).toHaveBeenCalledOnce();
@@ -358,6 +403,24 @@ describe("Player Profile dialog", () => {
       levelId: "trail-scout",
       labyrinthNumber: 4
     });
+  });
+
+  it("delegates the device-bound Offline Continuity receipt request", async () => {
+    const controller = createPlayerController();
+    const run = {
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+
+    await expect(
+      controller.issueOfflineReceipt(run, "installation_nonce_01MOSS")
+    ).resolves.toMatchObject({ receipt: expect.any(Object) });
+    expect(client.issueOfflineReceipt).toHaveBeenCalledWith(
+      run,
+      "installation_nonce_01MOSS"
+    );
   });
 
   it("reads the server-owned enforcement state", async () => {

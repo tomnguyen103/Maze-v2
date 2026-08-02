@@ -85,12 +85,35 @@ describe("Offline Run Continuity migration", () => {
     expect(sql).toContain(
       [
         "  WHERE submission.run_id = p_run_id",
+        "    AND submission.player_id IS NOT DISTINCT FROM NULLIF(",
+        "      current_setting('echo_maze.explorer_id', true),",
+        "      ''",
+        "    )",
         "    AND (",
         "      submission.idempotency_key = p_idempotency_key",
         "      OR submission.accepted",
         "    )"
       ].join("\n")
     );
+    expect(sql).toContain("recorded_accepted BOOLEAN");
+    expect(sql).toContain(
+      "SELECT 'duplicate'::TEXT, v_existing.accepted, v_existing.outcome::TEXT"
+    );
+  });
+
+  it("scopes ledger writes and apply retries to the session Explorer", async () => {
+    const sql = await readMigration(migrationUrl);
+    for (const functionName of [
+      "CREATE FUNCTION record_offline_submission",
+      "CREATE FUNCTION complete_offline_submission",
+      "CREATE FUNCTION offline_submission_pending_apply"
+    ]) {
+      const functionSql = sql.slice(sql.indexOf(functionName));
+      expect(functionSql).toContain("IS NOT DISTINCT FROM NULLIF(");
+      expect(functionSql).toContain(
+        "current_setting('echo_maze.explorer_id', true)"
+      );
+    }
   });
 
   it("reads a receipt that matched nothing as no live receipt", async () => {

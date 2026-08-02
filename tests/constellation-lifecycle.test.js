@@ -128,9 +128,9 @@ describe("Constellation export section", () => {
       )
     );
 
-    expect(EXPORT_SCHEMA_ID).toBe("echo-maze-export/4");
-    expect(schema.$id).toBe("echo-maze-export/4");
-    expect(schema.properties.schema.const).toBe("echo-maze-export/4");
+    expect(EXPORT_SCHEMA_ID).toBe("echo-maze-export/5");
+    expect(schema.$id).toBe("echo-maze-export/5");
+    expect(schema.properties.schema.const).toBe("echo-maze-export/5");
     expect(schema.properties.data.required).toContain(
       "daily_trail_contributions"
     );

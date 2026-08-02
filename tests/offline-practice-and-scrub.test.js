@@ -4,9 +4,11 @@ import {
   pinOfflinePracticeTrail
 } from "../src/learning/offline-practice.js";
 import {
+  ownerMismatch,
   hasUnverifiedOfflineResult,
   OFFLINE_ACCOUNT_SCOPED_KEYS,
   OFFLINE_ACTION_LOG_KEY,
+  OFFLINE_RECEIPT_KEY,
   OFFLINE_RUN_RECORD_KEY,
   scrubOfflineState
 } from "../src/game/offline-local-scrub.js";
@@ -168,7 +170,16 @@ describe("Offline sign-out cleanup", () => {
   });
 
   it("leaves another account nothing to reuse or inspect", () => {
-    const storage = populated();
+    const storage = fakeStorage({
+      ...Object.fromEntries(
+        OFFLINE_ACCOUNT_SCOPED_KEYS.map((key) => [key, "{}"])
+      ),
+      "echo-maze:offline-practice-trail:counting-to-twenty":
+        JSON.stringify({ questionIds: ["bright-foundation-1"] }),
+      [ACTIVE_RUN_RECOVERY_KEY]: "{}",
+      "echo-maze:public-shell": "kept",
+      "echo-maze:first-light:v1": "seen"
+    });
 
     scrubOfflineState(storage);
 
@@ -211,6 +222,49 @@ describe("Offline sign-out cleanup", () => {
         fakeStorage({ [OFFLINE_RUN_RECORD_KEY]: "not json" })
       )
     ).toBe(true);
+  });
+
+  it("detects a receipt left by a different identity before startup reuse", () => {
+    const receipt = JSON.stringify({ binding: { playerId: "user_previous" } });
+    expect(
+      ownerMismatch(
+        "user_current",
+        fakeStorage({ [OFFLINE_RECEIPT_KEY]: receipt })
+      )
+    ).toBe(true);
+    expect(
+      ownerMismatch(
+        "user_previous",
+        fakeStorage({ [OFFLINE_RECEIPT_KEY]: receipt })
+      )
+    ).toBe(false);
+    expect(
+      ownerMismatch(
+        null,
+        fakeStorage({ [OFFLINE_RECEIPT_KEY]: receipt })
+      )
+    ).toBe(true);
+    expect(
+      ownerMismatch(
+        null,
+        fakeStorage({
+          [OFFLINE_RECEIPT_KEY]: JSON.stringify({ binding: { playerId: null } })
+        })
+      )
+    ).toBe(false);
+  });
+
+  it("uses the owner marker on an outcome-only record after reconciliation", () => {
+    const record = JSON.stringify({
+      schema: "echo-maze-offline-run-record/1",
+      playerId: "user_previous",
+      verification: "verified"
+    });
+    const storage = fakeStorage({ [OFFLINE_RUN_RECORD_KEY]: record });
+
+    expect(ownerMismatch("user_current", storage)).toBe(true);
+    expect(ownerMismatch("user_previous", storage)).toBe(false);
+    expect(ownerMismatch(null, storage)).toBe(true);
   });
 
   it("runs even when the offline chunk never loaded", async () => {

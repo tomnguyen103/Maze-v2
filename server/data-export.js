@@ -1,6 +1,6 @@
 import { setTenantContext } from "./tenant-context.js";
 
-export const EXPORT_SCHEMA_ID = "echo-maze-export/4";
+export const EXPORT_SCHEMA_ID = "echo-maze-export/5";
 
 /**
  * Snapshot variant: every section reads from ONE repeatable-read snapshot,
@@ -138,6 +138,18 @@ const SECTION_QUERIES = {
     FROM verified_daily_entries
     WHERE player_id = $1
     ORDER BY daily_date, achieved_at`,
+  offline_receipts: `SELECT run_id, seed, level_id, labyrinth_number,
+      ruleset_revision, content_pack_hash, issued_at, play_expires_at,
+      submission_expires_at
+    FROM offline_run_receipts
+    WHERE player_id = $1
+    ORDER BY issued_at, run_id`,
+  offline_submissions: `SELECT run_id, accepted, outcome, score, moves,
+      elapsed_ms, applied_at, submitted_at,
+      COALESCE(replay_result->'journalSummary', '[]'::jsonb) AS journal_summary
+    FROM offline_pending_submissions
+    WHERE player_id = $1
+    ORDER BY submitted_at, idempotency_key`,
   // Definer reader keyed on the transaction-local Explorer identity, and the
   // only Constellation data that is personal: that this Explorer contributed
   // to a Daily, never where they walked. It applies the same 48-hour window
@@ -195,6 +207,8 @@ export async function buildUserExport(
   const verifiedDailyBestResults = await rowsOf(
     "verified_daily_best_results"
   );
+  const offlineReceipts = await rowsOf("offline_receipts");
+  const offlineSubmissions = await rowsOf("offline_submissions");
   const role = await rowsOf("role");
 
   /** @type {Record<string, unknown>[]} */
@@ -264,6 +278,10 @@ export async function buildUserExport(
       access_settings: accessSettings[0] ?? null,
       verified_daily_results: verifiedDailyResults,
       verified_daily_best_results: verifiedDailyBestResults,
+      offline_continuity: {
+        receipts: offlineReceipts,
+        submissions: offlineSubmissions
+      },
       daily_trail_contributions: dailyTrailContributions,
       // Absence of a row means player, same as the RBAC resolver.
       role: typeof role[0]?.role === "string" ? role[0].role : "player"

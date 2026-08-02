@@ -69,6 +69,26 @@ import {
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
 import { loadLifetimeConfig } from "./lifetime-config.js";
+import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
+import { deriveOfflineDeviceHash } from "./offline-device.js";
+import {
+  createOfflineReceiptHandler,
+  createUnavailableOfflineReceiptHandler,
+  OFFLINE_RECEIPT_PATHS
+} from "./offline-receipt-route.js";
+import {
+  createOfflineSubmissionHandler,
+  createUnavailableOfflineSubmissionHandler,
+  OFFLINE_SUBMISSION_PATHS
+} from "./offline-submission-route.js";
+import { createOfflineSubmissionService } from "./offline-submission.js";
+import { createOfflineSubmissionStore } from "./offline-submission-store.js";
+import { createOfflineCloudOutcomeApplier } from "./offline-cloud-outcome.js";
+import { createOfflineContentPack } from "./offline-content-pack.js";
+import { createOfflineReceiptSigner } from "./offline-receipt.js";
+import { createOfflineReceiptVerifier } from "./offline-receipt.js";
+import { loadOfflineReceiptConfig } from "./offline-receipt-config.js";
+import { createOfflineReceiptStore } from "./offline-receipt-store.js";
 import {
   createLifetimeHandler,
   LIFETIME_PATHS
@@ -93,6 +113,7 @@ import {
   QUEST_PROGRESS_PATHS
 } from "./quest-progress-route.js";
 import { createQuestProgressStore } from "./quest-progress-store.js";
+
 import { createQuestionBankStore } from "./question-bank-store.js";
 import {
   ACCESS_PATHS,
@@ -107,6 +128,50 @@ import {
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
 import { URL } from "node:url";
+import { getLabyrinthConfig, getDifficultyBand } from "../src/questions/quest-levels.js";
+import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
+
+const DATABASE_REVISION_PATTERN = /^database:(.+):v([1-9]\d*)$/;
+
+/**
+ * Pulls only database revision identities from the bounded replay log. The
+ * content itself remains server-side; these pairs are just the keys needed to
+ * load the exact reviewed cards before replay.
+ *
+ * @param {unknown} actionLog
+ */
+function databaseQuestionRevisions(actionLog) {
+  if (
+    !actionLog ||
+    typeof actionLog !== "object" ||
+    !Array.isArray(/** @type {{ actions?: unknown }} */ (actionLog).actions)
+  ) {
+    return [];
+  }
+  const revisions = new Map();
+  for (const action of /** @type {{ actions: unknown[] }} */ (actionLog).actions
+    .slice(0, 4096)) {
+    if (!action || typeof action !== "object") {
+      continue;
+    }
+    const revisionId = /** @type {{ questionRevisionId?: unknown }} */ (action)
+      .questionRevisionId;
+    if (typeof revisionId !== "string" || revisionId.length > 256) {
+      continue;
+    }
+    const match = DATABASE_REVISION_PATTERN.exec(revisionId);
+    if (!match) {
+      continue;
+    }
+    const version = Number(match[2]);
+    if (!Number.isSafeInteger(version)) {
+      continue;
+    }
+    const questionId = match[1];
+    revisions.set(`${questionId}\u0000${version}`, { questionId, version });
+  }
+  return [...revisions.values()];
+}
 
 const PLAYER_PATHS = new Set([
   "/api/profile",
@@ -118,6 +183,8 @@ const PLAYER_PATHS = new Set([
   LEARNING_JOURNAL_PATH,
   ...QUEST_PROGRESS_PATHS,
   ...ACCESS_PATHS,
+  ...OFFLINE_RECEIPT_PATHS,
+  ...OFFLINE_SUBMISSION_PATHS,
   ...LIFETIME_PATHS,
   CLERK_WEBHOOK_PATH
 ]);
@@ -301,6 +368,114 @@ export function createPlayerApi(env = process.env) {
   ) => getAuth(
     /** @type {import("express").Request} */ (request)
   ).userId;
+  const offlineReceiptConfig = loadOfflineReceiptConfig(env);
+  const offlineContinuityConfig = loadOfflineContinuityConfig(env);
+  const offlineReceiptStore = createOfflineReceiptStore(pool);
+  const offlineSubmissionStore = createOfflineSubmissionStore(pool);
+  const offlineCloudOutcomeApplier = createOfflineCloudOutcomeApplier({
+    playerStore: store,
+    questProgressStore,
+    learningJournalStore
+  });
+  const offlineReceiptHandler =
+    offlineReceiptConfig && offlineContinuityConfig
+      ? createOfflineReceiptHandler({
+          getUserId,
+          getRunGrant: (userId, runId) => accessStore.getRunGrant(userId, runId),
+          getQuestProgress: async (userId) =>
+            (await questProgressStore.get(userId))?.progress ?? null,
+          issueReceipt: (binding) =>
+            offlineReceiptStore.issueReceipt(
+              String(binding.playerId),
+              binding
+            ),
+          readReceipt: (userId, runId, deviceHash) =>
+            offlineReceiptStore.readReceipt(userId, runId, deviceHash),
+          signer: createOfflineReceiptSigner({
+            privateKey: offlineReceiptConfig.privateKey,
+            keyId: offlineReceiptConfig.keyId
+          }),
+          deviceHashFor: (nonce) =>
+            deriveOfflineDeviceHash(
+              nonce,
+              offlineContinuityConfig.deviceHashSecret
+            ),
+          contentPackHash: offlineContinuityConfig.contentPackHash,
+          assetPackage: offlineContinuityConfig.assetPackage
+        })
+      : createUnavailableOfflineReceiptHandler();
+  const offlineSubmissionHandler =
+    offlineReceiptConfig && offlineContinuityConfig
+      ? createOfflineSubmissionHandler({
+          getUserId,
+          rateLimit,
+          submit: async (submission) => {
+            const playerId =
+              typeof submission.playerId === "string"
+                ? submission.playerId
+                : "";
+            if (!playerId) {
+              throw new Error("Offline submission account is missing.");
+            }
+            const verifier = createOfflineReceiptVerifier({
+              keys: offlineReceiptConfig.keys
+            });
+            const service = createOfflineSubmissionService({
+              verifyReceipt: (receipt) => verifier.verify(receipt),
+              loadReceipt: (runId, deviceHash) =>
+                offlineSubmissionStore.readReceipt(
+                  playerId,
+                  runId,
+                  deviceHash
+                ),
+              labyrinthConfigFor: (levelId, labyrinthNumber, revision) => {
+                const ruleset = normalizeRunRuleset(
+                  {
+                    atlasRegionId: getDifficultyBand(labyrinthNumber).id,
+                    revision
+                  },
+                  labyrinthNumber
+                );
+                if (!ruleset) {
+                  throw new Error("Offline replay ruleset is invalid.");
+                }
+                return {
+                  ...getLabyrinthConfig(levelId, labyrinthNumber),
+                  ruleset
+                };
+              },
+              contentPackFor: async (_receipt, actionLog) => {
+                /** @type {Awaited<ReturnType<typeof questionBankStore.publishedQuestionRevisions>>} */
+                let publishedQuestionRevisions = [];
+                try {
+                  publishedQuestionRevisions =
+                    await questionBankStore.publishedQuestionRevisions(
+                      databaseQuestionRevisions(actionLog)
+                    );
+                } catch {
+                  // A database outage cannot make an unbound or guessed card
+                  // authoritative. The replay below will reject an exact DB
+                  // revision that could not be loaded, while bundled and Deck
+                  // content remains available.
+                }
+                return createOfflineContentPack(
+                  offlineContinuityConfig.contentPackHash,
+                  publishedQuestionRevisions
+                );
+              },
+              recordSubmission: (value) =>
+                offlineSubmissionStore.recordSubmission(playerId, value),
+              completeSubmission: async (key) => {
+                await offlineSubmissionStore.completeSubmission(playerId, key);
+              },
+              pendingApply: (key) =>
+                offlineSubmissionStore.pendingApply(playerId, key),
+              applyCloudOutcome: offlineCloudOutcomeApplier
+            });
+            return service.submit(submission);
+          }
+        })
+      : createUnavailableOfflineSubmissionHandler();
   const requirePermission = createPermissionGuard({
     resolver: roleResolver,
     getUserId
@@ -515,6 +690,7 @@ export function createPlayerApi(env = process.env) {
     inbox,
     pruneRateLimits: () => rateLimitStore.prune(),
     pruneWebhookInbox: () => inboxStore.prune(),
+    pruneOfflineRunContinuity: () => offlineSubmissionStore.prune(),
     createAuditCheckpoint,
     cronSecret: env.CRON_SECRET ?? ""
   });
@@ -691,6 +867,14 @@ export function createPlayerApi(env = process.env) {
         void unavailableQuestProgressHandler(request, response, next);
         return;
       }
+      if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
+        void offlineReceiptHandler(request, response, next);
+        return;
+      }
+      if (OFFLINE_SUBMISSION_PATHS.has(pathname)) {
+        void offlineSubmissionHandler(request, response, next);
+        return;
+      }
       if (DAILY_PATHS.has(pathname)) {
         void unavailableDailyHandler(request, response, next);
         return;
@@ -778,6 +962,14 @@ export function createPlayerApi(env = process.env) {
         }
         if (ACCESS_PATHS.has(pathname)) {
           void accessHandler(request, response, next);
+          return;
+        }
+        if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
+          void offlineReceiptHandler(request, response, next);
+          return;
+        }
+        if (OFFLINE_SUBMISSION_PATHS.has(pathname)) {
+          void offlineSubmissionHandler(request, response, next);
           return;
         }
         if (LIFETIME_PATHS.has(pathname)) {

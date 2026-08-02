@@ -10,9 +10,10 @@ The core product is coherent and substantially implemented. The next work is not
 
 ## Repository state
 
-- `main` is clean and synchronized with `origin/main`.
-- Current commit: `b9cfd20` (`docs: record the Echo Maze programme closeout`).
-- No open pull requests.
+- `origin/main` includes merged PR #152 at `a37dffa`; the current branch
+  `feat/offline-continuity-wiring` carries the P0.2 implementation for PR #158.
+- PR #158 remains open pending rebase, final local proof, and CodeRabbit review.
+- The deployed demo still reflects the pre-P0.2 merge surface.
 - GitHub Actions are disabled. Local validation is the CI gate.
 - CodeGraph index is present and current: 339 files, 3,253 nodes, 6,898 edges.
 
@@ -33,7 +34,8 @@ Milestones 1–5 shipped through PRs #102, #115, #123, #133, #148, and #149. Cur
 - Daily Trail Constellation mechanisms;
 - Cloud Quest Continuity at Labyrinth boundaries;
 - Active Run Recovery;
-- Offline Run Continuity mechanisms;
+- Offline Run Continuity wiring is implemented on the current branch; the
+  production key, migration, and deployment boundaries remain external;
 - health, readiness, telemetry, privacy, and export foundations.
 
 The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the primary historical release record. The [frozen expedition roadmap](../plans/echo-maze-next-expedition-roadmap.md) remains the contract for gameplay, privacy, content, and performance constraints.
@@ -46,32 +48,32 @@ Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-01:
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds; version reports `b9cfd20`. |
+| `/api/health` | 200 | Deployment responds; version reports the pre-P0.2 `b9cfd20` surface. |
 | `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
 | Verified Daily endpoints | 500 | Service reports Verified Daily unavailable. |
-| `/sw.js` | 200 | Service-worker asset is deployed, but the app does not register the worker yet. |
+| `/sw.js` | 200 | Service-worker asset is deployed; the current branch also wires registration, but that wiring is not deployed yet. |
 
 Current deployment is a working demo/test surface, not proof of production readiness.
 
 ## Current blockers
 
-### Offline Run Continuity is not wired
+### Offline Run Continuity wiring is pending merge and external release proof
 
-Milestone 5B shipped receipt signing, replay verification, offline action-log code, service-worker logic, Practice support, and cleanup helpers. The running app still does not:
+PR #158 connects the existing receipt, replay, worker, Practice, export, and
+cleanup mechanisms through the player path. Its local implementation and
+browser evidence are complete; the remaining repo workflow is rebase, review,
+and merge. Production migration application, receipt-key provisioning, live
+reconnect/export/prune smoke checks, and deployment remain external release
+work tracked from [issue #150](https://github.com/tomnguyen103/Maze-v2/issues/150).
 
-- issue a receipt from the real page;
-- register and use the service worker;
-- record the live Quest loop in Action Log v2;
-- connect the Continue Offline control;
-- submit an offline run for server replay;
-- scrub all offline state during real sign-out/account deletion.
+### Test runner false-confidence issue is fixed
 
-Track this work in [issue #150](https://github.com/tomnguyen103/Maze-v2/issues/150). Known gaps include service-worker restart persistence, account isolation, export coverage, Practice-key cleanup, and server-side device-hash validation.
-
-### Test runner can report false confidence
-
-The last recorded full gate passed lint, typecheck, build, bundle, Vitest, and Playwright. However, Vitest reruns showed workers exiting unexpectedly while the process still returned success and reported fewer tests. Finish [issue #151](https://github.com/tomnguyen103/Maze-v2/issues/151) before treating a green test command as trustworthy.
+PR #152 merged the canonical worker-loss gate and expected test-count manifest.
+The local proof records split-output detection, wrapper wiring, and a full
+147-file / 1,327-test run. CodeRabbit review was explicitly deferred by the
+owner override and recorded on the PR; the local gate is now the trusted repo
+check for this change.
 
 ### External release setup remains deferred
 

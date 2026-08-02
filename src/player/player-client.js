@@ -392,6 +392,28 @@ export function createPlayerApiClient({
         body: JSON.stringify(run)
       });
     },
+    /**
+     * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run
+     * @param {string} deviceInstallationNonce
+     */
+    async issueOfflineReceipt(run, deviceInstallationNonce) {
+      return request("/api/offline/receipt", {
+        method: "POST",
+        body: JSON.stringify({ ...run, deviceInstallationNonce })
+      });
+    },
+    /** @param {Record<string, unknown>} submission */
+    async submitOfflineRun(submission) {
+      return request(
+        "/api/offline/submission",
+        {
+          method: "POST",
+          body: JSON.stringify(submission)
+        },
+        true,
+        false
+      );
+    },
     /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} run */
     async authorizeGuestRun(run) {
       return request(

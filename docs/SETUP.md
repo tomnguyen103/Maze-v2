@@ -63,9 +63,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 22. `db/migrations/0022_access_settings_v2.sql`
 23. `db/migrations/0023_daily_trail_constellation.sql`
 24. `db/migrations/0024_offline_run_continuity.sql`
+25. `db/migrations/0025_offline_run_continuity_forward.sql`
 
-Migrations 0012 through 0024 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all thirteen.
+Migrations 0012 through 0025 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fourteen.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
@@ -289,6 +290,14 @@ a `kid` matching `OFFLINE_RECEIPT_KEY_ID` — in the JSON array
 `VITE_OFFLINE_RECEIPT_PUBLIC_KEYS` that the browser bundles. Leaving all three
 unset disables offline continuity; setting some but not all is an error rather
 than a half-configured signer.
+
+Issuing also requires `OFFLINE_DEVICE_HASH_SECRET` (a server-only HMAC secret),
+`OFFLINE_CONTENT_PACK_HASH` (64 lowercase hex characters for the reviewed pack),
+and `OFFLINE_ASSET_PACKAGE` (JSON with one version and same-origin assets whose
+scope is explicitly `public` or `account`). The route derives the device hash
+from the bounded browser nonce and never stores or returns that nonce. Keep the
+asset package version aligned with the reviewed build; an absent or partial set
+leaves the route unavailable rather than issuing an unverifiable receipt.
 
 Rotation is additive. Add the new key to the published array and point
 `OFFLINE_RECEIPT_KEY_ID` at it, but keep the retiring key listed until the last

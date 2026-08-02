@@ -39,7 +39,8 @@ import {
  *   explanation: string,
  *   difficultyBand: string,
  *   topicId: string,
- *   learningObjectiveId: string
+ *   learningObjectiveId: string,
+ *   reviewedRevisionId?: string
  * }} WardenQuestion
  * @typedef {{
  *   kind: "wrong" | "skipped",

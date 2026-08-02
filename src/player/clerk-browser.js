@@ -1,6 +1,6 @@
 /**
  * @param {{
- *   onChange?: () => void,
+ *   onChange?: () => void | Promise<unknown>,
  *   env?: { VITE_CLERK_PUBLISHABLE_KEY?: string },
  *   loadClerkModule?: () => Promise<{ Clerk: any }>,
  *   loadClerkUi?: (publishableKey: string) => Promise<any>
@@ -65,12 +65,11 @@ export function createClerkBrowser({
         return false;
       }
     },
-    async signOut() {
+    signOut() {
       if (!clerk) {
         return;
       }
-      await clerk.signOut();
-      onChange();
+      return clerk.signOut().then(onChange);
     }
   };
 

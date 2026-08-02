@@ -98,6 +98,37 @@ describe("question bank store", () => {
     expect(result).toBeNull();
   });
 
+  it("loads the requested published database revisions as a batch", async () => {
+    const pool = createPool([
+      {
+        id: "db-7",
+        level_id: "bright-start",
+        difficulty_band: "foundation",
+        question_ordinal: 7,
+        version: 3,
+        content: card("db-7")
+      }
+    ]);
+    const store = createQuestionBankStore(pool);
+
+    const questions = await store.publishedQuestionRevisions([
+      { questionId: "db-7", version: 3 }
+    ]);
+
+    expect(questions[0]).toMatchObject({
+      question: {
+        id: "db-7",
+        reviewedRevisionId: "database:db-7:v3"
+      },
+      levelId: "bright-start",
+      difficultyBand: "foundation",
+      questionOrdinal: 7
+    });
+    expect(pool.queries[0].sql).toContain("published_at IS NOT NULL");
+    expect(pool.queries[0].sql).toContain("unnest");
+    expect(pool.queries[0].values).toEqual([["db-7"], [3]]);
+  });
+
   it("rejects a malformed row rather than serving it", async () => {
     // A row that fails the same validation the bundled bank passes is not
     // something a player may see. It throws rather than reading as "nothing

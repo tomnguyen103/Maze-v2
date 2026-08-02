@@ -364,6 +364,39 @@ describe("player client", () => {
     );
   });
 
+  it("posts the admitted Run and installation nonce to Offline Continuity", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ receipt: { binding: { runId: "access_01J1MOSSWATCH" } } }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      )
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token"
+    });
+    const run = {
+      runId: "access_01J1MOSSWATCH",
+      seed: "MOSS-WATCH-11",
+      levelId: "trail-scout",
+      labyrinthNumber: 4
+    };
+
+    await expect(
+      client.issueOfflineReceipt(run, "installation_nonce_01MOSS")
+    ).resolves.toMatchObject({ receipt: expect.any(Object) });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/offline/receipt",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          ...run,
+          deviceInstallationNonce: "installation_nonce_01MOSS"
+        })
+      })
+    );
+  });
+
   it("posts guest Run admission without waiting for a Clerk token", async () => {
     const getToken = vi.fn(() => new Promise(() => {}));
     const fetchImpl = vi.fn(async () =>
@@ -462,6 +495,41 @@ describe("player client", () => {
         new Headers(call[1].headers).get("x-echo-maze-classroom-id")
       ).toBe("org_morning_123");
     }
+  });
+
+  it("submits an Offline Run without attaching a Classroom scope", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ status: "accepted", duplicate: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createPlayerApiClient({
+      fetchImpl,
+      getToken: async () => "session-token",
+      getClassroomId: () => "org_morning_123"
+    });
+    const submission = {
+      idempotencyKey: "offline_run_01MOSSWATCH",
+      receipt: { binding: { runId: "run_01MOSSWATCH" } },
+      deviceInstallationHash: "a".repeat(64),
+      contentPackHash: "b".repeat(64),
+      terminalAt: "2026-08-01T13:00:00.000Z",
+      actionLog: { version: 2, actions: [] }
+    };
+
+    await expect(client.submitOfflineRun(submission)).resolves.toEqual({
+      status: "accepted",
+      duplicate: false
+    });
+    const call = /** @type {any[][]} */ (fetchImpl.mock.calls)[0];
+    expect(call[0]).toBe("/api/offline/submission");
+    expect(new Headers(call[1].headers).get("authorization")).toBe(
+      "Bearer session-token"
+    );
+    expect(new Headers(call[1].headers).has(
+      "x-echo-maze-classroom-id"
+    )).toBe(false);
   });
 
   it("requests one exact public scoreboard partition", async () => {

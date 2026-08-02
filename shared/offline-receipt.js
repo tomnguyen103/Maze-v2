@@ -10,6 +10,7 @@
  * @typedef {{
  *   runId: string,
  *   playerId: string | null,
+ *   questId?: string,
  *   deviceInstallationHash: string,
  *   seed: string,
  *   levelId: "bright-start" | "trail-scout" | "maze-master",
@@ -18,7 +19,11 @@
  *   contentPackHash: string,
  *   issuedAt: string,
  *   playExpiresAt: string,
- *   submissionExpiresAt: string
+ *   submissionExpiresAt: string,
+ *   learningDeckId?: string,
+ *   learningDeckRevision?: string,
+ *   initialQuestionOrdinal?: number,
+ *   initialUsedQuestionIds?: string[]
  * }} OfflineReceiptBinding
  * @typedef {{
  *   schema: string,
@@ -56,7 +61,7 @@ export function offlineReceiptSigningInput({
   keyId,
   binding
 }) {
-  return JSON.stringify([
+  const fields = [
     schema,
     algorithm,
     keyId,
@@ -68,10 +73,21 @@ export function offlineReceiptSigningInput({
     binding.labyrinthNumber,
     binding.rulesetRevision,
     binding.contentPackHash,
+    binding.learningDeckId ?? "",
+    binding.learningDeckRevision ?? "",
+    binding.initialQuestionOrdinal ?? "",
+    JSON.stringify(binding.initialUsedQuestionIds ?? []),
     binding.issuedAt,
     binding.playExpiresAt,
     binding.submissionExpiresAt
-  ]);
+  ];
+  // Appending the Quest identity keeps receipts issued before this field was
+  // introduced verifiable while binding every newly issued receipt to the
+  // exact Quest whose boundary it may advance.
+  if (binding.questId !== undefined) {
+    fields.push(binding.questId);
+  }
+  return JSON.stringify(fields);
 }
 
 /**
@@ -82,12 +98,17 @@ export function offlineReceiptSigningInput({
  * @param {OfflineReceipt} receipt
  * @param {{
  *   runId: string,
+ *   questId?: string,
  *   deviceInstallationHash: string,
  *   seed: string,
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision: string,
- *   contentPackHash: string
+ *   contentPackHash: string,
+ *   learningDeckId?: string,
+ *   learningDeckRevision?: string,
+ *   initialQuestionOrdinal?: number,
+ *   initialUsedQuestionIds?: string[]
  * }} claim
  */
 export function receiptBindingMatches(receipt, claim) {
@@ -95,12 +116,22 @@ export function receiptBindingMatches(receipt, claim) {
   return Boolean(
     binding &&
       binding.runId === claim.runId &&
+      (claim.questId === undefined || binding.questId === claim.questId) &&
       binding.deviceInstallationHash === claim.deviceInstallationHash &&
       binding.seed === claim.seed &&
       binding.levelId === claim.levelId &&
       binding.labyrinthNumber === claim.labyrinthNumber &&
       binding.rulesetRevision === claim.rulesetRevision &&
-      binding.contentPackHash === claim.contentPackHash
+      binding.contentPackHash === claim.contentPackHash &&
+      (claim.learningDeckId === undefined ||
+        binding.learningDeckId === claim.learningDeckId) &&
+      (claim.learningDeckRevision === undefined ||
+        binding.learningDeckRevision === claim.learningDeckRevision) &&
+      (claim.initialQuestionOrdinal === undefined ||
+        binding.initialQuestionOrdinal === claim.initialQuestionOrdinal) &&
+      (claim.initialUsedQuestionIds === undefined ||
+        JSON.stringify(binding.initialUsedQuestionIds ?? []) ===
+          JSON.stringify(claim.initialUsedQuestionIds))
   );
 }
 

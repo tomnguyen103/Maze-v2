@@ -78,6 +78,63 @@ thresholds and carries no identity, count, or timing, and it now has its own
 rate-limit budget — but a caller who has not escaped can read the published
 band map.
 
+## P0.2 wiring follow-up — current branch evidence (2026-08-01)
+
+The mechanism-only assessment below is the historical Batch B baseline at
+`b9cfd20`. The follow-up branch `feat/offline-continuity-wiring` closes the
+repo-controlled wiring gaps through the existing player-function boundary and
+keeps production migration, key, and deployment actions outside this record.
+The receipt boundary landed in `e7400f8`; the P0.2 specification is in
+`2aabed7` while the remaining client, replay, privacy, and browser changes are
+implemented on this branch and are pending final review and merge in PR #158.
+
+### Delivered in the follow-up
+
+- Receipt issue and pending-submission routes are composed through the existing
+  player API and Vercel rewrites, with Personal/Guest binding checks and
+  Classroom exclusion.
+- The client now verifies the configured public receipt, registers the worker,
+  pins the versioned public/account package, connects the visible Continue
+  Offline action, and records live Quest transitions through Run Action Log v2.
+- Worker state is durable in IndexedDB; receipts, bounded packages, action
+  logs, outcome-only records, device binding markers, staged updates, quota
+  failures, and worker restart behavior have explicit controller tests.
+- Reconnect replay uses one stable idempotency key and applies cloud Quest,
+  Journal, and score outcomes only after replay acceptance. Rejection and
+  expiry retain only the bounded Offline—unverified outcome.
+- Identity end and account deletion use the shared scrub boundary, including
+  suffixed Practice pins and worker account state. Export and maintenance
+  paths cover the server-held offline records while reads remain expiry-guarded.
+
+### Verification receipt
+
+| Surface | Command or evidence | Result |
+| --- | --- | --- |
+| Local gate | `npm run check` | lint, typecheck, build, and bundle passed; Vitest 157 files / 1351 passed / 18 skipped; game JavaScript 30.00 KB gzip against the 30 KB ceiling |
+| Browser matrix | `npm run test:e2e` | 230 passed, 20 intentional project skips across desktop and mobile |
+| Responsive regression | `npm run test:e2e -- --workers=4 -g "opens Workshop catalog and transfers paused play to Journal or Atlas"` | 2 passed; includes the 200% text overflow guard |
+| Route/replay/privacy | `tests/offline-submission-route.test.js`, `tests/offline-submission-store.test.js`, `tests/offline-cloud-outcome.test.js`, `tests/offline-content-pack.test.js`, `tests/offline-continuity-controller.test.js`, `tests/service-worker.test.js` | Passed in the full gate; no reviewed text or selected option identifier is retained in the reviewed durable/export shapes |
+
+The browser evidence is built-page and fixture-backed for the external
+identity, receipt-key, and database boundaries. It proves the visible states,
+responsive behavior, and client wiring without claiming a production
+receipt/key or live migration round-trip.
+
+### Release boundaries still external
+
+- Migration `0024_offline_run_continuity.sql` has been authored and tested as
+  source, but has not been applied to a live database.
+- Production receipt private/public key configuration, rotation, and secret
+  provisioning remain unset and unauthorized.
+- A deployed production reconnect journey, live `/api/ready` proof, and
+  database-backed export/prune smoke test remain operator work.
+- Stripe activation, access enforcement, irreversible production changes, and
+  human assistive-technology acceptance remain outside this local delivery.
+
+The historical section below is retained so the original Batch B evidence is
+auditable; its mechanism-only conclusions describe the earlier commit, not the
+current follow-up source tree.
+
 ## Offline Run Continuity ships as mechanisms, not as a running feature
 
 **Read the whole offline section below with this in front of it.** Local review
@@ -157,10 +214,12 @@ is larger than any single ticket in this batch.
   it because every offline fixture uses the Classic Daily configuration. A
   service-level test now pins the threading; **there is still no test that
   records and replays a Run under any of the five Trail Twists.**
-- `terminalAt` is client-declared. It is now bounded — not in the future, not
-  before the receipt was issued — and both windows are checked against the
-  server's stored instants rather than the presented copy. It is still not
-  cross-checked against the replayed elapsed time.
+- `terminalAt` is client-declared. It is bounded — not in the future, not before
+  the receipt was issued — while the server also requires the submission to
+  arrive before the stored play-expiry instant, so a client cannot backdate a
+  terminal Run after play authority has ended. The submission window still
+  uses the stored receipt instants rather than the presented copy, and
+  `terminalAt` is not cross-checked against the replayed elapsed time.
 
 ## Gate record
 

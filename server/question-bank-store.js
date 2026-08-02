@@ -6,9 +6,9 @@ const LEVEL_IDS = /** @type {Set<string>} */ (
 );
 
 /**
- * Reads the published question bank. Only published versions are visible here:
- * a draft has no read path to a player at all, rather than being filtered out
- * further downstream where a missed condition would leak it.
+ * Reads the published question bank. Ordinary Quest reads see only the current
+ * published version. Offline replay also has a narrow exact-revision path for
+ * versions that were published when an outstanding receipt was issued.
  *
  * @param {{
  *   query: (
@@ -54,43 +54,67 @@ export function createQuestionBankStore(pool) {
       if (result.rows.length === 0) {
         return null;
       }
-      const row = result.rows[0];
-      // The same validation the bundled bank passes, plus the one thing the
-      // schema cannot express: content lives in `question_versions` and the
-      // band it is filed under lives in `questions`, so no CHECK can hold them
-      // together. A mismatch means a Warden Question is miscategorized, which
-      // would serve a foundation prompt at mastery.
-      const reviewedRevisionId = databaseRevisionId(
-        String(row.id),
-        Number(row.version)
+      return normalizePublishedQuestion(result.rows[0], difficultyBand);
+    },
+
+    /**
+     * Loads the exact published revisions named by an offline action log. The
+     * revision id is part of the replay contract, so an ordinal lookup is not
+     * sufficient after editorial content changes.
+     *
+     * @param {{ questionId: string, version: number }[]} revisions
+     */
+    async publishedQuestionRevisions(revisions) {
+      const unique = [
+        ...new Map(
+          revisions
+            .filter(
+              (revision) =>
+                typeof revision?.questionId === "string" &&
+                Number.isSafeInteger(revision.version) &&
+                revision.version > 0
+            )
+            .map((revision) => [
+              `${revision.questionId}\u0000${revision.version}`,
+              revision
+            ])
+        ).values()
+      ];
+      if (unique.length === 0) {
+        return [];
+      }
+      const result = await pool.query(
+        `SELECT q.id, q.level_id, q.difficulty_band, q.question_ordinal,
+                v.version, v.content
+         FROM questions q
+         JOIN question_versions v
+           ON v.question_id = q.id AND v.published_at IS NOT NULL
+         WHERE (q.id, v.version) IN (
+           SELECT requested.question_id, requested.version
+           FROM unnest($1::text[], $2::smallint[])
+             AS requested(question_id, version)
+         )`,
+        [
+          unique.map((revision) => revision.questionId),
+          unique.map((revision) => revision.version)
+        ]
       );
-      const content =
-        row.content && typeof row.content === "object"
-          ? /** @type {Record<string, unknown>} */ (row.content)
-          : {};
-      if (
-        content.echoLens !== undefined &&
-        content.reviewedRevisionId !== reviewedRevisionId
-      ) {
-        throw new Error(
-          "Published Echo Lens does not match its Reviewed Question Revision."
-        );
-      }
-      const question = normalizeQuestion({
-        ...content,
-        reviewedRevisionId
-      });
-      if (question.id !== String(row.id)) {
-        throw new Error(
-          "Published Warden Question content does not match its id."
-        );
-      }
-      if (question.difficultyBand !== difficultyBand) {
-        throw new Error(
-          "Published Warden Question does not match its difficulty band."
-        );
-      }
-      return question;
+      const requested = new Set(
+        unique.map((revision) => `${revision.questionId}\u0000${revision.version}`)
+      );
+      return result.rows
+        .filter((row) =>
+          requested.has(`${String(row.id)}\u0000${Number(row.version)}`)
+        )
+        .map((row) => ({
+          question: normalizePublishedQuestion(
+            row,
+            String(row.difficulty_band)
+          ),
+          levelId: String(row.level_id),
+          difficultyBand: String(row.difficulty_band),
+          questionOrdinal: Number(row.question_ordinal)
+        }));
     },
 
     async listQuestions() {
@@ -253,13 +277,13 @@ export function createQuestionBankStore(pool) {
         }
         await client.query(
           `UPDATE question_versions
-           SET status = 'draft', published_at = NULL
+           SET status = 'draft'
            WHERE question_id = $1 AND status = 'published'`,
           [questionId]
         );
         const published = await client.query(
           `UPDATE question_versions
-           SET status = 'published', published_at = now()
+           SET status = 'published', published_at = COALESCE(published_at, now())
            WHERE question_id = $1 AND version = $2
            RETURNING question_id AS id, version`,
           [questionId, version]
@@ -294,6 +318,48 @@ export function createQuestionBankStore(pool) {
 }
 
 export class QuestionBankInputError extends Error {}
+
+/**
+ * @param {Record<string, unknown>} row
+ * @param {string | null} expectedDifficultyBand
+ */
+function normalizePublishedQuestion(row, expectedDifficultyBand = null) {
+  // The same validation the bundled bank passes, plus the one thing the
+  // schema cannot express: content lives in `question_versions` and the band
+  // it is filed under lives in `questions`, so no CHECK can hold them
+  // together. A mismatch means a Warden Question is miscategorized, which
+  // would serve a foundation prompt at mastery.
+  const reviewedRevisionId = databaseRevisionId(
+    String(row.id),
+    Number(row.version)
+  );
+  const content =
+    row.content && typeof row.content === "object"
+      ? /** @type {Record<string, unknown>} */ (row.content)
+      : {};
+  if (
+    content.echoLens !== undefined &&
+    content.reviewedRevisionId !== reviewedRevisionId
+  ) {
+    throw new Error(
+      "Published Echo Lens does not match its Reviewed Question Revision."
+    );
+  }
+  const question = normalizeQuestion({
+    ...content,
+    reviewedRevisionId
+  });
+  if (question.id !== String(row.id)) {
+    throw new Error("Published Warden Question content does not match its id.");
+  }
+  if (
+    expectedDifficultyBand !== null &&
+    question.difficultyBand !== expectedDifficultyBand
+  ) {
+    throw new Error("Published Warden Question does not match its difficulty band.");
+  }
+  return question;
+}
 
 /**
  * @param {{
