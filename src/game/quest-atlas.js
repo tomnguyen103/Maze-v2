@@ -171,9 +171,11 @@ export function projectQuestAtlas(
  * @param {{ watchTrailLandmarkIds?: ReadonlySet<string> }} [options]
  */
 export async function projectAtlas(progress, options = {}) {
+  const snapshot = await getFossilSnapshot();
   return projectQuestAtlas(progress, {
     ...options,
-    snapshot: await getFossilSnapshot()
+    fossilCollection: snapshot?.collection,
+    fossilStatus: snapshot?.status
   });
 }
 
