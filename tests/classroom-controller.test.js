@@ -85,7 +85,11 @@ function workspaceClient() {
       }
     })),
     getClassExpeditionConstellation: vi.fn(async () => ({
-      constellation: { published: false, markers: [] }
+      constellation: {
+        published: false,
+        /** @type {{ labyrinthNumber: number, band: string }[]} */
+        markers: []
+      }
     })),
     createClassExpedition: vi.fn(async (_classroomId, input) => ({
       expedition: {

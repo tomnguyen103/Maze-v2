@@ -199,13 +199,13 @@ function advisoryCompletionDate(value) {
  *       domain: string,
  *       autoJoinEnabled: boolean
  *     }>,
-     *     progressForTeacher: (
-     *       userId: string,
-     *       classroomId: string
-     *     ) => Promise<{
-     *       progress: Record<string, unknown>[],
-     *       truncated: boolean
-     *     }>,
+ *     progressForTeacher: (
+ *       userId: string,
+ *       classroomId: string
+ *     ) => Promise<{
+ *       progress: Record<string, unknown>[],
+ *       truncated: boolean
+ *     }>,
  *     listExpeditions: (
  *       userId: string,
  *       classroomId: string
@@ -254,16 +254,16 @@ function advisoryCompletionDate(value) {
  *       classroomId: string,
  *       expeditionId: string
  *     ) => Promise<Record<string, unknown>[]>,
-     *     progressForExpedition: (
-     *       userId: string,
-     *       classroomId: string,
-     *       expeditionId: string
-     *     ) => Promise<Record<string, unknown>>
-     *     constellationForExpedition: (
-     *       userId: string,
-     *       classroomId: string,
-     *       expeditionId: string
-     *     ) => Promise<Record<string, unknown>>
+ *     progressForExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>,
+ *     constellationForExpedition: (
+ *       userId: string,
+ *       classroomId: string,
+ *       expeditionId: string
+ *     ) => Promise<Record<string, unknown>>
  *   },
  *   billing?: {
  *     createLicenseCheckout: (purchase: {

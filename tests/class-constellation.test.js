@@ -16,6 +16,7 @@ const migrationUrl = new URL(
   import.meta.url
 );
 
+/** @param {number[]} counts */
 function markers(counts) {
   return counts.map((contributorCount, index) => ({
     labyrinthNumber: index + 1,
@@ -98,7 +99,25 @@ describe("Class Constellation route and migration boundary", () => {
     }));
     const handler = createClassroomHandler({
       store: {
+        listForUser: vi.fn(async () => []),
         requireTeacher: vi.fn(async () => "teacher"),
+        domainForTeacher: vi.fn(async () => null),
+        registerDomain: vi.fn(async () => ({
+          domain: "school.example",
+          autoJoinEnabled: true
+        })),
+        progressForTeacher: vi.fn(async () => ({
+          progress: [],
+          truncated: false
+        })),
+        listExpeditions: vi.fn(async () => []),
+        createExpedition: vi.fn(async () => ({})),
+        setExpeditionStatus: vi.fn(async () => ({})),
+        capacityForTeacher: vi.fn(async () => ({})),
+        issueRunGrant: vi.fn(async () => ({})),
+        recordRunOutcome: vi.fn(async () => true),
+        listOwnGrants: vi.fn(async () => []),
+        progressForExpedition: vi.fn(async () => ({})),
         constellationForExpedition
       },
       provider: null,
