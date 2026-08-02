@@ -433,6 +433,12 @@ each signed-in Explorer's first verified escape for one Daily Shared Labyrinth.
 It never contains or exposes a personal trail.
 _Avoid_: route history, individual replay, live player map, reward
 
+**Class Constellation**:
+The Teacher-only privacy-thresholded projection of four Class Expedition
+milestones. It shows only Quiet, Glowing, or Bright bands after the Daily
+aggregate gate; it is not a route map, child-level progress view, or replay.
+_Avoid_: student map, route history, ranking, gradebook, individual trail
+
 **Echo Fossil**:
 One reviewed, coarse memory of a terminal Personal Labyrinth outcome in the
 active Quest. It contains the Atlas Region motif, a coarse journey state, a
