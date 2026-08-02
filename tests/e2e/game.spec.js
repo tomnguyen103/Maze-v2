@@ -1411,6 +1411,52 @@ test("presents Quest II storylets and reviewed Warden cards across the player pa
   );
 });
 
+test("keeps a Quest II content pack when replaying its saved Run Record", async ({
+  page
+}) => {
+  const questIId = "quest_record_replay_current_123";
+  const questIIId = "quest_ii_record_replay_123";
+  await page.addInitScript(({ questIId, questIIId }) => {
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: questIId,
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([{
+      elapsedMs: 100,
+      moves: 1,
+      seed: "QUEST-II-RECORD",
+      outcome: "escaped",
+      echoesCollected: 3,
+      echoTotal: 3,
+      questId: questIIId,
+      questLevelId: "trail-scout",
+      labyrinthNumber: 4,
+      atlasRegionId: "foundation",
+      rulesetRevision: "echo-hush-v1"
+    }]));
+  }, { questIId, questIIId });
+
+  await page.goto("/play");
+  await expectGameReady(page);
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(records).toBeVisible();
+  await records.getByRole("button", {
+    name: "Play seed QUEST-II-RECORD"
+  }).click();
+  await expect(page.locator("#quest-level-name")).toContainText("Quest II");
+  expect(await page.evaluate(() => JSON.parse(
+    localStorage.getItem("echo-maze:quest-progress:v1") ?? "null"
+  ).questId)).toMatch(/^quest_ii_/iu);
+});
+
 test("lazy Atlas keeps semantic map and list parity across a URL reload", async ({
   page
 }) => {

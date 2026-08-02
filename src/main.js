@@ -1484,6 +1484,7 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 
   if (button.dataset.recordAction === "replay") {
+    const record = runRecords[Number(button.dataset.recordIndex)];
     await startRecordedLabyrinth(
       button.dataset.level ?? "trail-scout",
       Number(button.dataset.labyrinth ?? 1),
@@ -1491,7 +1492,8 @@ elements.runRecords.addEventListener("click", async (event) => {
       {
         atlasRegionId: button.dataset.region,
         revision: button.dataset.ruleset
-      }
+      },
+      record?.questId
     );
     return;
   }
@@ -2790,12 +2792,14 @@ async function startNewQuest(
  * @param {number} labyrinthNumber
  * @param {string} seed
  * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
+ * @param {string} [recordQuestId]
  */
 async function startRecordedLabyrinth(
   levelId,
   labyrinthNumber,
   seed,
-  rulesetIdentity
+  rulesetIdentity,
+  recordQuestId
 ) {
   const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
   if (!ruleset) {
@@ -2804,7 +2808,11 @@ async function startRecordedLabyrinth(
   const nextProgress = createQuestProgress(
     levelId,
     labyrinthNumber,
-    createQuestId(getQuestContentPackId(questProgress.questId)),
+    createQuestId(
+      typeof recordQuestId === "string"
+        ? getQuestContentPackId(recordQuestId)
+        : getQuestContentPackId(questProgress.questId)
+    ),
     learningDeckForNewQuest(questProgress)
   );
   const locator = {
@@ -4097,11 +4105,13 @@ async function loadChallengeQuestion() {
  *   attempt: number,
  *   challengeKind: "warden" | "gate-warden",
  *   labyrinthNumber: number,
- *   questionOrdinal: number
+ *   questionOrdinal: number,
+ *   questId?: string
  * }} request
  */
 function questionRequestIdentifier(request) {
   return [
+    request.questId ?? "quest-i",
     request.levelId,
     request.seed,
     request.wardenId,
@@ -5057,6 +5067,7 @@ function renderRunRecords() {
       replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
       replay.dataset.region = ruleset.atlasRegionId;
       replay.dataset.ruleset = ruleset.revision;
+      replay.dataset.recordIndex = String(index);
       replay.dataset.recordAction = "replay";
       replay.textContent = "Play This Seed";
       replay.setAttribute("aria-label", `Play seed ${record.seed}`);
