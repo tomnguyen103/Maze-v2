@@ -53,12 +53,8 @@ export function createOfflineWorkerClient({
     return registrationPromise;
   }
 
-  /** @param {Record<string, unknown>} message */
-  async function message(message) {
-    const result = await registration();
-    if (!result.ok) {
-      return result;
-    }
+  /** @param {ServiceWorker} worker @param {Record<string, unknown>} message */
+  function postMessage(worker, message) {
     const channel = messageChannel();
     return new Promise((resolve) => {
       let settled = false;
@@ -77,11 +73,44 @@ export function createOfflineWorkerClient({
       );
       channel.port1.onmessage = (event) => finish(event.data);
       try {
-        result.worker.postMessage(message, [channel.port2]);
+        worker.postMessage(message, [channel.port2]);
       } catch {
         finish({ ok: false, reason: "message" });
       }
     });
+  }
+
+  /** @param {Record<string, unknown>} message */
+  async function message(message) {
+    const result = await registration();
+    if (!result.ok) {
+      return result;
+    }
+    return postMessage(result.worker, message);
+  }
+
+  async function signOut() {
+    if (registrationPromise) {
+      return message({ type: "sign-out" });
+    }
+    const serviceWorker = navigatorLike?.serviceWorker;
+    const controller = serviceWorker?.controller;
+    if (controller) {
+      return postMessage(controller, { type: "sign-out" });
+    }
+    if (typeof serviceWorker?.getRegistration === "function") {
+      try {
+        const existing = await serviceWorker.getRegistration();
+        const worker =
+          existing?.active ?? existing?.waiting ?? existing?.installing;
+        if (worker) {
+          return postMessage(worker, { type: "sign-out" });
+        }
+      } catch {
+        // A missing or inaccessible registration is equivalent to no worker.
+      }
+    }
+    return { ok: true, reason: "not-registered" };
   }
 
   return {
@@ -150,12 +179,7 @@ export function createOfflineWorkerClient({
     stage(version, { blocked = false } = {}) {
       return message({ type: "stage", version, blocked });
     },
-    signOut() {
-      if (!registrationPromise) {
-        return Promise.resolve({ ok: true, reason: "not-registered" });
-      }
-      return message({ type: "sign-out" });
-    },
+    signOut,
     status() {
       return message({ type: "status" });
     }

@@ -70,13 +70,18 @@ export function createOfflineReceiptSigner({ privateKey, keyId }) {
      * @param {{
      *   runId: string,
      *   playerId: string | null,
+     *   questId?: string,
      *   classroomId: string | null,
      *   deviceInstallationHash: string,
      *   seed: string,
      *   levelId: "bright-start" | "trail-scout" | "maze-master",
      *   labyrinthNumber: number,
      *   rulesetRevision: string,
-     *   contentPackHash: string
+     *   contentPackHash: string,
+     *   learningDeckId?: string,
+     *   learningDeckRevision?: string,
+     *   initialQuestionOrdinal?: number,
+     *   initialUsedQuestionIds?: string[]
      * }} admission
      * @param {{ issuedAt?: string }} [options]
      * @returns {OfflineReceipt}
@@ -95,6 +100,9 @@ export function createOfflineReceiptSigner({ privateKey, keyId }) {
       const binding = {
         runId: admission.runId,
         playerId: admission.playerId ?? null,
+        ...(typeof admission.questId === "string"
+          ? { questId: admission.questId }
+          : {}),
         deviceInstallationHash: admission.deviceInstallationHash,
         seed: admission.seed,
         levelId: admission.levelId,
@@ -103,7 +111,15 @@ export function createOfflineReceiptSigner({ privateKey, keyId }) {
         contentPackHash: admission.contentPackHash,
         issuedAt,
         playExpiresAt: windows.playExpiresAt,
-        submissionExpiresAt: windows.submissionExpiresAt
+        submissionExpiresAt: windows.submissionExpiresAt,
+        ...(typeof admission.learningDeckId === "string"
+          ? {
+              learningDeckId: admission.learningDeckId,
+              learningDeckRevision: admission.learningDeckRevision,
+              initialQuestionOrdinal: admission.initialQuestionOrdinal,
+              initialUsedQuestionIds: admission.initialUsedQuestionIds
+            }
+          : {})
       };
       const unsigned = {
         schema: OFFLINE_RECEIPT_SCHEMA,

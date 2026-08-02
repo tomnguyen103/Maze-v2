@@ -10,12 +10,25 @@ function storedReceipt(row) {
   return {
     runId: String(row.run_id),
     playerId: row.player_id === null ? null : String(row.player_id),
+    ...(typeof row.quest_id === "string"
+      ? { questId: String(row.quest_id) }
+      : {}),
     deviceInstallationHash: String(row.device_installation_hash),
     seed: String(row.seed),
     levelId: String(row.level_id),
     labyrinthNumber: Number(row.labyrinth_number),
     rulesetRevision: String(row.ruleset_revision),
     contentPackHash: String(row.content_pack_hash),
+    ...(typeof row.learning_deck_id === "string"
+      ? {
+          learningDeckId: String(row.learning_deck_id),
+          learningDeckRevision: String(row.learning_deck_revision),
+          initialQuestionOrdinal: Number(row.initial_question_ordinal),
+          initialUsedQuestionIds: Array.isArray(row.initial_used_question_ids)
+            ? row.initial_used_question_ids.map(String)
+            : []
+        }
+      : {}),
     issuedAt: instant(row.issued_at),
     playExpiresAt: instant(row.play_expires_at),
     submissionExpiresAt: instant(row.submission_expires_at)
@@ -50,7 +63,7 @@ export function createOfflineSubmissionStore(pool) {
 
     /**
      * @param {string} userId
-     * @param {{ idempotencyKey: string, runId: string, accepted: boolean, outcome: "won" | "lost", score: number, moves: number, elapsedMs: number }} submission
+     * @param {{ idempotencyKey: string, runId: string, accepted: boolean, outcome: "won" | "lost", score: number, moves: number, elapsedMs: number, replayResult?: unknown }} submission
      */
     async recordSubmission(userId, submission) {
       return withTenantContext(
@@ -59,7 +72,7 @@ export function createOfflineSubmissionStore(pool) {
         async (client) => {
           const result = await client.query(
             `SELECT *
-             FROM record_offline_submission($1, $2, $3, $4, $5, $6, $7)`,
+             FROM record_offline_submission($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
               submission.idempotencyKey,
               submission.runId,
@@ -67,7 +80,10 @@ export function createOfflineSubmissionStore(pool) {
               submission.outcome,
               submission.score,
               submission.moves,
-              submission.elapsedMs
+              submission.elapsedMs,
+              submission.replayResult === undefined
+                ? null
+                : JSON.stringify(submission.replayResult)
             ]
           );
           const row = result.rows?.[0];
@@ -83,6 +99,15 @@ export function createOfflineSubmissionStore(pool) {
               ? {}
               : {
                   recorded: {
+                    idempotencyKey: String(row.recorded_idempotency_key),
+                    ...(row.recorded_replay_result
+                      ? {
+                          result:
+                            typeof row.recorded_replay_result === "string"
+                              ? JSON.parse(row.recorded_replay_result)
+                              : row.recorded_replay_result
+                        }
+                      : {}),
                     accepted: row.recorded_accepted === true,
                     outcome: /** @type {"won" | "lost"} */ (
                       String(row.recorded_outcome)

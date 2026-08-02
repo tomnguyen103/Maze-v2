@@ -118,7 +118,10 @@ export function verifyRunReplay(value, trusted) {
  * @param {{
  *   seed: string,
  *   config: Parameters<typeof createRun>[1],
- *   questionForRevision: (revisionId: string) => ReturnType<
+ *   questionForRevision: (
+ *     revisionId: string,
+ *     context?: { run: ReturnType<typeof createRun> }
+ *   ) => ReturnType<
  *     (typeof import("../src/questions/question-bank.js"))["getBundledQuestion"]
  *   > | null,
  *   onAction?: (
@@ -162,7 +165,7 @@ export function verifyOfflineRunReplay(value, trusted) {
           "A Warden Challenge needs the Reviewed Question Revision that answered it."
         );
       }
-      const question = trusted.questionForRevision(revisionId);
+      const question = trusted.questionForRevision(revisionId, { run });
       if (!question) {
         throw new ReplayInputError(
           "Reviewed Question Revision is not in the receipt-bound content pack."
@@ -258,13 +261,23 @@ function validateEntryV2(value, previousElapsedMs) {
     };
   }
   if (
-    (input.type === "pulse" ||
-      input.type === "ring-bell" ||
-      input.type === "reveal-hint") &&
+    (input.type === "pulse" || input.type === "ring-bell") &&
     hasOnlyKeys(input, ["type", "elapsedMs"])
   ) {
     return {
-      type: /** @type {"pulse" | "ring-bell" | "reveal-hint"} */ (input.type),
+      type: /** @type {"pulse" | "ring-bell"} */ (input.type),
+      elapsedMs
+    };
+  }
+  if (
+    input.type === "reveal-hint" &&
+    typeof input.questionRevisionId === "string" &&
+    REVISION_ID_PATTERN.test(input.questionRevisionId) &&
+    hasOnlyKeys(input, ["type", "questionRevisionId", "elapsedMs"])
+  ) {
+    return {
+      type: /** @type {"reveal-hint"} */ (input.type),
+      questionRevisionId: input.questionRevisionId,
       elapsedMs
     };
   }
@@ -329,7 +342,11 @@ function replayActionV2(entry, run) {
   if (run.status !== "challenge" || !run.challenge?.question) {
     throw new ReplayInputError("Question answer is not available.");
   }
-  if (run.challenge.question.id !== entry.questionRevisionId) {
+  const question = /** @type {{ id: string, reviewedRevisionId?: string }} */ (
+    run.challenge.question
+  );
+  const questionRevisionId = question.reviewedRevisionId ?? question.id;
+  if (questionRevisionId !== entry.questionRevisionId) {
     throw new ReplayInputError(
       "Reviewed Question Revision does not match the Challenge it answered."
     );

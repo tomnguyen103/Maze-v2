@@ -113,6 +113,7 @@ import {
   QUEST_PROGRESS_PATHS
 } from "./quest-progress-route.js";
 import { createQuestProgressStore } from "./quest-progress-store.js";
+
 import { createQuestionBankStore } from "./question-bank-store.js";
 import {
   ACCESS_PATHS,
@@ -129,6 +130,48 @@ import {
 import { URL } from "node:url";
 import { getLabyrinthConfig, getDifficultyBand } from "../src/questions/quest-levels.js";
 import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
+
+const DATABASE_REVISION_PATTERN = /^database:(.+):v([1-9]\d*)$/;
+
+/**
+ * Pulls only database revision identities from the bounded replay log. The
+ * content itself remains server-side; these pairs are just the keys needed to
+ * load the exact reviewed cards before replay.
+ *
+ * @param {unknown} actionLog
+ */
+function databaseQuestionRevisions(actionLog) {
+  if (
+    !actionLog ||
+    typeof actionLog !== "object" ||
+    !Array.isArray(/** @type {{ actions?: unknown }} */ (actionLog).actions)
+  ) {
+    return [];
+  }
+  const revisions = new Map();
+  for (const action of /** @type {{ actions: unknown[] }} */ (actionLog).actions
+    .slice(0, 4096)) {
+    if (!action || typeof action !== "object") {
+      continue;
+    }
+    const revisionId = /** @type {{ questionRevisionId?: unknown }} */ (action)
+      .questionRevisionId;
+    if (typeof revisionId !== "string" || revisionId.length > 256) {
+      continue;
+    }
+    const match = DATABASE_REVISION_PATTERN.exec(revisionId);
+    if (!match) {
+      continue;
+    }
+    const version = Number(match[2]);
+    if (!Number.isSafeInteger(version)) {
+      continue;
+    }
+    const questionId = match[1];
+    revisions.set(`${questionId}\u0000${version}`, { questionId, version });
+  }
+  return [...revisions.values()];
+}
 
 const PLAYER_PATHS = new Set([
   "/api/profile",
@@ -339,6 +382,8 @@ export function createPlayerApi(env = process.env) {
       ? createOfflineReceiptHandler({
           getUserId,
           getRunGrant: (userId, runId) => accessStore.getRunGrant(userId, runId),
+          getQuestProgress: async (userId) =>
+            (await questProgressStore.get(userId))?.progress ?? null,
           issueReceipt: (binding) =>
             offlineReceiptStore.issueReceipt(
               String(binding.playerId),
@@ -363,6 +408,7 @@ export function createPlayerApi(env = process.env) {
     offlineReceiptConfig && offlineContinuityConfig
       ? createOfflineSubmissionHandler({
           getUserId,
+          rateLimit,
           submit: async (submission) => {
             const playerId =
               typeof submission.playerId === "string"
@@ -374,9 +420,6 @@ export function createPlayerApi(env = process.env) {
             const verifier = createOfflineReceiptVerifier({
               keys: offlineReceiptConfig.keys
             });
-            const contentPack = createOfflineContentPack(
-              offlineContinuityConfig.contentPackHash
-            );
             const service = createOfflineSubmissionService({
               verifyReceipt: (receipt) => verifier.verify(receipt),
               loadReceipt: (runId, deviceHash) =>
@@ -401,7 +444,25 @@ export function createPlayerApi(env = process.env) {
                   ruleset
                 };
               },
-              contentPackFor: async () => contentPack,
+              contentPackFor: async (_receipt, actionLog) => {
+                /** @type {Awaited<ReturnType<typeof questionBankStore.publishedQuestionRevisions>>} */
+                let publishedQuestionRevisions = [];
+                try {
+                  publishedQuestionRevisions =
+                    await questionBankStore.publishedQuestionRevisions(
+                      databaseQuestionRevisions(actionLog)
+                    );
+                } catch {
+                  // A database outage cannot make an unbound or guessed card
+                  // authoritative. The replay below will reject an exact DB
+                  // revision that could not be loaded, while bundled and Deck
+                  // content remains available.
+                }
+                return createOfflineContentPack(
+                  offlineContinuityConfig.contentPackHash,
+                  publishedQuestionRevisions
+                );
+              },
               recordSubmission: (value) =>
                 offlineSubmissionStore.recordSubmission(playerId, value),
               completeSubmission: async (key) => {

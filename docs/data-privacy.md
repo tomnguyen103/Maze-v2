@@ -20,7 +20,7 @@ give the account holder both halves of their data rights.
 | Classroom Progress Counts | `classroom_progress_counts` | per-Student/per-objective correct, wrong, Hint, Skip, and total counts only |
 | Verified Daily Submissions | `verified_daily_submissions` | current-UTC date, idempotency key, and server-replayed bounded result facts; no action log or Question text |
 | Verified Daily Best | `verified_daily_entries` | one best replay-verified result per Explorer/date; public API exposes username, rank, score, and Moves only |
-| Offline Run Continuity | `offline_run_receipts`, `offline_pending_submissions` | receipt binding and coarse replay outcome facts only; no device-local action log, selected option, or reviewed Question content |
+| Offline Run Continuity | `offline_run_receipts`, `offline_pending_submissions` | receipt binding, coarse replay outcome facts, and bounded learning-metadata counts only; no device-local action log, selected option, or reviewed Question content |
 
 Guests keep Explorer Access Settings only on their device. Signed-in Explorers
 sync the same four presentation-only choices to their profile. They never enter
@@ -41,8 +41,10 @@ Run, Quest, score, Question, or shared-link state.
   database-authoritative Classroom context in turn.
 - `data.offline_continuity.receipts` contains only server-held receipt binding
   and expiry facts. `data.offline_continuity.submissions` contains only coarse
-  accepted/rejected outcome facts. The device-local Action Log, selected
-  options, and reviewed Question content are never export rows.
+  accepted/rejected outcome facts and bounded `journal_summary` learning
+  metadata counts needed to apply Lantern Journal effects idempotently. The
+  device-local Action Log, selected options, Question ids, and reviewed
+  Question content are never export rows.
 - The admin variant, `GET /api/admin/users/:id/export`, reuses the same builder
   under the `export:any` permission, audited as `export.admin` with the target
   Explorer as the resource. Admin-only: a moderator holds `users:read` but not

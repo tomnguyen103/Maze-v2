@@ -206,6 +206,29 @@ describe("Offline asset pinning service worker", () => {
     expect(staged).toMatchObject({ activeVersion: "v1", stagedVersion: "v2" });
   });
 
+  it("switches the active package and account after all protected Runs end", async () => {
+    await worker.send({
+      type: "pin",
+      version: "v2",
+      accountScope: "user_02MOSS",
+      assets: [
+        { url: "https://echo.test/shell.js", scope: "public" },
+        { url: "https://echo.test/pack-v2.json", scope: "account" }
+      ]
+    });
+
+    await expect(worker.send({ type: "status" })).resolves.toMatchObject({
+      activeVersion: "v2",
+      accountScope: "user_02MOSS"
+    });
+    expect(worker.cacheNames()).not.toContain(
+      "echo-maze-pin-v1-account-user_01MOSS"
+    );
+    expect(worker.cacheNames()).toContain(
+      "echo-maze-pin-v2-account-user_02MOSS"
+    );
+  });
+
   it("routes an active Run through the version it was pinned against", async () => {
     await worker.send({
       type: "run-state",

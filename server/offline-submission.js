@@ -1,9 +1,10 @@
 import {
-  offlinePlayAuthorityOpen,
   offlineSubmissionOpen,
   receiptBindingMatches
 } from "../shared/offline-receipt.js";
+import { createOfflineQuestionSequence } from "./offline-content-pack.js";
 import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
+import { reviewedQuestionForId } from "../src/learning/lantern-journal.js";
 
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
 
@@ -27,6 +28,56 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  */
 
 /**
+ * Keeps the idempotency snapshot sufficient to retry cloud Journal effects
+ * without retaining Question ids, selected options, or the detailed replay.
+ *
+ * @param {ReturnType<typeof verifyOfflineRunReplay> & { journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[] }} result
+ */
+function compactReplayResult(result) {
+  const summary = new Map();
+  for (const event of result.journalEvents ?? []) {
+    const journalQuestion = reviewedQuestionForId(event.questionId);
+    if (
+      !journalQuestion ||
+      typeof event.topicId !== "string" ||
+      typeof event.learningObjectiveId !== "string" ||
+      typeof event.difficultyBand !== "string" ||
+      journalQuestion.topicId !== event.topicId ||
+      journalQuestion.learningObjectiveId !== event.learningObjectiveId ||
+      journalQuestion.difficultyBand !== event.difficultyBand ||
+      !["correct", "wrong", "hint", "skip"].includes(event.outcome)
+    ) {
+      continue;
+    }
+    const key = JSON.stringify([
+      event.topicId,
+      event.learningObjectiveId,
+      event.difficultyBand,
+      event.outcome
+    ]);
+    const current = summary.get(key) ?? {
+      topicId: event.topicId,
+      learningObjectiveId: event.learningObjectiveId,
+      difficultyBand: event.difficultyBand,
+      outcome: event.outcome,
+      count: 0
+    };
+    current.count += 1;
+    summary.set(key, current);
+  }
+  return {
+    status: result.status,
+    seed: result.seed,
+    score: result.score,
+    wardensDefeated: result.wardensDefeated,
+    echoesCollected: result.echoesCollected,
+    moves: result.moves,
+    elapsedMs: result.elapsedMs,
+    ...(summary.size > 0 ? { journalSummary: [...summary.values()] } : {})
+  };
+}
+
+/**
  * @param {{
  *   verifyReceipt: (receipt: unknown) => (
  *     { valid: true } | { valid: false, reason: string }
@@ -40,20 +91,31 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *     labyrinthNumber: number,
  *     rulesetRevision: string,
  *     contentPackHash: string,
+ *     questId?: string,
  *     issuedAt: string,
  *     playExpiresAt: string,
- *     submissionExpiresAt: string
+ *     submissionExpiresAt: string,
+ *     learningDeckId?: string,
+ *     learningDeckRevision?: string,
+ *     initialQuestionOrdinal?: number,
+ *     initialUsedQuestionIds?: string[]
  *   } | null>,
  *   labyrinthConfigFor: (
  *     levelId: string,
  *     labyrinthNumber: number,
  *     rulesetRevision: string
  *   ) => Parameters<typeof verifyOfflineRunReplay>[1]["config"],
- *   contentPackFor: (receipt: OfflineReceipt) => Promise<{
+ *   contentPackFor: (receipt: OfflineReceipt, actionLog: unknown) => Promise<{
  *     hash: string,
  *     questionForRevision: Parameters<
  *       typeof verifyOfflineRunReplay
  *     >[1]["questionForRevision"]
+ *     publishedQuestionRevisions?: {
+ *       question: ReturnType<typeof import("../src/questions/question-bank.js")["getBundledQuestion"]>,
+ *       levelId: string,
+ *       difficultyBand: string,
+ *       questionOrdinal: number
+ *     }[]
  *   } | null>,
  *   recordSubmission: (submission: {
  *     idempotencyKey: string,
@@ -62,7 +124,23 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *     outcome: "won" | "lost",
  *     score: number,
  *     moves: number,
- *     elapsedMs: number
+ *     elapsedMs: number,
+ *     replayResult?: ReturnType<typeof verifyOfflineRunReplay> & {
+ *       journalEvents?: {
+ *         questionId: string,
+ *         topicId: string,
+ *         learningObjectiveId: string,
+ *         difficultyBand: string,
+ *         outcome: "correct" | "wrong" | "hint" | "skip"
+ *       }[]
+ *       journalSummary?: {
+ *         topicId: string,
+ *         learningObjectiveId: string,
+ *         difficultyBand: string,
+ *         outcome: "correct" | "wrong" | "hint" | "skip",
+ *         count: number
+ *       }[]
+ *     }
  *   }) => Promise<{
  *     state: "recorded" | "duplicate" | "no-live-receipt",
  *     recorded?: {
@@ -70,7 +148,24 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *       outcome: "won" | "lost",
  *       score: number,
  *       moves: number,
- *       elapsedMs: number
+ *       elapsedMs: number,
+ *       idempotencyKey: string,
+ *       result?: ReturnType<typeof verifyOfflineRunReplay> & {
+ *         journalEvents?: {
+ *           questionId: string,
+ *           topicId: string,
+ *           learningObjectiveId: string,
+ *           difficultyBand: string,
+ *           outcome: "correct" | "wrong" | "hint" | "skip"
+ *         }[]
+ *         journalSummary?: {
+ *           topicId: string,
+ *           learningObjectiveId: string,
+ *           difficultyBand: string,
+ *           outcome: "correct" | "wrong" | "hint" | "skip",
+ *           count: number
+ *         }[]
+ *       }
  *     } | null
  *   }>,
  *   completeSubmission: (idempotencyKey: string) => Promise<void>,
@@ -87,6 +182,7 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{12,128}$/;
  *       labyrinthNumber: number,
  *       rulesetRevision: string,
  *       contentPackHash: string,
+ *       questId?: string,
  *       issuedAt: string,
  *       playExpiresAt: string,
  *       submissionExpiresAt: string
@@ -158,7 +254,12 @@ export function createOfflineSubmissionService({
           levelId: stored.levelId,
           labyrinthNumber: stored.labyrinthNumber,
           rulesetRevision: stored.rulesetRevision,
-          contentPackHash: stored.contentPackHash
+           contentPackHash: stored.contentPackHash,
+           questId: stored.questId,
+           learningDeckId: stored.learningDeckId,
+          learningDeckRevision: stored.learningDeckRevision,
+          initialQuestionOrdinal: stored.initialQuestionOrdinal,
+          initialUsedQuestionIds: stored.initialUsedQuestionIds
         }) ||
         stored.deviceInstallationHash !== submission.deviceInstallationHash ||
         stored.contentPackHash !== submission.contentPackHash
@@ -189,6 +290,12 @@ export function createOfflineSubmissionService({
           submissionExpiresAt: stored.submissionExpiresAt
         }
       };
+      if (at.getTime() >= Date.parse(stored.submissionExpiresAt)) {
+        return { status: "expired", duplicate: false, reason: "submission" };
+      }
+      if (at.getTime() >= Date.parse(stored.playExpiresAt)) {
+        return { status: "expired", duplicate: false, reason: "play" };
+      }
       if (
         !offlineSubmissionOpen(
           /** @type {OfflineReceipt} */ (authority),
@@ -198,18 +305,10 @@ export function createOfflineSubmissionService({
       ) {
         return { status: "expired", duplicate: false, reason: "submission" };
       }
-      // A terminal instant inside the play window is the normal case. One
-      // outside it means play continued past the authority it was granted.
-      if (
-        !offlinePlayAuthorityOpen(
-          /** @type {OfflineReceipt} */ (authority),
-          terminalAt
-        )
-      ) {
-        return { status: "expired", duplicate: false, reason: "play" };
-      }
-
-      const pack = await contentPackFor(submission.receipt);
+      const pack = await contentPackFor(
+        submission.receipt,
+        submission.actionLog
+      );
       if (!pack || pack.hash !== stored.contentPackHash) {
         return { status: "invalid", duplicate: false, reason: "content-pack" };
       }
@@ -218,7 +317,40 @@ export function createOfflineSubmissionService({
       let result;
       /** @type {{ questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[]} */
       const journalEvents = [];
+      const questionSequence = createOfflineQuestionSequence(
+        stored,
+        pack?.publishedQuestionRevisions ?? []
+      );
       try {
+        /**
+         * @param {string} revisionId
+         * @param {{ run: ReturnType<typeof import("../src/game/game-session.js").createRun> } | undefined} [context]
+         */
+        const questionForRevision = (revisionId, context = undefined) => {
+          const expected = context?.run
+            ? questionSequence?.next(context.run)
+            : null;
+          if (questionSequence && !expected) {
+            throw new ReplayInputError(
+              "Replay Question sequence is exhausted or invalid."
+            );
+          }
+          const expectedRevision = expected
+            ? (expected.reviewedRevisionId ?? expected.id)
+            : revisionId;
+          if (questionSequence && expectedRevision !== revisionId) {
+            throw new ReplayInputError(
+              "Replay Question does not match the trusted Challenge sequence."
+            );
+          }
+          const question = pack.questionForRevision(expectedRevision);
+          if (!question) {
+            throw new ReplayInputError(
+              "Reviewed Question Revision is not in the receipt-bound content pack."
+            );
+          }
+          return question;
+        };
         result = verifyOfflineRunReplay(submission.actionLog, {
           seed: stored.seed,
           // The ruleset the receipt bound, not the Labyrinth's default. Without
@@ -229,7 +361,7 @@ export function createOfflineSubmissionService({
             stored.labyrinthNumber,
             stored.rulesetRevision
           ),
-          questionForRevision: pack.questionForRevision,
+          questionForRevision,
           onAction: (run, action) => {
             const question = run.challenge?.question;
             if (!question) {
@@ -282,6 +414,14 @@ export function createOfflineSubmissionService({
         throw error;
       }
 
+      const compactResult = compactReplayResult(result);
+      const cloudResult = {
+        ...result,
+        ...(compactResult.journalSummary
+          ? { journalSummary: compactResult.journalSummary }
+          : {})
+      };
+
       // The ledger decides, not the caller.
       const { state, recorded } = await recordSubmission({
         idempotencyKey: submission.idempotencyKey,
@@ -290,7 +430,8 @@ export function createOfflineSubmissionService({
         outcome: result.status === "won" ? "won" : "lost",
         score: result.score,
         moves: result.moves,
-        elapsedMs: result.elapsedMs
+        elapsedMs: result.elapsedMs,
+        replayResult: compactResult
       });
       if (state === "no-live-receipt") {
         // Nothing was written, so reporting an acceptance would tell the
@@ -300,17 +441,21 @@ export function createOfflineSubmissionService({
       // What cloud state holds, not what this request replayed. The idempotency
       // key is client-chosen, so a second, different action log can arrive under
       // a spent key; both replay cleanly and only the first was ever stored.
-      // Only the four fields the ledger stores are overridden; the rest of the
-      // shape stays as replayed, because the ledger holds no record of them.
-      const ledgerResult = recorded
-        ? {
-            ...result,
-            status: recorded.outcome,
-            score: recorded.score,
-            moves: recorded.moves,
-            elapsedMs: recorded.elapsedMs
-          }
-        : result;
+      const ledgerKey = recorded?.idempotencyKey ?? submission.idempotencyKey;
+      // A recorded retry must apply the complete first replay result. The
+      // coarse fields alone are not enough to reconstruct Journal or Quest
+      // effects when a second request carries a different valid log.
+      const ledgerResult = recorded?.result
+        ? recorded.result
+        : recorded
+          ? {
+              ...result,
+              status: recorded.outcome,
+              score: recorded.score,
+              moves: recorded.moves,
+              elapsedMs: recorded.elapsedMs
+            }
+          : cloudResult;
 
       if (state === "duplicate") {
         if (!recorded) {
@@ -324,7 +469,14 @@ export function createOfflineSubmissionService({
           // recorded rejection into a verified result on transport retry.
           return { status: "rejected", duplicate: true, reason: "replay" };
         }
-        if (!(await pendingApply(submission.idempotencyKey))) {
+        if (!recorded.result) {
+          // An accepted ledger row without its complete replay snapshot cannot
+          // safely finish a cloud retry: the current request may carry a
+          // different valid log, and the coarse columns cannot rebuild the
+          // Journal or Quest effects of the first one.
+          return { status: "expired", duplicate: true, reason: "submission" };
+        }
+        if (!(await pendingApply(ledgerKey))) {
           return { status: "accepted", duplicate: true, result: ledgerResult };
         }
       }
@@ -339,7 +491,7 @@ export function createOfflineSubmissionService({
         receipt: stored,
         result: ledgerResult
       });
-      await completeSubmission(submission.idempotencyKey);
+      await completeSubmission(ledgerKey);
       return {
         status: "accepted",
         duplicate: state === "duplicate",

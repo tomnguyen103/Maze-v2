@@ -22,7 +22,8 @@ export function createOfflineReceiptStore(pool) {
         async (client) => {
           const result = await client.query(
             `SELECT issue_offline_run_receipt(
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+               $12, $13, $14, $15, $16
              ) AS issued`,
             [
               binding.runId,
@@ -35,7 +36,12 @@ export function createOfflineReceiptStore(pool) {
               binding.issuedAt,
               binding.playExpiresAt,
               binding.submissionExpiresAt,
-              binding.rulesetRevision
+              binding.rulesetRevision,
+              binding.questId,
+              binding.learningDeckId,
+              binding.learningDeckRevision,
+              binding.initialQuestionOrdinal,
+              JSON.stringify(binding.initialUsedQuestionIds ?? [])
             ]
           );
           return result.rows?.[0]?.issued === true;
@@ -65,12 +71,27 @@ export function createOfflineReceiptStore(pool) {
           return {
             runId: String(row.run_id),
             playerId: row.player_id === null ? null : String(row.player_id),
+            ...(typeof row.quest_id === "string"
+              ? { questId: String(row.quest_id) }
+              : {}),
             deviceInstallationHash: String(row.device_installation_hash),
             seed: String(row.seed),
             levelId: String(row.level_id),
             labyrinthNumber: Number(row.labyrinth_number),
             rulesetRevision: String(row.ruleset_revision),
             contentPackHash: String(row.content_pack_hash),
+            ...(typeof row.learning_deck_id === "string"
+              ? {
+                  learningDeckId: String(row.learning_deck_id),
+                  learningDeckRevision: String(row.learning_deck_revision),
+                  initialQuestionOrdinal: Number(row.initial_question_ordinal),
+                  initialUsedQuestionIds: Array.isArray(
+                    row.initial_used_question_ids
+                  )
+                    ? row.initial_used_question_ids.map(String)
+                    : []
+                }
+              : {}),
             issuedAt: instant(row.issued_at),
             playExpiresAt: instant(row.play_expires_at),
             submissionExpiresAt: instant(row.submission_expires_at)

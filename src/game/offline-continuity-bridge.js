@@ -1,3 +1,5 @@
+import { clearOfflineAccountState } from "./offline-account-cleanup.js";
+
 /** @typedef {Parameters<typeof import("./offline-continuity-runtime.js").createOfflineContinuityRuntime>[0]} RuntimeDependencies */
 /** @typedef {ReturnType<typeof import("./offline-continuity-runtime.js").createOfflineContinuityRuntime>} OfflineContinuityRuntime */
 
@@ -113,6 +115,38 @@ export function createOfflineContinuityBridge(
     return loadRuntime().then((runtime) => runtime.prepare(locator));
   }
 
+  /** @param {string} runId */
+  function cancelPreparation(runId) {
+    return loadRuntime().then((runtime) => runtime.cancelPreparation(runId));
+  }
+
+  /** @param {string | null} accountScope */
+  function setAccountScope(accountScope) {
+    return loadRuntime().then((runtime) => runtime.setAccountScope(accountScope));
+  }
+
+  function signOut() {
+    return loadRuntime()
+      .then((runtime) => runtime.signOut())
+      .then((result) => {
+        if (/** @type {{ ok?: boolean }} */ (result).ok !== true) {
+          reportSignOutFailure();
+        }
+        return result;
+      }, reportSignOutFailure)
+      .finally(() => {
+        runtimePromise = null;
+      });
+  }
+
+  /** @param {Omit<Parameters<typeof clearOfflineAccountState>[0], "signOut">} dependencies */
+  function clearState(dependencies) {
+    return clearOfflineAccountState({
+      ...dependencies,
+      signOut: () => signOut()
+    });
+  }
+
   /** @param {Parameters<OfflineContinuityRuntime["recordTransition"]>[0]} previous @param {Parameters<OfflineContinuityRuntime["recordTransition"]>[1]} action @param {Parameters<OfflineContinuityRuntime["recordTransition"]>[2]} next */
   function recordTransition(previous, action, next) {
     return loadRuntime().then((runtime) =>
@@ -139,27 +173,21 @@ export function createOfflineContinuityBridge(
     boot: () => loadRuntime().then((runtime) => runtime.boot()),
     reconcile: () => loadRuntime().then((runtime) => runtime.reconcile()),
     online: () => loadRuntime().then((runtime) => runtime.online()),
-    signOut: () =>
-      loadRuntime()
-        .then((runtime) => runtime.signOut())
-        .then((result) => {
-          if (/** @type {{ ok?: boolean }} */ (result).ok !== true) {
-            reportSignOutFailure();
-          }
-          return result;
-        }, reportSignOutFailure)
-        .finally(() => {
-          runtimePromise = null;
-        }),
+    signOut,
     prepare,
     continueRun,
     recordTransition,
     selectQuestion,
     loadQuestion,
+    cancelPreparation,
+    setAccountScope,
+    clearState,
     /** @param {string} runId */
     startRun: (runId) => loadRuntime().then((runtime) => runtime.startRun(runId)),
     startFirstLight: () =>
       loadRuntime().then((runtime) => runtime.startFirstLight()),
-    terminal: () => loadRuntime().then((runtime) => runtime.terminal())
+    /** @param {string | undefined} onlineRunId */
+    terminal: (onlineRunId = undefined) =>
+      loadRuntime().then((runtime) => runtime.terminal(onlineRunId))
   };
 }

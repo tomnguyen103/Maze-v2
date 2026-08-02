@@ -174,6 +174,7 @@ describe("offline continuity controller", () => {
       durable: true,
       record: {
         runId: identity.runId,
+        playerId: "user_offline_01",
         verification: "pending",
         outcome: "won",
         playAuthorityOpen: true
@@ -268,6 +269,83 @@ describe("offline continuity controller", () => {
       verification: "verified",
       label: ""
     });
+    expect(worker.release).toHaveBeenCalledWith(identity.runId);
+  });
+
+  it("keeps the worker lease until terminal cleanup succeeds", async () => {
+    const storage = createStorage();
+    const run = createRun("OFFLINE-CONTROLLER-CLEANUP", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
+    });
+    const identity = createRunIdentity(run);
+    const worker = {
+      setRunState: async () => ({ ok: true }),
+      release: vi.fn(async () => ({ ok: true }))
+    };
+    const controller = createOfflineContinuityController({
+      storage,
+      workerClient: worker,
+      submitOfflineRun: async () => ({ status: "accepted", duplicate: false }),
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
+      accountScope: "user_offline_01"
+    });
+    await controller.prepare({
+      run: identity,
+      receipt: createReceipt(identity),
+      assetPackage: createAssetPackage(),
+      verified: true
+    });
+    await controller.recordTerminal({
+      run: identity,
+      terminalRun: /** @type {ReturnType<typeof createRun>} */ ({
+        ...run,
+        status: "won",
+        score: 420
+      }),
+      outcome: "won",
+      terminalAt: new Date("2026-08-01T13:02:00.000Z")
+    });
+
+    const removeItem = storage.removeItem;
+    const setItem = storage.setItem;
+    storage.removeItem = () => {
+      throw new Error("storage locked");
+    };
+    storage.setItem = (key, value) => {
+      if (
+        value === "" &&
+        [
+          OFFLINE_RECEIPT_KEY,
+          OFFLINE_CONTENT_PACK_KEY,
+          OFFLINE_ACTION_LOG_KEY
+        ].includes(key)
+      ) {
+        return new Map();
+      }
+      return setItem(key, value);
+    };
+
+    await expect(controller.reconcile()).resolves.toMatchObject({
+      status: "accepted",
+      verification: "verified",
+      retry: true,
+      cleared: false
+    });
+    expect(worker.release).not.toHaveBeenCalled();
+
+    storage.removeItem = removeItem;
+    storage.setItem = setItem;
+    await expect(controller.reconcile()).resolves.toMatchObject({
+      status: "verified",
+      verification: "verified",
+      retry: false,
+      cleared: true
+    });
+    expect(worker.release).toHaveBeenCalledOnce();
     expect(worker.release).toHaveBeenCalledWith(identity.runId);
   });
 
@@ -467,6 +545,41 @@ describe("offline continuity controller", () => {
       })
     ).resolves.toMatchObject({ ok: true });
     expect(storage.getItem(OFFLINE_RUN_RECORD_KEY)).toBeNull();
+  });
+
+  it("cancels a prepared non-terminal Run without clearing another Run", async () => {
+    const storage = createStorage();
+    const worker = { release: vi.fn(async () => ({ ok: true })) };
+    const run = createRun("OFFLINE-CONTROLLER-CANCEL", {
+      size: 9,
+      echoCount: 1,
+      wardenCount: 0,
+      ruleset: { atlasRegionId: "foundation", revision: "classic-v1" }
+    });
+    const identity = createRunIdentity(run);
+    const controller = createOfflineContinuityController({
+      storage,
+      workerClient: worker,
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      accountScope: "user_offline_01"
+    });
+
+    await controller.prepare({
+      run: identity,
+      receipt: createReceipt(identity),
+      assetPackage: createAssetPackage(),
+      verified: true
+    });
+    await expect(controller.cancelPreparedRun(identity.runId)).resolves.toEqual({
+      ok: true,
+      durable: true,
+      cleared: true
+    });
+
+    expect(storage.getItem(OFFLINE_RECEIPT_KEY)).toBeNull();
+    expect(storage.getItem(OFFLINE_CONTENT_PACK_KEY)).toBeNull();
+    expect(storage.getItem(OFFLINE_ACTION_LOG_KEY)).toBeNull();
+    expect(worker.release).toHaveBeenCalledWith(identity.runId);
   });
 
   it("reports quota failure without leaving a partial durable package", async () => {

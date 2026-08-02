@@ -37,8 +37,9 @@ export function createOfflineContinuityClient({
   workerClient = createOfflineWorkerClient(),
   storage = globalThis.localStorage,
   cryptoLike = globalThis.crypto,
-  accountScope = null
+  accountScope: initialAccountScope = null
 }) {
+  let accountScope = initialAccountScope;
   /** @param {string} runId */
   function deviceInstallationHashFor(runId) {
     try {
@@ -121,6 +122,11 @@ export function createOfflineContinuityClient({
     return workerClient.pin(assetPackage, { accountScope });
   }
 
+  /** @param {string | null} nextAccountScope */
+  function setAccountScope(nextAccountScope) {
+    accountScope = nextAccountScope;
+  }
+
   /**
    * Issues, verifies, and pins one exact admitted Run. A failed verification
    * never reaches the worker, and a failed pin is returned to the caller so
@@ -190,6 +196,7 @@ export function createOfflineContinuityClient({
     verifyReceipt,
     deviceInstallationHashFor,
     pinAssetPackage,
+    setAccountScope,
     workerClient
   };
 }

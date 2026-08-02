@@ -254,6 +254,19 @@ describe("Offline sign-out cleanup", () => {
     ).toBe(false);
   });
 
+  it("uses the owner marker on an outcome-only record after reconciliation", () => {
+    const record = JSON.stringify({
+      schema: "echo-maze-offline-run-record/1",
+      playerId: "user_previous",
+      verification: "verified"
+    });
+    const storage = fakeStorage({ [OFFLINE_RUN_RECORD_KEY]: record });
+
+    expect(ownerMismatch("user_current", storage)).toBe(true);
+    expect(ownerMismatch("user_previous", storage)).toBe(false);
+    expect(ownerMismatch(null, storage)).toBe(true);
+  });
+
   it("runs even when the offline chunk never loaded", async () => {
     // The module is reachable on its own, importing nothing from the offline
     // play chunk, which is the whole point of the Milestone 4 precedent.

@@ -1,5 +1,5 @@
 {
-  "testFiles": 157,
-  "tests": 1371,
-  "source": "Full Vitest run on 2026-08-01 after P0.2 offline continuity wiring and canonical gate regression tests; update deliberately when tests change."
+  "testFiles": 159,
+  "tests": 1396,
+  "source": "Full Vitest run on 2026-08-02 after Offline Continuity forward migration, Quest binding, worker reload cleanup, Hint replay, replay-boundary, compact-summary, and Mixed Gate Warden regression tests."
 }

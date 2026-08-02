@@ -69,10 +69,7 @@ import {
   saveRunRecord,
   scrubRunReplays
 } from "./game/storage.js";
-import { scrubActiveRunRecovery } from "./game/local-recovery-scrub.js";
-import {
-  scrubOfflineState
-} from "./game/offline-local-scrub.js";
+import { scrubOfflineState } from "./game/offline-local-scrub.js";
 import { getBundledQuestion } from "./questions/question-bank.js";
 import { normalizeQuestion } from "./questions/question-contract.js";
 import {
@@ -1596,10 +1593,10 @@ window.addEventListener("resize", () => {
 window.addEventListener("online", () => {
   void loadOfflineContinuityBridge()
     .then((bridge) => bridge.online())
+    .catch(() => null)
+    .then(() => loadQuestContinuityController("online"))
+    .then((controller) => controller?.retry(loadQuestProgress()) ?? false)
     .catch(() => {});
-  void loadQuestContinuityController("online").then((controller) =>
-    controller?.retry(loadQuestProgress()) ?? false
-  );
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -1663,7 +1660,10 @@ function loadClassExpeditionPlay() {
           // Personal Run Replays are unrelated memories and stay.
           activeRunLocator = null;
           clearActiveRunLocator();
-          clearActiveRunRecoveryOnly();
+          await loadActiveRunRecoveryModule();
+          if (activeRunRecoveryController?.clear().status[0] !== "c") {
+            reportActiveRunRecoveryScrubFailed();
+          }
         }
       })
     )
@@ -3056,8 +3056,8 @@ function handleAuthenticationChange(signedIn) {
     renderDailyBoardParticipation();
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
-  if (hasRunReplayOwnerMismatch(userId)) {
-    clearActiveRunRecoveryForIdentityChange();
+  if (playerController.auth() && hasRunReplayOwnerMismatch(userId)) {
+    void clearActiveRunRecoveryForIdentityChange().catch(() => {});
   }
   runRecords = loadRunRecords(undefined, userId);
   bestEscapeRecord = bestEscape(runRecords);
@@ -3079,37 +3079,27 @@ function handleAuthenticationChange(signedIn) {
   void renderOfflineContinuityFromDevice();
 }
 
-async function clearActiveRunRecoveryForIdentityChange() {
-  offlineContinuityActive = false;
+function clearActiveRunRecoveryForIdentityChange() {
   scrubOfflineState();
-  await loadOfflineContinuityBridge().then((bridge) => bridge.signOut());
-  if (scrubRunReplays()) {
-    runRecords = loadRunRecords();
-    bestEscapeRecord = bestEscape(runRecords);
-    if (elements.recordsDialog.open) {
-      renderRunRecords();
-    }
-  } else {
-    const message =
-      "This device could not erase account-context Run Replay details. Clear this site's data before another player uses this device.";
-    announce(message);
-    showEvent(message);
-  }
-  clearActiveRunRecoveryOnly();
-}
-
-function clearActiveRunRecoveryOnly() {
-  if (!activeRunRecoveryController) {
-    if (scrubActiveRunRecovery()) {
-      return;
-    }
-    reportActiveRunRecoveryScrubFailed();
-    return;
-  }
-  const result = activeRunRecoveryController.clear();
-  if (result.status === "unavailable") {
-    reportActiveRunRecoveryScrubFailed();
-  }
+  return loadOfflineContinuityBridge().then((bridge) =>
+    bridge.clearState({
+      scrub: scrubRunReplays,
+      refresh: () => {
+        runRecords = loadRunRecords();
+        bestEscapeRecord = bestEscape(runRecords);
+        if (elements.recordsDialog.open) {
+          renderRunRecords();
+        }
+      },
+      recovery: activeRunRecoveryController,
+      report: reportActiveRunRecoveryScrubFailed,
+      setActive: (active) => {
+        offlineContinuityActive = active;
+      },
+      announce,
+      showEvent
+    })
+  );
 }
 
 /**
@@ -4132,6 +4122,7 @@ async function finishRun() {
     return;
   }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
+  const runId = activeRunLocator?.runId;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
   const classPlayLoading = loadClassExpeditionPlay();
@@ -4151,11 +4142,9 @@ async function finishRun() {
     }
   }
   const wasOffline = offlineContinuityActive;
-  if (wasOffline) {
-    await offlineContinuityBridgePromise
-      ?.then((bridge) => bridge.terminal())
-      .catch(() => null);
-  }
+  await offlineContinuityBridgePromise
+    ?.then((bridge) => bridge.terminal(wasOffline ? undefined : runId))
+    .catch(() => null);
   runRecords = saveRunRecord({
     elapsedMs: run.elapsedMs,
     moves: run.moves,

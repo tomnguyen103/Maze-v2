@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
 import { advanceQuest } from "../src/game/quest-progress.js";
 import { recordLearningOutcome } from "../src/learning/lantern-journal.js";
+import { getBundledQuestion } from "../src/questions/question-bank.js";
 import { getDifficultyBand } from "../src/questions/quest-levels.js";
 import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
+
+const JOURNAL_LEVEL_BY_BAND = Object.freeze({
+  foundation: { levelId: "bright-start", labyrinthNumber: 1 },
+  developing: { levelId: "trail-scout", labyrinthNumber: 5 },
+  capable: { levelId: "trail-scout", labyrinthNumber: 9 },
+  advanced: { levelId: "maze-master", labyrinthNumber: 13 },
+  mastery: { levelId: "maze-master", labyrinthNumber: 17 }
+});
 
 /** @param {string} key @param {number} index @param {Record<string, unknown>} event */
 function deterministicEventId(key, index, event) {
@@ -50,8 +59,8 @@ export function createOfflineCloudOutcomeApplier({
    * @param {{
    *   runId: string,
    *   playerId: string | null,
-   *   receipt: { runId: string, playerId: string | null, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string },
-   *   result: { status: "won" | "lost", score: number, wardensDefeated: number, echoesCollected: number, moves: number, elapsedMs: number, journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[] }
+   *   receipt: { runId: string, playerId: string | null, questId?: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string },
+   *   result: { status: "won" | "lost", score: number, wardensDefeated: number, echoesCollected: number, moves: number, elapsedMs: number, journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[], journalSummary?: { topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip", count: number }[] }
    * }} outcome
    */
   return async function applyOfflineCloudOutcome({
@@ -99,6 +108,8 @@ export function createOfflineCloudOutcomeApplier({
       if (
         record &&
         progress &&
+        typeof receipt.questId === "string" &&
+        progress.questId === receipt.questId &&
         progress.levelId === receipt.levelId &&
         progress.labyrinthNumber === receipt.labyrinthNumber &&
         progress.complete !== true
@@ -113,29 +124,72 @@ export function createOfflineCloudOutcomeApplier({
     }
 
     const events = result.journalEvents ?? [];
-    if (events.length === 0) {
+    const summaries = result.journalSummary ?? [];
+    if (events.length === 0 && summaries.length === 0) {
       return;
     }
     const state = await learningJournalStore.getJournal(playerId, null);
     let journal = state.journal;
     let changed = false;
-    for (const [index, event] of events.entries()) {
+    const descriptors =
+      summaries.length > 0
+        ? summaries.flatMap((summary) => {
+            const question = journalQuestionForSummary(summary);
+            if (
+              !question ||
+              !Number.isSafeInteger(summary.count) ||
+              summary.count < 1 ||
+              summary.count > 4096
+            ) {
+              return [];
+            }
+            return Array.from({ length: summary.count }, () => ({
+              question,
+              outcome: summary.outcome,
+              identity: summary
+            }));
+          })
+        : events.map((event) => ({
+            question: {
+              id: event.questionId,
+              topicId: event.topicId,
+              learningObjectiveId: event.learningObjectiveId,
+              difficultyBand: event.difficultyBand
+            },
+            outcome: event.outcome,
+            identity: event
+          }));
+    const existingEventIds = new Set(
+      journal &&
+      typeof journal === "object" &&
+      "events" in journal &&
+      Array.isArray(journal.events)
+        ? journal.events
+            .map((event) =>
+              event && typeof event === "object" && "eventId" in event
+                ? event.eventId
+                : null
+            )
+            .filter((eventId) => typeof eventId === "string")
+        : []
+    );
+    for (const [index, event] of descriptors.entries()) {
+      const eventId = deterministicEventId(`offline_${runId}`, index, event);
+      if (existingEventIds.has(eventId)) {
+        continue;
+      }
       try {
         const next = recordLearningOutcome(
           /** @type {Parameters<typeof recordLearningOutcome>[0]} */ (journal),
-          {
-            id: event.questionId,
-            topicId: event.topicId,
-            learningObjectiveId: event.learningObjectiveId,
-            difficultyBand: event.difficultyBand
-          },
+          event.question,
           event.outcome,
-          () => deterministicEventId(`offline_${runId}`, index, event)
+          () => eventId
         );
         if (JSON.stringify(next) !== JSON.stringify(journal)) {
           changed = true;
         }
         journal = next;
+        existingEventIds.add(eventId);
       } catch {
         // Gate-Warden capstones do not belong to the coarse Journal contract;
         // replay still succeeds and the unsupported event is not persisted.
@@ -150,4 +204,40 @@ export function createOfflineCloudOutcomeApplier({
       );
     }
   };
+}
+
+/**
+ * Rehydrates one representative reviewed Journal Question from the compact
+ * summary. The summary deliberately stores learning metadata and counts, not
+ * the Question id or its child-facing content.
+ *
+ * @param {{ topicId: string, learningObjectiveId: string, difficultyBand: string }} summary
+ */
+function journalQuestionForSummary(summary) {
+  const placement =
+    JOURNAL_LEVEL_BY_BAND[
+      /** @type {keyof typeof JOURNAL_LEVEL_BY_BAND} */ (
+        summary.difficultyBand
+      )
+    ];
+  if (!placement) {
+    return null;
+  }
+  for (let questionOrdinal = 0; questionOrdinal < 8; questionOrdinal += 1) {
+    const question = getBundledQuestion({
+      levelId: placement.levelId,
+      seed: "offline-journal-summary",
+      wardenId: 0,
+      labyrinthNumber: placement.labyrinthNumber,
+      questionOrdinal
+    });
+    if (
+      question.topicId === summary.topicId &&
+      question.learningObjectiveId === summary.learningObjectiveId &&
+      question.difficultyBand === summary.difficultyBand
+    ) {
+      return question;
+    }
+  }
+  return null;
 }

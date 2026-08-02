@@ -145,7 +145,8 @@ const SECTION_QUERIES = {
     WHERE player_id = $1
     ORDER BY issued_at, run_id`,
   offline_submissions: `SELECT run_id, accepted, outcome, score, moves,
-      elapsed_ms, applied_at, submitted_at
+      elapsed_ms, applied_at, submitted_at,
+      COALESCE(replay_result->'journalSummary', '[]'::jsonb) AS journal_summary
     FROM offline_pending_submissions
     WHERE player_id = $1
     ORDER BY submitted_at, idempotency_key`,

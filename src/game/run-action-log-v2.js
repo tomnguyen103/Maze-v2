@@ -26,6 +26,7 @@
  *   elapsedMs: number
  * } | {
  *   type: "reveal-hint",
+ *   questionRevisionId: string,
  *   elapsedMs: number
  * } | {
  *   type: "answer-question",
@@ -90,14 +91,15 @@ function replayEntryV2(previous, action, next) {
   if (action.type === "ring-bell" && next !== previous) {
     return { type: "ring-bell", elapsedMs };
   }
+  const revisionId = questionRevisionOf(previous);
   if (
     action.type === "reveal-hint" &&
     previous.status === "challenge" &&
+    revisionId &&
     next !== previous
   ) {
-    return { type: "reveal-hint", elapsedMs };
+    return { type: "reveal-hint", questionRevisionId: revisionId, elapsedMs };
   }
-  const revisionId = questionRevisionOf(previous);
   if (
     action.type === "answer-question" &&
     previous.status === "challenge" &&
@@ -134,9 +136,14 @@ function questionRevisionOf(run) {
   if (!question) {
     return null;
   }
-  // `id` is the revision identity, and the only one the server accepts: it
-  // resolves the content pack by this field and compares it to the Challenge it
-  // replayed. A second field here would name a revision the server rejects.
-  const revision = /** @type {{ id?: unknown }} */ (question);
+  // Reviewed cards carry an immutable revision id separate from their stable
+  // content id. Record that exact revision when it is available; legacy
+  // generated cards fall back to their id.
+  const revision = /** @type {{ id?: unknown, reviewedRevisionId?: unknown }} */ (
+    question
+  );
+  if (typeof revision.reviewedRevisionId === "string") {
+    return revision.reviewedRevisionId;
+  }
   return typeof revision.id === "string" ? revision.id : null;
 }

@@ -5,12 +5,13 @@ import {
   ownerMismatch,
   scrubOfflineState
 } from "./offline-local-scrub.js";
-import { getBundledQuestion } from "../questions/question-bank.js";
+import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-selection.js";
 
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string }} OfflineRunIdentity */
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, contentPackHash?: string }} OfflineRunLocator */
 /** @typedef {{ version: string, assets: { url: string, scope: "public" | "account" }[] }} OfflineAssetPackage */
 /** @typedef {import("../../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt */
+/** @typedef {ReturnType<typeof createOfflineContinuityRuntime>} OfflineContinuityRuntime */
 
 /**
  * Owns the lazy, player-facing Offline Continuity boundary. The game entry
@@ -28,6 +29,7 @@ import { getBundledQuestion } from "../questions/question-bank.js";
  *   },
      *   playerController: {
      *     getAuthenticatedUserId: () => string | null,
+     *     auth?: () => boolean,
      *     issueOfflineReceipt: (run: { runId: string, seed: string, levelId: string, labyrinthNumber: number }, nonce: string) => Promise<{ receipt: unknown, assetPackage: OfflineAssetPackage }>
      *     retryLanternJournalSync: () => Promise<void>,
      *     submitOfflineRun: (submission: {
@@ -51,7 +53,11 @@ import { getBundledQuestion } from "../questions/question-bank.js";
  *   closeCampfire: () => void,
  *   closeResult: () => void,
  *   loadChallengeQuestion: () => void,
- *   applyOfflineQuestion: (question: ReturnType<typeof getBundledQuestion>, ordinal: number, key: string) => void,
+ *   selectOfflineQuestion?: (
+ *     snapshot: Parameters<OfflineContinuityRuntime["selectQuestion"]>[0],
+ *     usedQuestionIds: string[]
+   *   ) => ReturnType<typeof import("../questions/question-bank.js")["getBundledQuestion"]> | null,
+   *   applyOfflineQuestion: (question: ReturnType<typeof import("../questions/question-bank.js")["getBundledQuestion"]>, ordinal: number, key: string) => void,
  *   focusCanvas: () => void,
  *   setActive: (active: boolean) => void,
  *   clearActiveRun: () => void
@@ -72,12 +78,13 @@ export function createOfflineContinuityRuntime({
   closeCampfire,
   closeResult,
   loadChallengeQuestion,
+  selectOfflineQuestion,
   applyOfflineQuestion,
   focusCanvas,
   setActive,
   clearActiveRun
 }) {
-  const accountScope = playerController.getAuthenticatedUserId();
+  let accountScope = playerController.getAuthenticatedUserId();
   const client = createOfflineContinuityClient({
     playerController,
     accountScope
@@ -102,13 +109,24 @@ export function createOfflineContinuityRuntime({
   /** @type {OfflineRunIdentity | null} */
   let runIdentity = null;
   let active = false;
+  /** @type {{ learningDeckId: string, learningDeckRevision: string } | null} */
+  let offlineDeckBinding = null;
   let recordingUnavailable = false;
   let preparationRunId = "";
+  let workerLeaseRunId = "";
   /** @type {Promise<boolean> | null} */
   let preparationPromise = null;
+  let preparationCancelled = false;
   let pendingOverflowed = false;
   /** @type {{ previous: Parameters<typeof controller.recordTransition>[0]["previous"], action: Parameters<typeof controller.recordTransition>[0]["action"], next: Parameters<typeof controller.recordTransition>[0]["next"] }[]} */
   let pendingTransitions = [];
+
+  /** @param {string | null} nextAccountScope */
+  function setAccountScope(nextAccountScope) {
+    accountScope = nextAccountScope;
+    client.setAccountScope(nextAccountScope);
+    controller.setAccountScope(nextAccountScope);
+  }
 
   /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string }} locator @param {OfflineReceipt} receipt */
   function offlineRunIdentity(locator, receipt) {
@@ -209,6 +227,7 @@ export function createOfflineContinuityRuntime({
         return;
       }
       runIdentity = recovered.run;
+      offlineDeckBinding = offlineDeckBindingFromReceipt(recovered.receipt);
       await render({
         offer: {
           offered: recovered.status === "ready",
@@ -250,11 +269,15 @@ export function createOfflineContinuityRuntime({
 
   /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number }} locator */
   async function prepare(locator) {
+    setAccountScope(playerController.getAuthenticatedUserId());
     active = false;
     setActive(false);
     recordingUnavailable = false;
     runIdentity = null;
+    offlineDeckBinding = null;
     preparationRunId = locator.runId;
+    workerLeaseRunId = "";
+    preparationCancelled = false;
     pendingTransitions = [];
     pendingOverflowed = false;
     preparationPromise = prepareInternal(locator);
@@ -264,6 +287,7 @@ export function createOfflineContinuityRuntime({
       if (preparationRunId === locator.runId) {
         preparationPromise = null;
         preparationRunId = "";
+        preparationCancelled = false;
         pendingTransitions = [];
         pendingOverflowed = false;
       }
@@ -274,6 +298,13 @@ export function createOfflineContinuityRuntime({
   async function prepareInternal(locator) {
     try {
       const result = await client.issueAndPin(locator);
+      if (result.ok === true) {
+        workerLeaseRunId = locator.runId;
+      }
+      if (preparationCancelled && preparationRunId === locator.runId) {
+        await cancelPreparedRun(locator.runId);
+        return false;
+      }
       if (!result.ok) {
         if (result.reason !== "unconfigured") {
           showEvent("Offline Continuity is not ready for this Run.");
@@ -290,6 +321,10 @@ export function createOfflineContinuityRuntime({
         showEvent("Offline Continuity is not ready for this Run.");
         return false;
       }
+      if (preparationCancelled && preparationRunId === locator.runId) {
+        await cancelPreparedRun(locator.runId);
+        return false;
+      }
       const prepared = await controller.prepare({
         run: identity,
         receipt,
@@ -300,11 +335,19 @@ export function createOfflineContinuityRuntime({
         showEvent("Offline Continuity is not ready for this Run.");
         return false;
       }
+      if (preparationCancelled && preparationRunId === locator.runId) {
+        await cancelPreparedRun(locator.runId);
+        return false;
+      }
       const bufferedBatch = pendingTransitions;
       pendingTransitions = [];
       let batch = bufferedBatch;
       let failureReason = "";
       while (batch.length > 0) {
+        if (preparationCancelled && preparationRunId === locator.runId) {
+          await cancelPreparedRun(locator.runId);
+          return false;
+        }
         for (const buffered of batch) {
           const result = await controller.recordTransition({
             run: identity,
@@ -314,6 +357,10 @@ export function createOfflineContinuityRuntime({
             failureReason = result.reason ?? "storage";
           }
           await preserveUnrecordable(identity, result);
+          if (preparationCancelled && preparationRunId === locator.runId) {
+            await cancelPreparedRun(locator.runId);
+            return false;
+          }
         }
         batch = pendingTransitions;
         pendingTransitions = [];
@@ -328,7 +375,12 @@ export function createOfflineContinuityRuntime({
         }
         reportFailure(marked);
       }
+      if (preparationCancelled && preparationRunId === locator.runId) {
+        await cancelPreparedRun(locator.runId);
+        return false;
+      }
       runIdentity = identity;
+      offlineDeckBinding = offlineDeckBindingFromReceipt(receipt);
       recordingUnavailable ||= pendingOverflowed;
       await render({
         offer: {
@@ -342,11 +394,60 @@ export function createOfflineContinuityRuntime({
               })
         }
       });
+      if (preparationCancelled && preparationRunId === locator.runId) {
+        await cancelPreparedRun(locator.runId);
+        runIdentity = null;
+        offlineDeckBinding = null;
+        return false;
+      }
       return true;
     } catch {
       showEvent("Offline Continuity is not ready for this Run.");
       return false;
     }
+  }
+
+  /** @param {OfflineReceipt} receipt */
+  function offlineDeckBindingFromReceipt(receipt) {
+    const binding = receipt.binding;
+    return typeof binding.learningDeckId === "string" &&
+      typeof binding.learningDeckRevision === "string"
+      ? {
+          learningDeckId: binding.learningDeckId,
+          learningDeckRevision: binding.learningDeckRevision
+        }
+      : null;
+  }
+
+  /** @param {string} runId */
+  async function cancelPreparedRun(runId) {
+    if (workerLeaseRunId !== runId) {
+      return { ok: true, durable: true, cleared: false };
+    }
+    const result = await controller.cancelPreparedRun(runId);
+    if (result.ok !== false) {
+      workerLeaseRunId = "";
+    }
+    return result;
+  }
+
+  /** @param {string} runId */
+  async function cancelPreparation(runId) {
+    if (active && runIdentity?.runId === runId) {
+      return { ok: false, reason: "active", durable: false };
+    }
+    if (preparationRunId === runId) {
+      preparationCancelled = true;
+      await preparationPromise;
+    }
+    const result = await cancelPreparedRun(runId);
+    if (runIdentity?.runId === runId) {
+      runIdentity = null;
+      offlineDeckBinding = null;
+      pendingTransitions = [];
+      pendingOverflowed = false;
+    }
+    return result;
   }
 
   /** @param {Parameters<typeof controller.recordTransition>[0]["previous"]} previous @param {Parameters<typeof controller.recordTransition>[0]["action"]} action @param {Parameters<typeof controller.recordTransition>[0]["next"]} next */
@@ -422,6 +523,7 @@ export function createOfflineContinuityRuntime({
         return;
       }
       runIdentity = recovered.run;
+      offlineDeckBinding = offlineDeckBindingFromReceipt(recovered.receipt);
       active = true;
       recordingUnavailable = false;
       setActive(true);
@@ -449,6 +551,7 @@ export function createOfflineContinuityRuntime({
     recordingUnavailable = false;
     if (runIdentity?.runId !== runId) {
       runIdentity = null;
+      offlineDeckBinding = null;
     }
     if (preparationRunId !== runId) {
       pendingTransitions = [];
@@ -460,11 +563,12 @@ export function createOfflineContinuityRuntime({
     active = false;
     setActive(false);
     runIdentity = null;
+    offlineDeckBinding = null;
     recordingUnavailable = false;
   }
 
   /**
-   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number }} snapshot
+   * @param {{ levelId: string, seed: string, wardenId: number, attempt: number, challengeKind: "warden" | "gate-warden", labyrinthNumber: number, questionOrdinal: number, learningDeckId?: string, learningDeckRevision?: string }} snapshot
    * @param {string[]} usedQuestionIds
    */
   function selectQuestion(snapshot, usedQuestionIds) {
@@ -478,10 +582,17 @@ export function createOfflineContinuityRuntime({
           : "warden";
       const request = {
         ...snapshot,
+        ...(offlineDeckBinding ?? {}),
         questionOrdinal: snapshot.questionOrdinal + offset,
         challengeKind
       };
-      const question = getBundledQuestion(request);
+      const question = selectOfflineQuestion
+        ? selectOfflineQuestion(request, usedQuestionIds)
+        : selectOfflineLearningDeckQuestion(request, usedQuestionIds)?.question ??
+          null;
+      if (!question) {
+        continue;
+      }
       if (!usedQuestionIds.includes(question.id)) {
         return { question, ordinal: request.questionOrdinal };
       }
@@ -524,7 +635,11 @@ export function createOfflineContinuityRuntime({
     showEvent(message);
   }
 
-  async function terminal() {
+  /** @param {string | undefined} onlineRunId */
+  async function terminal(onlineRunId = undefined) {
+    if (!active && onlineRunId) {
+      return cancelPreparation(onlineRunId);
+    }
     if (
       preparationPromise &&
       getActiveRunLocator()?.runId === preparationRunId
@@ -583,7 +698,10 @@ export function createOfflineContinuityRuntime({
   }
 
   async function boot() {
-    if (ownerMismatch(accountScope)) {
+    const authAvailable =
+      typeof playerController.auth !== "function" || playerController.auth();
+    setAccountScope(playerController.getAuthenticatedUserId());
+    if (authAvailable && ownerMismatch(accountScope)) {
       const cleared = scrubOfflineState();
       await signOut();
       clearActiveRun();
@@ -652,6 +770,8 @@ export function createOfflineContinuityRuntime({
     selectQuestion,
     loadQuestion,
     terminal,
+    cancelPreparation,
+    setAccountScope,
     isActive: () => active
   };
 }

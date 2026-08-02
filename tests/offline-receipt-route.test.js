@@ -27,12 +27,17 @@ const ASSET_PACKAGE = {
 /** @typedef {{
  *   runId: string,
  *   playerId: string | null,
+ *   questId?: string,
  *   deviceInstallationHash: string,
  *   seed: string,
  *   levelId: string,
  *   labyrinthNumber: number,
  *   rulesetRevision: string,
  *   contentPackHash: string,
+ *   learningDeckId?: string,
+ *   learningDeckRevision?: string,
+ *   initialQuestionOrdinal?: number,
+ *   initialUsedQuestionIds?: string[],
  *   issuedAt: string,
  *   playExpiresAt: string,
  *   submissionExpiresAt: string
@@ -77,8 +82,25 @@ function response() {
   };
 }
 
-/** @param {{ grant?: typeof RUN | null, userId?: string }} [options] */
-function createHarness({ grant = RUN, userId = "user_01MOSS" } = {}) {
+/** @typedef {{ questId: string, levelId: string, labyrinthNumber: number, learningDeckId: string, learningDeckRevision: string, nextQuestionOrdinal: number, usedQuestionIds: string[] }} QuestProgress */
+
+const DEFAULT_QUEST_PROGRESS = {
+  questId: "quest_01MOSS123",
+  levelId: RUN.levelId,
+  labyrinthNumber: RUN.labyrinthNumber,
+  learningDeckId: "mixed-trail",
+  learningDeckRevision:
+    "deck:mixed-trail:v1:d0647e88de6cbe1dea606b07e468ab92",
+  nextQuestionOrdinal: 0,
+  usedQuestionIds: []
+};
+
+/** @param {{ grant?: typeof RUN | null, userId?: string, questProgress?: QuestProgress | null }} [options] */
+function createHarness({
+  grant = RUN,
+  userId = "user_01MOSS",
+  questProgress = DEFAULT_QUEST_PROGRESS
+} = {}) {
   const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const signer = createOfflineReceiptSigner({
     privateKey: pair.privateKey,
@@ -102,6 +124,7 @@ function createHarness({ grant = RUN, userId = "user_01MOSS" } = {}) {
     getRunGrant: vi.fn(async () => grant),
     issueReceipt,
     readReceipt,
+    getQuestProgress: async () => questProgress,
     signer,
     deviceHashFor: () => DEVICE_HASH,
     contentPackHash: CONTENT_PACK_HASH,
@@ -128,6 +151,7 @@ describe("Offline Continuity receipt route", () => {
     expect(body.receipt.binding).toMatchObject({
       runId: RUN.runId,
       playerId: "user_01MOSS",
+      questId: "quest_01MOSS123",
       deviceInstallationHash: DEVICE_HASH,
       seed: RUN.seed,
       levelId: RUN.levelId,
@@ -158,6 +182,40 @@ describe("Offline Continuity receipt route", () => {
     expect(harness.issueReceipt).toHaveBeenCalledTimes(2);
   });
 
+  it("signs the Quest Deck cursor into the receipt binding", async () => {
+    const harness = createHarness({
+      questProgress: {
+        questId: "quest_01MOSS123",
+        levelId: RUN.levelId,
+        labyrinthNumber: RUN.labyrinthNumber,
+        learningDeckId: "number-trail",
+        learningDeckRevision:
+          "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+        nextQuestionOrdinal: 7,
+        usedQuestionIds: ["bright-foundation-01"]
+      }
+    });
+    const result = response();
+
+    await harness.handler(
+      request({ ...RUN, deviceInstallationNonce: "installation_nonce_01MOSS" }),
+      result.output
+    );
+
+    expect(result.output.statusCode).toBe(201);
+    expect(result.body().receipt.binding).toMatchObject({
+      learningDeckId: "number-trail",
+      learningDeckRevision:
+        "deck:number-trail:v1:67aa6e0169885d41ba784245b45a7105",
+      initialQuestionOrdinal: 7,
+      initialUsedQuestionIds: ["bright-foundation-01"]
+    });
+    expect(harness.issueReceipt.mock.calls[0][0]).toMatchObject({
+      learningDeckId: "number-trail",
+      initialQuestionOrdinal: 7
+    });
+  });
+
   it("does not disclose a receipt to a second device on an idempotent retry", async () => {
     const harness = createHarness();
     const secondDevice = createOfflineReceiptHandler({
@@ -165,6 +223,7 @@ describe("Offline Continuity receipt route", () => {
       getRunGrant: async () => RUN,
       issueReceipt: harness.issueReceipt,
       readReceipt: harness.readReceipt,
+      getQuestProgress: async () => DEFAULT_QUEST_PROGRESS,
       signer: createOfflineReceiptSigner({
         privateKey: generateKeyPairSync("ec", { namedCurve: "prime256v1" })
           .privateKey,

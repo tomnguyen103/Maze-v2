@@ -13,6 +13,7 @@
 export const RATE_LIMIT_BUDGETS = {
   "guest-run.start": { limit: 20, windowMs: 60_000 },
   "question.fetch": { limit: 30, windowMs: 60_000 },
+  "offline.submit": { limit: 5, windowMs: 60_000 },
   "score.submit": { limit: 10, windowMs: 60_000 },
   // The Constellation projection is the one Daily read a Guest may repeat
   // without an identity, and each call costs two definer round trips. Wide

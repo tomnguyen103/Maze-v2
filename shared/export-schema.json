@@ -115,7 +115,7 @@
           "items": { "type": "object" }
         },
         "offline_continuity": {
-          "description": "Server-held Offline Run receipt bindings and coarse submission outcomes. Device-local action logs, selected options, and reviewed Question content are never exported.",
+          "description": "Server-held Offline Run receipt bindings and coarse submission outcomes. The bounded journal_summary contains only learning metadata and counts; device-local action logs, selected options, and reviewed Question content are never exported.",
           "type": "object",
           "additionalProperties": false,
           "required": ["receipts", "submissions"],
@@ -170,7 +170,8 @@
                   "moves",
                   "elapsed_ms",
                   "applied_at",
-                  "submitted_at"
+                  "submitted_at",
+                  "journal_summary"
                 ],
                 "properties": {
                   "run_id": { "type": "string" },
@@ -186,6 +187,30 @@
                   "submitted_at": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "journal_summary": {
+                    "description": "Bounded learning metadata counts retained for idempotent Journal application; no Question ids or content.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "topicId",
+                        "learningObjectiveId",
+                        "difficultyBand",
+                        "outcome",
+                        "count"
+                      ],
+                      "properties": {
+                        "topicId": { "type": "string" },
+                        "learningObjectiveId": { "type": "string" },
+                        "difficultyBand": { "type": "string" },
+                        "outcome": {
+                          "enum": ["correct", "wrong", "hint", "skip"]
+                        },
+                        "count": { "type": "integer", "minimum": 1 }
+                      }
+                    }
                   }
                 }
               }

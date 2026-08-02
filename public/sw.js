@@ -319,9 +319,11 @@ async function pin(message, state) {
   ) {
     throw new Error("Account-scoped package needs an account scope.");
   }
-  const nonTerminal = Object.values(state.runs).some((run) => !run.terminal);
+  const protectedRuns = Object.values(state.runs).some(
+    (run) => !run.terminal || !run.durable
+  );
   if (
-    nonTerminal &&
+    protectedRuns &&
     accountScope &&
     state.activeAccountScope &&
     accountScope !== state.activeAccountScope
@@ -341,8 +343,14 @@ async function pin(message, state) {
     }
     await cache.add(new Request(asset.url, { cache: "reload" }));
   }
-  state.activeVersion ??= message.version;
-  state.activeAccountScope ??= accountScope;
+  if (!protectedRuns) {
+    state.activeVersion = message.version;
+    state.activeAccountScope = accountScope;
+    await evictUnreferenced(state);
+  } else {
+    state.activeVersion ??= message.version;
+    state.activeAccountScope ??= accountScope;
+  }
   return { ok: true, version: message.version };
 }
 
@@ -373,7 +381,10 @@ async function settle(state) {
 /** @param {WorkerState} state */
 async function evictUnreferenced(state) {
   const referenced = new Set(
-    Object.values(state.runs).map((run) => run.version).filter(Boolean)
+    Object.values(state.runs)
+      .filter((run) => !run.terminal || !run.durable)
+      .map((run) => run.version)
+      .filter(Boolean)
   );
   if (state.activeVersion) {
     referenced.add(state.activeVersion);

@@ -214,10 +214,12 @@ is larger than any single ticket in this batch.
   it because every offline fixture uses the Classic Daily configuration. A
   service-level test now pins the threading; **there is still no test that
   records and replays a Run under any of the five Trail Twists.**
-- `terminalAt` is client-declared. It is now bounded — not in the future, not
-  before the receipt was issued — and both windows are checked against the
-  server's stored instants rather than the presented copy. It is still not
-  cross-checked against the replayed elapsed time.
+- `terminalAt` is client-declared. It is bounded — not in the future, not before
+  the receipt was issued — while the server also requires the submission to
+  arrive before the stored play-expiry instant, so a client cannot backdate a
+  terminal Run after play authority has ended. The submission window still
+  uses the stored receipt instants rather than the presented copy, and
+  `terminalAt` is not cross-checked against the replayed elapsed time.
 
 ## Gate record
 

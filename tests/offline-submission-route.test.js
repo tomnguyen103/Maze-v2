@@ -141,6 +141,38 @@ describe("Offline Continuity submission route", () => {
     });
   });
 
+  it("enforces the per-account Offline submission budget before parsing the package", async () => {
+    const rateLimit = vi.fn(async () => ({
+      allowed: false,
+      degraded: false,
+      limit: 5,
+      remaining: 0,
+      retryAfterSeconds: 60
+    }));
+    const submit = vi.fn();
+    const handler = createOfflineSubmissionHandler({
+      getUserId: async () => "user_01MOSS",
+      submit,
+      rateLimit
+    });
+    const result = response();
+
+    await handler(request(SUBMISSION), result.output);
+
+    expect(result.output.statusCode).toBe(429);
+    expect(result.headers.get("retry-after")).toBe("60");
+    expect(result.body()).toEqual({
+      error: "Too many Offline Run submissions. Try again shortly.",
+      retryAfter: 60
+    });
+    expect(rateLimit).toHaveBeenCalledWith(
+      "offline.submit",
+      expect.anything(),
+      "user_01MOSS"
+    );
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it("fails closed for unauthenticated, Classroom, malformed, and unsupported requests", async () => {
     const unauthenticated = response();
     await createOfflineSubmissionHandler({

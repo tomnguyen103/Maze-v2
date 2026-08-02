@@ -1,6 +1,8 @@
 import { URL } from "node:url";
 import { classroomIdFromRequest } from "./classroom-context.js";
+import { UNMETERED } from "./rate-limit-config.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { sendRateLimited } from "./rate-limit-request.js";
 import { RUN_REPLAY_LIMITS } from "./run-replay.js";
 
 /**
@@ -136,13 +138,15 @@ function publicReplayResult(result) {
  *     result?: Record<string, unknown>,
  *     reason?: string
  *   }>,
- *   classroomIdFor?: (request: import("node:http").IncomingMessage) => string | null
+ *   classroomIdFor?: (request: import("node:http").IncomingMessage) => string | null,
+ *   rateLimit?: import("./rate-limit-request.js").RateLimit
  * }} dependencies
  */
 export function createOfflineSubmissionHandler({
   getUserId,
   submit,
-  classroomIdFor = classroomIdFromRequest
+  classroomIdFor = classroomIdFromRequest,
+  rateLimit = async () => UNMETERED
 }) {
   /**
    * @param {import("node:http").IncomingMessage} request
@@ -176,6 +180,15 @@ export function createOfflineSubmissionHandler({
         sendJson(response, 403, {
           error: "Classroom Runs cannot be submitted offline."
         });
+        return;
+      }
+      const decision = await rateLimit("offline.submit", request, userId);
+      if (!decision.allowed) {
+        sendRateLimited(
+          response,
+          decision,
+          "Too many Offline Run submissions. Try again shortly."
+        );
         return;
       }
       const submission = await readSubmissionRequest(request);

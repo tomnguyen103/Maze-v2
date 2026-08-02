@@ -92,9 +92,16 @@ export function ownerMismatch(userId, storage) {
     return false;
   }
   try {
-    const raw = target.getItem(OFFLINE_RECEIPT_KEY);
-    return raw !== null &&
-      (JSON.parse(raw)?.binding?.playerId || null) !== userId;
+    const receiptRaw = target.getItem(OFFLINE_RECEIPT_KEY);
+    if (receiptRaw !== null) {
+      return (JSON.parse(receiptRaw)?.binding?.playerId || null) !== userId;
+    }
+    const recordRaw = target.getItem(OFFLINE_RUN_RECORD_KEY);
+    if (recordRaw === null) {
+      return false;
+    }
+    const playerId = JSON.parse(recordRaw)?.playerId;
+    return (typeof playerId === "string" ? playerId : null) !== userId;
   } catch {
     return true;
   }

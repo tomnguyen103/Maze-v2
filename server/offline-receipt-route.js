@@ -14,12 +14,17 @@ const MAX_BODY_BYTES = 8 * 1024;
 /** @typedef {{
  *   runId: string,
  *   playerId: string | null,
+ *   questId?: string,
  *   deviceInstallationHash: string,
  *   seed: string,
  *   levelId: OfflineLevelId,
  *   labyrinthNumber: number,
  *   rulesetRevision: string,
- *   contentPackHash: string
+ *   contentPackHash: string,
+ *   learningDeckId?: string,
+ *   learningDeckRevision?: string,
+ *   initialQuestionOrdinal?: number,
+ *   initialUsedQuestionIds?: string[]
  * }} OfflineReceiptFields */
 /** @typedef {OfflineReceiptFields & {
  *   issuedAt: string,
@@ -81,6 +86,7 @@ async function readReceiptRequest(request) {
  *   readReceipt: (userId: string, runId: string, deviceHash: string) => Promise<{
  *     runId: string,
  *     playerId: string | null,
+ *     questId?: string,
  *     deviceInstallationHash: string,
  *     seed: string,
  *     levelId: string,
@@ -89,7 +95,20 @@ async function readReceiptRequest(request) {
  *     contentPackHash: string,
  *     issuedAt: string | Date,
  *     playExpiresAt: string | Date,
- *     submissionExpiresAt: string | Date
+ *     submissionExpiresAt: string | Date,
+ *     learningDeckId?: string,
+ *     learningDeckRevision?: string,
+ *     initialQuestionOrdinal?: number,
+ *     initialUsedQuestionIds?: string[]
+ *   } | null>,
+ *   getQuestProgress?: (userId: string) => Promise<{
+ *     questId: string,
+ *     levelId: string,
+ *     labyrinthNumber: number,
+ *     learningDeckId: string,
+ *     learningDeckRevision: string,
+ *     nextQuestionOrdinal: number,
+ *     usedQuestionIds: string[]
  *   } | null>,
  *   signer: { issue: (admission: OfflineReceiptAdmission, options?: { issuedAt?: string }) => Record<string, unknown> },
  *   deviceHashFor: (nonce: string) => string,
@@ -105,6 +124,7 @@ export function createOfflineReceiptHandler({
   getRunGrant,
   issueReceipt,
   readReceipt,
+  getQuestProgress,
   signer,
   deviceHashFor,
   contentPackHash,
@@ -155,6 +175,37 @@ export function createOfflineReceiptHandler({
         });
         return;
       }
+      let questBinding = null;
+      if (!getQuestProgress) {
+        sendJson(response, 503, {
+          error: "The Quest Progress is not ready for Offline Continuity."
+        });
+        return;
+      }
+      const progress = await getQuestProgress(userId);
+      if (
+        !progress ||
+        typeof progress.questId !== "string" ||
+        progress.levelId !== grant.levelId ||
+        Number(progress.labyrinthNumber) !== Number(grant.labyrinthNumber) ||
+        typeof progress.learningDeckId !== "string" ||
+        typeof progress.learningDeckRevision !== "string" ||
+        !Number.isSafeInteger(progress.nextQuestionOrdinal) ||
+        !Array.isArray(progress.usedQuestionIds) ||
+        progress.usedQuestionIds.some((id) => typeof id !== "string")
+      ) {
+        sendJson(response, 409, {
+          error: "The Quest Progress is not ready for Offline Continuity."
+        });
+        return;
+      }
+      questBinding = {
+        questId: progress.questId,
+        learningDeckId: progress.learningDeckId,
+        learningDeckRevision: progress.learningDeckRevision,
+        initialQuestionOrdinal: progress.nextQuestionOrdinal,
+        initialUsedQuestionIds: [...progress.usedQuestionIds]
+      };
       const deviceInstallationHash = deviceHashFor(input.deviceInstallationNonce);
       const rulesetRevision = rulesetFor(input).revision;
       const issuedAt = now().toISOString();
@@ -169,7 +220,8 @@ export function createOfflineReceiptHandler({
         rulesetRevision,
         contentPackHash,
         issuedAt,
-        ...windows
+        ...windows,
+        ...(questBinding ?? {})
       });
       const stored = await readReceipt(
         userId,
@@ -200,12 +252,23 @@ export function createOfflineReceiptHandler({
           runId: stored.runId,
           playerId: stored.playerId,
           classroomId: null,
+          ...(typeof stored.questId === "string"
+            ? { questId: stored.questId }
+            : {}),
           deviceInstallationHash: stored.deviceInstallationHash,
           seed: stored.seed,
           levelId: /** @type {OfflineLevelId} */ (stored.levelId),
           labyrinthNumber: Number(stored.labyrinthNumber),
           rulesetRevision: stored.rulesetRevision,
-          contentPackHash: stored.contentPackHash
+          contentPackHash: stored.contentPackHash,
+          ...(typeof stored.learningDeckId === "string"
+            ? {
+                learningDeckId: stored.learningDeckId,
+                learningDeckRevision: stored.learningDeckRevision,
+                initialQuestionOrdinal: stored.initialQuestionOrdinal,
+                initialUsedQuestionIds: stored.initialUsedQuestionIds
+              }
+            : {})
         },
         { issuedAt: new Date(stored.issuedAt).toISOString() }
       );

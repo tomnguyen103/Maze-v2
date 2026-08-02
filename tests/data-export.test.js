@@ -147,7 +147,8 @@ function fixtureAdapter() {
       moves: 12,
       elapsed_ms: 30000,
       applied_at: "2026-08-01T00:02:00.000Z",
-      submitted_at: "2026-08-01T00:01:00.000Z"
+      submitted_at: "2026-08-01T00:01:00.000Z",
+      journal_summary: []
     },
     user_roles: { role: "moderator" }
   };

@@ -131,4 +131,21 @@ describe("Offline Continuity browser boundary", () => {
       reason: "binding"
     });
   });
+
+  it("uses the current account scope when a cached client survives auth changes", async () => {
+    const pin = vi.fn(async () => ({ ok: true }));
+    const client = createOfflineContinuityClient({
+      playerController: { issueOfflineReceipt: vi.fn() },
+      workerClient: { pin },
+      storage: storage(),
+      accountScope: "user_previous"
+    });
+
+    client.setAccountScope("user_current");
+    await client.pinAssetPackage(ASSET_PACKAGE);
+
+    expect(pin).toHaveBeenCalledWith(ASSET_PACKAGE, {
+      accountScope: "user_current"
+    });
+  });
 });

@@ -24,6 +24,22 @@ const RUN_ID = "offline_run_01J1MOSSWATCH";
 const ISSUED_AT = "2026-07-31T00:00:00.000Z";
 const TERMINAL_AT = "2026-07-31T01:00:00.000Z";
 
+/** @typedef {{ status: "won" | "lost", seed: string, score: number, wardensDefeated: number, echoesCollected: number, moves: number, elapsedMs: number, journalEvents?: { questionId: string, topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip" }[], journalSummary?: { topicId: string, learningObjectiveId: string, difficultyBand: string, outcome: "correct" | "wrong" | "hint" | "skip", count: number }[] }} TestReplayResult */
+
+/** @param {Partial<TestReplayResult>} [overrides] @returns {TestReplayResult} */
+function testReplayResult(overrides = {}) {
+  return {
+    status: "won",
+    seed: DAILY_REPLAY_FIXTURE.seed,
+    score: 900,
+    wardensDefeated: 3,
+    echoesCollected: 2,
+    moves: 12,
+    elapsedMs: 30000,
+    ...overrides
+  };
+}
+
 const { privateKey, publicKey } = generateKeyPairSync("ec", {
   namedCurve: "P-256"
 });
@@ -45,6 +61,9 @@ function winningOfflineRun() {
       const question = getDailyQuestion(DAILY_REPLAY_FIXTURE, questionIndex);
       questionIndex += 1;
       pack.set(question.id, question);
+      if (question.reviewedRevisionId) {
+        pack.set(question.reviewedRevisionId, question);
+      }
       run = applyAction(run, { type: "provide-question", question });
     }
     /** @type {Parameters<typeof applyAction>[1]} */
@@ -70,6 +89,7 @@ function storedReceipt() {
   return {
     runId: RUN_ID,
     playerId: "user_moss",
+    questId: "quest_01MOSS123",
     deviceInstallationHash: DEVICE,
     seed: DAILY_REPLAY_FIXTURE.seed,
     levelId: DAILY_REPLAY_FIXTURE.levelId,
@@ -86,6 +106,7 @@ function signedReceipt() {
     {
       runId: RUN_ID,
       playerId: "user_moss",
+      questId: "quest_01MOSS123",
       classroomId: null,
       deviceInstallationHash: DEVICE,
       seed: DAILY_REPLAY_FIXTURE.seed,
@@ -104,6 +125,8 @@ function signedReceipt() {
 /** @param {Record<string, unknown>} [overrides] */
 function service(overrides = {}) {
   const recorded = new Set();
+  /** @type {Map<string, TestReplayResult>} */
+  const recordedResults = new Map();
   const applied = new Set();
   const applyCloudOutcome = vi.fn(async () => {});
   const completeSubmission = vi.fn(
@@ -116,20 +139,30 @@ function service(overrides = {}) {
       recorded.has(key) && !applied.has(key)
   );
   const recordSubmission = vi.fn(
-    async (/** @type {{ idempotencyKey: string }} */ submission) => {
+    async (/** @type {{ idempotencyKey: string, replayResult?: TestReplayResult }} */ submission) => {
       if (recorded.has(submission.idempotencyKey)) {
+        const result =
+          recordedResults.get(submission.idempotencyKey) ?? testReplayResult();
         return {
           state: /** @type {const} */ ("duplicate"),
           recorded: {
+            idempotencyKey: submission.idempotencyKey,
             accepted: true,
-            outcome: /** @type {const} */ ("won"),
-            score: 900,
-            moves: 12,
-            elapsedMs: 30000
+            outcome: /** @type {"won" | "lost"} */ (
+              result.status === "won" ? "won" : "lost"
+            ),
+            score: result.score,
+            moves: result.moves,
+            elapsedMs: result.elapsedMs,
+            result
           }
         };
       }
       recorded.add(submission.idempotencyKey);
+      recordedResults.set(
+        submission.idempotencyKey,
+        submission.replayResult ?? testReplayResult()
+      );
       return { state: /** @type {const} */ ("recorded") };
     }
   );
@@ -230,11 +263,18 @@ describe("Offline submission authority", () => {
       recordSubmission: async () => ({
         state: /** @type {const} */ ("duplicate"),
         recorded: {
+          idempotencyKey: "offline_submit_01J1MOSSWATCH",
           accepted: true,
           outcome: /** @type {const} */ ("lost"),
           score: 120,
           moves: 44,
-          elapsedMs: 61000
+          elapsedMs: 61000,
+          result: testReplayResult({
+            status: "lost",
+            score: 120,
+            moves: 44,
+            elapsedMs: 61000
+          })
         }
       }),
       pendingApply: async () => false
@@ -252,11 +292,13 @@ describe("Offline submission authority", () => {
       recordSubmission: async () => ({
         state: /** @type {const} */ ("duplicate"),
         recorded: {
+          idempotencyKey: "offline_submit_01J1MOSSWATCH",
           accepted: true,
           outcome: /** @type {const} */ ("won"),
           score: 900,
           moves: 12,
-          elapsedMs: 30000
+          elapsedMs: 30000,
+          result: testReplayResult()
         }
       }),
       pendingApply: async () => true
@@ -281,6 +323,7 @@ describe("Offline submission authority", () => {
       recordSubmission: async () => ({
         state: /** @type {const} */ ("duplicate"),
         recorded: {
+          idempotencyKey: "offline_submit_01J1MOSSWATCH",
           accepted: false,
           outcome: /** @type {const} */ ("lost"),
           score: 0,
@@ -305,6 +348,29 @@ describe("Offline submission authority", () => {
         state: /** @type {const} */ ("duplicate")
       }),
       pendingApply: async () => false
+    });
+
+    await expect(harness.service.submit(submission())).resolves.toEqual({
+      status: "expired",
+      duplicate: true,
+      reason: "submission"
+    });
+    expect(harness.applyCloudOutcome).not.toHaveBeenCalled();
+  });
+
+  it("does not finish an accepted duplicate without its complete replay result", async () => {
+    const harness = service({
+      recordSubmission: async () => ({
+        state: /** @type {const} */ ("duplicate"),
+        recorded: {
+          idempotencyKey: "offline_submit_01J1MOSSWATCH",
+          accepted: true,
+          outcome: /** @type {const} */ ("won"),
+          score: 900,
+          moves: 12,
+          elapsedMs: 30000
+        }
+      })
     });
 
     await expect(harness.service.submit(submission())).resolves.toEqual({
@@ -351,7 +417,7 @@ describe("Offline submission authority", () => {
     expect(overrun.applyCloudOutcome).not.toHaveBeenCalled();
   });
 
-  it("never puts a selected option identifier into persistent storage", async () => {
+  it("never puts detailed replay data into persistent storage", async () => {
     const harness = service();
 
     await harness.service.submit(submission());
@@ -360,15 +426,21 @@ describe("Offline submission authority", () => {
     expect(persisted).not.toContain("optionId");
     expect(persisted).not.toContain("questionRevisionId");
     expect(persisted).not.toContain("actions");
-    expect(JSON.parse(persisted)[0][0]).toEqual({
+    const stored = JSON.parse(persisted)[0][0];
+    expect(stored).toEqual({
       idempotencyKey: "offline_submit_01J1MOSSWATCH",
       runId: RUN_ID,
       accepted: true,
       outcome: "won",
       score: expect.any(Number),
       moves: expect.any(Number),
-      elapsedMs: expect.any(Number)
+      elapsedMs: expect.any(Number),
+      replayResult: expect.objectContaining({
+        status: "won"
+      })
     });
+    expect(stored.replayResult).not.toHaveProperty("journalEvents");
+    expect(stored.replayResult).not.toHaveProperty("actionLog");
   });
   it("refuses a terminal instant in the future or before the receipt", async () => {
     const harness = service();

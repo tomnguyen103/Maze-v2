@@ -26,10 +26,11 @@ import { getDailyQuestion } from "../src/game/daily-labyrinth.js";
  * and it reaches a genuine terminal state — which is the only thing the server
  * replay will accept.
  */
-function recordWinningOfflineRun() {
+function recordWinningOfflineRun({ includeHint = false } = {}) {
   let run = createRun(DAILY_REPLAY_FIXTURE.seed, DAILY_REPLAY_CONFIG);
   let log = createRunActionLogV2();
   let questionIndex = 0;
+  let hinted = false;
   /** @type {Map<string, ReturnType<typeof getDailyQuestion>>} */
   const contentPack = new Map();
 
@@ -42,7 +43,23 @@ function recordWinningOfflineRun() {
       const question = getDailyQuestion(DAILY_REPLAY_FIXTURE, questionIndex);
       questionIndex += 1;
       contentPack.set(question.id, question);
+      if (question.reviewedRevisionId) {
+        contentPack.set(question.reviewedRevisionId, question);
+      }
       run = applyAction(run, { type: "provide-question", question });
+      if (includeHint && !hinted) {
+        const hintedRun = applyAction(run, { type: "reveal-hint" });
+        log = /** @type {typeof log} */ (
+          tryAppendRunActionV2(
+            log,
+            run,
+            { type: "reveal-hint" },
+            hintedRun
+          )
+        );
+        run = hintedRun;
+        hinted = true;
+      }
     }
     /** @type {Parameters<typeof applyAction>[1]} */
     const action =
@@ -104,7 +121,7 @@ describe("Run Action Log version 2", () => {
       move: ["direction", "elapsedMs", "type"],
       pulse: ["elapsedMs", "type"],
       "ring-bell": ["elapsedMs", "type"],
-      "reveal-hint": ["elapsedMs", "type"],
+      "reveal-hint": ["elapsedMs", "questionRevisionId", "type"],
       "answer-question": [
         "elapsedMs",
         "optionId",
@@ -181,6 +198,22 @@ describe("Offline server replay", () => {
     expect(result.moves).toBe(run.moves);
     expect(result.score).toBe(run.score);
     expect(result.elapsedMs).toBe(Math.round(run.elapsedMs));
+  });
+
+  it("replays a free Hint when it is the first Challenge action", () => {
+    const { log, contentPack } = recordWinningOfflineRun({ includeHint: true });
+
+    expect(log.actions[0]).toMatchObject({
+      type: "move"
+    });
+    const hint = log.actions.find((entry) => entry.type === "reveal-hint");
+    expect(hint).toMatchObject({
+      type: "reveal-hint",
+      questionRevisionId: expect.any(String)
+    });
+    expect(verifyOfflineRunReplay(log, trustedInputs(contentPack)).status).toBe(
+      "won"
+    );
   });
 
   it("rejects a Run replayed against a different seed", () => {

@@ -219,9 +219,10 @@ export function createOfflineContinuityController({
   receiptVerifier = null,
   submitOfflineRun = null,
   now = () => new Date(),
-  accountScope = null,
+  accountScope: initialAccountScope = null,
   getDeviceInstallationHash
 } = {}) {
+  let accountScope = initialAccountScope;
   /** @returns {StorageLike | null} */
   function targetStorage() {
     return storage ?? null;
@@ -422,6 +423,11 @@ export function createOfflineContinuityController({
     return { ok: true, durable: true, worker };
   }
 
+  /** @param {string | null} nextAccountScope */
+  function setAccountScope(nextAccountScope) {
+    accountScope = nextAccountScope;
+  }
+
   /**
    * @param {{
    *   run: OfflineRunIdentity,
@@ -536,6 +542,7 @@ export function createOfflineContinuityController({
     const record = {
       schema: RUN_RECORD_SCHEMA,
       runId: run.runId,
+      playerId: receipt.binding.playerId ?? null,
       seed: run.seed,
       levelId: run.levelId,
       labyrinthNumber: run.labyrinthNumber,
@@ -692,6 +699,7 @@ export function createOfflineContinuityController({
     return {
       schema: RUN_RECORD_SCHEMA,
       runId: record.runId,
+      playerId: record.playerId ?? null,
       seed: record.seed,
       levelId: record.levelId,
       labyrinthNumber: record.labyrinthNumber,
@@ -764,6 +772,16 @@ export function createOfflineContinuityController({
         return { status: "pending", retry: true, reason: "storage" };
       }
       const cleared = discardDetailedState(storageTarget);
+      if (!cleared) {
+        return {
+          status: storedVerification,
+          verification: storedVerification,
+          retry: true,
+          reason: "storage",
+          cloudWritten: storedVerification === "verified",
+          cleared: false
+        };
+      }
       await release(storedRunId);
       return {
         status: storedVerification,
@@ -819,6 +837,17 @@ export function createOfflineContinuityController({
         };
       }
       const cleared = discardDetailedState(storageTarget);
+      if (!cleared) {
+        return {
+          status,
+          verification: reconciliation.verification,
+          label: reconciliation.label,
+          retry: true,
+          reason: "storage",
+          cloudWritten: reconciliation.cloudWritten,
+          cleared: false
+        };
+      }
       await release(storedRunId);
       return {
         status,
@@ -905,6 +934,34 @@ export function createOfflineContinuityController({
     return { ok: true, durable: true, recorded: true, reason };
   }
 
+  /**
+   * Discards a non-terminal prepared Run after online play has ended before
+   * Offline Continuity became active. The run id check makes this narrow: a
+   * late preparation cannot clear a newer Run's local authority.
+   *
+   * @param {string} runId
+   */
+  async function cancelPreparedRun(runId) {
+    const target = targetStorage();
+    if (target) {
+      const envelope = readJson(target, OFFLINE_ACTION_LOG_KEY);
+      const record = runRecord(readJson(target, OFFLINE_RUN_RECORD_KEY));
+      if (
+        isRecord(envelope) &&
+        isRunIdentity(envelope.run) &&
+        envelope.run.runId === runId &&
+        envelope.terminal !== true &&
+        record?.verification !== "pending"
+      ) {
+        const cleared = discardDetailedState(target);
+        await release(runId);
+        return { ok: cleared, durable: cleared, cleared };
+      }
+    }
+    await release(runId);
+    return { ok: true, durable: true, cleared: false };
+  }
+
   /** @param {string} runId */
   async function release(runId) {
     const target = targetStorage();
@@ -925,6 +982,8 @@ export function createOfflineContinuityController({
     recover,
     reconcile,
     markUnrecordable,
+    cancelPreparedRun,
+    setAccountScope,
     release
   };
 }

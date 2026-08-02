@@ -174,6 +174,9 @@ export function createPlayerController({
     getAuthenticatedUserId() {
       return clerkBrowser.user?.id ?? null;
     },
+    auth() {
+      return clerkAvailable;
+    },
     getApiClient() {
       return client;
     },

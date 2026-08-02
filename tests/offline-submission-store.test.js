@@ -13,6 +13,7 @@ function createPool() {
             {
               run_id: "offline_run_01J1MOSSWATCH",
               player_id: "user_01MOSS",
+              quest_id: "quest_01MOSS123",
               device_installation_hash: "a".repeat(64),
               seed: "MOSS-WATCH-11",
               level_id: "trail-scout",
@@ -31,11 +32,22 @@ function createPool() {
           rows: [
             {
               state: "recorded",
+              recorded_idempotency_key: "offline_submit_01J1MOSSWATCH",
               recorded_accepted: true,
               recorded_outcome: "won",
               recorded_score: 900,
               recorded_moves: 12,
-              recorded_elapsed_ms: 30000
+              recorded_elapsed_ms: 30000,
+              recorded_replay_result: {
+                status: "won",
+                seed: "MOSS-WATCH-11",
+                score: 900,
+                wardensDefeated: 1,
+                echoesCollected: 1,
+                moves: 12,
+                elapsedMs: 30000,
+                journalEvents: []
+              }
             }
           ]
         };
@@ -79,7 +91,17 @@ describe("Offline submission store", () => {
       outcome: "won",
       score: 900,
       moves: 12,
-      elapsedMs: 30000
+      elapsedMs: 30000,
+      replayResult: {
+        status: "won",
+        seed: "MOSS-WATCH-11",
+        score: 900,
+        wardensDefeated: 1,
+        echoesCollected: 1,
+        moves: 12,
+        elapsedMs: 30000,
+        journalEvents: []
+      }
     });
     await expect(
       store.completeSubmission("user_01MOSS", "offline_submit_01J1MOSSWATCH")
@@ -91,16 +113,28 @@ describe("Offline submission store", () => {
 
     expect(receipt).toMatchObject({
       playerId: "user_01MOSS",
+      questId: "quest_01MOSS123",
       issuedAt: "2026-08-01T00:00:00.000Z"
     });
     expect(recorded).toEqual({
       state: "recorded",
       recorded: {
+        idempotencyKey: "offline_submit_01J1MOSSWATCH",
         accepted: true,
         outcome: "won",
         score: 900,
         moves: 12,
-        elapsedMs: 30000
+        elapsedMs: 30000,
+        result: {
+          status: "won",
+          seed: "MOSS-WATCH-11",
+          score: 900,
+          wardensDefeated: 1,
+          echoesCollected: 1,
+          moves: 12,
+          elapsedMs: 30000,
+          journalEvents: []
+        }
       }
     });
     expect(pool.sql.join(" ")).not.toContain("actionLog");

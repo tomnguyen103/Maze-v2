@@ -80,6 +80,23 @@ describe("Offline Continuity worker client", () => {
     expect(harness.worker.postMessage).not.toHaveBeenCalled();
   });
 
+  it("cleans up an existing worker after a page reload without registering", async () => {
+    const harness = navigatorWithWorker();
+    /** @type {any} */ (harness.navigatorLike.serviceWorker).controller =
+      harness.worker;
+    const client = createOfflineWorkerClient(harness);
+
+    await expect(client.signOut()).resolves.toEqual({
+      ok: true,
+      version: undefined
+    });
+    expect(harness.navigatorLike.serviceWorker.register).not.toHaveBeenCalled();
+    expect(harness.worker.postMessage).toHaveBeenCalledWith(
+      { type: "sign-out" },
+      expect.any(Array)
+    );
+  });
+
   it("does not ask the worker to pin an invalid or unsupported package", async () => {
     const harness = navigatorWithWorker();
     const client = createOfflineWorkerClient(harness);
