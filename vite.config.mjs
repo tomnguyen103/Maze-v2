@@ -1,6 +1,22 @@
 import { defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
 
+/** @type {import("vite").ResolveModulePreloadDependenciesFn} */
+const resolveModulePreloadDependencies = (
+  _filename,
+  dependencies,
+  { hostType }
+) => {
+  if (hostType !== "js") {
+    return dependencies;
+  }
+  return dependencies.filter(
+    (dependency) =>
+      !dependency.includes("game-session-") &&
+      !dependency.includes("tactics-lab-view-")
+  );
+};
+
 export default defineConfig(({ mode }) => {
   const base = {
     test: {
@@ -14,7 +30,13 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: "dist",
-      sourcemap: true
+      sourcemap: true,
+      modulePreload: {
+        // These are already static ESM dependencies of the app shell or
+        // Workshop route; normal imports keep them correct without repeating
+        // their paths in every dynamic-import preload map.
+        resolveDependencies: resolveModulePreloadDependencies
+      }
     },
     server: {
       port: 3000,

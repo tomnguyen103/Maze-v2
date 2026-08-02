@@ -4068,6 +4068,123 @@ test("opens Workshop catalog and transfers paused play to Journal or Atlas", asy
   await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "false");
 });
 
+test("opens the unscored Warden Tactics Lab from Workshop", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+
+  const workshopButton = page.getByRole("button", {
+    name: "Workshop",
+    exact: true
+  });
+  await workshopButton.click();
+  const workshop = page.getByRole("dialog", {
+    name: "Lantern Trail Workshop"
+  });
+  await expect(workshop).toBeVisible();
+
+  const beforeLab = await page.evaluate(() => ({
+    score: document.getElementById("player-score")?.textContent,
+    vitality: document.getElementById("vitality-count")?.textContent,
+    moves: document.getElementById("moves-value")?.textContent,
+    storage: Object.fromEntries(
+      Object.keys(localStorage)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key)])
+    )
+  }));
+
+  await workshop.getByRole("button", { name: "Open Warden Tactics Lab" }).click();
+  await expect(page.getByRole("heading", { name: "Warden Tactics Lab" })).toBeVisible();
+  await expect(page.locator("[data-tactics-drill]")).toHaveCount(4);
+
+  await page.locator("[data-tactics-drill='patrol']").click();
+  await expect(page.locator("#practice-tactics-session")).toBeVisible();
+  await expect(page.locator("#practice-tactics-report")).toContainText("Patrol");
+  await expect(page.locator("#practice-tactics-report")).not.toContainText(/row|col|answer/i);
+
+  await page.getByRole("button", { name: "Use Pulse" }).click();
+  await expect(page.locator("#practice-tactics-progress")).toContainText("1 moves");
+  await page.getByRole("button", { name: "Restart Drill" }).click();
+  await expect(page.locator("#practice-tactics-progress")).toContainText("0 moves");
+
+  await page.getByRole("button", { name: "Back to Drills" }).click();
+  await page.locator("[data-tactics-drill='hunt']").click();
+  await page.locator("[data-tactics-move='right']").click();
+  await expect(page.locator("#practice-tactics-report")).toContainText("Hunt");
+
+  await page.getByRole("button", { name: "Back to Drills" }).click();
+  await page.locator("[data-tactics-drill='intercept']").click();
+  await page.locator("[data-tactics-move='down']").click();
+  await expect(page.locator("#practice-tactics-report")).toContainText("Intercept");
+
+  await page.getByRole("button", { name: "Back to Drills" }).click();
+  await page.locator("[data-tactics-drill='trail-twists']").click();
+  await expect(page.locator("[data-tactics-twist]")).toHaveCount(5);
+  await expect(page.locator("#practice-tactics-twist-list")).toContainText("Echo Hush");
+  await expect(page.locator("#practice-tactics-twist-list")).toContainText("Warden Bells");
+  await page.locator("[data-tactics-twist='echo-hush-v1']").click();
+  await expect(page.locator("#practice-tactics-rule")).toContainText("Echo Hush");
+
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  const overflow = await workshop.evaluate((dialog) => ({
+    pixels: dialog.scrollWidth - dialog.clientWidth,
+    pagePixels: document.documentElement.scrollWidth - window.innerWidth,
+    sources: [...dialog.querySelectorAll("*")]
+      .filter(
+        (element) =>
+          element.getBoundingClientRect().right >
+          dialog.getBoundingClientRect().right + 1
+      )
+      .slice(0, 8)
+      .map((element) => element.id || element.className || element.tagName)
+  }));
+  expect(
+    overflow.pixels,
+    `Tactics overflow sources: ${overflow.sources.join(", ")}`
+  ).toBeLessThanOrEqual(1);
+  expect(
+    overflow.pagePixels,
+    `Page overflow sources: ${overflow.sources.join(", ")}`
+  ).toBeLessThanOrEqual(1);
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("font-size");
+  });
+
+  await page.getByRole("button", { name: "Back to Workshop" }).click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Journal" })).toBeVisible();
+  await page.getByRole("button", { name: "Return to Play" }).click();
+  await expect(workshop).toBeHidden();
+  await expect(workshopButton).toBeFocused();
+
+  expect(
+    await page.evaluate(() => ({
+      score: document.getElementById("player-score")?.textContent,
+      vitality: document.getElementById("vitality-count")?.textContent,
+      moves: document.getElementById("moves-value")?.textContent,
+      storage: Object.fromEntries(
+        Object.keys(localStorage)
+          .sort()
+          .map((key) => [key, localStorage.getItem(key)])
+      )
+    }))
+  ).toEqual(beforeLab);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await workshopButton.click();
+  await expect(page.locator("#practice-catalog")).toBeVisible();
+  await expect(page.locator("[data-tactics-drill]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open Warden Tactics Lab" }).click();
+  await expect(page.locator("[data-tactics-drill]")).toHaveCount(4);
+  await page.getByRole("button", { name: "Back to Workshop" }).click();
+  await page.getByRole("button", { name: "Return to Play" }).click();
+  await expect(workshopButton).toBeFocused();
+});
+
 test("keeps an active Run operable when the Journal chunk is unavailable", async ({
   page
 }) => {

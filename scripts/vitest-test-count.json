@@ -1,5 +1,5 @@
 {
-  "testFiles": 166,
-  "tests": 1422,
-  "source": "Full Vitest run on 2026-08-02 after adding the Echo Fossil Atlas contract, continuity, route/store, terminal, runtime idempotence, and Atlas view tests on current main; update deliberately when tests change."
+  "testFiles": 168,
+  "tests": 1432,
+  "source": "Full Vitest run on 2026-08-02 after merging the Echo Fossil Atlas player path and adding the Warden Tactics Lab contract, view, and Intercept coverage; update deliberately when tests change."
 }
