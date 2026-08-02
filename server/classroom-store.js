@@ -13,7 +13,6 @@ function classroom(row) {
 /** @param {Record<string, unknown>} row */
 function progress(row) {
   return {
-    studentName: String(row.student_name),
     objectiveId: String(row.objective_id),
     correct: Number(row.correct_count),
     wrong: Number(row.wrong_count),
@@ -103,7 +102,6 @@ export function createClassroomStore(pool) {
           await requireTeacherInTransaction(database, userId, classroomId);
           const result = await database.query(
             `SELECT
-               student_name,
                objective_id,
                correct_count,
                wrong_count,

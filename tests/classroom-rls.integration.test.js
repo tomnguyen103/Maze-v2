@@ -396,15 +396,7 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
       await expect(
         classroomStore.progressForTeacher(explorerId, classroomA)
       ).resolves.toEqual({
-        progress: [{
-          studentName: `Other ${suffix.slice(0, 8)}`,
-          objectiveId: "addition-within-20",
-          correct: 1,
-          wrong: 1,
-          hints: 0,
-          skips: 0,
-          total: 2
-        }],
+        progress: [],
         truncated: false
       });
       await expect(

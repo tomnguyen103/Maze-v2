@@ -71,8 +71,9 @@ test("renders the Classroom browser state matrix and Teacher workflows", async (
 
   await renderMockWorkspace(page, "teacher");
   await expect(page.getByText("Teacher tools")).toBeVisible();
-  await expect(page.getByText("Moss")).toBeVisible();
+  await expect(page.getByText("Try next: Combine groups")).toBeVisible();
   await expect(page.getByText("3 correct")).toBeVisible();
+  await expect(page.locator("#game-root")).not.toContainText("Moss");
   await expect(page.locator("#game-root")).not.toContainText("user_student_1");
 
   await expect(
@@ -180,8 +181,7 @@ async function renderMockWorkspace(page, scenario, waitForRender = true) {
         }),
         getClassroomProgress: async () => ({
           progress: [{
-            studentName: "Moss",
-            objectiveId: "addition-within-20",
+            objectiveId: "bright-combine-groups",
             correct: 3,
             wrong: 1,
             hints: 0,
@@ -323,6 +323,26 @@ test("shows Class Expedition tools to Teachers and Students with counts only", a
     studentCard.locator("[data-student-expedition='exped_e2e_1']")
   ).toBeVisible();
   await expect(studentCard).toContainText("1 of 4 Labyrinths escaped");
+  await expect(studentCard.locator("[data-private-reflection='true']")).toContainText(
+    "These prompts stay on this device"
+  );
+  const browserState = await page.evaluate(() => {
+    /** @param {unknown} value @returns {unknown} */
+    function walk(value) {
+      if (value === null || typeof value !== "object") return value;
+      if (Array.isArray(value)) return value.map(walk);
+      const objectValue = /** @type {Record<string, unknown>} */ (value);
+      return Object.fromEntries(
+        Object.entries(objectValue).map(([key, nested]) => [key, walk(nested)])
+      );
+    }
+    return JSON.stringify(
+      walk(Object.fromEntries(Object.entries(localStorage)))
+    );
+  });
+  expect(browserState).not.toMatch(
+    /studentName|username|answer|prompt|timestamp|route|rank|diagnos/i
+  );
   const startButton = studentCard.locator(
     "[data-action='start-class-expedition']"
   );

@@ -677,6 +677,37 @@ describe("Classroom Teacher read boundary migration", () => {
   });
 });
 
+describe("Classroom Expedition debrief migration", () => {
+  it("replaces named rows with thresholded objective aggregates", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0028_classroom_expedition_debrief.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("DROP FUNCTION IF EXISTS read_classroom_progress(TEXT)");
+    expect(sql).toContain("CREATE FUNCTION read_classroom_progress(p_classroom_id TEXT)");
+    expect(sql).toContain("BEGIN;");
+    expect(sql).toContain("COMMIT;");
+    expect(sql).toContain("HAVING SUM(progress.total_count) >= 3");
+    expect(sql).toContain("COUNT(*) OVER () > 100 AS truncated");
+    expect(sql).toContain("LIMIT 100");
+    expect(sql).toContain("role = 'teacher'");
+    expect(sql).toContain("role = 'student'");
+    expect(sql).not.toMatch(/student_name|student_id|username|provider/i);
+    expect(sql).not.toMatch(/prompt|answer_text|selected_answer|timestamp|route|rank/i);
+    expect(sql).not.toContain("BYPASSRLS");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION read_classroom_progress(TEXT) FROM PUBLIC"
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION read_classroom_progress(TEXT)"
+    );
+  });
+});
+
 describe("Class Expedition migration", () => {
   const migrationUrl = new URL(
     "../db/migrations/0021_class_expeditions.sql",

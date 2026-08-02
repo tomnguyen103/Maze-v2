@@ -75,7 +75,6 @@ describe("Classroom store", () => {
       if (sql.includes("SELECT role")) return [{ role: "teacher" }];
       if (sql.includes("read_classroom_progress")) {
         return [{
-          student_name: "Moss",
           objective_id: "addition-within-20",
           correct_count: 2,
           wrong_count: 1,
@@ -93,7 +92,6 @@ describe("Classroom store", () => {
       store.progressForTeacher("user_teacher_1", "org_class_1")
     ).resolves.toEqual({
       progress: [{
-        studentName: "Moss",
         objectiveId: "addition-within-20",
         correct: 2,
         wrong: 1,
