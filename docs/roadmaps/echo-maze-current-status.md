@@ -10,11 +10,15 @@ The core product is coherent and substantially implemented. The next work is not
 
 ## Repository state
 
-- `origin/main` includes merged PR #152 at `a37dffa` and merged PR #158 at
-  `69f4cd6`.
+- `origin/main` includes merged PR #192 at `2680874` (including PR #152 at
+  `a37dffa` and PR #158 at `69f4cd6`).
+- Quest II PR #197 is the only open product PR. Its local gate, browser matrix,
+  Vercel preview, and local review are green; its CodeRabbit review is parked
+  under the documented temporary rate limit before merge.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The deployed demo still reflects the pre-P0.2 merge surface.
+- The deployed demo currently reports `2680874` (the Postcards merge); PR #197
+  remains a preview-only change until it merges.
 - GitHub Actions are disabled. Local validation is the CI gate.
 - CodeGraph index is present and current: 372 files, 3,636 nodes, 8,104 edges.
 
@@ -37,27 +41,47 @@ Milestones 1–5 shipped through PRs #102, #115, #123, #133, #148, and #149. Cur
 - Active Run Recovery;
 - Offline Run Continuity wiring is merged in `origin/main`; the production key,
   migration, and deployment boundaries remain external;
+- Echo Fossil Atlas contract, continuity, and terminal player path;
+- unscored Warden Tactics Lab;
+- reviewed Echo Lens packs;
+- Quiet Expedition presentation and semantic route;
+- explicit Trail Compass intention;
+- Classroom Expedition Debrief and privacy-thresholded Class Constellation;
+- seed-only Echo Postcards;
 - health, readiness, telemetry, privacy, and export foundations.
 
 The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the primary historical release record. The [frozen expedition roadmap](../plans/echo-maze-next-expedition-roadmap.md) remains the contract for gameplay, privacy, content, and performance constraints.
 
 ## Live deployment snapshot
 
-Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02:
+Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
+`origin/main` Postcards merge:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds; version still reports the pre-P0.2 `a37dffa` surface. |
-| `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`. |
+| `/api/health` | 200 | Deployment responds and reports version `2680874`. |
+| `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`, so production readiness is unavailable. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
-| Verified Daily endpoints | 500 | Service reports Verified Daily unavailable. |
-| `/sw.js` | 200 | The deployed worker is still the pre-#158 surface; merged wiring is not deployed yet. |
+| `/api/daily/leaderboard`, `/api/daily/constellation` | 500 | Verified Daily read services remain unavailable; `/api/daily/scores` correctly rejects a GET with 405 because it is a write path. |
+| `/sw.js` | 200 | The deployed worker responds from the current demo surface. |
 
 Current deployment is a working demo/test surface, not proof of production readiness.
 
 ## Current blockers
+
+### Quest II remains the only repo-controlled roadmap item in review
+
+PR #197 implements the Quest II Living Regions contract, reviewed content,
+identity propagation, authored storylets, Atlas/player path, and replay/offline
+boundaries. Its local and browser evidence is green, but the PR is not counted
+as delivered until its required CodeRabbit review clears and the PR merges.
+Issues [#193](https://github.com/tomnguyen103/Maze-v2/issues/193),
+[#194](https://github.com/tomnguyen103/Maze-v2/issues/194),
+[#195](https://github.com/tomnguyen103/Maze-v2/issues/195), and
+[#196](https://github.com/tomnguyen103/Maze-v2/issues/196) remain open until
+that merge closeout.
 
 ### Offline Run Continuity wiring is merged; external release proof remains
 
@@ -78,7 +102,7 @@ check for this change.
 
 ### External release setup remains deferred
 
-- Database migrations `0018` through `0025` require authorized application and smoke testing.
+- Database migrations `0018` through `0029` require authorized application and smoke testing.
 - Offline receipt keys need generation and deployment.
 - Verified Daily needs live configuration and route verification.
 - Stripe is not activated.
