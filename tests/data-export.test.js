@@ -95,6 +95,12 @@ function fixtureAdapter() {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-05T00:00:00.000Z"
     },
+    echo_fossil_collections: {
+      quest_id: "quest_export_123",
+      collection: { version: 1, questId: "quest_export_123", fossils: [] },
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-05T00:00:00.000Z"
+    },
     explorer_access_settings: {
       schema_version: 1,
       high_contrast: true,
@@ -225,6 +231,10 @@ describe("buildUserExport", () => {
       quest_id: "quest_export_123"
     });
     expect(exported.data.journal).toMatchObject({ clear_generation: 1 });
+    expect(exported.data.fossil_collection).toMatchObject({
+      quest_id: "quest_export_123",
+      collection: { version: 1, fossils: [] }
+    });
     expect(exported.data.class_quest_progress).toEqual([
       expect.objectContaining({
         classroom_id: "org_export_1",
@@ -293,6 +303,7 @@ describe("buildUserExport", () => {
     expect(exported.data.classroom_memberships).toEqual([]);
     expect(exported.data.quest_progress).toBeNull();
     expect(exported.data.journal).toBeNull();
+    expect(exported.data.fossil_collection).toBeNull();
     expect(exported.data.class_quest_progress).toEqual([]);
     expect(exported.data.class_journals).toEqual([]);
     expect(exported.data.access_settings).toBeNull();
@@ -320,7 +331,7 @@ describe("buildUserExport", () => {
     // Personal sections plus four Classroom-scoped sections, the two
     // Explorer-keyed Class Expedition definer readers, and the Constellation
     // contribution receipt reader.
-    expect(adapter.queries).toHaveLength(21);
+    expect(adapter.queries).toHaveLength(22);
   });
 
   // Structural pinning only: envelope keys, section set, and $id. The
@@ -396,7 +407,7 @@ describe("exportUserSnapshot", () => {
     expect(pool.parameters[1]).toEqual(["user_snapshot_1", ""]);
     expect(pool.statements.at(-1)).toBe("COMMIT");
     // Context plus every section read between BEGIN and COMMIT.
-    expect(pool.statements).toHaveLength(20);
+    expect(pool.statements).toHaveLength(21);
     expect(pool.releasedWith()).toBe(false);
     expect(exported.schema).toBe(EXPORT_SCHEMA_ID);
   });

@@ -22,7 +22,8 @@ describe("Clerk user deletion store", () => {
               verified_daily_entries_deleted: true,
               daily_trail_contributions_deleted: true,
               offline_run_receipts_deleted: true,
-              offline_pending_submissions_deleted: true
+              offline_pending_submissions_deleted: true,
+              echo_fossils_deleted: true
             }]
           : []
         };
@@ -42,6 +43,7 @@ describe("Clerk user deletion store", () => {
       expect.stringContaining("INSERT INTO deleted_user_tombstones"),
       expect.stringContaining("DELETE FROM cloud_quest_progress"),
       expect.stringContaining("DELETE FROM explorer_access_settings"),
+      expect.stringContaining("DELETE FROM echo_fossil_collections"),
       expect.stringContaining("DELETE FROM players"),
       expect.stringContaining("DELETE FROM player_access"),
       expect.stringContaining("AS tombstone_present"),
@@ -75,7 +77,8 @@ describe("Clerk user deletion store", () => {
               verified_daily_entries_deleted: true,
               daily_trail_contributions_deleted: true,
               offline_run_receipts_deleted: true,
-              offline_pending_submissions_deleted: true
+              offline_pending_submissions_deleted: true,
+              echo_fossils_deleted: true
             }]
           : []
         };
@@ -157,7 +160,8 @@ describe("Clerk user deletion store", () => {
               verified_daily_entries_deleted: true,
               daily_trail_contributions_deleted: false,
               offline_run_receipts_deleted: true,
-              offline_pending_submissions_deleted: true
+              offline_pending_submissions_deleted: true,
+              echo_fossils_deleted: true
             }]
           : []
         };

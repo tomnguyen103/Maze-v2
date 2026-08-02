@@ -19,6 +19,7 @@
         "classroom_memberships",
         "quest_progress",
         "journal",
+        "fossil_collection",
         "class_quest_progress",
         "class_journals",
         "class_run_grants",
@@ -73,6 +74,10 @@
         },
         "journal": {
           "description": "Personal Play learning_journals row - the privacy-minimized Lantern Journal outcomes.",
+          "type": ["object", "null"]
+        },
+        "fossil_collection": {
+          "description": "Personal Play Echo Fossil Collection for the current Quest; no historical Quest archive is retained.",
           "type": ["object", "null"]
         },
         "class_quest_progress": {

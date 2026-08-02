@@ -64,9 +64,10 @@ For Vercel, connect the Neon project and apply the migrations in order:
 23. `db/migrations/0023_daily_trail_constellation.sql`
 24. `db/migrations/0024_offline_run_continuity.sql`
 25. `db/migrations/0025_offline_run_continuity_forward.sql`
+26. `db/migrations/0026_echo_fossil_collections.sql`
 
-Migrations 0012 through 0025 are the exception to the single-credential setup.
-Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fourteen.
+Migrations 0012 through 0026 are the exception to the single-credential setup.
+Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.
 Deploy the privilege boundary in this order during a maintenance window:
 
 1. Apply migration 0012. The old direct append and new definer append both work.
