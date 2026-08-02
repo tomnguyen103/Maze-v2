@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createTacticsLabView } from "../src/learning/t.js";
+import { createTacticsLabView } from "../src/learning/tactics-lab-view.js";
 
 function renderFixture() {
   document.body.innerHTML = `

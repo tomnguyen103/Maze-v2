@@ -9,7 +9,7 @@ import {
 } from "./lantern-trail.js";
 import { evaluatePracticeAnswer } from "./lantern-journal-ui.js";
 import { ensureQuestionNarration } from "./question-narration.js";
-import { createTacticsLabView } from "./t.js";
+import { createTacticsLabView } from "./tactics-lab-view.js";
 
 const LEVEL_LABELS = Object.freeze({
   "bright-start": "Bright Start",

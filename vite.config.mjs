@@ -12,7 +12,8 @@ const resolveModulePreloadDependencies = (
   }
   return dependencies.filter(
     (dependency) =>
-      !dependency.includes("game-session-") && !dependency.includes("/t-")
+      !dependency.includes("game-session-") &&
+      !dependency.includes("tactics-lab-view-")
   );
 };
 
