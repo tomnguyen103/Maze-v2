@@ -315,6 +315,13 @@ It is a transient choice, not account data, a score, a difficulty profile, or
 gameplay state.
 _Avoid_: adaptive mode, mastery score, recommendation, hidden difficulty
 
+**Echo Postcard**:
+A versioned, seed-only `/play` invitation containing one Quest Level, one
+Labyrinth/Atlas Region, and the exact deterministic ruleset revision. It starts
+the recipient's normal Run and never carries identity, score, route, raw
+actions, profile data, or replay state.
+_Avoid_: ghost replay, child profile, shared Run, invitation record, reward
+
 **Quiet Expedition**:
 An explicit presentation preset for Personal Play that combines the Trail
 Compass, reader-friendly Question text, and reduced visual effects into one

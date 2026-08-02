@@ -7,7 +7,9 @@ const assetsDirectory = new URL("../dist/assets/", import.meta.url);
 const files = await readdir(assetsDirectory);
 const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
-  { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 30 },
+  // P2.4 keeps the seed-only postcard parser out of normal startup, but the
+  // entry orchestration still needs a small amount of main-chunk headroom.
+  { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 31 },
   {
     label: "Campfire Resume JavaScript",
     prefix: "active-run-recovery-",
@@ -64,6 +66,12 @@ const budgets = [
     prefix: "offline-continuity-view-",
     suffix: ".js",
     maxKb: 3
+  },
+  {
+    label: "Echo Postcard JavaScript",
+    prefix: "echo-postcard-",
+    suffix: ".js",
+    maxKb: 2
   },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard

@@ -2465,7 +2465,7 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
   const eventRibbon = page.locator("#event-ribbon");
   await expect(eventRibbon).toHaveClass(/is-visible/);
   await expect(eventRibbon).toHaveText(
-    "Share link copied. Send it to another Explorer."
+    "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
   );
 
   const mazeBounds = await page.locator("#maze-canvas").boundingBox();
