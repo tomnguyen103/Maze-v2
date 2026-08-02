@@ -17,11 +17,9 @@ The core product is coherent and substantially implemented. The next work is not
   actionable comments.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The deployed demo currently reports `2680874` (the Postcards deployment); the
-  Quest II merge is present in the repository but has not changed this demo
-  deployment's reported version.
+- The deployed demo currently reports `618aba1` after the Quest II deployment.
 - GitHub Actions are disabled. Local validation is the CI gate.
-- CodeGraph index is present and current: 400 files, 3,905 nodes, 8,676 edges.
+- CodeGraph index is present and current: 405 files, 3,999 nodes, 8,749 edges.
 
 ## Shipped product surface
 
@@ -57,13 +55,13 @@ The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the pr
 ## Live deployment snapshot
 
 Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
-`origin/main` Quest II merge; the deployed demo still reports `2680874`:
+`origin/main` Quest II deployment:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds and reports version `2680874`. |
+| `/api/health` | 200 | Deployment responds and reports version `618aba1`. |
 | `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`, so production readiness is unavailable. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
 | `/api/daily/leaderboard`, `/api/daily/constellation` | 500 | Verified Daily read services remain unavailable; `/api/daily/scores` correctly rejects a GET with 405 because it is a write path. |
