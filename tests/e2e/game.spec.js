@@ -698,6 +698,17 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await expect(explore).toBeChecked();
   await explore.focus();
   await expect(explore).toBeFocused();
+  await explore.press("ArrowLeft");
+  const review = intentionGroup.getByRole("radio", { name: /Review/ });
+  await expect(review).toBeChecked();
+  await expect(page.locator("#practice-intention-guidance")).toHaveText(
+    /Review keeps .* selected below\./
+  );
+  await review.press("ArrowRight");
+  await expect(explore).toBeChecked();
+  await expect(page.locator("#practice-intention-guidance")).toHaveText(
+    "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below."
+  );
   expect(
     await intentionGroup.evaluate((element) =>
       element.scrollWidth <= element.clientWidth + 1
@@ -784,8 +795,32 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await expect(
     intentionGroup.getByRole("radio", { name: /Explore/ })
   ).toBeChecked();
-  const storageKeys = await page.evaluate(() => Object.keys(localStorage));
-  expect(storageKeys.some((key) => /intention/i.test(key))).toBe(false);
+  const storageEntries = await page.evaluate(() =>
+    Object.entries(localStorage).map(([key, value]) => ({ key, value }))
+  );
+  expect(storageEntries.some(({ key }) => /intention/i.test(key))).toBe(false);
+  expect(
+    storageEntries.some(({ value }) => {
+      /** @param {unknown} candidate @returns {boolean} */
+      const containsIntentionField = (candidate) => {
+        if (candidate && typeof candidate === "object") {
+          return Object.entries(candidate).some(
+            ([key, child]) =>
+              /intention/i.test(key) || containsIntentionField(child)
+          );
+        }
+        return (
+          typeof candidate === "string" &&
+          /(?:practice[-_ ]?intention|\bintention\b)/i.test(candidate)
+        );
+      };
+      try {
+        return containsIntentionField(JSON.parse(value));
+      } catch {
+        return containsIntentionField(value);
+      }
+    })
+  ).toBe(false);
 });
 
 test("locks one published Learning Deck into a new Quest", async ({

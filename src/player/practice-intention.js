@@ -9,7 +9,7 @@ export const PRACTICE_INTENTIONS = Object.freeze([
   Object.freeze({
     id: /** @type {PracticeIntentionId} */ ("explore"),
     label: "Explore",
-    description: "Choose a different reviewed Level or Learning Deck."
+    description: "Choose any explicit reviewed Level or Learning Deck."
   }),
   Object.freeze({
     id: /** @type {PracticeIntentionId} */ ("challenge"),
@@ -35,7 +35,8 @@ const PRACTICE_INTENTION_IDS = new Set(
  *   selectedLevelNumber: number,
  *   currentLevelNumber: number,
  *   selectedDeckId: string,
- *   currentDeckId: string
+ *   currentDeckId: string,
+ *   highestPublishedLevelNumber: number
  * }} choice
  */
 export function validatePracticeIntention(choice) {
@@ -54,6 +55,12 @@ export function validatePracticeIntention(choice) {
   }
 
   if (choice.intention === "challenge") {
+    if (choice.currentLevelNumber >= choice.highestPublishedLevelNumber) {
+      return {
+        valid: false,
+        message: "No higher Quest Level is available for Challenge."
+      };
+    }
     return choice.selectedLevelNumber > choice.currentLevelNumber
       ? { valid: true, message: "Challenge choice is ready." }
       : {

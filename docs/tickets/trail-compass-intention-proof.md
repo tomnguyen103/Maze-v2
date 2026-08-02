@@ -29,7 +29,7 @@ does not enter gameplay or identity state.
   `../src/player/practice-intention.js` did not exist.
 - Green contract: the same focused command passed with 4 tests.
 - Green local gate: `npm run check` passed with 1424 tests passed and 18
-  skipped across 170 Vitest files; build and bundle budgets passed at 29.83 KB
+  skipped across 170 Vitest files; build and bundle budgets passed at 29.87 KB
   game JavaScript gzip and 11.96 KB shared CSS gzip.
 - Browser: the focused Practice Intention test passed in both desktop and
   mobile projects (2/2), including keyboard focus, reduced motion, 200% text,
@@ -37,12 +37,13 @@ does not enter gameplay or identity state.
   full suite passed 240 tests with 22 skips across desktop and mobile.
 - Storage: the browser proof snapshots all localStorage entries before and
   after rejected Review and same-Level Challenge choices, verifies equality,
-  verifies Escape closes the picker, and verifies no key containing
-  `intention` is written after reopening it.
+  verifies Escape closes the picker, and recursively inspects serialized
+  localStorage values to verify no intention field or value is written after
+  reopening it.
 - Boundary inspection: the intention is passed only into the pure validator;
   accepted Quest Progress, Run locators, share URLs, Access Settings, and
   Question requests retain their existing shapes and write paths.
-- Local review: bounded Standards, Spec, Security & Reliability, and
+- Local review: post-fix Standards, Spec, Security & Reliability, and
   performance review of the diff found no medium-or-higher findings; the
   validator runs before authorization and the intention has no persistence,
   sharing, account, score, or Question-request path.

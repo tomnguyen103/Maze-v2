@@ -78,6 +78,7 @@ import {
 } from "./questions/learning-deck-catalog.js";
 import {
   QUEST_LABYRINTH_COUNT,
+  QUEST_LEVELS,
   getDifficultyBand,
   getLabyrinthConfig,
   getQuestLevel,
@@ -122,6 +123,9 @@ let deferChallengeQuestionForLens = false;
 /** @typedef {typeof import("./game/region-theme.js").getRegionTheme} RegionThemeLookup */
 
 const DEFAULT_PRACTICE_INTENTION = "explore";
+const HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER = Math.max(
+  ...QUEST_LEVELS.map(({ number }) => number)
+);
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
 const renderer = createCanvasRenderer(canvas);
@@ -2546,7 +2550,9 @@ function renderPracticeIntentionGuidance() {
     intention === "review"
       ? `Review keeps ${currentQuestLevel.name} and ${currentDeck.label} selected below.`
       : intention === "challenge"
-        ? `Challenge requires a Quest Level above ${currentQuestLevel.name}. Choose it below; nothing changes automatically.`
+        ? currentQuestLevel.number >= HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER
+          ? `Challenge is unavailable: no higher Quest Level is published than ${currentQuestLevel.name}. Choose Explore or Review.`
+          : `Challenge requires a Quest Level above ${currentQuestLevel.name}. Choose it below; nothing changes automatically.`
         : "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below.";
   const label =
     intention === "review"
@@ -2668,7 +2674,8 @@ async function startNewQuest(
     selectedLevelNumber: selectedLevel.number,
     currentLevelNumber: currentQuestLevel.number,
     selectedDeckId: learningDeck.deckId,
-    currentDeckId: currentDeck.deckId
+    currentDeckId: currentDeck.deckId,
+    highestPublishedLevelNumber: HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER
   });
   if (!intentionValidation.valid) {
     elements.practiceIntentionStatus.dataset.state = "error";

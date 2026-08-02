@@ -19,7 +19,7 @@ The New Quest picker presents exactly three Practice Intentions:
 | Intention | Meaning | Start boundary |
 | --- | --- | --- |
 | Review | Revisit the current Quest Level and selected reviewed Learning Deck. | The visible Level and Deck must remain the current choices. |
-| Explore | Try a different reviewed Deck, Level, or Region by choosing it. | Any visible published Level and Deck choice is allowed. |
+| Explore | Choose any explicit reviewed Level and Learning Deck, including the current choices. | Any visible published Level and Deck choice is allowed. |
 | Challenge | Opt into harder reviewed content. | The visible Level must be higher than the current Level. |
 
 The intention is transient picker state. It is never inferred from answers,
@@ -68,4 +68,3 @@ links, cloud Access Settings, score, exports, or analytics.
   text.
 - Local lint, typecheck, Vitest, build, bundle, browser, local review, and
   CodeRabbit gates pass.
-

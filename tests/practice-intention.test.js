@@ -22,7 +22,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 2,
         currentLevelNumber: 2,
         selectedDeckId: "number-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
       })
     ).toEqual({ valid: true, message: "Review choice is ready." });
     expect(
@@ -31,7 +32,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 3,
         currentLevelNumber: 2,
         selectedDeckId: "number-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
       }).valid
     ).toBe(false);
     expect(
@@ -40,7 +42,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 2,
         currentLevelNumber: 2,
         selectedDeckId: "mixed-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
       }).valid
     ).toBe(false);
   });
@@ -52,7 +55,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 1,
         currentLevelNumber: 3,
         selectedDeckId: "mixed-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
       }).valid
     ).toBe(true);
     expect(
@@ -61,7 +65,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 3,
         currentLevelNumber: 3,
         selectedDeckId: "mixed-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 4
       })
     ).toEqual({
       valid: false,
@@ -73,9 +78,23 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 3,
         currentLevelNumber: 2,
         selectedDeckId: "mixed-trail",
-        currentDeckId: "number-trail"
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
       }).valid
     ).toBe(true);
+    expect(
+      validatePracticeIntention({
+        intention: "challenge",
+        selectedLevelNumber: 3,
+        currentLevelNumber: 3,
+        selectedDeckId: "mixed-trail",
+        currentDeckId: "number-trail",
+        highestPublishedLevelNumber: 3
+      })
+    ).toEqual({
+      valid: false,
+      message: "No higher Quest Level is available for Challenge."
+    });
   });
 
   it("rejects undeclared intention values", () => {
@@ -85,7 +104,8 @@ describe("Practice Intention contract", () => {
         selectedLevelNumber: 2,
         currentLevelNumber: 2,
         selectedDeckId: "mixed-trail",
-        currentDeckId: "mixed-trail"
+        currentDeckId: "mixed-trail",
+        highestPublishedLevelNumber: 3
       })
     ).toEqual({ valid: false, message: "Choose a Practice Intention." });
   });
