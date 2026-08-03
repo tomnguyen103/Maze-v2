@@ -17,9 +17,13 @@ The core product is coherent and substantially implemented. The next work is not
   actionable comments.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The deployed demo currently reports `618aba1` after the Quest II deployment.
+- The last verified deployed-demo snapshot reports `618aba1` after the Quest II
+  deployment; it predates this test-only closeout fix.
 - GitHub Actions are disabled. Local validation is the CI gate.
-- CodeGraph index is present and current: 405 files, 3,999 nodes, 8,749 edges.
+- CodeGraph index is present and current: 405 files, 4,002 nodes, 8,559 edges.
+- Latest repository-controlled closeout validation: `npm run check` passed with
+  1,474 tests passed and 18 skipped across 174 files; the full desktop/mobile
+  browser matrix passed 248 tests with 20 intentional skips and no failures.
 
 ## Shipped product surface
 
@@ -55,13 +59,13 @@ The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the pr
 ## Live deployment snapshot
 
 Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
-`origin/main` Quest II deployment:
+`origin/main` Quest II deployment and before this test-only closeout fix:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responds and reports version `618aba1`. |
+| `/api/health` | 200 | Deployment responded and reported version `618aba1` at the time of this snapshot. |
 | `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`, so production readiness is unavailable. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
 | `/api/daily/leaderboard`, `/api/daily/constellation` | 500 | Verified Daily read services remain unavailable; `/api/daily/scores` correctly rejects a GET with 405 because it is a write path. |
