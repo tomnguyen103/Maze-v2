@@ -5,7 +5,7 @@
 The desktop/mobile browser matrix failed the Practice Intention storage case
 on desktop while the mobile counterpart passed. The case compared the entire
 `localStorage` object before and after rejecting an invalid Quest Level choice
-in the `/play` flow (`tests/e2e/game.spec.js:724-760`).
+in the `/play` flow (`tests/e2e/game.spec.js:762-823`).
 
 ## What did not work
 
@@ -20,11 +20,11 @@ Clerk initializes asynchronously during `/play`. Its development bootstrap can
 write `__clerk_environment` after the test captures `beforeRejectedReview`.
 The browser also retains the test's `echo-maze:first-light:v1` marker. The
 Practice Intention contract concerns product-owned storage only; Clerk-owned
-keys are outside that contract (`tests/e2e/game.spec.js:724-760`).
+keys are outside that contract (`tests/e2e/game.spec.js:762-823`).
 
 ## Fix
 
-The affected browser proofs now snapshot every sorted `localStorage` key except
+The affected browser proofs now snapshot every `localStorage` key except
 the known asynchronous Clerk bootstrap key, `__clerk_environment`. The Practice
 Intention test uses `readPracticeStorage`
 (`tests/e2e/game.spec.js:28-43`) for all rejected Review, Challenge, cancel, and
