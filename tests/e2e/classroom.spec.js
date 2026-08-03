@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readdirSync } from "node:fs";
 
+const CLERK_BOOTSTRAP_STORAGE_KEY = "__clerk_environment";
+
 const classroomAsset = readdirSync("dist/assets").find((name) =>
   /^classroom-controller-.*\.js$/.test(name)
 );
@@ -344,7 +346,7 @@ test("shows Class Expedition tools to Teachers and Students with counts only", a
   await expect(studentCard.locator("[data-private-reflection='true']")).toContainText(
     "These prompts stay on this device"
   );
-  const browserState = await page.evaluate(() => {
+  const browserState = await page.evaluate((ignoredKey) => {
     /** @param {unknown} value @returns {unknown} */
     function walk(value) {
       if (value === null || typeof value !== "object") return value;
@@ -355,9 +357,13 @@ test("shows Class Expedition tools to Teachers and Students with counts only", a
       );
     }
     return JSON.stringify(
-      walk(Object.fromEntries(Object.entries(localStorage)))
+      walk(
+        Object.fromEntries(
+          Object.entries(localStorage).filter(([key]) => key !== ignoredKey)
+        )
+      )
     );
-  });
+  }, CLERK_BOOTSTRAP_STORAGE_KEY);
   expect(browserState).not.toMatch(
     /studentName|username|answer|prompt|timestamp|route|rank|diagnos/i
   );

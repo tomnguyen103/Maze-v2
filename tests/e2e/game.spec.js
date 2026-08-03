@@ -25,6 +25,22 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+const CLERK_BOOTSTRAP_STORAGE_KEY = "__clerk_environment";
+
+/**
+ * @param {import("@playwright/test").Page} page
+ */
+async function readPracticeStorage(page) {
+  return page.evaluate((ignoredKey) =>
+    Object.fromEntries(
+      Object.keys(localStorage)
+        .filter((key) => key !== ignoredKey)
+        .sort()
+        .map((key) => [key, localStorage.getItem(key) ?? ""])
+    ), CLERK_BOOTSTRAP_STORAGE_KEY
+  );
+}
+
 const WINNING_SEED = "DAYLIGHT-0";
 const WINNING_PATH = "right,right,right,right,down,down,left,left,left,left,down,down,down,down,right,right,right,right,right,right,up,right,right,up,down,down,down,down,right,right,up,up,up,up,up".split(",");
 const DEFEAT_SEED = "DEFEAT-RECORD";
@@ -743,26 +759,12 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await intentionGroup
     .getByRole("radio", { name: /Review/ })
     .check();
-  const beforeRejectedReview = await page.evaluate(() =>
-    Object.fromEntries(
-      Object.keys(localStorage)
-        .sort()
-        .map((key) => [key, localStorage.getItem(key)])
-    )
-  );
+  const beforeRejectedReview = await readPracticeStorage(page);
   await page.getByRole("button", { name: /Bright Start/ }).click();
   await expect(page.locator("#practice-intention-status")).toHaveText(
     "Review keeps your current Quest Level and Learning Deck."
   );
-  expect(
-    await page.evaluate(() =>
-      Object.fromEntries(
-        Object.keys(localStorage)
-          .sort()
-          .map((key) => [key, localStorage.getItem(key)])
-      )
-    )
-  ).toEqual(beforeRejectedReview);
+  expect(await readPracticeStorage(page)).toEqual(beforeRejectedReview);
 
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
@@ -770,13 +772,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await explore.check();
   await chooseTrailScout(page);
   await expect(page.locator("#level-dialog")).not.toBeVisible();
-  const beforeRejectedChallenge = await page.evaluate(() =>
-    Object.fromEntries(
-      Object.keys(localStorage)
-        .sort()
-        .map((key) => [key, localStorage.getItem(key)])
-    )
-  );
+  const beforeRejectedChallenge = await readPracticeStorage(page);
 
   await page.getByRole("button", { name: "New Quest", exact: true }).click();
   await expect(intentionGroup).toBeVisible();
@@ -787,41 +783,19 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await expect(page.locator("#practice-intention-status")).toHaveText(
     "Choose a higher Quest Level for Challenge."
   );
-  expect(
-    await page.evaluate(() =>
-      Object.fromEntries(
-        Object.keys(localStorage)
-          .sort()
-          .map((key) => [key, localStorage.getItem(key)])
-      )
-    )
-  ).toEqual(beforeRejectedChallenge);
+  expect(await readPracticeStorage(page)).toEqual(beforeRejectedChallenge);
 
-  const beforeCancel = await page.evaluate(() =>
-    Object.fromEntries(
-      Object.keys(localStorage)
-        .sort()
-        .map((key) => [key, localStorage.getItem(key)])
-    )
-  );
+  const beforeCancel = await readPracticeStorage(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#level-dialog")).not.toBeVisible();
-  expect(
-    await page.evaluate(() =>
-      Object.fromEntries(
-        Object.keys(localStorage)
-          .sort()
-          .map((key) => [key, localStorage.getItem(key)])
-      )
-    )
-  ).toEqual(beforeCancel);
+  expect(await readPracticeStorage(page)).toEqual(beforeCancel);
   await page.getByRole("button", { name: "New Quest", exact: true }).click();
   await expect(intentionGroup).toBeVisible();
   await expect(
     intentionGroup.getByRole("radio", { name: /Explore/ })
   ).toBeChecked();
-  const storageEntries = await page.evaluate(() =>
-    Object.entries(localStorage).map(([key, value]) => ({ key, value }))
+  const storageEntries = Object.entries(await readPracticeStorage(page)).map(
+    ([key, value]) => ({ key, value })
   );
   expect(storageEntries.some(({ key }) => /intention/i.test(key))).toBe(false);
   expect(
