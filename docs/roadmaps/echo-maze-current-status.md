@@ -1,6 +1,6 @@
 # Echo Maze: Current Status
 
-Status snapshot: 2026-08-02
+Status snapshot: 2026-08-03
 
 ## Verdict
 
@@ -11,14 +11,16 @@ The core product is coherent and substantially implemented. The next work is not
 ## Repository state
 
 - `origin/main` includes merged Quest II PR #197 at `618aba1` (including PR
-  #192 at `2680874`, PR #152 at `a37dffa`, and PR #158 at `69f4cd6`).
+  #192 at `2680874`, PR #152 at `a37dffa`, and PR #158 at `69f4cd6`) and
+  closeout PR #199 at `ce868a0`.
 - No product PRs remain open. PR #197's local gate, browser matrix, local
-  review, and final CodeRabbit review are complete; CodeRabbit reported no
-  actionable comments.
+  review, and final CodeRabbit review are complete; PR #199's closeout gate,
+  browser matrix, and local review are complete, and its CodeRabbit review was
+  waived under the documented >30-minute rate-limit rule.
 - PR #158 is merged. Its >30-minute CodeRabbit rate-limit waiver, green local
   gate, clean local review, and merge are recorded on the PR.
-- The last verified deployed-demo snapshot reports `618aba1` after the Quest II
-  deployment; it predates this test-only closeout fix.
+- The latest read-only deployed-demo snapshot reports `194b3a3`; it predates
+  closeout PR #199 and is not evidence that the merged fix is deployed there.
 - GitHub Actions are disabled. Local validation is the CI gate.
 - CodeGraph index is present and current: 405 files, 4,002 nodes, 8,559 edges.
 - Latest repository-controlled closeout validation: `npm run check` passed with
@@ -58,15 +60,16 @@ The [programme closeout](../playtests/echo-maze-programme-closeout.md) is the pr
 
 ## Live deployment snapshot
 
-Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-02 after the
-`origin/main` Quest II deployment and before this test-only closeout fix:
+Checked against `https://maze-v2-zeta.vercel.app` on 2026-08-03 after closeout
+PR #199 merged to `origin/main`. The deployed demo still serves pre-closeout
+version `194b3a3`:
 
 | Surface | Result | Meaning |
 | --- | --- | --- |
 | `/` | 200 | Landing surface loads. |
 | `/play` | 200 | Game surface loads. |
-| `/api/health` | 200 | Deployment responded and reported version `618aba1` at the time of this snapshot. |
-| `/api/ready` | 503 | Database and Clerk report `ok`; Stripe is `unconfigured`, so production readiness is unavailable. |
+| `/api/health` | 200 | Deployment responded and reported version `194b3a3`. |
+| `/api/ready` | 503 | Readiness is unavailable; production readiness remains unverified. |
 | `/api/access/config` | 200 | Enforcement disabled; guest demo enforcement enabled. |
 | `/api/daily/leaderboard`, `/api/daily/constellation` | 500 | Verified Daily read services remain unavailable; `/api/daily/scores` correctly rejects a GET with 405 because it is a write path. |
 | `/sw.js` | 200 | The deployed worker responds from the current demo surface. |
