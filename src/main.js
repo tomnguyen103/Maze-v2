@@ -225,6 +225,10 @@ const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   workshopButton: requiredElement("workshop-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
+  trailCompassDiscover: requiredElement(
+    "trail-compass-discover",
+    HTMLButtonElement
+  ),
   best: requiredElement("best-run", HTMLElement),
   bell: requiredElement("bell-action", HTMLButtonElement),
   canvasFrame: requiredElement("canvas-frame", HTMLElement),
@@ -1078,6 +1082,13 @@ elements.recordsButton.addEventListener("click", () => {
   }
   renderRunRecords();
   elements.recordsDialog.showModal();
+});
+// A keyboard/screen-reader user who has never opened Settings has no way to
+// learn Trail Compass exists, since the region it controls stays
+// `display: none` until enabled. This reuses the Settings button's own
+// click handling rather than duplicating it.
+elements.trailCompassDiscover.addEventListener("click", () => {
+  elements.settingsButton.click();
 });
 elements.settingsButton.addEventListener("click", async () => {
   if (accessSettingsOpening) {

@@ -128,6 +128,30 @@ describe("A11Y-02 — a held key is one action", () => {
   });
 });
 
+describe("A11Y-01 — Trail Compass is discoverable before Settings is opened", () => {
+  it("gives keyboard and screen-reader players a skip-link to Settings", () => {
+    // The Trail Compass region is `display: none` until enabled, so nothing
+    // in the accessible tree mentioned it existed unless a player already
+    // knew to open Settings. A second skip-link, reachable before anything
+    // else on the page, names it and points at the fix.
+    const html = source("index.html");
+    const skipLinks = html.slice(html.indexOf('<a class="skip-link"'));
+    expect(skipLinks.slice(0, 250)).toContain(
+      '<button class="skip-link" id="trail-compass-discover" type="button">'
+    );
+    expect(skipLinks.slice(0, 250)).toContain("Trail Compass");
+    expect(skipLinks.slice(0, 250)).toContain("Settings");
+  });
+
+  it("wires the skip-link to the same flow as the Settings button", () => {
+    const main = source("src/main.js");
+    const wiring = main.slice(
+      main.indexOf("elements.trailCompassDiscover.addEventListener")
+    );
+    expect(wiring.slice(0, 200)).toContain("elements.settingsButton.click()");
+  });
+});
+
 describe("FE-UI-1 — the primary call to action stays on screen", () => {
   it("wraps the command bar rather than overflowing it", () => {
     const css = source("src/daylight.css");
