@@ -687,7 +687,7 @@ html[data-access-compass="trail"] .trail-compass {
   max-width: 38rem;
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 0.88rem;
+  font-size: var(--text-body);
 }
 
 .trail-compass__heading + p {
@@ -762,7 +762,7 @@ kbd {
 .objective-copy {
   margin: var(--space-2) 0 0;
   color: var(--color-ink);
-  font-size: 0.88rem;
+  font-size: var(--text-body);
 }
 
 .echo-lens {
@@ -1033,7 +1033,7 @@ kbd {
 .field-note {
   margin: var(--space-5) 0 0;
   color: var(--color-ink-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-body);
 }
 
 .record-strip {
@@ -1130,16 +1130,7 @@ kbd {
 .lifetime-dialog > p,
 .result-dialog > p {
   color: var(--color-ink-muted);
-  font-size: 0.88rem;
-}
-
-.player-dialog .dialog-intro,
-.journal-dialog .dialog-intro,
-.practice-dialog .dialog-intro,
-.lifetime-dialog .dialog-intro,
-.quest-conflict-dialog .dialog-intro,
-.scoreboard-dialog .dialog-intro {
-  font-size: 1rem;
+  font-size: var(--text-body);
 }
 
 .quest-conflict-dialog {
@@ -1856,7 +1847,7 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .access-settings-preset p {
   color: var(--color-ink-muted);
-  font-size: 0.88rem;
+  font-size: var(--text-body);
 }
 
 .access-setting input {
@@ -1879,14 +1870,14 @@ body[data-run-mode="first-light"] .play-workbench {
 .access-setting small {
   margin-top: var(--space-1);
   color: var(--color-ink-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-body);
 }
 
 .access-settings-status {
   min-height: 1.3em;
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-body);
 }
 
 .access-settings-actions {
@@ -2377,7 +2368,7 @@ body[data-run-mode="first-light"] .play-workbench {
   max-width: 62ch;
   margin: var(--space-4) 0 0;
   color: var(--color-ink);
-  font-size: 1rem;
+  font-size: var(--text-body);
   line-height: 1.55;
 }
 
@@ -2413,7 +2404,7 @@ body[data-run-mode="first-light"] .play-workbench {
 .first-light-route span {
   min-width: 0;
   color: var(--color-ink-muted);
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   overflow-wrap: anywhere;
 }
 
@@ -2423,7 +2414,7 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink);
   border: 2px solid var(--color-line);
   background: var(--color-signal-glow);
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   line-height: 1.5;
 }
 
@@ -2554,7 +2545,7 @@ body[data-run-mode="first-light"] .play-workbench {
   max-width: 68ch;
   margin: var(--space-1) 0 0;
   color: var(--color-ink-muted);
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   line-height: 1.5;
 }
 
@@ -2693,7 +2684,7 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .level-dialog__note {
   margin: var(--space-5) 0 0;
-  font-size: 0.78rem;
+  font-size: var(--text-body);
   text-align: center;
 }
 
@@ -2779,7 +2770,7 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink);
   border-left: 0.35rem solid var(--color-signal-deep);
   background: var(--color-signal-glow);
-  font-size: 0.9rem;
+  font-size: var(--text-body);
 }
 
 .challenge-choices {

@@ -213,3 +213,69 @@ describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
     expect(markers.slice(0, 1200)).not.toContain("--color-gate");
   });
 });
+
+describe("TYPE — body copy has a real 16px floor", () => {
+  it("defines a named type scale instead of one compact token", () => {
+    const tokens = source("tokens.css");
+    expect(tokens).toContain("--text-body: 1rem;");
+    expect(tokens).toContain("--text-label: 0.875rem;");
+  });
+
+  it("raises the shared dialog intro, guidance, and status text to the floor", () => {
+    // These were 0.72rem-0.9rem: 133 sub-16px dialog text nodes was the
+    // audit's evidence. This is the prose a player reads to understand or
+    // decide something, not a badge or a mono stat readout — those keep
+    // their own smaller, intentional sizes.
+    //
+    // Normalized to LF: most tracked files in this repo (including this
+    // one) check out CRLF, but that is a checkout detail, not something
+    // these anchors should depend on.
+    const daylight = source("src/daylight.css").replace(/\r\n/g, "\n");
+    const bodyCopySelectors = [
+      ".dialog-intro,",
+      ".trail-compass p {",
+      ".objective-copy {",
+      ".access-settings-status {",
+      ".first-light-route span {",
+      ".first-light-boundary {",
+      ".learning-deck-picker > p {",
+      ".level-dialog__note {",
+      ".field-note {",
+      // Not just ".question-hint {" — that substring also opens inside
+      // `:root[data-access-type="reader"] .question-hint {`, an unrelated
+      // reader-mode override earlier in the file.
+      ".question-hint {\n  width",
+      // Not just ".access-settings-preset p {" — declared twice, once
+      // with no font-size (margin: 0 only) before this one.
+      ".access-settings-preset p {\n  color"
+    ];
+    for (const selector of bodyCopySelectors) {
+      const rule = daylight.slice(daylight.indexOf(selector));
+      const closingBrace = rule.indexOf("}");
+      expect(rule.slice(0, closingBrace)).toContain("var(--text-body)");
+    }
+
+    // `.access-setting small` is declared twice — once in a selector group
+    // with no font-size, once on its own with the description copy's size —
+    // so this one needs its own, more specific anchor.
+    const settingSmall = daylight.slice(
+      daylight.indexOf(".access-setting small {\n  margin-top")
+    );
+    expect(settingSmall.slice(0, settingSmall.indexOf("}"))).toContain(
+      "var(--text-body)"
+    );
+
+    const classroom = source("src/classroom/classroom.css").replace(
+      /\r\n/g,
+      "\n"
+    );
+    // Not just ".classroom-form__status {" — that substring also opens
+    // inside two earlier `[data-state="..."]` variant selectors.
+    const classroomRule = classroom.slice(
+      classroom.indexOf(".classroom-form__status {\n  min-height")
+    );
+    expect(classroomRule.slice(0, classroomRule.indexOf("}"))).toContain(
+      "var(--text-body)"
+    );
+  });
+});
