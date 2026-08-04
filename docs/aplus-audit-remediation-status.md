@@ -19,6 +19,9 @@ be misleading on Performance and Front-End.
 | 4b | Security | [#204](https://github.com/tomnguyen103/Maze-v2/pull/204) | SG-01, SG-02 (partial), SG-06, SG-07, SG-13, SG-17, TM-01v, TM-11, TM-12, TM-13 |
 | 5 | Back-end data layer | [#205](https://github.com/tomnguyen103/Maze-v2/pull/205) | DB-01, DB-02, DB-03 |
 | 6 | Maintainability | [#206](https://github.com/tomnguyen103/Maze-v2/pull/206) | Q-64 |
+| 7 | Performance | [#207](https://github.com/tomnguyen103/Maze-v2/pull/207) | WP-01, P-01, P-10, P-04, `vercel.json` functions block |
+| 8 | Front-end a11y | [#208](https://github.com/tomnguyen103/Maze-v2/pull/208) | A11Y-06/07/08, A11Y-F, A11Y-02, FE-UI-1 |
+| 10 (part) | dataviz ramp | [#209](https://github.com/tomnguyen103/Maze-v2/pull/209) | DASH-20/22/35 |
 
 Gate on `main`: `npm run check` green — lint, typecheck (two projects), 184 test
 files / 1,598 tests, build, 15/15 bundle budgets. `npm run security:secrets`
@@ -28,22 +31,49 @@ Every Group A finding on Correctness, Security, Testing, Maintainability and
 Back-End is closed. Both blockers on the Security grade — `SG-13` and the
 gitleaks asterisk — are gone.
 
-## Not started
+## Open, and why
 
-| Batch | Theme | Findings |
+Everything still open is visual work that cannot be finished honestly from a
+source diff. Each needs the design stack, desktop and mobile screenshots, and
+the Hallmark slop gate; two of them need a decision from the operator first.
+
+### Blocked on the `design.md` lock
+
+**`SHELL-07`** — "Add dark tokens, `prefers-color-scheme`, a three-state
+control, and a blocking head script."
+
+`design.md:18` states the theme as **"Paper: warm daylight"** and lists no
+dark variant, and `tokens.css:3` hard-locks `color-scheme: light`. Adding a
+dark theme is an amendment to the locked system's theme definition, not a
+conformance fix, so it is a stop-and-ask: **`design.md` is LOCKED, decision
+KEEP.** Nothing here can proceed on it without that decision being revisited.
+
+### Needs the design stack and browser verification
+
+| ID | Eff | Why it is not a source-diff change |
 |---|---|---|
-| 7 | Performance | `WP-01`/`WP-02`, `P-01`, `P-10`, `P-04` |
-| 8 | Front-end correctness and a11y | `FE-UI-1`, `FE-UI-2`, `A11Y-F`, `A11Y-06/07/08`, `A11Y-01/02`, `TYPE`, `HM-01` |
-| 9 | Front-end architecture | `SHELL-11`, `SHELL-04/15`, `SHELL-07` |
-| 10 | Dashboard governance | `DASH-01`, `DASH-20/22/35` |
+| `SHELL-11` | L | Extract one layout owner; the shell is re-implemented four times. Collapses 7 of the 18 app-shell violations, so it has to be verified as a shell, not as a diff |
+| `SHELL-04/15` | L | Convert admin panels to routes and move `/class` selection into the URL — six panels and five datasets currently mount on every load |
+| `DASH-01` | L | Bring "Operations pulse" under `dashboard-creation`: signed brief, data contract, metrics dictionary, layout matrix, gates G1–G10. **G2 and G10 need a live database** |
+| `TYPE` | M | A real type scale with a body-copy floor, against 187 `font-size` declarations across 57 values and 133 sub-16px dialog text nodes |
+| `HM-01` | M | Split `level-dialog` into one decision per view — three decisions plus a fourth action in one modal |
+| `A11Y-01` | S | Make Trail Compass discoverable; it is the documented keyboard and screen-reader path and it is off by default |
+| `FE-UI-2` | S | Scope `.primary-button` geometry to the class; the admin auth gate renders a 141×21 px control and its copy says "sign in" with nothing to click |
+| `WP-02` | — | Server-render or inline the LCP text. `/` and `/play` share one `index.html`, so this needs a separate HTML entry or landing copy flashes on the game route |
 
-`TOKENS` and `HM-02` were in batch 8's original list and landed in batch 1, so
-batch 8 is smaller than the work order describes.
+**Before the first Stitch call, create the `design.md` Stitch pairing
+frontmatter** — audit §5 records the current pairing state as `neither`.
 
-Batches 8 through 10 are UI work and run the design stack. **Before the first
-Stitch call, create the `design.md` Stitch pairing frontmatter** — audit §5
-records the current pairing state as `neither`. `design.md` itself stays
-LOCKED, decision KEEP.
+`TOKENS` and `HM-02` were in batch 8's original list and landed in batch 1.
+
+### A note on how these were handled
+
+Batches 8 and 10 deliberately shipped only the findings whose correctness is
+*computable* — contrast ratios derived from the tokens through oklch, focus
+rules, key-repeat handling, a monotonic ramp. Every one of those has a test
+that recomputes it. The findings above were left rather than claimed on a
+source diff, because a UI change nobody looked at is not a UI change that
+works.
 
 ## Closed differently from the audit's wording
 
