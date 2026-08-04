@@ -17,7 +17,7 @@ export class LifetimeOwnershipError extends Error {
  *   config: { priceId: string },
  *   createId?: () => string,
  *   provider: {
- *     constructWebhookEvent: (body: Buffer, signature: string) => unknown,
+ *     constructWebhookEvent: (body: Buffer, signature: string) => Promise<unknown>,
  *     createCheckout: (purchase: { purchaseId: string, userId: string }) => Promise<{ checkoutUrl: string, sessionId: string }>,
  *     retrieveCheckout: (sessionId: string) => Promise<Record<string, unknown>>,
  *     retrieveCheckoutLink: (sessionId: string) => Promise<string>,
@@ -182,14 +182,14 @@ export function createLifetimeService({
      * @param {Buffer} rawBody
      * @param {string} signature
      */
-    verifyWebhook(rawBody, signature) {
+    async verifyWebhook(rawBody, signature) {
       return provider.constructWebhookEvent(rawBody, signature);
     },
 
     /** @param {Buffer} rawBody @param {string} signature */
     async processWebhook(rawBody, signature) {
       return this.processVerifiedWebhook(
-        provider.constructWebhookEvent(rawBody, signature)
+        await provider.constructWebhookEvent(rawBody, signature)
       );
     },
 

@@ -70,7 +70,7 @@ function billing(stripe, store) {
     appOrigin: APP_ORIGIN,
     basePriceId: BASE_PRICE,
     extensionPriceId: EXTENSION_PRICE,
-    stripe,
+    getStripe: async () => stripe,
     store,
     createId: () => "9d2f8a34-0000-4000-8000-000000000001"
   });

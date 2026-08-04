@@ -22,7 +22,7 @@ export class ExpeditionBillingError extends Error {
  *   appOrigin: string,
  *   basePriceId: string,
  *   extensionPriceId: string,
- *   stripe: any,
+ *   getStripe: () => Promise<any>,
  *   store: {
  *     reserveLicense: (
  *       sponsorUserId: string,
@@ -55,7 +55,7 @@ export function createClassExpeditionBilling({
   appOrigin,
   basePriceId,
   extensionPriceId,
-  stripe,
+  getStripe,
   store,
   createId = randomUUID
 }) {
@@ -74,7 +74,7 @@ export function createClassExpeditionBilling({
     if (purchaseByPaymentIntent.has(paymentIntentId)) {
       return purchaseByPaymentIntent.get(paymentIntentId) ?? null;
     }
-    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const intent = await (await getStripe()).paymentIntents.retrieve(paymentIntentId);
     const metadata = objectMetadata(intent);
     const purchaseId =
       metadata?.purchase_kind === EXPEDITION_PURCHASE_KIND
@@ -123,7 +123,7 @@ export function createClassExpeditionBilling({
       // recorded at provider timestamp 0 so a genuine later Stripe event for
       // this purchase still supersedes it.
       try {
-        const session = await stripe.checkout.sessions.create(
+        const session = await (await getStripe()).checkout.sessions.create(
           {
             allow_promotion_codes: false,
             cancel_url: `${appOrigin}/class?expedition-checkout=canceled`,
@@ -204,7 +204,7 @@ export function createClassExpeditionBilling({
         return { outcome: "ignored" };
       }
       if (normalized.kind === "checkout-paid" && "sessionId" in normalized) {
-        const session = await stripe.checkout.sessions.retrieve(
+        const session = await (await getStripe()).checkout.sessions.retrieve(
           normalized.sessionId,
           { expand: ["line_items.data.price", "payment_intent"] }
         );

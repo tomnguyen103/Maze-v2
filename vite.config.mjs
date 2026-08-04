@@ -31,6 +31,22 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       sourcemap: true,
+      rolldownOptions: {
+        output: {
+          // Twelve chunks were byte-identical duplicates of six modules,
+          // ~19.4 KB gzip of the same code downloaded more than once. These
+          // are imported from several dynamic entry points, so the bundler
+          // inlined a copy into each rather than emitting one shared chunk.
+          advancedChunks: {
+            groups: [
+              {
+                name: "quest-rules",
+                test: /src[/\\]game[/\\](run-ruleset|quest-constants|quest-progress|quest-content|compare-keys|unique-id)[.]js$/
+              }
+            ]
+          }
+        }
+      },
       modulePreload: {
         // These are already static ESM dependencies of the app shell or
         // Workshop route; normal imports keep them correct without repeating

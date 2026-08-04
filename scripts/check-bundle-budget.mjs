@@ -7,9 +7,16 @@ const assetsDirectory = new URL("../dist/assets/", import.meta.url);
 const files = await readdir(assetsDirectory);
 const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
-  // P2.4 keeps the seed-only postcard parser out of normal startup, but the
-  // entry orchestration still needs a small amount of main-chunk headroom.
-  { label: "game JavaScript", prefix: "main-", suffix: ".js", maxKb: 31 },
+  // Every chunk an Explorer downloads to start a Run, summed. Measuring
+  // `main-` alone let the two heaviest pieces — the engine and the renderer —
+  // grow outside the ceiling this budget exists to hold, so the gate reported
+  // 26% less than the real weight and passed at 99% headroom.
+  {
+    label: "game JavaScript",
+    prefixes: ["main-", "game-session-", "canvas-renderer-"],
+    suffix: ".js",
+    maxKb: 42
+  },
   {
     label: "Campfire Resume JavaScript",
     prefix: "active-run-recovery-",
@@ -90,20 +97,31 @@ const budgets = [
 
 let failed = false;
 for (const budget of budgets) {
-  const file = files.find(
-    (candidate) =>
-      candidate.startsWith(budget.prefix) &&
-      candidate.endsWith(budget.suffix)
+  // A budget may name several prefixes: what matters to a player is the total
+  // they wait for, not how the bundler happened to split it.
+  const prefixes = budget.prefixes ?? [budget.prefix];
+  const matched = prefixes.map((prefix) =>
+    files.find(
+      (candidate) =>
+        candidate.startsWith(prefix) && candidate.endsWith(budget.suffix)
+    )
   );
-  if (!file) {
+  if (matched.some((file) => !file)) {
     if (budget.optional) {
-      process.stdout.write(`SKIP ${budget.label}: not built\n`);
+      process.stdout.write(`SKIP ${budget.label}: not built
+`);
       continue;
     }
-    throw new Error(`Could not find ${budget.label} in dist/assets.`);
+    const missing = prefixes.filter((_, at) => !matched[at]);
+    throw new Error(
+      `Could not find ${budget.label} in dist/assets (${missing.join(", ")}).`
+    );
   }
-  const bytes = await readFile(new URL(file, assetsDirectory));
-  const gzipKb = gzipSync(bytes).byteLength / 1024;
+  let gzipKb = 0;
+  for (const file of matched) {
+    const bytes = await readFile(new URL(String(file), assetsDirectory));
+    gzipKb += gzipSync(bytes).byteLength / 1024;
+  }
   const result = `${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
   if (gzipKb > budget.maxKb) {
     failed = true;
