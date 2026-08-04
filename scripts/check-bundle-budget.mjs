@@ -23,7 +23,12 @@ const budgets = [
     suffix: ".js",
     maxKb: 5
   },
-  { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 12 },
+  // Raised from 12 KB deliberately, not to stop it complaining. The A+ audit
+  // remediation added a `:focus` floor so script-moved focus is visible, a
+  // text-safe contrast pair, and a three-step ordinal ramp — all of them
+  // things the stylesheet has to carry. 12.02 KB against a 12 KB ceiling was
+  // a real signal; this is the new honest number plus a little room.
+  { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 13 },
   {
     label: "Trail Compass JavaScript",
     prefix: "trail-compass-",
