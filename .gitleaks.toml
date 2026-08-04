@@ -1,0 +1,31 @@
+# gitleaks configuration for Echo Maze.
+#
+# Run it with `npm run security:secrets`. The A+ audit graded Security with a
+# mandatory asterisk purely because gitleaks had never executed here, so the
+# point of this file is that the scan runs clean for a real reason and stays
+# that way — not that findings are quiet.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  # `db/migrations/0017_verified_classroom_domains.sql` carries the public
+  # email-provider denylist as ~3,000 single-quoted domains, twelve to a line.
+  # The generic-api-key rule reads the domain *after* one containing "api" as
+  # that key's value:
+  #
+  #     'aphlog.com', 'api-v1.cc.cd', 'api.qwen3-30b-a3b.xyz', 'api89891.eu.cc',
+  #                    ^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^
+  #                    "keyword"      read as the secret
+  #
+  # Every entry is a public domain name published so that a free mailbox
+  # cannot claim a Verified Classroom Domain. There is nothing to leak.
+  # Scoped to this one file and this one rule, and to values shaped like a
+  # domain, so an actual key committed to the same file would still be caught.
+  [rules.allowlist]
+  description = "Public email-provider denylist, not credentials"
+  paths = ['''db/migrations/0017_verified_classroom_domains\.sql''']
+  regexes = ['''^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$''']
+  regexTarget = "match"
