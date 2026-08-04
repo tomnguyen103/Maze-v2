@@ -4,5 +4,6 @@
     "types": [],
     "lib": ["ES2022", "WebWorker"]
   },
-  "include": ["public/**/*.js"]
+  "include": ["public/sw.js"],
+  "//": "The worker project, not every script under public/. `theme-boot.js` is a browser script and needs DOM, so it belongs to the main project."
 }

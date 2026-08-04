@@ -15,6 +15,12 @@ Playful storybook expedition with tactile field-guide controls.
 
 ## Theme
 
+Two surfaces, one identity. Warm daylight is the default and the one the
+genre is written around; night is the same expedition after dark, not a
+second design.
+
+**Daylight**
+
 - Paper: warm daylight
 - Ink: deep navy
 - Accent: electric pear
@@ -22,7 +28,25 @@ Playful storybook expedition with tactile field-guide controls.
 - Danger: coral red
 - Success: leaf green
 
-All colors come from `tokens.css`. Raw color values do not belong in components.
+**Night**
+
+- Paper: deep navy — the daylight Ink, become the surface
+- Ink: warm daylight — the daylight Paper, become the text
+- Accent: electric pear, unchanged. It is the signature and it does not move
+- Exploration, Danger, Success: the same hues, lifted in lightness so each
+  clears AA against navy rather than against paper
+
+The inversion is the point: an Explorer who plays at night is in the same
+Labyrinth, lit differently. Nothing changes role, only which side of the
+paper/ink pair carries the surface.
+
+**Which one a player gets.** System by default, honouring
+`prefers-color-scheme`, with an explicit override the player can set and that
+persists. The override is applied before first paint — a flash of the wrong
+theme is a defect, not a nicety.
+
+All colors come from `tokens.css`. Raw color values do not belong in
+components, and neither does a hard-coded `color-scheme`.
 
 ## Typography
 

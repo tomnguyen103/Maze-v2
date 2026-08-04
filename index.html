@@ -17,6 +17,18 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d9e500'/%3E%3Cpath d='M16 14h32v8H24v8h16v20H16v-8h16v-4H16z' fill='%230d1b2a'/%3E%3C/svg%3E"
     />
     <title>Echo Maze</title>
+    <!--
+      Blocking on purpose: `design.md` requires the chosen surface to be
+      applied before first paint, and a deferred script would render the
+      wrong theme and correct it — the flash that requirement exists to
+      prevent.
+
+      A separate file rather than an inline block, because `script-src` is
+      `'self'` with neither `'unsafe-inline'` nor a nonce
+      (`server/security-headers.js`), and that is a decision worth more than
+      the two hundred bytes an inline version would save.
+    -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="game-root"></div>
