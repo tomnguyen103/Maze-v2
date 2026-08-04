@@ -2,7 +2,6 @@
 // must register before pg or any http client loads.
 import "./telemetry-bootstrap.js";
 import { clerkMiddleware, getAuth } from "@clerk/express";
-import Stripe from "stripe";
 import {
   CLERK_WEBHOOK_PATH,
   createClerkWebhookHandler
@@ -10,6 +9,7 @@ import {
 import { dispatch } from "./dispatch.js";
 import { offlineReplayConfigFor } from "./run-replay.js";
 import { setRetryAfter } from "./http-retry.js";
+import { createLazyStripe } from "./stripe-client.js";
 import { createAdminHandler, isAdminPath } from "./admin-route.js";
 import { createAdminStore } from "./admin-store.js";
 import {
@@ -532,18 +532,21 @@ export function createPlayerApi(env = process.env) {
     getUserId,
     recordAudit
   });
-  const stripeClient = lifetimeConfig
-    ? new Stripe(lifetimeConfig.secretKey)
+  // Lazy on purpose: eleven of the twelve Vercel functions import this
+  // module and only two routes ever reach Stripe, so a static import made
+  // every cold start pay a measured 90.20 ms for an SDK it would not use.
+  const getStripe = lifetimeConfig
+    ? createLazyStripe(lifetimeConfig.secretKey)
     : null;
   const classExpeditionBillingStore =
     createClassExpeditionBillingStore(pool);
   const classExpeditionBilling =
-    lifetimeConfig?.expedition && stripeClient
+    lifetimeConfig?.expedition && getStripe
       ? createClassExpeditionBilling({
           appOrigin: lifetimeConfig.appOrigin,
           basePriceId: lifetimeConfig.expedition.basePriceId,
           extensionPriceId: lifetimeConfig.expedition.extensionPriceId,
-          stripe: stripeClient,
+          getStripe,
           store: classExpeditionBillingStore
         })
       : null;
@@ -567,11 +570,11 @@ export function createPlayerApi(env = process.env) {
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
-  const lifetimeProvider = lifetimeConfig && stripeClient
+  const lifetimeProvider = lifetimeConfig && getStripe
     ? createStripeLifetimeProvider({
         appOrigin: lifetimeConfig.appOrigin,
         priceId: lifetimeConfig.priceId,
-        stripe: stripeClient,
+        getStripe,
         webhookSecret: lifetimeConfig.webhookSecret
       })
     : null;

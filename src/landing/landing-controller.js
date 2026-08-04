@@ -76,17 +76,33 @@ export function renderLanding(root) {
     "landing-primary-action",
     HTMLAnchorElement
   );
+  // Set once Clerk has been asked to initialize, so the first sign-in click
+  // loads it and later ones do not wait on the check again.
+  let clerkReady = false;
+  let clerkAvailable = true;
   const clerkBrowser = createClerkBrowser({ onChange: syncAccount });
   const playerClient = createPlayerApiClient({
     getToken: clerkBrowser.getToken
   });
 
-  headerSignIn.disabled = true;
-  heroSignIn.disabled = true;
-  headerSignIn.setAttribute("aria-busy", "true");
-  heroSignIn.setAttribute("aria-busy", "true");
   headerSignIn.addEventListener("click", openAccount);
   heroSignIn.addEventListener("click", openAccount);
+
+  // Clerk is 559 kB — 74.6% of this page, 94.9% of it unused by a visitor who
+  // never signs in — and loading it eagerly was the whole of the measured LCP
+  // failure here. A signed-out visitor now gets a working landing page
+  // without it, and it arrives on the first click instead.
+  //
+  // `__client_uat` is Clerk's own signed-in hint: a Unix timestamp for a
+  // visitor with a session, `0` for one without. Reading it costs nothing and
+  // keeps a returning Explorer's name from flickering in.
+  if (hasClerkSession()) {
+    headerSignIn.disabled = true;
+    heroSignIn.disabled = true;
+    headerSignIn.setAttribute("aria-busy", "true");
+    heroSignIn.setAttribute("aria-busy", "true");
+    void syncAccount();
+  }
   // Quest validation loads lazily so Deck identity stays out of the landing
   // bundle. If the chunk never arrives the call to action stays "Enter the
   // Maze", which still reaches the game route and resumes the stored Quest.
@@ -97,9 +113,28 @@ export function renderLanding(root) {
       }
     })
     .catch(() => {});
-  void syncAccount();
+
+  /**
+   * Whether Clerk believes this browser has a session. The cookie is set by
+   * Clerk itself and is readable without the SDK; a missing or `0` value
+   * means signed out, which is the case worth not paying 559 kB for.
+   */
+  function hasClerkSession() {
+    return /(?:^|;\s*)__client_uat=(?!0(?:;|$))[^;]+/.test(
+      globalThis.document?.cookie ?? ""
+    );
+  }
 
   async function openAccount() {
+    // The first click is where a visitor who wants an account pays for one.
+    if (!clerkReady) {
+      headerSignIn.setAttribute("aria-busy", "true");
+      heroSignIn.setAttribute("aria-busy", "true");
+      await syncAccount();
+      headerSignIn.removeAttribute("aria-busy");
+      heroSignIn.removeAttribute("aria-busy");
+      if (!clerkAvailable) return;
+    }
     if (clerkBrowser.user) {
       await clerkBrowser.openUserProfile();
       return;
@@ -114,7 +149,9 @@ export function renderLanding(root) {
   }
 
   async function syncAccount() {
+    clerkReady = true;
     const available = await clerkBrowser.initialize();
+    clerkAvailable = available;
     const user = clerkBrowser.user;
     headerSignIn.removeAttribute("aria-busy");
     heroSignIn.removeAttribute("aria-busy");

@@ -33,7 +33,7 @@ class LifetimeInputError extends Error {
  *     confirmCheckout: (userId: string, sessionId: string) => Promise<Record<string, unknown>>,
  *     createCheckout: (userId: string) => Promise<Record<string, unknown>>,
  *     processWebhook: (rawBody: Buffer, signature: string) => Promise<Record<string, unknown>>,
- *     verifyWebhook?: (rawBody: Buffer, signature: string) => unknown,
+ *     verifyWebhook?: (rawBody: Buffer, signature: string) => Promise<unknown>,
  *     processVerifiedWebhook?: (verified: unknown) => Promise<Record<string, unknown>>
  *   },
  *   recordAudit?: import("./audit.js").RecordAudit,
@@ -178,7 +178,7 @@ export function createLifetimeHandler({
       return service.processWebhook(rawBody, signature);
     }
     const verified = /** @type {Record<string, unknown>} */ (
-      service.verifyWebhook(rawBody, signature)
+      await service.verifyWebhook(rawBody, signature)
     );
     const eventId = typeof verified.id === "string" ? verified.id : "";
     const eventType = typeof verified.type === "string" ? verified.type : "";

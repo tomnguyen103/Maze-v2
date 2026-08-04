@@ -36,12 +36,12 @@ describe("Stripe lifetime adapter", () => {
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
       priceId: "price_echo_test",
-      stripe: {
+      getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
         paymentIntents: { retrieve: vi.fn() },
         refunds: { create: createRefund },
         webhooks: { constructEvent: vi.fn() }
-      },
+      }),
       webhookSecret: "whsec_test"
     });
 
@@ -68,11 +68,11 @@ describe("Stripe lifetime adapter", () => {
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
       priceId: "price_echo_test",
-      stripe: {
+      getStripe: async () => ({
         checkout: { sessions: { create, retrieve: vi.fn() } },
         paymentIntents: { retrieve: vi.fn() },
         webhooks: { constructEvent: vi.fn() }
-      },
+      }),
       webhookSecret: "whsec_test"
     });
 
@@ -130,11 +130,11 @@ describe("Stripe lifetime adapter", () => {
     const provider = createStripeLifetimeProvider({
       appOrigin: "http://localhost:3000",
       priceId: "price_echo_test",
-      stripe: {
+      getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve } },
         paymentIntents: { retrieve: retrievePaymentIntent },
         webhooks: { constructEvent: vi.fn() }
-      },
+      }),
       webhookSecret: "whsec_test"
     });
 
@@ -171,7 +171,7 @@ describe("Stripe lifetime adapter", () => {
     const provider = createStripeLifetimeProvider({
       appOrigin: "http://localhost:3000",
       priceId: "price_echo_test",
-      stripe: {
+      getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
         paymentIntents: {
           retrieve: vi.fn().mockResolvedValue({
@@ -191,7 +191,7 @@ describe("Stripe lifetime adapter", () => {
           })
         },
         webhooks: { constructEvent: vi.fn() }
-      },
+      }),
       webhookSecret: "whsec_test"
     });
 
@@ -202,23 +202,25 @@ describe("Stripe lifetime adapter", () => {
     });
   });
 
-  it("passes the untouched body and signature to Stripe verification", () => {
+  it("passes the untouched body and signature to Stripe verification", async () => {
     const constructEvent = vi.fn().mockReturnValue({ id: "evt_verified" });
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
       priceId: "price_echo_test",
-      stripe: {
+      getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
         paymentIntents: { retrieve: vi.fn() },
         webhooks: { constructEvent }
-      },
+      }),
       webhookSecret: "whsec_test"
     });
     const rawBody = Buffer.from('{"id":"evt_verified"}');
 
-    expect(provider.constructWebhookEvent(rawBody, "t=1,v1=signed")).toEqual({
-      id: "evt_verified"
-    });
+    // Async now: the SDK is imported on first use rather than at module
+    // load, so verification has to await the client.
+    await expect(
+      provider.constructWebhookEvent(rawBody, "t=1,v1=signed")
+    ).resolves.toEqual({ id: "evt_verified" });
     expect(constructEvent).toHaveBeenCalledWith(
       rawBody,
       "t=1,v1=signed",

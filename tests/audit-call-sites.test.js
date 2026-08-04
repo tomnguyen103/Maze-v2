@@ -450,7 +450,10 @@ describe("audit call sites", () => {
         createCheckout: async () => ({}),
         confirmCheckout: async () => ({}),
         processWebhook: async () => ({}),
-        verifyWebhook: () => ({ id: "evt_1", type: "checkout.session.completed" }),
+        verifyWebhook: async () => ({
+          id: "evt_1",
+          type: "checkout.session.completed"
+        }),
         processVerifiedWebhook: async () => ({ outcome: "processed" })
       }
     });

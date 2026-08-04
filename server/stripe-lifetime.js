@@ -9,12 +9,12 @@ import {
  * @param {{
  *   appOrigin: string,
  *   priceId: string,
- *   stripe: any,
+ *   getStripe: () => Promise<any>,
  *   webhookSecret: string
  * }} configuration
  */
 export function createStripeLifetimeProvider(configuration) {
-  const { appOrigin, priceId, stripe, webhookSecret } = configuration;
+  const { appOrigin, priceId, getStripe, webhookSecret } = configuration;
   return {
     /**
      * Starts the provider refund. Entitlement is intentionally left alone:
@@ -23,7 +23,7 @@ export function createStripeLifetimeProvider(configuration) {
      * @param {{ paymentIntentId: string, purchaseId: string }} payment
      */
     async issueRefund(payment) {
-      const refund = await stripe.refunds.create(
+      const refund = await (await getStripe()).refunds.create(
         { payment_intent: payment.paymentIntentId },
         { idempotencyKey: `echo-maze-refund:${payment.purchaseId}` }
       );
@@ -41,7 +41,7 @@ export function createStripeLifetimeProvider(configuration) {
         clerk_user_id: purchase.userId,
         purchase_id: purchase.purchaseId
       };
-      const session = await stripe.checkout.sessions.create(
+      const session = await (await getStripe()).checkout.sessions.create(
         {
           allow_promotion_codes: false,
           cancel_url: `${appOrigin}/play?checkout=canceled`,
@@ -71,7 +71,7 @@ export function createStripeLifetimeProvider(configuration) {
 
     /** @param {string} sessionId */
     async retrieveCheckout(sessionId) {
-      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      const session = await (await getStripe()).checkout.sessions.retrieve(sessionId, {
         expand: ["line_items.data.price", "payment_intent"]
       });
       return normalizeStripeCheckoutSession(session);
@@ -79,7 +79,7 @@ export function createStripeLifetimeProvider(configuration) {
 
     /** @param {string} sessionId */
     async retrieveCheckoutLink(sessionId) {
-      const session = await stripe.checkout.sessions.retrieve(sessionId, {});
+      const session = await (await getStripe()).checkout.sessions.retrieve(sessionId, {});
       const checkoutUrl = String(session.url ?? "");
       if (
         session.status !== "open" ||
@@ -94,7 +94,7 @@ export function createStripeLifetimeProvider(configuration) {
 
     /** @param {string} paymentIntentId */
     async retrievePaymentReference(paymentIntentId) {
-      const paymentIntent = await stripe.paymentIntents.retrieve(
+      const paymentIntent = await (await getStripe()).paymentIntents.retrieve(
         paymentIntentId,
         { expand: ["latest_charge"] }
       );
@@ -133,9 +133,9 @@ export function createStripeLifetimeProvider(configuration) {
     },
 
     /** @param {Buffer} rawBody @param {string} signature */
-    constructWebhookEvent(rawBody, signature) {
+    async constructWebhookEvent(rawBody, signature) {
       try {
-        return stripe.webhooks.constructEvent(
+        return (await getStripe()).webhooks.constructEvent(
           rawBody,
           signature,
           webhookSecret
