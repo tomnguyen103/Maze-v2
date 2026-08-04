@@ -91,3 +91,74 @@ runtime role and cannot apply migrations — deliberately.
 
 Applying to the live database is an authorized operator action. It is not part
 of any automated run in this repository.
+
+## What the applied migrations cost, and what to do about it
+
+The A+ audit filed three migrations as unsafe against a live table
+(`DB-01`, `DB-02`, `DB-03`). Two of them are below the applied boundary and
+therefore cannot be re-authored — rewriting them would change history for
+every environment that has already run them. What follows is the record of
+what they do, so an operator restoring or rebuilding a populated database
+knows what to expect and can quiesce for it deliberately.
+
+### 0014 — Classroom RLS foundation (`DB-01`, applied)
+
+Three plain `CREATE INDEX` statements (`classroom_memberships_user_idx`,
+`cloud_quest_progress_classroom_idx`, `learning_journals_classroom_idx`), each
+holding `SHARE` — blocking every write to that table — for the duration of the
+build. It also adds a `PRIMARY KEY`, two `UNIQUE` constraints and two foreign
+keys, all under `ACCESS EXCLUSIVE`, each scanning the table it constrains.
+
+Against the small tables it ran on originally this is instant. Against a
+populated `cloud_quest_progress` or `learning_journals` it is a write outage
+for the length of the scan.
+
+**Quiesce:** stop the writers, confirm no open transactions on those three
+tables, apply, restart. Expect the outage to scale with the row count, not
+with the number of statements.
+
+### 0015 — Classroom authority and writes (`DB-02`, applied)
+
+One `ALTER TABLE score_entries` that adds a column, drops a `UNIQUE`
+constraint, adds a `UNIQUE NULLS NOT DISTINCT` constraint, and adds a foreign
+key — in a single statement, so all of it under one `ACCESS EXCLUSIVE` lock.
+The `UNIQUE` builds an index; the foreign key scans to validate. Followed by a
+plain `CREATE INDEX score_entries_classroom_idx`.
+
+`score_entries` is written by every escaped Run and read by the anonymous
+Global Scoreboard, so this is the worst of the three to apply hot.
+
+**Quiesce:** required. Stop the writers before applying; do not attempt it
+behind live traffic.
+
+### 0019 — score entry ruleset partitions (`DB-03`, not applied)
+
+Above the boundary, so it was re-authored in place rather than documented
+around. It now uses a batched, committing backfill instead of one unbounded
+`UPDATE`, `NOT VALID` constraints validated separately, a validated
+`IS NOT NULL` check so `SET NOT NULL` skips its own scan, and
+`CREATE INDEX CONCURRENTLY`. **No quiesce window is needed.**
+
+That difference is the whole point of the boundary: 0019 could be fixed, and
+0014 and 0015 can only be planned around.
+
+### 0020, 0022 and 0025 — the same defect, found by the guard
+
+`tests/migration-locking.test.js` derives the live tables from the applied
+migrations and fails on any unapplied migration that would scan one under
+`ACCESS EXCLUSIVE`. Writing it turned up three more instances of `DB-03`'s
+defect, all now corrected in place:
+
+- **0020** — an unbounded `UPDATE` plus two unvalidated `CHECK` constraints on
+  `cloud_quest_progress`, in one transaction.
+- **0022** — an unbounded `UPDATE` plus two unvalidated `CHECK` constraints on
+  `explorer_access_settings`, in one transaction.
+- **0025** — an unvalidated `CHECK` on `question_versions`.
+
+The guard scopes itself the same way this document does: a constraint on a
+table an *unapplied* migration created validates against nothing, so it is not
+flagged. Only tables that already have rows count.
+
+What it does not yet catch: a unique index promoted to a constraint by a route
+other than `ADD CONSTRAINT ... USING INDEX`, and `ALTER TYPE` on a column of a
+live table. Both would need adding if either pattern appears.

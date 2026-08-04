@@ -14,9 +14,14 @@ ALTER TABLE question_versions
   DROP CONSTRAINT IF EXISTS question_versions_check;
 ALTER TABLE question_versions
   DROP CONSTRAINT IF EXISTS question_versions_status_published_at_check;
+-- NOT VALID, then validated: `question_versions` is created in applied
+-- migration 0010, so it has rows and an unvalidated add would scan every one
+-- of them under ACCESS EXCLUSIVE. See docs/migration-safety.md.
 ALTER TABLE question_versions
   ADD CONSTRAINT question_versions_status_published_at_check
-  CHECK (status <> 'published' OR published_at IS NOT NULL);
+  CHECK (status <> 'published' OR published_at IS NOT NULL) NOT VALID;
+ALTER TABLE question_versions
+  VALIDATE CONSTRAINT question_versions_status_published_at_check;
 
 ALTER TABLE offline_run_receipts
   ADD COLUMN IF NOT EXISTS quest_id TEXT,
