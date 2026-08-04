@@ -33,6 +33,10 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
 } else if (url.pathname === "/play") {
   void startGameplay();
 } else if (url.pathname === "/admin") {
+  // index.html inlines the landing hero statically (WP-02); every non-landing
+  // route clears it before its own content can arrive, so the admin chunk's
+  // network fetch never leaves it flashing on screen.
+  gameRoot.innerHTML = "";
   // Loaded on demand: an Explorer who never opens /admin never pays for it.
   void import("./admin/admin-controller.js")
     .then((admin) => admin.renderAdmin(gameRoot))
@@ -51,6 +55,9 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
       `;
     });
 } else if (url.pathname === "/class") {
+  // Same reason as the /admin branch above: clear the inlined landing hero
+  // before the classroom chunk's fetch can leave it visible.
+  gameRoot.innerHTML = "";
   // Classroom code is isolated from guest play and the public landing page.
   void import("./classroom/classroom-controller.js")
     .then((classroom) => classroom.renderClassroom(gameRoot))
