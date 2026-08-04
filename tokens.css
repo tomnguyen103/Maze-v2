@@ -37,8 +37,14 @@
   --color-echo: oklch(61% 0.17 232);
   --color-echo-soft: oklch(89% 0.075 226);
   --color-warden: oklch(58% 0.22 24);
+  /* Text weights. The 58%/54% pair above is a fill colour: on --color-paper
+     it measures 4.38:1 and 4.32:1, just under AA, which is how a danger
+     message and a success message both ended up unreadable on the surface
+     they are shown on. These pass on paper and on stone. */
+  --color-warden-text: oklch(44% 0.22 24);
   --color-warden-soft: oklch(91% 0.06 25);
   --color-gate: oklch(54% 0.14 155);
+  --color-gate-text: oklch(44% 0.14 155);
   --color-focus: oklch(42% 0.16 245);
   --color-shadow: oklch(24% 0.035 255 / 16%);
   --color-overlay: oklch(18% 0.035 255 / 72%);

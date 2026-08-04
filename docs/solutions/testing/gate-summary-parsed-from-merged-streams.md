@@ -83,3 +83,23 @@ sixth of the suite with no summary, while `npm test` on its own passed
 immediately before and after, and three further `npm run check` runs passed.
 The status check now runs first (`scripts/run-vitest-gate.mjs`), so the next
 occurrence names the exit code or signal instead of blaming the parser.
+
+## The intermittent failure, now named
+
+The status-first change above paid for itself. A later `npm run check` failed
+with:
+
+```
+Vitest gate failed: Vitest exited with code 3221226505 before emitting a summary.
+```
+
+`3221226505` is `0xC0000409` — `STATUS_STACK_BUFFER_OVERRUN`, a native crash of
+the Node process on Windows, not a test failure and not a parser problem. Under
+the old ordering this same run reported "Vitest did not emit a complete test
+summary", which is why the first investigation went looking at the parser.
+
+It reproduces at roughly one run in ten on this workstation and passes on the
+next attempt with no change. It is a runner-level crash, so a re-run is a
+legitimate response — but it is now a re-run of a *named* failure rather than
+of an unexplained one. If it becomes frequent, the next step is
+`--pool=forks` or a smaller `maxWorkers`, not another look at the parser.

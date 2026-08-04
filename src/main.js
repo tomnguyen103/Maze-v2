@@ -627,6 +627,12 @@ document.addEventListener("keydown", (event) => {
   ) {
     return;
   }
+  // A held key repeats at the OS rate. Each repeat used to move the Explorer
+  // and announce it, so a screen reader was read a wall of movement nobody
+  // asked for. One press, one move.
+  if (event.repeat) {
+    return;
+  }
   const directions = /** @type {Partial<Record<string, Direction>>} */ ({
     ArrowUp: "up",
     w: "up",
