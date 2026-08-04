@@ -7,6 +7,7 @@ import {
   ACTIVE_RUN_RECOVERY_KEY,
   scrubActiveRunRecovery
 } from "./local-recovery-scrub.js";
+import { questIdentityMatches } from "../../shared/quest-identity.js";
 
 export { ACTIVE_RUN_RECOVERY_KEY };
 export const ACTIVE_RUN_RECOVERY_MAX_ACTIONS = 2048;
@@ -872,20 +873,6 @@ function sameIdentity(left, right) {
     left.rulesetRevision === right.rulesetRevision &&
     questIdentityMatches(left.questId, right.questId)
   );
-}
-
-/** @param {unknown} left @param {unknown} right */
-function questIdentityMatches(left, right) {
-  return (
-    left === right ||
-    (left === undefined && !isQuestIIQuestId(right)) ||
-    (right === undefined && !isQuestIIQuestId(left))
-  );
-}
-
-/** @param {unknown} value */
-function isQuestIIQuestId(value) {
-  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /** @param {number} elapsedMs */

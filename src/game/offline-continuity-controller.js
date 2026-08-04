@@ -3,6 +3,7 @@ import {
   reconcileOfflineRun,
   verificationLabel
 } from "./offline-continuity.js";
+import { questIdentityMatches } from "../../shared/quest-identity.js";
 import {
   OFFLINE_ACTION_LOG_KEY,
   OFFLINE_CONTENT_PACK_KEY,
@@ -121,20 +122,6 @@ function receiptMatchesRun(receipt, run) {
     receipt.binding.contentPackHash === run.contentPackHash &&
     questIdentityMatches(receipt.binding.questId, run.questId)
   );
-}
-
-/** @param {unknown} left @param {unknown} right */
-function questIdentityMatches(left, right) {
-  return (
-    left === right ||
-    (left === undefined && !isQuestIIQuestId(right)) ||
-    (right === undefined && !isQuestIIQuestId(left))
-  );
-}
-
-/** @param {unknown} value */
-function isQuestIIQuestId(value) {
-  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /** @param {unknown} value @returns {RunActionLogV2 | null} */
