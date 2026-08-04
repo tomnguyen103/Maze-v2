@@ -97,7 +97,13 @@ a {
   touch-action: manipulation;
 }
 
-button {
+/*
+ * `.primary-button` ships on both `<button>` and `<a>` (the admin denial
+ * gate's only way back is a link). Geometry has to reach both tags, or the
+ * link keeps its browser-default box: no min-height, no padding.
+ */
+button,
+.primary-button {
   min-width: 2.8125rem;
   min-height: 2.8125rem;
   padding: var(--space-3) var(--space-4);
