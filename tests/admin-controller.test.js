@@ -435,6 +435,49 @@ describe("renderAdmin", () => {
   });
 });
 
+describe("SHELL-15 — the theme choice is reachable from the workbench", () => {
+  it("adds an Appearance panel with the three theme choices, and applies a change", async () => {
+    localStorage.removeItem("echo-maze:theme");
+    const client = staffClient();
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: { role: "admin", permissions: ["audit:read"] }
+      }),
+      client
+    });
+    root
+      .querySelector("[data-panel-link='settings']")
+      ?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true })
+      );
+    await vi.waitFor(() => {
+      expect(root.querySelector("input[name='admin-theme']")).not.toBeNull();
+    });
+    const radios = [
+      ...root.querySelectorAll("input[name='admin-theme']")
+    ].filter(
+      /** @returns {radio is HTMLInputElement} */
+      (radio) => radio instanceof HTMLInputElement
+    );
+    expect(radios.map((radio) => radio.value)).toEqual([
+      "system",
+      "light",
+      "dark"
+    ]);
+    const systemRadio = radios.find((radio) => radio.value === "system");
+    expect(systemRadio?.checked).toBe(true);
+
+    const darkRadio = radios.find((radio) => radio.value === "dark");
+    darkRadio?.click();
+    darkRadio?.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(localStorage.getItem("echo-maze:theme")).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    document.documentElement.removeAttribute("data-theme");
+    localStorage.removeItem("echo-maze:theme");
+  });
+});
+
 function staffClient() {
   return {
     listAdminUsers: vi.fn(async () => ({

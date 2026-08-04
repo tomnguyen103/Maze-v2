@@ -2,6 +2,12 @@ import { can } from "../player/can.js";
 import { describeEchoLensVisual } from "../questions/echo-lens-presentation.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
 import { renderAdminShell } from "./admin-shell.js";
+import {
+  THEME_CHOICES,
+  applyThemeChoice,
+  isThemeChoice,
+  readThemeChoice
+} from "../player/theme.js";
 
 /**
  * @typedef {{
@@ -81,8 +87,48 @@ const PANEL_DEFS = [
     permission: "webhooks:read",
     fetch: (client) => client.listDeadWebhooks(),
     render: (panel, value) => renderDeadDeliveries(panel, value)
+  },
+  {
+    // Every staff member who reaches the workbench already holds
+    // audit:read — resolveAdminAccess gates the whole route on it — so this
+    // is the "no specific tool permission" slot, not actually restricted.
+    id: "settings",
+    title: "Appearance",
+    permission: "audit:read",
+    fetch: null,
+    render: (panel) => renderAppearanceSettings(panel)
   }
 ];
+
+/** @param {HTMLElement} panel */
+function renderAppearanceSettings(panel) {
+  const current = readThemeChoice();
+  const fieldset = element("fieldset", "admin-field");
+  const legend = document.createElement("legend");
+  legend.textContent = "Theme";
+  fieldset.append(legend);
+  const labels = { system: "System", light: "Light", dark: "Dark" };
+  for (const choice of THEME_CHOICES) {
+    const label = document.createElement("label");
+    label.className = "admin-appearance-option";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "admin-theme";
+    input.value = choice;
+    input.checked = choice === current;
+    const span = document.createElement("span");
+    span.textContent = labels[choice];
+    label.append(input, span);
+    fieldset.append(label);
+  }
+  fieldset.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && isThemeChoice(target.value)) {
+      applyThemeChoice(target.value);
+    }
+  });
+  panel.append(fieldset);
+}
 
 /**
  * @param {HTMLElement} root
