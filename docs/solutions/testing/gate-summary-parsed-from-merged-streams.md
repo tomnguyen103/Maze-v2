@@ -69,3 +69,17 @@ A gate failure whose message is about the *shape* of Vitest's output rather
 than about a test — "did not emit a complete test summary", a count that is off
 by exactly the size of one lane — is a parser or manifest problem, not a test
 problem. Check which stream the text came from before touching a test.
+
+## A fourth defect, found while fixing the first three
+
+`runVitestGate` parsed the summary *before* checking the child's exit status,
+so a Vitest process that died partway through — printing dots and then
+nothing — was reported as "Vitest did not emit a complete test summary". That
+is the symptom, not the cause, and it sent the first investigation looking at
+the parser instead of at the child.
+
+Reproduced once during this work: a `npm run check` run ended after roughly a
+sixth of the suite with no summary, while `npm test` on its own passed
+immediately before and after, and three further `npm run check` runs passed.
+The status check now runs first (`scripts/run-vitest-gate.mjs`), so the next
+occurrence names the exit code or signal instead of blaming the parser.

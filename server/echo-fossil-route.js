@@ -3,7 +3,7 @@ import {
   normalizeFossilCollection
 } from "../src/game/quest-fossils.js";
 import { setRetryAfter } from "./http-retry.js";
-import { DeletedUserError } from "./deleted-user-guard.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 
 export const ECHO_FOSSIL_PATH = "/api/echo-fossils";
@@ -87,8 +87,7 @@ export function createEchoFossilHandler({
         sendJson(response, 400, { error: error.message });
         return;
       }
-      if (error instanceof DeletedUserError) {
-        sendJson(response, 410, { error: "This account has been deleted." });
+      if (answerDeletedUser(error, response)) {
         return;
       }
       console.error("[echo-fossil] API request failed", {

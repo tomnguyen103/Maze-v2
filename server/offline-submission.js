@@ -3,7 +3,11 @@ import {
   receiptBindingMatches
 } from "../shared/offline-receipt.js";
 import { createOfflineQuestionSequence } from "./offline-content-pack.js";
-import { ReplayInputError, verifyOfflineRunReplay } from "./run-replay.js";
+import {
+  ReplayInputError,
+  TrustedReplayContentError,
+  verifyOfflineRunReplay
+} from "./run-replay.js";
 import { reviewedQuestionForId } from "../src/learning/lantern-journal.js";
 import {
   getQuestContentPackId,
@@ -409,6 +413,11 @@ export function createOfflineSubmissionService({
         });
         result = { ...result, journalEvents };
       } catch (error) {
+        if (error instanceof TrustedReplayContentError) {
+          // Our content, not their submission. Leave the receipt live so the
+          // player can submit again once the gap is published.
+          throw error;
+        }
         if (error instanceof ReplayInputError) {
           // Terminal rejection: recorded so a retry cannot re-run it, and no
           // cloud write is attempted, so cloud state is byte-identical to

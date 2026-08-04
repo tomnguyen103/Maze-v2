@@ -4,7 +4,7 @@ import {
   validateCloudQuestWrite
 } from "./quest-progress-validation.js";
 import { setRetryAfter } from "./http-retry.js";
-import { DeletedUserError } from "./deleted-user-guard.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 import {
   ClassroomAccessDeniedError,
@@ -115,10 +115,7 @@ export function createQuestProgressHandler({
         sendJson(response, 403, { error: error.message });
         return;
       }
-      if (error instanceof DeletedUserError) {
-        sendJson(response, 410, {
-          error: "This account has been deleted."
-        });
+      if (answerDeletedUser(error, response)) {
         return;
       }
       console.error("[quest-progress] API request failed", {

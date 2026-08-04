@@ -4,8 +4,27 @@ const handler = createPlayerApi();
 
 const ME_ROUTES = new Set(["export", "settings"]);
 const OFFLINE_ROUTES = new Set(["receipt", "submission"]);
-const CLASSROOM_ROUTE_PATTERN =
-  /^(?:root|org_[A-Za-z0-9_-]{3,120}\/(?:domain|invitations|progress|expeditions(?:\/exped_[A-Za-z0-9_-]{3,120}\/(?:status|license|capacity|progress|grants|grants\/outcome))?))$/;
+/**
+ * Every sub-resource `server/classroom-route.js` serves under one Class
+ * Expedition. The guard below is the only thing standing between a rewritten
+ * path and dispatch, so a sub-resource missing from this list answers 404 in
+ * production while working locally, where Express reaches the route directly.
+ * `constellation` — the one correctly k-anonymized Teacher view — was missing.
+ * `tests/audit-correctness.test.js` fails if the two lists drift apart again.
+ */
+export const CLASS_EXPEDITION_SUB_RESOURCES = Object.freeze([
+  "status",
+  "license",
+  "capacity",
+  "progress",
+  "constellation",
+  "grants",
+  "grants/outcome"
+]);
+
+const CLASSROOM_ROUTE_PATTERN = new RegExp(
+  `^(?:root|org_[A-Za-z0-9_-]{3,120}/(?:domain|invitations|progress|expeditions(?:/exped_[A-Za-z0-9_-]{3,120}/(?:${CLASS_EXPEDITION_SUB_RESOURCES.join("|")}))?))$`
+);
 
 /**
  * Also hosts `/api/me/*`, `/api/classrooms/*`, and `/api/echo-fossils` via

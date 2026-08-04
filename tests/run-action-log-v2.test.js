@@ -145,15 +145,45 @@ describe("Run Action Log version 2", () => {
     // a Bell is a Warden Bells action with no version 1 shape at all, which is
     // why Verified Daily cannot carry an offline Quest Run.
     const run = createRun(DAILY_REPLAY_FIXTURE.seed, DAILY_REPLAY_CONFIG);
-    const rung = applyAction(run, { type: "ring-bell" });
     const hinted = applyAction(run, { type: "reveal-hint" });
 
+    // Driven through the real Warden Bells rules rather than a synthetic
+    // `next`: the writer records an action only when the engine says the Run
+    // advanced, which is the same rule `server/run-replay.js` verifies
+    // against. A log written under a looser rule cannot be verified.
+    const bells = createRun("ECHO-BELL-ENTRY", {
+      size: 11,
+      echoCount: 1,
+      wardenCount: 1,
+      ruleset: {
+        atlasRegionId: "mastery",
+        revision: "warden-bells-v1",
+        label: "Warden Bells"
+      }
+    });
+    const bell = bells.signalBells[0];
+    const beside = {
+      ...bells,
+      explorer: { ...bells.explorer, row: bell.row, col: bell.col + 1 }
+    };
+    const rung = applyAction(beside, { type: "ring-bell" });
+    expect(rung.moves).toBe(beside.moves + 1);
+    expect(
+      tryAppendRunActionV2(
+        createRunActionLogV2(),
+        beside,
+        { type: "ring-bell" },
+        rung
+      )?.actions.at(-1)
+    ).toEqual({ type: "ring-bell", elapsedMs: 0 });
+
+    // A ring that changed nothing is not an action, however new the object.
     expect(
       tryAppendRunActionV2(createRunActionLogV2(), run, { type: "ring-bell" }, {
-        ...rung,
+        ...run,
         event: { type: "bell", message: "Bell rung." }
-      })?.actions.at(-1)
-    ).toEqual({ type: "ring-bell", elapsedMs: 0 });
+      })?.actions
+    ).toEqual([]);
     // A Hint outside a Challenge is not an action, so nothing is recorded.
     expect(
       tryAppendRunActionV2(

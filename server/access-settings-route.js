@@ -1,5 +1,5 @@
 import { URL } from "node:url";
-import { DeletedUserError } from "./deleted-user-guard.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { setRetryAfter } from "./http-retry.js";
 
@@ -110,10 +110,7 @@ export function createAccessSettingsHandler({
         sendJson(response, 400, { error: error.message });
         return;
       }
-      if (error instanceof DeletedUserError) {
-        sendJson(response, 410, {
-          error: "This account has been deleted."
-        });
+      if (answerDeletedUser(error, response)) {
         return;
       }
       console.error("[access-settings] API request failed", {

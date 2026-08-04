@@ -3,8 +3,15 @@ import { classroomIdFromRequest } from "./classroom-context.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { offlineReceiptWindows } from "../shared/offline-receipt.js";
 import { getQuestContentPackId, QUEST_II_CONTENT_PACK_ID } from "../src/game/quest-content.js";
-import { validateOfflineDeviceInstallationNonce } from "./offline-device.js";
-import { validateRunRequest } from "./run-access-route.js";
+import {
+  OfflineDeviceInputError,
+  validateOfflineDeviceInstallationNonce
+} from "./offline-device.js";
+import {
+  RunAccessInputError,
+  validateRunRequest
+} from "./run-access-route.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { setRetryAfter } from "./http-retry.js";
 
 export const OFFLINE_RECEIPT_PATH = "/api/offline/receipt";
@@ -55,14 +62,14 @@ async function readReceiptRequest(request) {
   for await (const chunk of request) {
     body += chunk;
     if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      throw new Error("Request body is too large.");
+      throw new RunAccessInputError("Request body is too large.");
     }
   }
   let parsed;
   try {
     parsed = JSON.parse(body);
   } catch {
-    throw new Error("Request body must be valid JSON.");
+    throw new RunAccessInputError("Request body must be valid JSON.");
   }
   const input =
     parsed && typeof parsed === "object"
@@ -72,7 +79,7 @@ async function readReceiptRequest(request) {
     typeof input.questId !== "string" ||
     !/^(quest|legacy)_[A-Za-z0-9_-]{7,92}$/.test(input.questId)
   ) {
-    throw new Error("Quest ID is invalid.");
+    throw new RunAccessInputError("Quest ID is invalid.");
   }
   return {
     ...validateRunRequest(input),
@@ -293,13 +300,12 @@ export function createOfflineReceiptHandler({
       );
       sendJson(response, issued ? 201 : 200, { receipt, assetPackage });
     } catch (error) {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
       if (
-        error instanceof Error &&
-        (error.message.startsWith("Request body") ||
-          error.message.startsWith("Run ") ||
-          error.message.startsWith("Quest ") ||
-          error.message.startsWith("Labyrinth ") ||
-          error.message.startsWith("Device installation nonce"))
+        error instanceof RunAccessInputError ||
+        error instanceof OfflineDeviceInputError
       ) {
         sendJson(response, 400, { error: error.message });
         return;

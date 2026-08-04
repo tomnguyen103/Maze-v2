@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { createRunAccessHandler } from "../server/run-access-route.js";
+import { RunAccessConflictError } from "../server/run-access-store.js";
 import { describe, expect, it, vi } from "vitest";
 
 /**
@@ -390,10 +391,10 @@ describe("Run Access API", () => {
   });
 
   it("rejects one id reused for different Run facts", async () => {
-    const error = new Error(
-      "That Run id is already bound to a different Labyrinth."
-    );
-    error.name = "RunAccessConflictError";
+    // The real class, not a look-alike: the route classifies on the class the
+    // store exports, so a hand-rolled error with a matching `name` would pass
+    // a test the production path does not exercise.
+    const error = new RunAccessConflictError();
     const handler = createRunAccessHandler({
       store: {
         getAccess: vi.fn(),

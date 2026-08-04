@@ -596,6 +596,7 @@ let touchStart = null;
 let atlasViewPromise = null;
 let atlasOpening = false;
 let atlasViewRetry = false;
+let atlasProjectionRetry = false;
 /** @type {Promise<ReturnType<typeof import("./game/run-replay-view.js").createRunReplayView>> | null} */
 let runReplayViewPromise = null;
 let runReplayOpening = false;
@@ -869,55 +870,76 @@ async function showQuestAtlas(trigger, { resumePausedRun = false } = {}) {
   }
   const retrying = atlasViewRetry;
   try {
-    if (!atlasViewPromise) {
-      /** @type {Promise<typeof import("./game/quest-atlas-view.js")>} */
-      const viewModule = retrying
-        // @ts-expect-error Vite treats the query as a distinct retry chunk.
-        ? import("./game/quest-atlas-view.js?retry=1")
-        : import("./game/quest-atlas-view.js");
-      atlasViewRetry = true;
-      atlasViewPromise = viewModule.then(
-        ({ createQuestAtlasView }) => createQuestAtlasView({
-        onWatchTrail: (landmarkId, returnTarget) => {
-          const record = replayRecordForLandmark(landmarkId);
-          if (!record) {
-            announce(
-              "That Trail is no longer retained on this device."
-            );
-            return;
-          }
-          resumeAfterRunReplay = false;
-          void openRunReplay(record, returnTarget);
-        },
-        onWorkshop: (selection, returnTarget) => {
-          const resumePausedRun = resumeAfterAtlas;
-          resumeAfterAtlas = false;
-          void openWorkshop({
-            ...selection,
-            origin: "atlas",
-            trigger: returnTarget,
-            resumePausedRun
-          });
-        },
-        onClose: () => {
-          if (resumeAfterAtlas && run.status === "paused") {
-            togglePause();
-          }
-          resumeAfterAtlas = false;
-        }
-        })
+    // Two scopes on purpose. Building the view attaches listeners to
+    // `#atlas-dialog`, so only a failure of the import or of that build may
+    // discard the cached promise. A failure anywhere after it — projecting
+    // the Atlas, reading retained Trails — would leave those listeners
+    // attached and let the next open add a second set, without bound.
+    let atlasView;
+    try {
+      if (!atlasViewPromise) {
+        /** @type {Promise<typeof import("./game/quest-atlas-view.js")>} */
+        const viewModule = retrying
+          // @ts-expect-error Vite treats the query as a distinct retry chunk.
+          ? import("./game/quest-atlas-view.js?retry=1")
+          : import("./game/quest-atlas-view.js");
+        atlasViewRetry = true;
+        atlasViewPromise = viewModule.then(
+          ({ createQuestAtlasView }) => createQuestAtlasView({
+            onWatchTrail: (landmarkId, returnTarget) => {
+              const record = replayRecordForLandmark(landmarkId);
+              if (!record) {
+                announce(
+                  "That Trail is no longer retained on this device."
+                );
+                return;
+              }
+              resumeAfterRunReplay = false;
+              void openRunReplay(record, returnTarget);
+            },
+            onWorkshop: (selection, returnTarget) => {
+              const resumePausedRun = resumeAfterAtlas;
+              resumeAfterAtlas = false;
+              void openWorkshop({
+                ...selection,
+                origin: "atlas",
+                trigger: returnTarget,
+                resumePausedRun
+              });
+            },
+            onClose: () => {
+              if (resumeAfterAtlas && run.status === "paused") {
+                togglePause();
+              }
+              resumeAfterAtlas = false;
+            }
+          })
+        );
+      }
+      atlasView = await atlasViewPromise;
+    } catch {
+      atlasViewPromise = null;
+      if (resumeAfterAtlas && run.status === "paused") {
+        togglePause();
+      }
+      resumeAfterAtlas = false;
+      announce(
+        retrying
+          ? "Echo Atlas is unavailable. Reload to try again."
+          : "Echo Atlas could not open. Continue the Quest and try again."
       );
+      return;
     }
-    const [atlasView, { projectAtlas }] = await Promise.all([
-      atlasViewPromise,
-      import("./game/quest-atlas.js")
-    ]);
+    const { projectAtlas } = await (atlasProjectionRetry
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./game/quest-atlas.js?retry=1")
+      : import("./game/quest-atlas.js"));
+    atlasProjectionRetry = true;
     const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
     atlasView.show(await projectAtlas(questProgress, {
       watchTrailLandmarkIds,
     }), trigger);
   } catch {
-    atlasViewPromise = null;
     if (resumeAfterAtlas && run.status === "paused") {
       togglePause();
     }

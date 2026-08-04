@@ -1,6 +1,8 @@
 import { URL } from "node:url";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { setRetryAfter } from "./http-retry.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
+import { RunAccessConflictError } from "./run-access-store.js";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
@@ -29,6 +31,9 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+/** A caller-supplied Run request this module can name a problem with. */
+export class RunAccessInputError extends Error {}
+
 /**
  * @param {unknown} value
  * @returns {{
@@ -45,28 +50,28 @@ export function validateRunRequest(value) {
       : {};
   const runId = run.runId;
   if (typeof runId !== "string" || !RUN_ID_PATTERN.test(runId)) {
-    throw new Error("Run id must be 12-128 letters, numbers, dashes, or underscores.");
+    throw new RunAccessInputError("Run id must be 12-128 letters, numbers, dashes, or underscores.");
   }
   if (
     typeof run.seed !== "string" ||
     !/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(run.seed) ||
     run.seed.length > 24
   ) {
-    throw new Error("Run seed is invalid.");
+    throw new RunAccessInputError("Run seed is invalid.");
   }
   if (
     run.levelId !== "bright-start" &&
     run.levelId !== "trail-scout" &&
     run.levelId !== "maze-master"
   ) {
-    throw new Error("Quest Level is invalid.");
+    throw new RunAccessInputError("Quest Level is invalid.");
   }
   if (
     !Number.isInteger(run.labyrinthNumber) ||
     Number(run.labyrinthNumber) < 1 ||
     Number(run.labyrinthNumber) > 20
   ) {
-    throw new Error("Labyrinth Number is invalid.");
+    throw new RunAccessInputError("Labyrinth Number is invalid.");
   }
   return {
     runId,
@@ -82,14 +87,14 @@ async function readRunRequest(request) {
   for await (const chunk of request) {
     body += chunk;
     if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      throw new Error("Request body is too large.");
+      throw new RunAccessInputError("Request body is too large.");
     }
   }
   let parsed;
   try {
     parsed = JSON.parse(body);
   } catch {
-    throw new Error("Request body must be valid JSON.");
+    throw new RunAccessInputError("Request body must be valid JSON.");
   }
   return validateRunRequest(parsed);
 }
@@ -377,17 +382,14 @@ export function createRunAccessHandler({
       }
       sendJson(response, 200, { ...result, enforcementEnabled });
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.startsWith("Request body") ||
-          error.message.startsWith("Run ") ||
-          error.message.startsWith("Quest ") ||
-          error.message.startsWith("Labyrinth "))
-      ) {
+      if (error instanceof RunAccessInputError) {
         sendJson(response, 400, { error: error.message });
         return;
       }
-      if (error instanceof Error && error.name === "RunAccessConflictError") {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
+      if (error instanceof RunAccessConflictError) {
         sendJson(response, 409, { error: error.message });
         return;
       }

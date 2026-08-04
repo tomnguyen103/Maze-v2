@@ -1,4 +1,5 @@
 import {
+  actionAdvancedRun,
   applyAction,
   createRun,
   normalizeSeed
@@ -11,6 +12,11 @@ import {
   RUN_ACTION_LOG_V2_MAX_ACTIONS,
   RUN_ACTION_LOG_V2_VERSION
 } from "../src/game/run-action-log-v2.js";
+import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
+import {
+  getDifficultyBand,
+  getLabyrinthConfig
+} from "../src/questions/quest-levels.js";
 
 export const RUN_REPLAY_LIMITS = Object.freeze({
   maxActions: RUN_ACTION_LOG_MAX_ACTIONS,
@@ -26,6 +32,44 @@ const ANSWER_ID_PATTERN = /^[a-z0-9_-]{1,32}$/i;
 const REVISION_ID_PATTERN = /^[a-z0-9:_-]{1,120}$/i;
 
 export class ReplayInputError extends Error {}
+
+/**
+ * A failure in something the server supplies to a replay — the reviewed
+ * content pack, the trusted Question resolver — rather than in anything the
+ * submitter sent.
+ *
+ * The distinction is load-bearing. `server/offline-submission.js` treats a
+ * `ReplayInputError` as a TERMINAL rejection that consumes the receipt, which
+ * is right for a forged or impossible action log and wrong for a gap in our
+ * own content: a player would lose a legitimate offline Run to a publishing
+ * mistake. This class stays retryable.
+ */
+export class TrustedReplayContentError extends Error {}
+
+/**
+ * The Labyrinth configuration one offline receipt's Run replays against.
+ *
+ * A receipt names a ruleset revision, and a receipt is caller-supplied, so a
+ * revision that does not normalize is bad input — not a fault on our side.
+ * It used to throw a plain `Error`, which escaped the `ReplayInputError`
+ * catch in `server/offline-submission.js`: the submission became a 500, the
+ * receipt was never terminally rejected, and the client retried the same
+ * poisoned package forever.
+ *
+ * @param {string} levelId
+ * @param {number} labyrinthNumber
+ * @param {string} revision
+ */
+export function offlineReplayConfigFor(levelId, labyrinthNumber, revision) {
+  const ruleset = normalizeRunRuleset(
+    { atlasRegionId: getDifficultyBand(labyrinthNumber).id, revision },
+    labyrinthNumber
+  );
+  if (!ruleset) {
+    throw new ReplayInputError("Offline replay ruleset is invalid.");
+  }
+  return { ...getLabyrinthConfig(levelId, labyrinthNumber), ruleset };
+}
 
 /**
  * `createRun` refuses a seed that normalizes to nothing rather than inventing
@@ -95,7 +139,7 @@ export function verifyRunReplay(value, trusted) {
 
     const action = replayAction(entry, run);
     const next = applyAction(run, action);
-    if (!changedAsExpected(run, next, action)) {
+    if (!actionAdvancedRun(run, next, action)) {
       throw new ReplayInputError(
         "Run Action Log contains an impossible or no-op action."
       );
@@ -197,7 +241,7 @@ export function verifyOfflineRunReplay(value, trusted) {
     const action = replayActionV2(entry, run);
     trusted.onAction?.(run, action);
     const next = applyAction(run, action);
-    if (!changedAsExpected(run, next, action)) {
+    if (!actionAdvancedRun(run, next, action)) {
       throw new ReplayInputError(
         "Run Action Log contains an impossible or no-op action."
       );
@@ -499,21 +543,14 @@ function replayAction(entry, run) {
   };
 }
 
-/**
- * @param {ReturnType<typeof createRun>} previous
- * @param {ReturnType<typeof createRun>} next
- * @param {Parameters<typeof applyAction>[1]} action
- */
-function changedAsExpected(previous, next, action) {
-  if (action.type === "move" || action.type === "pulse") {
-    return next.moves === previous.moves + 1;
-  }
-  return next !== previous;
-}
-
 /** @param {unknown} question */
 function assertTrustedQuestion(question) {
-  const value = record(question, "Trusted Question resolver returned no Question.");
+  if (!question || typeof question !== "object" || Array.isArray(question)) {
+    throw new TrustedReplayContentError(
+      "Trusted Question resolver returned no Question."
+    );
+  }
+  const value = /** @type {Record<string, unknown>} */ (question);
   if (
     typeof value.id !== "string" ||
     typeof value.answerId !== "string" ||
@@ -526,7 +563,9 @@ function assertTrustedQuestion(question) {
         choice.id === value.answerId
     )
   ) {
-    throw new Error("Trusted Question resolver returned an invalid Question.");
+    throw new TrustedReplayContentError(
+      "Trusted Question resolver returned an invalid Question."
+    );
   }
 }
 
