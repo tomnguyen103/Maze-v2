@@ -312,6 +312,23 @@ const elements = {
   learningDeckOptions: requiredElement("learning-deck-options", HTMLElement),
   levelCards: requiredElement("level-cards", HTMLElement),
   levelDialog: requiredElement("level-dialog", HTMLDialogElement),
+  levelDialogBack2: requiredElement(
+    "level-dialog-back-2",
+    HTMLButtonElement
+  ),
+  levelDialogBack3: requiredElement(
+    "level-dialog-back-3",
+    HTMLButtonElement
+  ),
+  levelDialogNext1: requiredElement(
+    "level-dialog-next-1",
+    HTMLButtonElement
+  ),
+  levelDialogNext2: requiredElement(
+    "level-dialog-next-2",
+    HTMLButtonElement
+  ),
+  levelDialogProgress: requiredElement("level-dialog-progress", HTMLElement),
   practiceIntentionGuidance: requiredElement(
     "practice-intention-guidance",
     HTMLElement
@@ -739,6 +756,18 @@ elements.firstLightReplay.addEventListener("click", () => {
 });
 elements.practiceIntentionOptions.addEventListener("change", () => {
   renderPracticeIntentionGuidance();
+});
+elements.levelDialogNext1.addEventListener("click", () => {
+  setLevelDialogStep(2);
+});
+elements.levelDialogBack2.addEventListener("click", () => {
+  setLevelDialogStep(1);
+});
+elements.levelDialogNext2.addEventListener("click", () => {
+  setLevelDialogStep(3);
+});
+elements.levelDialogBack3.addEventListener("click", () => {
+  setLevelDialogStep(2);
 });
 elements.levelCards.addEventListener("click", async (event) => {
   const button =
@@ -2628,6 +2657,39 @@ function createFreshLocator(levelId, labyrinthNumber) {
   throw new Error("Could not create a fresh Labyrinth for this Quest.");
 }
 
+const LEVEL_DIALOG_STEP_COUNT = 3;
+
+/**
+ * The level dialog is one decision per step (HM-01): Practice Intention,
+ * Learning Deck, then Quest Level. `data-step` on the dialog drives which
+ * step's markup is visible (see daylight.css); this also moves the
+ * accessible name and keyboard focus to the step becoming visible, since a
+ * screen-reader user gets no other signal that the view changed under them.
+ *
+ * @param {number} step
+ */
+function setLevelDialogStep(step) {
+  elements.levelDialog.dataset.step = String(step);
+  // `level-dialog-progress` stays `aria-hidden` so a screen reader reading
+  // the dialog's own content doesn't hit it a second time as a stray
+  // paragraph; referencing it here still folds "Step X of 3" into the
+  // dialog's spoken name, which aria-labelledby computes from an
+  // aria-hidden element's text by design.
+  elements.levelDialog.setAttribute(
+    "aria-labelledby",
+    `level-dialog-progress level-title-${step}`
+  );
+  elements.levelDialogProgress.textContent = `Step ${step} of ${LEVEL_DIALOG_STEP_COUNT}`;
+  requestAnimationFrame(() => {
+    const heading = elements.levelDialog.querySelector(
+      `.level-dialog__step[data-step="${step}"] h2`
+    );
+    if (heading instanceof HTMLElement) {
+      heading.focus({ preventScroll: true });
+    }
+  });
+}
+
 function renderLearningDeckOptions() {
   void import("./player/deck-picker.js")
     .then((module) =>
@@ -2655,12 +2717,12 @@ function renderPracticeIntentionGuidance() {
   const currentDeck = learningDeckForNewQuest(questProgress);
   const guidance =
     intention === "review"
-      ? `Review keeps ${currentQuestLevel.name} and ${currentDeck.label} selected below.`
+      ? `Review keeps ${currentQuestLevel.name} and ${currentDeck.label} selected as you continue.`
       : intention === "challenge"
         ? currentQuestLevel.number >= HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER
           ? `Challenge is unavailable: no higher Quest Level is published than ${currentQuestLevel.name}. Choose Explore or Review.`
-          : `Challenge requires a Quest Level above ${currentQuestLevel.name}. Choose it below; nothing changes automatically.`
-        : "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below.";
+          : `Challenge requires a Quest Level above ${currentQuestLevel.name}. Choose it ahead; nothing changes automatically.`
+        : "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both ahead.";
   const label =
     intention === "review"
       ? "Review"
@@ -2919,11 +2981,7 @@ async function openLevelPicker(requireChoice = false) {
   if (!elements.levelDialog.open) {
     elements.levelDialog.showModal();
   }
-  requestAnimationFrame(() => {
-    elements.levelDialog
-      .querySelector("h2")
-      ?.focus?.({ preventScroll: true });
-  });
+  setLevelDialogStep(1);
   return true;
 }
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectGameReady } from "./game-ready.js";
+import { expectGameReady, goToLevelStep } from "./game-ready.js";
 import { installSignedInQuestPlayer } from "./signed-player.js";
 import { loadEnv } from "vite";
 import { getFirstLightQuestion } from "../../src/game/first-light.js";
@@ -270,7 +270,7 @@ test("completes First Light without writing product progress", async ({
 
   await page.getByRole("button", { name: "Choose Quest Level" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Choose your Quest Level" })
+    page.getByRole("dialog", { name: "Choose your Intention" })
   ).toBeVisible();
   await expect(page.locator("#seed-value")).toHaveText("FIRST-LIGHT-56");
   await page.getByRole("button", { name: "Replay First Light" }).click();
@@ -582,7 +582,7 @@ test("defers incoming Cloud Quest progress until First Light is over", async ({
 
   await page.getByRole("button", { name: "Choose Quest" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Choose your Quest Level" })
+    page.getByRole("dialog", { name: "Choose your Intention" })
   ).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(
@@ -596,6 +596,7 @@ test("defers incoming Cloud Quest progress until First Light is over", async ({
     )
     .toBeNull();
 
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("body")).toHaveAttribute(
     "data-run-mode",
@@ -642,7 +643,7 @@ test("lets a new Explorer skip First Light without starting a Quest", async ({
   await page.getByRole("button", { name: "Skip to Quest" }).click();
 
   await expect(
-    page.getByRole("dialog", { name: "Choose your Quest Level" })
+    page.getByRole("dialog", { name: "Choose your Intention" })
   ).toBeVisible();
   await expect
     .poll(() =>
@@ -721,7 +722,7 @@ test("blocks a completed guest demo on return, reload, and direct links", async 
     page.getByRole("button", { name: "Create account for three Runs" })
   ).toBeVisible();
   await expect(
-    page.getByRole("dialog", { name: "Choose your Quest Level" })
+    page.getByRole("dialog", { name: "Choose your Intention" })
   ).not.toBeVisible();
 
   await page.reload();
@@ -889,6 +890,7 @@ test("copies an Echo Postcard without changing normal gameplay URL", async ({
 }) => {
   await page.goto("/play");
   await page.getByRole("button", { name: "Skip to Quest" }).click();
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();
@@ -960,6 +962,7 @@ test("restarts the same active Labyrinth after a clean play-route refresh", asyn
 }) => {
   await page.goto("/play");
   await page.getByRole("button", { name: "Skip to Quest" }).click();
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("#seed-value")).not.toHaveText("");
   const seed = await page.locator("#seed-value").textContent();

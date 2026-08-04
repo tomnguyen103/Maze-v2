@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { goToLevelStep } from "./game-ready.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -66,6 +67,7 @@ test("boots and plays a Labyrinth with no Content Security Policy violation", as
   });
 
   await page.goto("/play");
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   // A handful of moves exercises the lazily loaded Fog, Pulse, and Warden
@@ -100,6 +102,7 @@ test("normal play never spends a rate-limit budget", async ({ page }) => {
   );
   await page.goto("/play");
   await leaderboardLoaded;
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.getByLabel(/Interactive maze/)).toBeVisible();
   for (const key of ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"]) {

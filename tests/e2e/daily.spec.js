@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectGameReady } from "./game-ready.js";
+import { expectGameReady, goToLevelStep } from "./game-ready.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import {
   createDailyContract,
@@ -387,6 +387,7 @@ test("retries the optional Cloud sync chunk after a transient load failure", asy
 
   await page.goto("/play");
   await expectGameReady(page);
+  await goToLevelStep(page, 3);
   await page.locator('[data-level="trail-scout"]').click();
   await expect(page.locator("#run-state")).toHaveText("Exploring");
   await expect.poll(() => chunkRequests).toBe(2);
