@@ -36,6 +36,13 @@ const WORKER_LOSS_SCAN_TAIL = 128;
  *   writeStdout?: (chunk: Buffer) => void,
  *   writeStderr?: (chunk: Buffer) => void
  * }} options
+ * @returns {Promise<{
+ *   code: number | null,
+ *   signal: string | null,
+ *   output: string,
+ *   stderr: string,
+ *   workerLossDetected: boolean
+ * }>} `output` is stdout alone — the stream the summary is parsed from.
  */
 export function runVitest({
   spawnProcess = spawn,
@@ -59,31 +66,42 @@ export function runVitest({
       }
     );
 
-    let output = "";
+    // Two buffers, not one. The summary the gate parses is written to
+    // stdout, but a test that logs to stderr interleaves into the same
+    // stream at arbitrary byte offsets — including in the middle of the
+    // summary line. Merging them reproduced a gate failure on green code.
+    let stdout = "";
+    let stderr = "";
     let workerLossDetected = false;
-    let workerLossScanTail = "";
-    /** @param {Buffer | string} chunk */
-    const retainOutput = (chunk) => {
-      const text = chunk.toString();
-      const scanText = `${workerLossScanTail}${text}`;
+    /** One scan tail per stream: splicing them would fabricate matches. */
+    const scanTails = { stdout: "", stderr: "" };
+    /**
+     * @param {"stdout" | "stderr"} stream
+     * @param {string} text
+     */
+    const scanForWorkerLoss = (stream, text) => {
+      const scanText = `${scanTails[stream]}${text}`;
       workerLossDetected ||= containsWorkerLoss(scanText);
-      workerLossScanTail = scanText.slice(-WORKER_LOSS_SCAN_TAIL);
-      output = `${output}${text}`.slice(-OUTPUT_TAIL_LIMIT);
+      scanTails[stream] = scanText.slice(-WORKER_LOSS_SCAN_TAIL);
     };
 
     child.stdout.on("data", (chunk) => {
       writeStdout(chunk);
-      retainOutput(chunk);
+      const text = chunk.toString();
+      scanForWorkerLoss("stdout", text);
+      stdout = `${stdout}${text}`.slice(-OUTPUT_TAIL_LIMIT);
     });
     child.stderr.on("data", (chunk) => {
       writeStderr(chunk);
-      retainOutput(chunk);
+      const text = chunk.toString();
+      scanForWorkerLoss("stderr", text);
+      stderr = `${stderr}${text}`.slice(-OUTPUT_TAIL_LIMIT);
     });
     child.once("error", rejectRun);
     // `exit` can fire before stdout/stderr have flushed the final summary.
     // Wait for `close` so the parser sees the complete reporter output.
     child.once("close", (code, signal) =>
-      resolveRun({ code, signal, output, workerLossDetected })
+      resolveRun({ code, signal, output: stdout, stderr, workerLossDetected })
     );
   });
 }
@@ -93,7 +111,7 @@ export function runVitest({
  * This exported seam keeps the package-level gate testable without spawning a
  * real Vitest process.
  *
- * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number } | null }} options
+ * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number, skipped?: number | null } | null }} options
  */
 export async function runVitestGate({ run = runVitest, expected = null } = {}) {
   const expectedManifest =
@@ -103,6 +121,7 @@ export async function runVitestGate({ run = runVitest, expected = null } = {}) {
   const gate = assertVitestGate({
     summary,
     output: result.output,
+    stderr: result.stderr,
     expected: expectedManifest,
     workerLossDetected: result.workerLossDetected
   });
@@ -116,9 +135,28 @@ export async function runVitestGate({ run = runVitest, expected = null } = {}) {
   return gate;
 }
 
+/**
+ * The manifest pins `skipped` for the default configuration, where the
+ * database and object-store lanes are dark. An operator who arms those lanes
+ * executes tests the manifest counts as skipped, and must not be punished for
+ * it — but the pin has to stay exact in the configuration the gate normally
+ * runs in, which is the whole point of pinning it.
+ */
+async function expectedForEnv() {
+  const manifest = JSON.parse(await readFile(countPath, "utf8"));
+  const integrationArmed =
+    process.env.RUN_DATABASE_INTEGRATION === "1" ||
+    process.env.RUN_AUDIT_SINK_INTEGRATION === "1";
+  if (!integrationArmed) return manifest;
+  console.log(
+    `Integration lanes are armed, so up to ${manifest.skipped} skipped tests are expected rather than exactly that many.`
+  );
+  return { ...manifest, maxSkipped: manifest.skipped, skipped: null };
+}
+
 async function main() {
   assertCanonicalGateArgs(process.argv.slice(2));
-  const gate = await runVitestGate();
+  const gate = await runVitestGate({ expected: await expectedForEnv() });
   console.log(
     `Vitest gate passed: ${gate.passed} passed, ${gate.skipped} skipped across ${gate.testFiles} files (${gate.tests} total).`
   );

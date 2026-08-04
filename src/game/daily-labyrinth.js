@@ -1,4 +1,5 @@
 import { getBundledQuestion } from "../questions/question-bank.js";
+import { compareKeys } from "./compare-keys.js";
 
 const DAILY_RECORDS_KEY = "echo-maze:daily-records:v1";
 const DAILY_RECORD_LIMIT = 31;
@@ -164,7 +165,7 @@ export function saveDailyResult(
     next,
     ...records.filter((record) => record.date !== daily.date)
   ]
-    .sort((left, right) => right.date.localeCompare(left.date))
+    .sort((left, right) => compareKeys(right.date, left.date))
     .slice(0, DAILY_RECORD_LIMIT);
 
   if (!storage) {
@@ -191,7 +192,7 @@ function loadDailyRecords(storage) {
     return parsed
       .map(normalizeDailyRecord)
       .filter((record) => record !== null)
-      .sort((left, right) => right.date.localeCompare(left.date))
+      .sort((left, right) => compareKeys(right.date, left.date))
       .slice(0, DAILY_RECORD_LIMIT);
   } catch {
     return [];

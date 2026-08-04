@@ -7,6 +7,7 @@
 
 import { QUEST_LABYRINTH_COUNT } from "./quest-constants.js";
 import { REGION_MOTIFS } from "./region-metadata.js";
+import { uniqueId } from "./unique-id.js";
 
 export const QUEST_I_CONTENT_PACK_ID = "quest-i";
 export const QUEST_II_CONTENT_PACK_ID = "quest-ii";
@@ -265,10 +266,7 @@ export function createQuestId(contentPackId = QUEST_I_CONTENT_PACK_ID) {
   if (!QUEST_CONTENT_PACK_IDS.includes(contentPackId)) {
     throw new Error("Quest content pack is not supported.");
   }
-  const randomId = globalThis.crypto?.randomUUID?.();
-  const suffix =
-    randomId ??
-    `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+  const suffix = uniqueId();
   return contentPackId === QUEST_II_CONTENT_PACK_ID
     ? `quest_ii_${suffix}`
     : `quest_${suffix}`;

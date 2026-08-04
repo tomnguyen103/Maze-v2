@@ -58,15 +58,20 @@ export function parseVitestSummary(output) {
  * @param {string} label
  */
 function parseSummaryLine(output, label) {
+  // Vitest writes `<label>  N passed | M skipped (T)`. The total is read from
+  // the last `(T)` on the line rather than from end-of-line: anything the
+  // child appends after the counts — a stderr fragment landing mid-line, a
+  // trailing reporter glyph — used to hide the line from this parser and fail
+  // the gate on a green run.
   const lines = stripVTControlCharacters(output)
     .split(/\r?\n/)
     .filter(
       (candidate) =>
-        candidate.trim().startsWith(label) && /\(\d+\)\s*$/.test(candidate)
+        candidate.trim().startsWith(label) && /\(\d+\)/.test(candidate)
     );
   const line = lines.at(-1);
   if (!line) return null;
-  const total = line.match(/\((\d+)\)\s*$/)?.[1];
+  const total = line.match(/\((\d+)\)(?![\s\S]*\(\d+\))/)?.[1];
   if (!total) return null;
   return {
     total: Number(total),
@@ -77,15 +82,20 @@ function parseSummaryLine(output, label) {
 }
 
 /**
- * @param {{ summary: VitestSummary, output: string, expected: { testFiles: number, tests: number }, workerLossDetected?: boolean }} input
+ * @param {{ summary: VitestSummary, output: string, stderr?: string, expected: { testFiles: number, tests: number, skipped?: number | null, maxSkipped?: number }, workerLossDetected?: boolean }} input
  */
 export function assertVitestGate({
   summary,
   output,
+  stderr = "",
   expected,
   workerLossDetected = false
 }) {
-  if (workerLossDetected || containsWorkerLoss(output)) {
+  if (
+    workerLossDetected ||
+    containsWorkerLoss(output) ||
+    containsWorkerLoss(stderr)
+  ) {
     throw new Error(
       "Vitest Worker exited unexpectedly; the test gate cannot trust this run."
     );
@@ -104,6 +114,34 @@ export function assertVitestGate({
   if (summary.tests !== expected.tests) {
     throw new Error(
       `Vitest expected ${expected.tests} tests, received ${summary.tests}.`
+    );
+  }
+
+  // `null` means the caller has declared the pin inapplicable to this run —
+  // an armed integration lane executes tests the manifest counts as skipped.
+  // `undefined` means the manifest simply has no pin, which is the hole this
+  // check exists to close: a green run once printed "gate passed" while 18
+  // tests never executed.
+  if (expected.skipped === undefined) {
+    throw new Error(
+      "The test-count manifest must pin `skipped`. Without it a run can move tests from executed to skipped and still report a passing gate."
+    );
+  }
+
+  if (expected.skipped !== null && summary.skipped !== expected.skipped) {
+    throw new Error(
+      `Vitest expected ${expected.skipped} skipped tests, received ${summary.skipped}.`
+    );
+  }
+
+  // With the pin opted out, the count still cannot grow: arming a lane can
+  // only move tests from skipped to executed, never the other way.
+  if (
+    typeof expected.maxSkipped === "number" &&
+    summary.skipped > expected.maxSkipped
+  ) {
+    throw new Error(
+      `Vitest expected at most ${expected.maxSkipped} skipped tests, received ${summary.skipped}.`
     );
   }
 

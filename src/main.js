@@ -378,7 +378,7 @@ const locationSeed = seedFromLocation();
 let echoPostcardRequest = null;
 const storedQuestProgress = loadQuestProgress();
 const normalizedLocationSeed =
-  locationSeed === null ? null : normalizeSeed(locationSeed);
+  locationSeed === null ? null : normalizeSeed(locationSeed) || null;
 /** @type {{ seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string }} */
 const sharedLocationFacts = {
   seed: normalizedLocationSeed ?? "",

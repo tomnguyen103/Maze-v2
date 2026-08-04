@@ -5,8 +5,8 @@
 The Vitest command could exit successfully after losing a worker, leaving a
 partial test run looking green. The local gate therefore needed two independent
 checks: an explicit worker-loss failure and a committed expected file/test
-manifest. The gate implementation is in `scripts/vitest-gate.mjs:8-123`, and
-the manifest is `scripts/vitest-test-count.json:1-5`.
+manifest. The gate implementation is in `scripts/vitest-gate.mjs:8-160`, and
+the manifest is `scripts/vitest-test-count.json:1-6`.
 
 ## What did not work
 
@@ -17,7 +17,7 @@ JSON reporter was also unsuitable for the manifest because its suite totals
 included imported suites rather than the configured test-file count. The gate
 now parses Vitest's human-facing summary instead, and the regression tests cover
 worker loss, split child-process output, wrapper wiring, caller overrides, failed
-tests, unaccounted totals, and a short run in `tests/vitest-gate.test.js:64-167`.
+tests, unaccounted totals, and a short run in `tests/vitest-gate.test.js:67-244`.
 
 ## Root cause
 
@@ -44,3 +44,9 @@ the exported wrapper seam in `scripts/run-vitest-gate.mjs:98-114` and
 passed with 139 passed test files, 8 skipped files, 1,309 passed tests, 18
 skipped tests, and 1,327 total tests after the three wrapper regression tests;
 the checked-in manifest records those totals.
+
+## Later
+
+The gate had two more defects in the same reading path — a merged stdout/stderr
+buffer and an unpinned `skipped` count. See
+[the gate failing a green run](gate-summary-parsed-from-merged-streams.md).

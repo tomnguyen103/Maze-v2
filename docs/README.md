@@ -14,6 +14,7 @@ holds everything else, organised by how authoritative it is.
 | [`data-privacy.md`](data-privacy.md) | What the server stores per Explorer, `GET /api/me/export`, deletion, retention |
 | [`lifetime-membership-operations.md`](lifetime-membership-operations.md) | Stripe test setup, support triage, receipt recovery, refund/dispute handling, account deletion, billing disable, rollback |
 | [`performance-budget.md`](performance-budget.md) | Bundle budgets enforced by `npm run check:bundle` |
+| [`testing-database-lane.md`](testing-database-lane.md) | Running the database and object-store test lanes: `npm run test:db`, the roles they need, and why the runtime role must not be a superuser |
 
 ## Decisions — `adr/`
 

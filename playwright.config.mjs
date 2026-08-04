@@ -1,5 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
 
+/*
+ * Does the browser suite join `npm run check`? No — decided deliberately
+ * (audit finding T-05).
+ *
+ * `check` is the pre-push gate and has to stay runnable on a clean clone with
+ * no browser download and no network. Playwright needs both. `check:full`
+ * (`check` + `test:e2e`) is the pre-release gate and is what a browser matrix
+ * is run through. The two failure modes T-05 named are closed inside this
+ * config instead: `forbidOnly` stops a committed `test.only` from narrowing
+ * the suite silently, and reuse of an already-running preview is now opt-in
+ * so the suite cannot pass against a stale bundle.
+ */
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,

@@ -2,6 +2,7 @@ import {
   getClassicRunRuleset,
   normalizeKnownRunRuleset
 } from "./run-ruleset.js";
+import { compareKeys } from "./compare-keys.js";
 
 /**
  * @typedef {"up" | "right" | "down" | "left"} Direction
@@ -174,6 +175,11 @@ const INTERCEPT_STEPS = 2;
  */
 export function createRun(requestedSeed, input = {}) {
   const seed = normalizeSeed(requestedSeed);
+  if (!seed) {
+    throw new Error(
+      "createRun needs a seed that survives normalization; the caller chooses it."
+    );
+  }
   const config = normalizeConfig(input);
   const random = createRandom(seed);
   const labyrinth = generateLabyrinth(config.size, random);
@@ -821,7 +827,9 @@ function moveLuredWardens(run, bell) {
         const distance =
           (targetDistances.get(positionKey(left)) ?? Infinity) -
           (targetDistances.get(positionKey(right)) ?? Infinity);
-        return distance || positionKey(left).localeCompare(positionKey(right));
+        // Code-unit order, not `localeCompare`: a Lured Warden must pick the
+        // same tile on every device, and collation is locale-dependent.
+        return distance || compareKeys(positionKey(left), positionKey(right));
       });
     const chosen = candidates[0] ?? warden;
     wardens.push({ ...chosen, id: warden.id, mode: "lured" });
@@ -1164,19 +1172,24 @@ function clampInteger(value, fallback, minimum, maximum) {
 }
 
 /**
+ * Reduce a requested seed to the canonical form the Labyrinth generator reads.
+ *
+ * Returns `""` when nothing usable survives. It used to substitute a clock
+ * reading instead, which meant a Run whose seed came from a malformed link
+ * silently generated a different Labyrinth from the one the link named, and it
+ * put a hidden clock read inside the deterministic core. Choosing a seed is a
+ * caller's job now.
+ *
  * @param {string} seed
+ * @returns {string} the canonical seed, or `""` if the input carried none
  */
 export function normalizeSeed(seed) {
-  const normalized = String(seed ?? "")
+  return String(seed ?? "")
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 24);
-  if (normalized) {
-    return normalized;
-  }
-  return `ECHO-${Date.now().toString(36).toUpperCase()}`;
 }
 
 /**
