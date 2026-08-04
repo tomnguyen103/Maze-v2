@@ -17,6 +17,15 @@
   --color-line-soft: oklch(78% 0.035 250);
   --color-signal: oklch(84% 0.18 108);
   --color-signal-soft: oklch(93% 0.07 108);
+  /* One sequential ordinal ramp, for the Class Constellation's three bands.
+     Single hue, monotonically decreasing lightness, so "more" reads as
+     "more" without a legend. Ink and ink-muted both clear AA on every step —
+     the caption uses ink-muted, and it measured 1.95:1 before this existed.
+     The bands are Quiet, Glowing, Bright, in that order, and the previous
+     colours ran the other way. */
+  --color-band-1: oklch(94% 0.06 108);
+  --color-band-2: oklch(89% 0.11 108);
+  --color-band-3: oklch(82% 0.175 108);
   --color-signal-bright: oklch(91% 0.16 108);
   --color-signal-deep: oklch(48% 0.14 112);
   --color-signal-glow: oklch(84% 0.18 108 / 42%);

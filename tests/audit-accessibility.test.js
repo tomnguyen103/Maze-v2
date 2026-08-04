@@ -136,3 +136,44 @@ describe("FE-UI-1 — the primary call to action stays on screen", () => {
     expect(actions.slice(0, 400)).toContain("min-width: 0");
   });
 });
+
+describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
+  it("steps monotonically from Quiet to Bright", () => {
+    const bands = ["--color-band-1", "--color-band-2", "--color-band-3"].map(
+      (name) => relativeLuminance(token(name))
+    );
+    // Sequential, single hue, darker as the band rises. The old colours ran
+    // the other way: "Bright" was darker than "Glowing".
+    expect(bands[0]).toBeGreaterThan(bands[1]);
+    expect(bands[1]).toBeGreaterThan(bands[2]);
+  });
+
+  it("separates the lowest band from the surface it sits on", () => {
+    // Quiet used to inherit `--color-stone` exactly: 1.00:1, invisible.
+    expect(token("--color-band-1")).not.toEqual(token("--color-stone"));
+    expect(
+      contrast(token("--color-band-1"), token("--color-stone"))
+    ).toBeGreaterThan(1.05);
+  });
+
+  it("keeps the caption legible on every band", () => {
+    // The caption is `--color-ink-muted`; on the old "BRIGHT" band it
+    // measured 1.95:1.
+    for (const name of ["--color-band-1", "--color-band-2", "--color-band-3"]) {
+      expect(
+        contrast(token("--color-ink-muted"), token(name))
+      ).toBeGreaterThan(4.5);
+      expect(contrast(token("--color-ink"), token(name))).toBeGreaterThan(4.5);
+    }
+  });
+
+  it("is used by the markers rather than the old semantic fills", () => {
+    const css = source("src/classroom/classroom.css");
+    const markers = css.slice(css.indexOf(".classroom-constellation-marker"));
+    expect(markers).toContain("--color-band-1");
+    expect(markers).toContain("--color-band-2");
+    expect(markers).toContain("--color-band-3");
+    // `--color-gate` is success, not a magnitude.
+    expect(markers.slice(0, 1200)).not.toContain("--color-gate");
+  });
+});

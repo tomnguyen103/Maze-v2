@@ -202,7 +202,9 @@
   min-width: 0;
   padding: var(--space-2);
   border: 2px solid var(--color-line);
-  background: var(--color-stone);
+  /* The lowest band, not the page. It used to inherit the surface exactly,
+     so a Quiet marker was invisible at 1.00:1 against what it sat on. */
+  background: var(--color-band-1);
 }
 
 .classroom-constellation-marker h4,
@@ -225,11 +227,11 @@
 }
 
 .classroom-constellation-marker[data-band="glowing"] {
-  background: var(--color-signal);
+  background: var(--color-band-2);
 }
 
 .classroom-constellation-marker[data-band="bright"] {
-  background: var(--color-gate);
+  background: var(--color-band-3);
 }
 
 .classroom-expedition-card[data-expedition-status="closed"] {
