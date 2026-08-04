@@ -61,10 +61,12 @@ import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-sel
    *   applyOfflineQuestion: (question: ReturnType<typeof import("../questions/question-bank.js")["getBundledQuestion"]>, ordinal: number, key: string) => void,
  *   focusCanvas: () => void,
  *   setActive: (active: boolean) => void,
- *   clearActiveRun: () => void
+ *   clearActiveRun: () => void,
+ *   now?: () => Date
  * }} dependencies
  */
 export function createOfflineContinuityRuntime({
+  now = () => new Date(),
   elements,
   playerController,
   getActiveRunLocator,
@@ -699,7 +701,7 @@ export function createOfflineContinuityRuntime({
         run: /** @type {OfflineRunIdentity} */ (runIdentity),
         terminalRun: current,
         outcome: current.status === "won" ? "won" : "lost",
-        terminalAt: new Date()
+        terminalAt: now()
       });
       reportFailure(result);
       if (result.record) {

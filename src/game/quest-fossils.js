@@ -2,6 +2,7 @@ import {
   getDifficultyBand,
   isGateWardenMilestone
 } from "../questions/quest-levels.js";
+import { compareKeys } from "./compare-keys.js";
 
 export const ECHO_FOSSIL_VERSION = 1;
 export const MAX_FOSSILS_PER_QUEST = 40;
@@ -419,5 +420,5 @@ function hasExactKeys(value, keys) {
 
 /** @param {EchoFossil} left @param {EchoFossil} right */
 function compareFossils(left, right) {
-  return left.fossilId.localeCompare(right.fossilId);
+  return compareKeys(left.fossilId, right.fossilId);
 }

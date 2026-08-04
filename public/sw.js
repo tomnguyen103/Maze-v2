@@ -8,6 +8,17 @@
  * store; IndexedDB holds only the version/run references that protect it.
  */
 
+/**
+ * The worker global, typed. Without this the checker sees `self` as a plain
+ * `WorkerGlobalScope`, so every handler below receives a bare `Event` and the
+ * service-worker members it actually uses look like mistakes.
+ *
+ * @type {ServiceWorkerGlobalScope & typeof globalThis}
+ */
+const worker = /** @type {ServiceWorkerGlobalScope & typeof globalThis} */ (
+  /** @type {unknown} */ (self)
+);
+
 const PIN_PREFIX = "echo-maze-pin-";
 const ACCOUNT_SCOPED = "account";
 const PUBLIC_SCOPED = "public";
@@ -42,6 +53,18 @@ function emptyState() {
   };
 }
 
+/** @param {unknown} value @returns {{ version: string, blocked: boolean } | null} */
+function normalizeStaged(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const staged = /** @type {Record<string, unknown>} */ (value);
+  return {
+    version: typeof staged.version === "string" ? staged.version : "",
+    blocked: staged.blocked === true
+  };
+}
+
 /** @param {unknown} value @returns {WorkerState} */
 function normalizeState(value) {
   if (!value || typeof value !== "object") {
@@ -61,16 +84,7 @@ function normalizeState(value) {
       typeof candidate.activeAccountScope === "string"
         ? candidate.activeAccountScope
         : null,
-    staged:
-      candidate.staged && typeof candidate.staged === "object"
-        ? {
-            version:
-              typeof candidate.staged.version === "string"
-                ? candidate.staged.version
-                : "",
-            blocked: candidate.staged.blocked === true
-          }
-        : null,
+    staged: normalizeStaged(candidate.staged),
     runs
   };
 }
@@ -160,21 +174,26 @@ function mutateState(operation) {
     }
     return result;
   });
-  mutationChain = mutation.catch(() => {});
+  // The chain only sequences mutations; it carries no result and must never
+  // reject, or every later mutation would be skipped.
+  mutationChain = mutation.then(
+    () => undefined,
+    () => undefined
+  );
   return mutation;
 }
 
-self.addEventListener("install", (event) => {
+worker.addEventListener("install", (event) => {
   // Never skipWaiting: taking over immediately is exactly the mid-Run swap
   // this worker exists to prevent.
   event.waitUntil(Promise.resolve());
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+worker.addEventListener("activate", (event) => {
+  event.waitUntil(worker.clients.claim());
 });
 
-self.addEventListener("message", (event) => {
+worker.addEventListener("message", (event) => {
   const message = event.data;
   if (!message || typeof message !== "object") {
     return;
@@ -182,10 +201,19 @@ self.addEventListener("message", (event) => {
   const reply = (/** @type {unknown} */ payload) => {
     event.ports?.[0]?.postMessage(payload);
   };
+  /** @param {Promise<unknown>} promise */
   const respond = (promise) => {
     event.waitUntil(
-      promise.then(reply, (error) =>
-        reply({ ok: false, reason: String(error?.message ?? error) })
+      promise.then(reply, (/** @type {unknown} */ error) =>
+        reply({
+          ok: false,
+          reason: String(
+            (typeof (/** @type {{ message?: unknown }} */ (error))?.message ===
+            "string"
+              ? /** @type {{ message: string }} */ (error).message
+              : null) ?? error
+          )
+        })
       )
     );
   };
@@ -247,7 +275,7 @@ self.addEventListener("message", (event) => {
   }
 });
 
-self.addEventListener("fetch", (event) => {
+worker.addEventListener("fetch", (event) => {
   event.respondWith(
     Promise.race([
       mutationChain.then(() => statePromise),
@@ -272,13 +300,13 @@ self.addEventListener("fetch", (event) => {
  */
 function fetchFromPinnedVersion(request, state) {
   const selected = versionForRequest(state);
-  if (!selected?.version) {
+  const version = selected?.version;
+  if (!version) {
     return fetch(request);
   }
-  return (selected.accountScope
-    ? caches.open(
-        cacheName(selected.version, ACCOUNT_SCOPED, selected.accountScope)
-      )
+  const accountScope = selected?.accountScope ?? null;
+  return (accountScope
+    ? caches.open(cacheName(version, ACCOUNT_SCOPED, accountScope))
     : Promise.resolve(null)
   )
     .then((cache) => cache?.match(request))
@@ -286,7 +314,7 @@ function fetchFromPinnedVersion(request, state) {
       (hit) =>
         hit ??
         caches
-          .open(cacheName(selected.version, PUBLIC_SCOPED))
+          .open(cacheName(version, PUBLIC_SCOPED))
           .then((cache) => cache.match(request))
           .then((publicHit) => publicHit ?? fetch(request))
     );
@@ -307,7 +335,14 @@ function versionForRequest(state) {
     : null;
 }
 
-/** @param {{ version: string, assets: { url: string, scope?: string }[] }} message @param {WorkerState} state */
+/**
+ * @param {{
+ *   version: string,
+ *   assets: { url: string, scope?: string }[],
+ *   accountScope?: string | null
+ * }} message
+ * @param {WorkerState} state
+ */
 async function pin(message, state) {
   const accountAssets = (message.assets ?? []).filter(
     (asset) => asset.scope !== PUBLIC_SCOPED

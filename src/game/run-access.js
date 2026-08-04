@@ -1,17 +1,11 @@
 import { normalizeRunRuleset } from "./run-ruleset.js";
+import { uniqueId } from "./unique-id.js";
 
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
 
-function defaultIdFactory() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
 /** @param {() => string} [idFactory] */
-export function createRunAccessId(idFactory = defaultIdFactory) {
+export function createRunAccessId(idFactory = uniqueId) {
   const runId = `access_${idFactory()}`.slice(0, 128);
   if (!RUN_ID_PATTERN.test(runId)) {
     throw new Error("Could not create a valid Run Access id.");
@@ -44,7 +38,7 @@ export function createRunAccessId(idFactory = defaultIdFactory) {
  *   questId?: string
  * }}
  */
-export function withRunAccessId(locator, idFactory = defaultIdFactory) {
+export function withRunAccessId(locator, idFactory = uniqueId) {
   const runId =
     typeof locator.runId === "string" && RUN_ID_PATTERN.test(locator.runId)
       ? locator.runId

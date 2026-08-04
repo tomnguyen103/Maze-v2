@@ -1,5 +1,6 @@
 {
-  "testFiles": 176,
-  "tests": 1499,
-  "source": "Full Vitest run on 2026-08-04 after the A+ audit Group B quick wins added retry-after and custom-property coverage; update deliberately when tests change."
+  "testFiles": 178,
+  "tests": 1526,
+  "skipped": 18,
+  "source": "Full Vitest run on 2026-08-04 after the A+ audit testing and DX/CI batch. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL — see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

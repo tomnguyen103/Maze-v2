@@ -1,4 +1,4 @@
-import { applyAction, createRun } from "./game-session.js";
+import { applyAction, createRun, normalizeSeed } from "./game-session.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
 import { normalizeRunReplay } from "./run-replay-contract.js";
 import { normalizeRunRuleset } from "./run-ruleset.js";
@@ -39,7 +39,7 @@ export function buildRunReplayTimeline(record) {
   if (
     !replay ||
     typeof record.seed !== "string" ||
-    !record.seed ||
+    !normalizeSeed(record.seed) ||
     !levelId ||
     !labyrinthNumber ||
     !ruleset

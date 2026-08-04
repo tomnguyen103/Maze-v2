@@ -10,7 +10,8 @@ import { runVitest, runVitestGate } from "../scripts/run-vitest-gate.mjs";
 
 const EXPECTED = {
   testFiles: 147,
-  tests: 1324
+  tests: 1324,
+  skipped: 18
 };
 
 function summary(overrides = {}) {
@@ -28,8 +29,8 @@ function reporterOutput() {
   return "Test Files  139 passed | 8 skipped (147)\nTests  1306 passed | 18 skipped (1324)";
 }
 
-/** @param {string[]} stdoutChunks */
-function fakeChild(stdoutChunks = []) {
+/** @param {string[]} stdoutChunks @param {string[]} [stderrChunks] */
+function fakeChild(stdoutChunks = [], stderrChunks = []) {
   const child = Object.assign(new EventEmitter(), {
     stdout: new EventEmitter(),
     stderr: new EventEmitter()
@@ -37,6 +38,9 @@ function fakeChild(stdoutChunks = []) {
   queueMicrotask(() => {
     for (const chunk of stdoutChunks) {
       child.stdout.emit("data", Buffer.from(chunk));
+    }
+    for (const chunk of stderrChunks) {
+      child.stderr.emit("data", Buffer.from(chunk));
     }
     child.emit("close", 0, null);
   });
@@ -163,5 +167,72 @@ describe("Vitest gate validation", () => {
     );
 
     expect(packageJson.scripts.test).toBe("node scripts/run-vitest-gate.mjs");
+  });
+});
+
+describe("skipped-count pin", () => {
+  it("refuses a manifest with no `skipped` pin", () => {
+    expect(() =>
+      assertVitestGate({
+        summary: summary(),
+        output: "",
+        expected: { testFiles: 147, tests: 1324 }
+      })
+    ).toThrow("must pin `skipped`");
+  });
+
+  it("fails when a run moves tests from executed to skipped", () => {
+    expect(() =>
+      assertVitestGate({
+        summary: summary({ passed: 1300, skipped: 24 }),
+        output: "",
+        expected: EXPECTED
+      })
+    ).toThrow("expected 18 skipped tests, received 24");
+  });
+
+  it("lets an armed integration lane opt the pin out explicitly", () => {
+    expect(
+      assertVitestGate({
+        summary: summary({ passed: 1324, skipped: 0 }),
+        output: "",
+        expected: { ...EXPECTED, skipped: null }
+      })
+    ).toMatchObject({ skipped: 0 });
+  });
+
+  it("keeps the manifest's `skipped` a number, not a placeholder", async () => {
+    const manifest = JSON.parse(
+      await readFile(
+        new URL("../scripts/vitest-test-count.json", import.meta.url),
+        "utf8"
+      )
+    );
+    expect(typeof manifest.skipped).toBe("number");
+  });
+});
+
+describe("summary parsing", () => {
+  it("reads the counts when stderr interleaves into the summary line", () => {
+    // Reproduces the false gate failure: a test writing to stderr landed
+    // inside the summary line, so the end-of-line anchor never matched.
+    const interleaved =
+      "Test Files  139 passed | 8 skipped (147)stderr | leaked\n" +
+      "Tests  1306 passed | 18 skipped (1324) trailing glyph";
+    expect(parseVitestSummary(interleaved)).toMatchObject({
+      testFiles: 147,
+      tests: 1324,
+      passed: 1306,
+      skipped: 18
+    });
+  });
+
+  it("parses the summary from stdout when stderr carries its own numbers", async () => {
+    const result = await runVitest({
+      spawnProcess: () => fakeChild([reporterOutput()], ["Tests  1 passed (1)"]),
+      writeStdout: () => {},
+      writeStderr: () => {}
+    });
+    expect(parseVitestSummary(result.output)).toMatchObject({ tests: 1324 });
   });
 });

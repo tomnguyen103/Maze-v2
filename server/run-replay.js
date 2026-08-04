@@ -1,4 +1,8 @@
-import { applyAction, createRun } from "../src/game/game-session.js";
+import {
+  applyAction,
+  createRun,
+  normalizeSeed
+} from "../src/game/game-session.js";
 import {
   RUN_ACTION_LOG_MAX_ACTIONS,
   RUN_ACTION_LOG_VERSION
@@ -24,6 +28,19 @@ const REVISION_ID_PATTERN = /^[a-z0-9:_-]{1,120}$/i;
 export class ReplayInputError extends Error {}
 
 /**
+ * `createRun` refuses a seed that normalizes to nothing rather than inventing
+ * one. Callers of this module classify on `ReplayInputError`, so the refusal
+ * has to arrive as one.
+ *
+ * @param {string} seed
+ */
+function assertReplayableSeed(seed) {
+  if (!normalizeSeed(seed)) {
+    throw new ReplayInputError("This Run's seed is missing or unusable.");
+  }
+}
+
+/**
  * @param {unknown} value
  * @param {{
  *   seed: string,
@@ -42,6 +59,7 @@ export class ReplayInputError extends Error {}
  */
 export function verifyRunReplay(value, trusted) {
   const log = validateLog(value);
+  assertReplayableSeed(trusted.seed);
   let run = createRun(trusted.seed, trusted.config);
   let elapsedMs = 0;
   let questionIndex = 0;
@@ -136,6 +154,7 @@ export function verifyRunReplay(value, trusted) {
  */
 export function verifyOfflineRunReplay(value, trusted) {
   const log = validateLogV2(value);
+  assertReplayableSeed(trusted.seed);
   let run = createRun(trusted.seed, trusted.config);
   let elapsedMs = 0;
   trusted.onStep?.(run, null);
