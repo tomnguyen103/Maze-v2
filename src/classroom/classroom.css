@@ -339,7 +339,7 @@
   min-height: 1.45em;
   margin: var(--space-2) 0 0;
   color: var(--color-ink-muted);
-  font-size: 0.86rem;
+  font-size: var(--text-body);
 }
 
 .classroom-invitation-result {

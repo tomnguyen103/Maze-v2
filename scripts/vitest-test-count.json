@@ -1,6 +1,6 @@
 {
   "testFiles": 187,
-  "tests": 1641,
+  "tests": 1643,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-08-04 after WP-02 (landing LCP text inlined in index.html). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-08-04 after TYPE (real type scale, 16px body-copy floor). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

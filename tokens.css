@@ -136,6 +136,23 @@
   --duration-reveal: 280ms;
   --duration-recoil: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /*
+   * A real type scale (TYPE), not 57 hand-picked font-size values against
+   * one token. Roles, not just sizes:
+   *   --text-body   the hard floor. A player reads this to understand or
+   *                  decide something — dialog copy, guidance, status
+   *                  messages. Never smaller than 16px.
+   *   --text-label  badges, eyebrows, stat chips, short utility captions.
+   *                  Not read for understanding on its own; scanned
+   *                  alongside something bigger that carries the meaning.
+   *   --text-compact  mono utility figures (admin tables, Atlas counters).
+   *                    Existing token, unchanged.
+   * Display and headline sizes are untouched — they already scale
+   * responsively via clamp() and the audit's evidence (133 sub-16px nodes)
+   * was about the small end of the scale, not the large one.
+   */
+  --text-body: 1rem;
+  --text-label: 0.875rem;
   --text-compact: 0.7rem;
 }
 
