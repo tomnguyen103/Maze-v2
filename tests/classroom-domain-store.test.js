@@ -49,7 +49,7 @@ describe("Classroom Domain store", () => {
     expect(database.query.mock.calls).toEqual([
       [
         expect.stringContaining("register_classroom_domain"),
-        ["org_class_1", "user_teacher_1", "students.school.example"]
+        ["org_class_1", "user_teacher_1", "students.school.example", null]
       ],
       [
         expect.stringContaining("read_classroom_domain"),

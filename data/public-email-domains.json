@@ -7,8 +7,20 @@
     "canonicalization": "sorted lowercase unique JSON array without whitespace",
     "baseDomainsSha256": "fdee865b4e71f671399ed6b548f0603c3769b0ce599930e2c9f84597004372a4",
     "reviewedSupplements": [
-      "tuta.io"
-    ]
+      "tuta.com",
+      "tuta.io",
+      "tutamail.com",
+      "tutanota.com",
+      "tutanota.de"
+    ],
+    "reviewedSupplementsAfterMigration0017": [
+      "tuta.com",
+      "tutamail.com",
+      "tutanota.com",
+      "tutanota.de"
+    ],
+    "snapshotTakenAt": "2026-07-28",
+    "maxSnapshotAgeDays": 365
   },
   "domains": [
     "0-mail.com",
@@ -11915,7 +11927,11 @@
     "turual.com",
     "turuma.com",
     "tut.by",
+    "tuta.com",
     "tuta.io",
+    "tutamail.com",
+    "tutanota.com",
+    "tutanota.de",
     "tutuapp.bid",
     "tuyenchau.click",
     "tuyenchau.online",

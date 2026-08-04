@@ -288,7 +288,10 @@ describe("Classroom API", () => {
     expect(store.registerDomain).toHaveBeenCalledWith(
       "user_teacher_1",
       "org_class_1",
-      "school.example"
+      "school.example",
+      // Tri-state. `null` is "the Teacher said nothing", which leaves an
+      // already-armed Classroom armed; SQL no longer assumes a value.
+      null
     );
     expect(audit).toHaveBeenCalledWith(
       expect.anything(),
@@ -333,7 +336,10 @@ describe("Classroom API", () => {
     expect(store.registerDomain).toHaveBeenCalledWith(
       "user_teacher_1",
       "org_class_1",
-      "school.example"
+      "school.example",
+      // Tri-state. `null` is "the Teacher said nothing", which leaves an
+      // already-armed Classroom armed; SQL no longer assumes a value.
+      null
     );
   });
 

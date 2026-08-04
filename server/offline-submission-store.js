@@ -137,6 +137,44 @@ export function createOfflineSubmissionStore(pool) {
       );
     },
 
+    /**
+     * The recorded outcome for one idempotency key, or `null`.
+     *
+     * Read-only and deliberately cheap: `submit` calls it before replaying so
+     * a resubmitted package is answered from the ledger instead of costing a
+     * full verification first. Row-level security scopes the read to the
+     * Explorer in the transaction-local tenant context, so a key belonging to
+     * someone else reads as absent rather than as somebody's outcome.
+     *
+     * @param {string} userId
+     * @param {string} idempotencyKey
+     */
+    async findRecordedSubmission(userId, idempotencyKey) {
+      return withTenantContext(
+        pool,
+        { explorerId: userId, classroomId: null },
+        async (client) => {
+          const result = await client.query(
+            `SELECT run_id, accepted, applied_at, replay_result
+             FROM offline_pending_submissions
+             WHERE idempotency_key = $1`,
+            [idempotencyKey]
+          );
+          const row = result.rows?.[0];
+          if (!row) return null;
+          return {
+            runId: String(row.run_id),
+            accepted: row.accepted === true,
+            applied: row.applied_at !== null && row.applied_at !== undefined,
+            result:
+              row.replay_result === null || row.replay_result === undefined
+                ? null
+                : /** @type {Record<string, unknown>} */ (row.replay_result)
+          };
+        }
+      );
+    },
+
     /** @param {string} userId @param {string} idempotencyKey */
     async pendingApply(userId, idempotencyKey) {
       return withTenantContext(

@@ -55,6 +55,38 @@ export function createUserDeletionStore(pool) {
            WHERE clerk_user_id = $1`,
           [userId]
         );
+        // Three tables kept the Clerk identifier after erasure reported
+        // success. `user_roles` and `classroom_authority_versions` are not
+        // reachable through any RLS-scoped read, so nothing would have
+        // surfaced them; `rate_limit_counters` holds the same identifier
+        // inside its key for a signed-in Explorer. All three predate the
+        // applied boundary, so unlike the newer tables asserted below they
+        // need no `to_regclass` guard — they are always present.
+        await client.query(
+          `DELETE FROM user_roles
+           WHERE user_id = $1`,
+          [userId]
+        );
+        // Keys are `<budget>:user:<clerk id>`; the guest form is
+        // `<budget>:ip:<hash>` and holds no account identifier.
+        await client.query(
+          `DELETE FROM rate_limit_counters
+           WHERE split_part(key, ':user:', 2) = $1`,
+          [userId]
+        );
+        // Ordered before the Membership rows are gone: this table records a
+        // Membership by its Clerk membership id, so the join is the only way
+        // back to the Explorer.
+        await client.query(
+          `DELETE FROM classroom_authority_versions AS authority
+           WHERE authority.entity_type = 'membership'
+             AND authority.entity_id IN (
+               SELECT membership.clerk_membership_id
+               FROM classroom_memberships AS membership
+               WHERE membership.clerk_user_id = $1
+             )`,
+          [userId]
+        );
         await client.query(
           `DELETE FROM player_access
            WHERE clerk_user_id = $1`,
@@ -141,7 +173,24 @@ export function createUserDeletionStore(pool) {
                    SELECT 1 FROM echo_fossil_collections
                    WHERE player_id = $1
                  )
-               ) AS echo_fossils_deleted`,
+               ) AS echo_fossils_deleted,
+               NOT EXISTS (
+                 SELECT 1 FROM user_roles
+                 WHERE user_id = $1
+               ) AS roles_deleted,
+               NOT EXISTS (
+                 SELECT 1 FROM rate_limit_counters
+                 WHERE split_part(key, ':user:', 2) = $1
+               ) AS rate_limit_counters_deleted,
+               NOT EXISTS (
+                 SELECT 1 FROM classroom_authority_versions AS authority
+                 WHERE authority.entity_type = 'membership'
+                   AND authority.entity_id IN (
+                     SELECT membership.clerk_membership_id
+                     FROM classroom_memberships AS membership
+                     WHERE membership.clerk_user_id = $1
+                   )
+               ) AS classroom_authority_versions_deleted`,
           [userId, deletedUserHash(userId)]
         );
         if (!deletionVerified(verification.rows?.[0])) {
@@ -184,7 +233,10 @@ const DELETION_ASSERTIONS = Object.freeze([
   "daily_trail_contributions_deleted",
   "offline_run_receipts_deleted",
   "offline_pending_submissions_deleted",
-  "echo_fossils_deleted"
+  "echo_fossils_deleted",
+  "roles_deleted",
+  "rate_limit_counters_deleted",
+  "classroom_authority_versions_deleted"
 ]);
 
 /** @param {unknown} row */

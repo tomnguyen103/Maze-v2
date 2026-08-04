@@ -16,6 +16,7 @@ holds everything else, organised by how authoritative it is.
 | [`performance-budget.md`](performance-budget.md) | Bundle budgets enforced by `npm run check:bundle` |
 | [`testing-database-lane.md`](testing-database-lane.md) | Running the database and object-store test lanes: `npm run test:db`, the roles they need, and why the runtime role must not be a superuser |
 | [`secret-scanning.md`](secret-scanning.md) | `npm run security:secrets`, the recorded gitleaks result over full history, and why the two allowlisted matches are not secrets |
+| [`migration-safety.md`](migration-safety.md) | The applied boundary, which statements lock a live table, `CONCURRENTLY`, and what a documented quiesce window has to say |
 
 ## Decisions — `adr/`
 

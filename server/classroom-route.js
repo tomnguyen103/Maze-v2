@@ -196,7 +196,8 @@ function advisoryCompletionDate(value) {
  *     registerDomain: (
  *       userId: string,
  *       classroomId: string,
- *       domain: string
+ *       domain: string,
+ *       autoJoinEnabled?: boolean | null
  *     ) => Promise<{
  *       domain: string,
  *       autoJoinEnabled: boolean
@@ -433,7 +434,10 @@ export function createClassroomHandler({
         const registered = await store.registerDomain(
           userId,
           selectedClassroomId,
-          domain
+          domain,
+          typeof body.autoJoinEnabled === "boolean"
+            ? body.autoJoinEnabled
+            : null
         );
         await recordAudit(request, {
           actorId: userId,

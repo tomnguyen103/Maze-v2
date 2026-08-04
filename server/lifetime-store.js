@@ -55,7 +55,21 @@ export function createLifetimeStore(pool) {
           [userId]
         );
         const accessRow = access.rows[0] ?? {};
-        if (accessRow.membership_state === "active") {
+        // `refunded` is absorbing in `transitionLifetimeState`: once an
+        // account reaches it, no later event restores membership. Creating a
+        // second Checkout from that state charges a parent again and changes
+        // nothing — the child keeps zero Runs while a stranger has three, and
+        // deleting the account is the only way out. The refusal is a state a
+        // human resolves, not one a payment can.
+        const membershipState = String(accessRow.membership_state ?? "none");
+        if (membershipState !== "none" && membershipState !== "active") {
+          return {
+            purchaseId: String(accessRow.active_purchase_id ?? purchaseId),
+            sessionId: null,
+            state: "membership-blocked"
+          };
+        }
+        if (membershipState === "active") {
           return {
             purchaseId: String(
               accessRow.active_purchase_id ?? purchaseId

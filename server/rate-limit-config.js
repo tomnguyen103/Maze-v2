@@ -19,6 +19,10 @@ export const RATE_LIMIT_BUDGETS = {
   // without an identity, and each call costs two definer round trips. Wide
   // enough that reopening the Daily dialog never reaches it.
   "daily.constellation": { limit: 30, windowMs: 60_000 },
+  // Anonymous and address-bound. The Global Scoreboard is a public read whose
+  // cost grows with the partition, and the partition grows with what players
+  // submit, so it cannot stay unmetered.
+  "leaderboard.read": { limit: 60, windowMs: 60_000 },
   "lifetime.checkout": { limit: 5, windowMs: 60_000 },
   "profile.write": { limit: 10, windowMs: 60_000 },
   "export.self": { limit: 2, windowMs: 3_600_000 },

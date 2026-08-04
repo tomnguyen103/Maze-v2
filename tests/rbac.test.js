@@ -260,7 +260,13 @@ describe("publicAccess", () => {
   it("exposes the role and its permissions for UI gating only", () => {
     expect(publicAccess("moderator")).toEqual({
       role: "moderator",
-      permissions: ["audit:read", "questions:read", "questions:write", "users:read"]
+      permissions: [
+        "audit:read",
+        "questions:read",
+        "questions:write",
+        "users:names:write",
+        "users:read"
+      ]
     });
   });
 

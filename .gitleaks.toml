@@ -24,8 +24,15 @@ id = "generic-api-key"
   # cannot claim a Verified Classroom Domain. There is nothing to leak.
   # Scoped to this one file and this one rule, and to values shaped like a
   # domain, so an actual key committed to the same file would still be caught.
+  # `docs/secret-scanning.md` is here for the same reason and no other: it
+  # quotes the line above verbatim to explain the false positive, so the scan
+  # reports on its own explanation. Both files are constrained by the same
+  # domain-shaped value regex, so a real key in either is still caught.
   [rules.allowlist]
-  description = "Public email-provider denylist, not credentials"
-  paths = ['''db/migrations/0017_verified_classroom_domains\.sql''']
+  description = "Public email-provider denylist, and the note explaining it"
+  paths = [
+    '''db/migrations/0017_verified_classroom_domains\.sql''',
+    '''docs/secret-scanning\.md'''
+  ]
   regexes = ['''^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$''']
   regexTarget = "match"

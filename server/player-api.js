@@ -71,7 +71,10 @@ import {
   trustsProxyHeaders
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
-import { loadLifetimeConfig } from "./lifetime-config.js";
+import {
+  loadLifetimeConfig,
+  resolveEnforcement
+} from "./lifetime-config.js";
 import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
 import { deriveOfflineDeviceHash } from "./offline-device.js";
 import {
@@ -360,6 +363,19 @@ export function createPlayerApi(env = process.env) {
   const roleStore = createRoleStore(queryAdapter);
   const roleResolver = createRoleResolver({ store: roleStore });
   const lifetimeConfig = loadLifetimeConfig(env);
+  // Asking for enforcement without a usable checkout is a misconfiguration,
+  // and it used to resolve silently to "off" — a state operators read as an
+  // intentional billing-disable. It is loud now, but not fatal: this factory
+  // is constructed at module load in every `api/*.js` entry point, so a throw
+  // here would cold-start-crash the Scoreboard and the Stripe webhook too.
+  // `server.js` is the deployment where refusing to boot is right, and it
+  // calls `resolveEnforcementEnabled` for exactly that.
+  const enforcementDecision = resolveEnforcement(env);
+  if (enforcementDecision.refusal) {
+    console.error("[access] enforcement refused", {
+      reason: enforcementDecision.refusal
+    });
+  }
   const inboxStore = createWebhookInboxStore(queryAdapter);
   const classroomAuthorityStore = createClassroomAuthorityStore(queryAdapter);
   const classroomDomainStore = createClassroomDomainStore(queryAdapter);
@@ -464,6 +480,8 @@ export function createPlayerApi(env = process.env) {
               },
               pendingApply: (key) =>
                 offlineSubmissionStore.pendingApply(playerId, key),
+              findRecordedSubmission: (key) =>
+                offlineSubmissionStore.findRecordedSubmission(playerId, key),
               applyCloudOutcome: offlineCloudOutcomeApplier
             });
             return service.submit(submission);
@@ -579,7 +597,8 @@ export function createPlayerApi(env = process.env) {
       ? (payment) => lifetimeProvider.issueRefund(payment)
       : undefined,
     recordAudit,
-    mirrorRole: createClerkRoleMirror(env)
+    mirrorRole: createClerkRoleMirror(env),
+    clearUsername: (userId) => store.clearUsername(userId)
   });
   const inbox = createWebhookInbox({
     store: inboxStore,
@@ -716,9 +735,7 @@ export function createPlayerApi(env = process.env) {
     guestStore: guestDemoStore,
     addressHashFor,
     getUserId,
-    enforcementEnabled:
-      env.RUN_ACCESS_ENFORCEMENT_ENABLED === "true" &&
-      lifetimeConfig !== null,
+    enforcementEnabled: enforcementDecision.enabled,
     guestDemoEnforcementEnabled: Boolean(addressSalt),
     rateLimit,
     recordEvent: recordProductEvent,

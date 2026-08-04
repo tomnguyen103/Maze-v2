@@ -106,3 +106,39 @@ with the Membership. Personal Play remains.
   schema/version metadata, time, maximum audit id, row hash, and signature; its
   compliance retention period is deployment-configured.
 - The Lantern Journal is clearable by the Explorer in-game at any time.
+
+## Tracing
+
+Tracing is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. With it set, spans
+leave this process for whatever OTLP-compatible backend that endpoint names —
+a third party, in every deployment we run. **Erasure does not reach it.**
+`DELETE /api/me` and the Clerk `user.deleted` webhook remove rows from this
+database; nothing here can retract a span already exported.
+
+That makes span attributes a data-retention decision, not a debugging
+convenience. The default HTTP instrumentation carries two things this API must
+not export:
+
+- **The caller's address.** The callers are children.
+- **The full request target, including its query string.** The admin export
+  path puts the Explorer being exported into it, so a child's Clerk identifier
+  would ride along.
+
+`server/tracing.js` deletes both from every span as it ends, through a span
+processor rather than the instrumentation's response hook — the hook does not
+run for an aborted or errored request, and those spans are exported too. The
+attributes suppressed are listed in `SUPPRESSED_HTTP_ATTRIBUTES`, with the
+deprecated names alongside the current ones because which pair is emitted
+depends on the instrumentation's semantic-convention mode.
+
+What still leaves the process: the route template, method, status, duration,
+and the SQL statement text from the pg instrumentation — which carries bound
+parameters as placeholders, never values.
+
+### Before pointing it at a backend
+
+Name the backend and its operator in the deployment record, confirm its
+retention period, and confirm it is covered by whatever processor agreement
+applies to children's data in the jurisdictions served. A trace backend is a
+sub-processor. Leaving `OTEL_EXPORTER_OTLP_ENDPOINT` unset is a valid answer
+and is the current one.

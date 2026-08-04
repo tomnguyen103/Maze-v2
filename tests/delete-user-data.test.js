@@ -26,7 +26,10 @@ function verifiedClient() {
               daily_trail_contributions_deleted: true,
               offline_run_receipts_deleted: true,
               offline_pending_submissions_deleted: true,
-              echo_fossils_deleted: true
+              echo_fossils_deleted: true,
+              roles_deleted: true,
+              rate_limit_counters_deleted: true,
+              classroom_authority_versions_deleted: true
           }]
         : []
     })),
