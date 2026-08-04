@@ -3,7 +3,14 @@ import { createClerkBrowser } from "../player/clerk-browser.js";
 
 /** @param {HTMLElement} root */
 export function renderLanding(root) {
-  root.innerHTML = `
+  // index.html inlines this same markup statically so the hero text paints
+  // before any JS runs (WP-02). A landing visit finds it already correct and
+  // only wires listeners onto it; every other route clears it first (see
+  // src/app.js), so a stale copy is never what this rebuilds onto. The two
+  // copies have to keep the same DOM shape (whitespace aside) — see the
+  // structural-equality test in tests/audit-performance.test.js.
+  if (!document.getElementById("landing-title")) {
+    root.innerHTML = `
     <a class="skip-link" href="#landing-main">Skip to the introduction</a>
     <header class="landing-header">
       <a class="wordmark" href="/" aria-label="Echo Maze home">Echo Maze</a>
@@ -66,6 +73,7 @@ export function renderLanding(root) {
       </section>
     </main>
   `;
+  }
   const headerSignIn = requiredElement("landing-sign-in", HTMLButtonElement);
   const heroSignIn = requiredElement(
     "landing-sign-in-hero",

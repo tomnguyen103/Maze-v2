@@ -135,7 +135,7 @@ describe("A11Y-01 — Trail Compass is discoverable before Settings is opened", 
     // knew to open Settings. A second skip-link, reachable before anything
     // else on the page, names it and points at the fix.
     const html = source("index.html");
-    const skipLinks = html.slice(html.indexOf('<a class="skip-link"'));
+    const skipLinks = html.slice(html.indexOf("Skip to the Labyrinth"));
     expect(skipLinks.slice(0, 250)).toContain(
       '<button class="skip-link" id="trail-compass-discover" type="button">'
     );

@@ -49,6 +49,65 @@ describe("WP-01 — a visitor who never signs in never downloads Clerk", () => {
   });
 });
 
+describe("WP-02 — the landing LCP text paints before any JS runs", () => {
+  it("inlines the hero markup directly in index.html, not inside the inert game template", () => {
+    const html = source("index.html");
+    const gameRoot = html.slice(html.indexOf('<div id="game-root">'));
+    const beforeTemplate = gameRoot.slice(0, gameRoot.indexOf("<template"));
+    expect(beforeTemplate).toContain('<h1 id="landing-title">Echo Maze</h1>');
+    expect(beforeTemplate).toContain(
+      'href="/play" id="landing-primary-action"'
+    );
+  });
+
+  it("skips rebuilding the hero when the static markup is already there", () => {
+    const controller = source("src/landing/landing-controller.js");
+    const fn = controller.slice(controller.indexOf("export function renderLanding"));
+    expect(fn.slice(0, 700)).toContain(
+      'if (!document.getElementById("landing-title")) {'
+    );
+  });
+
+  it("clears the inlined hero before /admin or /class can render over it", () => {
+    // Both chunks arrive over an async import; without this the fetch delay
+    // is exactly how long the landing hero flashes on a route that isn't it.
+    const app = source("src/app.js");
+    const adminBranch = app.slice(app.indexOf('url.pathname === "/admin"'));
+    expect(adminBranch.slice(0, 350)).toContain('gameRoot.innerHTML = "";');
+    const classBranch = app.slice(app.indexOf('url.pathname === "/class"'));
+    expect(classBranch.slice(0, 300)).toContain('gameRoot.innerHTML = "";');
+  });
+
+  it("keeps the static copy and renderLanding's template in the same DOM shape", () => {
+    // Two copies of the same markup with nothing checking they agree: a hand
+    // edit to one that misses the other ships silently, because the guard in
+    // renderLanding means `/` just keeps showing the stale static copy
+    // forever with a fully green gate. Whitespace-normalized structural
+    // equality is what actually has to hold, not byte-identical text.
+    /** @param {string} fragment */
+    const normalize = (fragment) => fragment.replace(/>\s+</g, "><").trim();
+
+    const html = source("index.html");
+    const htmlStart = html.indexOf(
+      '<a class="skip-link" href="#landing-main">'
+    );
+    const htmlEnd = html.indexOf("</main>", htmlStart) + "</main>".length;
+    const staticCopy = normalize(html.slice(htmlStart, htmlEnd));
+
+    const controller = source("src/landing/landing-controller.js");
+    const controllerStart = controller.indexOf(
+      '<a class="skip-link" href="#landing-main">'
+    );
+    const controllerEnd =
+      controller.indexOf("</main>", controllerStart) + "</main>".length;
+    const renderedCopy = normalize(
+      controller.slice(controllerStart, controllerEnd)
+    );
+
+    expect(staticCopy).toBe(renderedCopy);
+  });
+});
+
 describe("P-01 — the game budget measures what a player waits for", () => {
   it("sums every chunk a Run needs, not just the entry", () => {
     const script = source("scripts/check-bundle-budget.mjs");
