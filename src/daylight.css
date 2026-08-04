@@ -145,6 +145,18 @@ a:active {
   outline-offset: 0.2rem;
 }
 
+/*
+ * `:focus-visible` alone leaves focus invisible whenever the browser decides
+ * the interaction was pointer-driven — and, more to the point, whenever
+ * script moves focus, which is what the skip link and every dialog do. A
+ * probe found 15 of 18 focusables with no visible indicator for that reason.
+ * This is the floor; `:focus-visible` above still supplies the wider ring.
+ */
+:focus {
+  outline: 0.15rem solid var(--color-focus);
+  outline-offset: 0.15rem;
+}
+
 .skip-link {
   position: fixed;
   z-index: 20;
@@ -206,6 +218,11 @@ a:active {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* Wrap rather than overflow. Without this the action row kept laying out
+     past the viewport on a 390px screen, putting "New Quest" — the primary
+     call to action — at left=471 where nothing could reach it. */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .command-bar__actions {
@@ -1499,7 +1516,8 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .legend-mark--tide-door::before {
   content: "≈" / "";
-  color: var(--color-signal);
+  /* Not --color-signal: pear on the legend's sea-glass measures 1.17:1. */
+  color: var(--color-signal-deep);
   font: 800 1rem/1 var(--font-body);
 }
 
@@ -1947,12 +1965,12 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .lifetime-status[data-state="error"] {
-  color: var(--color-warden);
+  color: var(--color-warden-text);
 }
 
 .lifetime-status[data-state="success"],
 .result-access-note {
-  color: var(--color-gate);
+  color: var(--color-gate-text);
   font-weight: 700;
 }
 
