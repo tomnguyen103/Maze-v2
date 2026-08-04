@@ -1,3 +1,7 @@
+---
+stitch-project: 754643373869195468
+---
+
 # Design - Echo Maze
 
 A locked design system for the Echo Maze app. Gameplay function carries the
