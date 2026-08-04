@@ -5,6 +5,7 @@ import {
   ownerMismatch,
   scrubOfflineState
 } from "./offline-local-scrub.js";
+import { questIdentityMatches } from "../../shared/quest-identity.js";
 import { selectOfflineLearningDeckQuestion } from "../questions/offline-deck-selection.js";
 
 /** @typedef {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, contentPackHash: string, questId?: string }} OfflineRunIdentity */
@@ -164,20 +165,6 @@ export function createOfflineContinuityRuntime({
         identity.labyrinthNumber === locator.labyrinthNumber &&
         questIdentityMatches(identity.questId, locator.questId)
     );
-  }
-
-  /** @param {unknown} left @param {unknown} right */
-  function questIdentityMatches(left, right) {
-    return (
-      left === right ||
-      (left === undefined && !isQuestIIQuestId(right)) ||
-      (right === undefined && !isQuestIIQuestId(left))
-    );
-  }
-
-  /** @param {unknown} value */
-  function isQuestIIQuestId(value) {
-    return typeof value === "string" && /^quest_ii_/iu.test(value);
   }
 
   /** @param {{ ok?: boolean, reason?: string } | null | undefined} result */

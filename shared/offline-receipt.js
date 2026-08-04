@@ -1,3 +1,4 @@
+import { questIdentityMatches } from "./quest-identity.js";
 /**
  * Offline Continuity Receipt shape and windows, per ADR 0034.
  *
@@ -133,20 +134,6 @@ export function receiptBindingMatches(receipt, claim) {
         JSON.stringify(binding.initialUsedQuestionIds ?? []) ===
           JSON.stringify(claim.initialUsedQuestionIds))
   );
-}
-
-/** @param {unknown} left @param {unknown} right */
-function questIdentityMatches(left, right) {
-  return (
-    left === right ||
-    (left === undefined && !isQuestIIQuestId(right)) ||
-    (right === undefined && !isQuestIIQuestId(left))
-  );
-}
-
-/** @param {unknown} value */
-function isQuestIIQuestId(value) {
-  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /**

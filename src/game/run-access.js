@@ -1,5 +1,6 @@
 import { normalizeRunRuleset } from "./run-ruleset.js";
 import { uniqueId } from "./unique-id.js";
+import { questIdentityMatches } from "../../shared/quest-identity.js";
 
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
 const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
@@ -84,20 +85,6 @@ export function isAdmittedRunResume(active, candidate) {
     active.runId === candidate.runId &&
     questIdentityMatches(active.questId, candidate.questId)
   );
-}
-
-/** @param {unknown} left @param {unknown} right */
-function questIdentityMatches(left, right) {
-  return (
-    left === right ||
-    (left === undefined && !isQuestIIQuestId(right)) ||
-    (right === undefined && !isQuestIIQuestId(left))
-  );
-}
-
-/** @param {unknown} value */
-function isQuestIIQuestId(value) {
-  return typeof value === "string" && /^quest_ii_/iu.test(value);
 }
 
 /**

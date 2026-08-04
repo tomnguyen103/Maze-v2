@@ -1,6 +1,7 @@
 import {
   loadOrCreateOfflineDeviceInstallationNonce
 } from "./offline-device.js";
+import { questIdentityMatches } from "../../shared/quest-identity.js";
 import { createConfiguredOfflineReceiptVerifier } from "./offline-receipt-config.js";
 import { createOfflineWorkerClient } from "./offline-worker-client.js";
 import { OFFLINE_DEVICE_BINDING_KEY } from "./offline-local-scrub.js";
@@ -107,20 +108,6 @@ export function createOfflineContinuityClient({
           run.questId
         )
     );
-  }
-
-  /** @param {unknown} left @param {unknown} right */
-  function questIdentityMatches(left, right) {
-    return (
-      left === right ||
-      (left === undefined && !isQuestIIQuestId(right)) ||
-      (right === undefined && !isQuestIIQuestId(left))
-    );
-  }
-
-  /** @param {unknown} value */
-  function isQuestIIQuestId(value) {
-    return typeof value === "string" && /^quest_ii_/iu.test(value);
   }
 
   /** @param {unknown} receipt */

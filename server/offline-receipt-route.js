@@ -2,7 +2,6 @@ import { URL } from "node:url";
 import { classroomIdFromRequest } from "./classroom-context.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { offlineReceiptWindows } from "../shared/offline-receipt.js";
-import { getQuestContentPackId, QUEST_II_CONTENT_PACK_ID } from "../src/game/quest-content.js";
 import {
   OfflineDeviceInputError,
   validateOfflineDeviceInstallationNonce
@@ -12,6 +11,7 @@ import {
   validateRunRequest
 } from "./run-access-route.js";
 import { answerDeletedUser } from "./deleted-user-guard.js";
+import { questIdentityMatches } from "../shared/quest-identity.js";
 import { setRetryAfter } from "./http-retry.js";
 
 export const OFFLINE_RECEIPT_PATH = "/api/offline/receipt";
@@ -321,16 +321,6 @@ export function createOfflineReceiptHandler({
   };
 }
 
-/** @param {string | undefined} left @param {string} right */
-function questIdentityMatches(left, right) {
-  return (
-    left === right ||
-    (left === undefined &&
-      getQuestContentPackId(right) !== QUEST_II_CONTENT_PACK_ID) ||
-    (right === undefined &&
-      getQuestContentPackId(left) !== QUEST_II_CONTENT_PACK_ID)
-  );
-}
 
 /** @param {string} [message] */
 export function createUnavailableOfflineReceiptHandler(
