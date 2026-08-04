@@ -171,8 +171,14 @@ describe("Run Access migration", () => {
     expect(dropsOldCheck).toBeGreaterThan(-1);
     expect(backfills).toBeGreaterThan(-1);
     expect(dropsOldCheck).toBeLessThan(backfills);
-    expect(sql).toContain("BEGIN;");
-    expect(sql).toContain("COMMIT;");
+    // Deliberately NOT one transaction any more. `cloud_quest_progress` is
+    // written at every Labyrinth boundary, and wrapping the backfill and the
+    // constraint work together held ACCESS EXCLUSIVE across a full scan — a
+    // write outage for its duration. The backfill commits as it batches and
+    // the checks validate separately. See docs/migration-safety.md.
+    expect(sql).not.toMatch(/^BEGIN;/m);
+    expect(sql).toContain("GET DIAGNOSTICS touched = ROW_COUNT");
+    expect(sql).toContain("VALIDATE CONSTRAINT");
   });
 
   it("backfills Learning Deck identity only where it is missing", async () => {
@@ -627,8 +633,10 @@ describe("Regional shared-score partition migration", () => {
       "utf8"
     );
 
-    expect(sql).toContain("ADD COLUMN atlas_region_id");
-    expect(sql).toContain("ADD COLUMN ruleset_revision");
+    // `IF NOT EXISTS`, because the file gave up its transaction to stay
+    // online and so has to be restartable from the top.
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS atlas_region_id");
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS ruleset_revision");
     expect(sql).toContain("ruleset_revision = 'classic-v1'");
     expect(sql).toContain("labyrinth_number BETWEEN 1 AND 4");
     expect(sql).toContain("Invalid legacy score_entries.labyrinth_number");
@@ -942,10 +950,14 @@ describe("Class Expedition migration", () => {
     expect(dropsOldCheck).toBeGreaterThan(-1);
     expect(backfills).toBeGreaterThan(-1);
     expect(dropsOldCheck).toBeLessThan(backfills);
-    expect(sql).toContain("BEGIN;");
-    expect(sql).toContain("COMMIT;");
-    expect(sql).toContain("Apply with DATABASE_ADMIN_URL after migration 0021");
-    expect(sql).not.toMatch(/\bDELETE\b/);
+    // Deliberately NOT one transaction any more: `explorer_access_settings`
+    // is created in applied migration 0011, so it has rows, and wrapping the
+    // backfill and the CHECK constraints together held ACCESS EXCLUSIVE
+    // across a full scan. See docs/migration-safety.md.
+    expect(sql).not.toMatch(/^BEGIN;/m);
+    expect(sql).toContain("GET DIAGNOSTICS touched = ROW_COUNT");
+    expect(sql).toContain("NOT VALID");
+    expect(sql).toContain("VALIDATE CONSTRAINT");
     expect(sql).not.toContain("DROP TABLE");
     expect(sql).not.toMatch(/voice|speech|audio_url/i);
   });
