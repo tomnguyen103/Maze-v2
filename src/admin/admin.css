@@ -570,6 +570,10 @@
     grid-template-columns: 13rem minmax(0, 1fr);
   }
 
+  .admin-rail ~ .admin-main {
+    grid-column: 2;
+  }
+
   .admin-rail {
     position: sticky;
     top: 4.5rem;
@@ -583,6 +587,14 @@
   }
 
   .admin-main {
+    /*
+     * SHELL-11: the shared shell renders .admin-main without a rail for
+     * every state but the authorized workbench. Without this, a railless
+     * .admin-main falls into the grid's first (13rem) track instead of the
+     * full width; .admin-rail ~ .admin-main above narrows it back when a
+     * rail sibling exists.
+     */
+    grid-column: 1 / -1;
     padding: var(--space-10) var(--space-8) var(--space-16);
   }
 

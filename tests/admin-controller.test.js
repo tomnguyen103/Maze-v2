@@ -37,6 +37,30 @@ describe("the /admin route itself", () => {
   });
 });
 
+describe("SHELL-11 — one shell owns skip-link, header, and main landmark", () => {
+  it("is the only place any of the three /admin states build that chrome", () => {
+    // Before this, the authorized workbench, the denial/loading frame, and
+    // the chunk-load-failure fallback each wrote their own
+    // `<a class="skip-link">` + header + `#admin-main`. All three now call
+    // through admin-shell.js instead of repeating it.
+    const shell = readFileSync("src/admin/admin-shell.js", "utf8");
+    expect(shell).toContain('id="admin-main"');
+    expect(shell).toContain('tabindex="-1"');
+
+    const view = readFileSync("src/admin/admin-view.js", "utf8");
+    expect(view).toContain('from "./admin-shell.js"');
+    expect(view).not.toContain("#admin-main");
+
+    const controller = readFileSync("src/admin/admin-controller.js", "utf8");
+    expect(controller).toContain('from "./admin-shell.js"');
+    expect(controller).not.toContain("#admin-main");
+
+    const app = readFileSync("src/app.js", "utf8");
+    expect(app).toMatch(/import\("\.\/admin\/admin-shell\.js"\)/);
+    expect(app).not.toContain("#admin-main");
+  });
+});
+
 describe("renderAdmin", () => {
   it("shows a denial and fetches nothing for a non-staff Explorer", async () => {
     const loadProfile = vi.fn();

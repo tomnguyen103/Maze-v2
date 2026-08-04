@@ -43,16 +43,33 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
     .catch(() => {
       // A stale deployment or an offline client rejects the import. Without
       // this the route renders nothing at all, which reads as a broken app
-      // rather than as something to retry.
-      gameRoot.dataset.adminState = "unavailable";
-      gameRoot.innerHTML = `
-        <main class="landing-page" id="admin-main">
-          <p class="section-label">Admin</p>
-          <h1>Admin could not load.</h1>
-          <p>Reload to try again. Your Quest is unaffected.</p>
-          <a class="primary-button" href="/admin">Try again</a>
-        </main>
-      `;
+      // rather than as something to retry. The shell module is imported here
+      // rather than at the top of this file so a working /admin never pays
+      // for it on the eager landing path (SHELL-11) — but the same rejected
+      // network is exactly the state where that second fetch can also fail,
+      // so this leaf keeps its own inline fallback rather than trusting a
+      // second dynamic import to always succeed.
+      void import("./admin/admin-shell.js")
+        .then(({ renderAdminShell }) => {
+          const { main } = renderAdminShell(gameRoot, { state: "unavailable" });
+          main.innerHTML = `
+            <p class="section-label">Admin</p>
+            <h2>Admin could not load.</h2>
+            <p>Reload to try again. Your Quest is unaffected.</p>
+            <a class="primary-button" href="/admin">Try again</a>
+          `;
+        })
+        .catch(() => {
+          gameRoot.dataset.adminState = "unavailable";
+          gameRoot.innerHTML = `
+            <main class="landing-page" id="admin-main">
+              <p class="section-label">Admin</p>
+              <h1>Admin could not load.</h1>
+              <p>Reload to try again. Your Quest is unaffected.</p>
+              <a class="primary-button" href="/admin">Try again</a>
+            </main>
+          `;
+        });
     });
 } else if (url.pathname === "/class") {
   // Same reason as the /admin branch above: clear the inlined landing hero

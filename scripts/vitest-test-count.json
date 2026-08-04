@@ -1,6 +1,6 @@
 {
   "testFiles": 187,
-  "tests": 1643,
+  "tests": 1644,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-08-04 after TYPE (real type scale, 16px body-copy floor). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-08-04 after SHELL-11 (one shared admin shell owner). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }
