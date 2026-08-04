@@ -22,6 +22,7 @@ be misleading on Performance and Front-End.
 | 7 | Performance | [#207](https://github.com/tomnguyen103/Maze-v2/pull/207) | WP-01, P-01, P-10, P-04, `vercel.json` functions block |
 | 8 | Front-end a11y | [#208](https://github.com/tomnguyen103/Maze-v2/pull/208) | A11Y-06/07/08, A11Y-F, A11Y-02, FE-UI-1 |
 | 10 (part) | dataviz ramp | [#209](https://github.com/tomnguyen103/Maze-v2/pull/209) | DASH-20/22/35 |
+| 9 (part) | Dark theme | [#210](https://github.com/tomnguyen103/Maze-v2/pull/210) | SHELL-07 |
 
 Gate on `main`: `npm run check` green — lint, typecheck (two projects), 184 test
 files / 1,598 tests, build, 15/15 bundle budgets. `npm run security:secrets`
@@ -37,16 +38,21 @@ Everything still open is visual work that cannot be finished honestly from a
 source diff. Each needs the design stack, desktop and mobile screenshots, and
 the Hallmark slop gate; two of them need a decision from the operator first.
 
-### Blocked on the `design.md` lock
+### `design.md` was amended, once, deliberately
 
-**`SHELL-07`** — "Add dark tokens, `prefers-color-scheme`, a three-state
-control, and a blocking head script."
+**`SHELL-07` is closed** ([#210](https://github.com/tomnguyen103/Maze-v2/pull/210)).
+It could not be a conformance fix — `design.md` named one surface and
+`tokens.css` hard-locked `color-scheme: light` — so it went back to the
+operator as the stop-and-ask it was, and the amendment was authorised.
 
-`design.md:18` states the theme as **"Paper: warm daylight"** and lists no
-dark variant, and `tokens.css:3` hard-locks `color-scheme: light`. Adding a
-dark theme is an amendment to the locked system's theme definition, not a
-conformance fix, so it is a stop-and-ask: **`design.md` is LOCKED, decision
-KEEP.** Nothing here can proceed on it without that decision being revisited.
+The Theme section of `design.md` now describes one identity on two surfaces.
+That is the only amendment made to the locked system in this programme;
+everything else conformed to it as written. The three by-construction gate
+failures in audit §5 (38, 25, 23) are untouched and remain decision-pending.
+
+**The three-state control's UI is not built.** The choice module, its
+persistence and the System default are in and tested; the control belongs in
+Settings > Appearance, which is part of `SHELL-04/15` below.
 
 ### Needs the design stack and browser verification
 
