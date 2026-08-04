@@ -3,6 +3,7 @@ import {
   InputError,
   validateCloudQuestWrite
 } from "./quest-progress-validation.js";
+import { setRetryAfter } from "./http-retry.js";
 import { DeletedUserError } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 import {
@@ -153,6 +154,7 @@ async function readJsonBody(request) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

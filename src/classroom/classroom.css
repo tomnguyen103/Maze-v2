@@ -84,7 +84,8 @@
   padding-block: var(--space-2);
   border-block: 1px solid var(--color-line-soft);
   color: var(--color-ink-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
+  font-weight: 600;
   font-size: 0.78rem;
 }
 
@@ -100,7 +101,7 @@
   border: 2px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-panel);
-  box-shadow: var(--shadow-offset);
+  box-shadow: var(--shadow-panel);
 }
 
 .classroom-panel--memberships {
@@ -217,7 +218,7 @@
 .classroom-constellation-marker p {
   margin-block-start: var(--space-1);
   color: var(--color-ink-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -352,7 +353,7 @@
   border-radius: 999px;
   background: var(--color-signal);
   color: var(--color-ink);
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -367,7 +368,8 @@
 .progress-card__objective {
   margin: var(--space-1) 0 var(--space-3);
   color: var(--color-ink-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
+  font-weight: 600;
   font-size: 0.78rem;
   text-transform: capitalize;
 }
@@ -424,7 +426,8 @@
 }
 
 .next-step-card__topic {
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
+  font-weight: 600;
   font-size: 0.75rem;
   text-transform: uppercase;
 }
@@ -469,7 +472,8 @@
   border: 2px solid var(--color-line);
   background: var(--color-stone);
   color: var(--color-ink-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-utility);
+  font-weight: 600;
   font-size: 0.78rem;
 }
 

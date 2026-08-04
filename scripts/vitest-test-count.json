@@ -1,5 +1,5 @@
 {
-  "testFiles": 174,
-  "tests": 1492,
-  "source": "Full Vitest run on 2026-08-02 after Quest II identity, alias, and safe storylet regression coverage; update deliberately when tests change."
+  "testFiles": 176,
+  "tests": 1499,
+  "source": "Full Vitest run on 2026-08-04 after the A+ audit Group B quick wins added retry-after and custom-property coverage; update deliberately when tests change."
 }

@@ -2,6 +2,7 @@ import { URL } from "node:url";
 import {
   normalizeFossilCollection
 } from "../src/game/quest-fossils.js";
+import { setRetryAfter } from "./http-retry.js";
 import { DeletedUserError } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
 
@@ -151,6 +152,7 @@ async function readJsonBody(request) {
 /** @param {import("node:http").ServerResponse} response @param {number} status @param {unknown} body */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

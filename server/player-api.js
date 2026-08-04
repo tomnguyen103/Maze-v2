@@ -7,6 +7,7 @@ import {
   CLERK_WEBHOOK_PATH,
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
+import { setRetryAfter } from "./http-retry.js";
 import { createAdminHandler, isAdminPath } from "./admin-route.js";
 import { createAdminStore } from "./admin-store.js";
 import {
@@ -202,6 +203,7 @@ const PLAYER_PATHS = new Set([
  */
 function sendError(response, status, error) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify({ error }));

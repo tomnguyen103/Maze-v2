@@ -130,6 +130,13 @@ CREATE TABLE classroom_run_grants (
 CREATE INDEX classroom_run_grants_expedition_status_idx
   ON classroom_run_grants (expedition_id, status);
 
+-- The GDPR export reads this table once per Classroom Membership, keyed on the
+-- Explorer and the Classroom. The primary key leads with `expedition_id`, so
+-- without this index every one of those reads sequentially scans the whole
+-- table.
+CREATE INDEX classroom_run_grants_user_classroom_idx
+  ON classroom_run_grants (clerk_user_id, classroom_id);
+
 ALTER TABLE class_expeditions OWNER TO echo_maze_tenant_owner;
 ALTER TABLE class_expedition_licenses OWNER TO echo_maze_tenant_owner;
 ALTER TABLE class_expedition_seats OWNER TO echo_maze_tenant_owner;

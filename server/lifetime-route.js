@@ -2,6 +2,7 @@ import {
   LifetimeVerificationError,
   LifetimeWebhookVerificationError
 } from "./lifetime-domain.js";
+import { setRetryAfter } from "./http-retry.js";
 import {
   LifetimeOwnershipError
 } from "./lifetime-service.js";
@@ -302,6 +303,7 @@ function validSessionId(value) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

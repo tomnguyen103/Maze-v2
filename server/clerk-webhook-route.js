@@ -3,6 +3,7 @@ import { URL } from "node:url";
 import { safeErrorName } from "./safe-error-log.js";
 import { SYSTEM_ACTORS } from "./audit.js";
 import { verifiedEmailDomain } from "./classroom-domain.js";
+import { setRetryAfter } from "./http-retry.js";
 
 export const CLERK_WEBHOOK_PATH = "/api/clerk-webhook";
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -294,6 +295,7 @@ async function readRawBody(request) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

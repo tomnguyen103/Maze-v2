@@ -5,6 +5,7 @@ import { offlineReceiptWindows } from "../shared/offline-receipt.js";
 import { getQuestContentPackId, QUEST_II_CONTENT_PACK_ID } from "../src/game/quest-content.js";
 import { validateOfflineDeviceInstallationNonce } from "./offline-device.js";
 import { validateRunRequest } from "./run-access-route.js";
+import { setRetryAfter } from "./http-retry.js";
 
 export const OFFLINE_RECEIPT_PATH = "/api/offline/receipt";
 export const OFFLINE_RECEIPT_PATHS = new Set([OFFLINE_RECEIPT_PATH]);
@@ -42,6 +43,7 @@ function noStore(response) {
 /** @param {import("node:http").ServerResponse} response @param {number} status @param {unknown} body */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   noStore(response);
   response.end(JSON.stringify(body));

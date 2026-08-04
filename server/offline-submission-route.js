@@ -4,6 +4,7 @@ import { UNMETERED } from "./rate-limit-config.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { RUN_REPLAY_LIMITS } from "./run-replay.js";
+import { setRetryAfter } from "./http-retry.js";
 
 /**
  * @typedef {import("../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt
@@ -48,6 +49,7 @@ function noStore(response) {
 /** @param {import("node:http").ServerResponse} response @param {number} status @param {unknown} body */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   noStore(response);
   response.end(JSON.stringify(body));

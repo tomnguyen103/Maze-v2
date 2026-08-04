@@ -3,6 +3,7 @@ import { QuestionBankInputError } from "./question-bank-store.js";
 import { RoleWriteError } from "./rbac.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { URL } from "node:url";
+import { setRetryAfter } from "./http-retry.js";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const ROLE_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/role$/;
@@ -796,6 +797,7 @@ async function readJsonBody(request) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

@@ -4,6 +4,7 @@ import {
   validateScorePartition,
   validateScoreInput
 } from "./player-validation.js";
+import { setRetryAfter } from "./http-retry.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
@@ -28,6 +29,7 @@ function noStore(response) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   noStore(response);
   response.end(JSON.stringify(body));

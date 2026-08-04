@@ -1,6 +1,7 @@
 import { URL } from "node:url";
 import { DeletedUserError } from "./deleted-user-guard.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { setRetryAfter } from "./http-retry.js";
 
 export const ACCESS_SETTINGS_PATH = "/api/me/settings";
 const MAX_BODY_BYTES = 4096;
@@ -198,6 +199,7 @@ async function readJsonBody(request) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

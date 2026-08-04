@@ -67,12 +67,14 @@ existing leaderboard function, preserving the enforced Vercel function ceiling.
   - [x] Navigating to `/admin` as a non-admin shows a denial state without any admin data fetch
   - [x] Admin role (from Clerk mirror, confirmed by profile fetch) renders the admin shell
 
-### 5. Admin data export (`export:any`) — [NOT_STARTED] — DONE, PR #68
+### 5. Admin data export (`export:any`) — [DONE] — PR #68
 
 - What: An admin-initiated GDPR export of any Explorer's data, reusing `buildUserExport` unchanged, gated by the already-declared `export:any` permission and audited as `export.admin`.
 - Why it matters: GDPR/support workflows currently require direct DB access; the permission exists but no route consumes it.
 - Source: docs/adr/0018-gdpr-data-export.md — Consequences; docs/data-privacy.md ("Export")
-- Evidence checked: grep `export:any|export.admin` — `shared/permissions.js:21` and tests only (`tests/permissions.test.js:47`, `tests/rbac.test.js:243`); no consuming route. Self-export exists: `server/data-export.js`, `server/data-export-route.js`.
+- Evidence checked (at cataloguing, 2026-07-27): grep `export:any|export.admin` — `shared/permissions.js:21` and tests only (`tests/permissions.test.js:47`, `tests/rbac.test.js:243`); no consuming route. Self-export existed: `server/data-export.js`, `server/data-export-route.js`.
+- Shipped: the consuming route is `handleExport` at `server/admin-route.js:294`.
+  This item was catalogued as `[NOT_STARTED]`; that assessment is historical.
 - Touches: server/admin-route.js (new sub-path on existing api/admin.js function — 12-function ceiling), server/data-export.js (reuse), tests
 - Depends on: none (UI exposure depends on 8)
 - Effort: S
@@ -270,7 +272,7 @@ existing leaderboard function, preserving the enforced Vercel function ceiling.
 | Explorer Access Settings (local MVP) | Master plan §17 order 7 "P2 / Later" | `src/player/access-settings.js`, `access-settings-view.js` (PR #53, ADR 0011) |
 | Daily Shared Labyrinth (casual) | Master plan §17 order 8 "P3 / Later" | `src/game/daily-labyrinth.js`, `tests/e2e/daily.spec.js` (PR #54, ADR 0012) |
 | Enterprise hardening phases 1–6 | Plan checkboxes | Migrations 0006–0009, `server/audit*.js`, `rbac.js`, `rate-limit*.js`, `security-headers.js`, `webhook-inbox.js`, `logger.js`, `tracing.js`, `data-export*.js`, ADRs 0013–0018 |
-| `prefers-reduced-motion` respected | MASTER.md Pre-Delivery Checklist unchecked | `src/daylight.css`, `src/styles.css` |
+| `prefers-reduced-motion` respected | MASTER.md Pre-Delivery Checklist unchecked | `src/daylight.css` |
 | Run Records (5 strongest, outcomes, seed replay), distinct-seed retry, swipe movement, Space/Q pulse, Warden mode text labels | design-system/echo-maze/pages/game.md stated as spec | `src/game/storage.js:3,118,210`; `src/main.js:306,351,1282-1286,2719-2721,2741-2756` |
 | Warden Hunt/Intercept threshold tests | ADR 0001 "tuning hypotheses… must be covered" | `tests/game-session.test.js:269,297`; e2e evidence in docs/release-readiness.md |
 

@@ -3,6 +3,7 @@ import {
   getDailyQuestion,
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
+import { setRetryAfter } from "./http-retry.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 import { collectTrailMarkers } from "./constellation-markers.js";
 import { ReplayInputError, verifyRunReplay } from "./run-replay.js";
@@ -428,6 +429,7 @@ function hasOnlyKeys(value, keys) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

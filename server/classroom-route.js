@@ -2,6 +2,7 @@ import {
   ClassroomAccessDeniedError,
   ClassroomContextError
 } from "./classroom-context.js";
+import { setRetryAfter } from "./http-retry.js";
 import { ClassExpeditionStateError } from "./class-expedition-store.js";
 import {
   ClassroomDomainConflictError,
@@ -48,6 +49,7 @@ function noStore(response) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   noStore(response);
   response.end(JSON.stringify(body));
