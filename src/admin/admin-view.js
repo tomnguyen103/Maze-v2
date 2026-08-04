@@ -21,14 +21,77 @@ import { renderAdminShell } from "./admin-shell.js";
  */
 
 /**
+ * One entry per tool. `permission` gates whether a signed-in staff member
+ * gets a nav link for it at all; `fetch` is the dataset that tool needs,
+ * requested only when its panel becomes current — not eagerly for all six
+ * on every load (SHELL-04). Membership support has no eager dataset; it is
+ * a lookup form.
+ *
+ * @type {{
+ *   id: string,
+ *   title: string,
+ *   permission: string,
+ *   fetch: ((client: AdminClient) => Promise<unknown>) | null,
+ *   render: (panel: HTMLElement, value: unknown, access: unknown) => void
+ * }[]}
+ */
+const PANEL_DEFS = [
+  {
+    id: "metrics",
+    title: "Operations pulse",
+    permission: "refunds:issue",
+    fetch: (client) => client.getAdminMetrics(),
+    render: (panel, value) => renderMetrics(panel, value)
+  },
+  {
+    id: "users",
+    title: "Explorer directory",
+    permission: "users:read",
+    fetch: (client) => client.listAdminUsers(),
+    render: (panel, value, access) =>
+      renderUsers(panel, value, {
+        mayChangeRoles: can(access, "users:roles:write"),
+        mayExport: can(access, "export:any")
+      })
+  },
+  {
+    id: "questions",
+    title: "Warden Question bank",
+    permission: "questions:read",
+    fetch: (client) => client.listAdminQuestions(),
+    render: (panel, value, access) => renderQuestions(panel, value, access)
+  },
+  {
+    id: "membership",
+    title: "Membership support",
+    permission: "refunds:issue",
+    fetch: null,
+    render: (panel) => renderMembership(panel)
+  },
+  {
+    id: "audit",
+    title: "Audit trail",
+    permission: "audit:read",
+    fetch: (client) => client.listAdminAudit(),
+    render: (panel, value) => renderAudit(panel, value)
+  },
+  {
+    id: "dead",
+    title: "Dead deliveries",
+    permission: "webhooks:read",
+    fetch: (client) => client.listDeadWebhooks(),
+    render: (panel, value) => renderDeadDeliveries(panel, value)
+  }
+];
+
+/**
  * @param {HTMLElement} root
  * @param {{
  *   access: unknown,
- *   client: AdminClient,
- *   data: Record<string, unknown>
+ *   client: AdminClient
  * }} options
  */
-export function renderAdminWorkbench(root, { access, client, data }) {
+export async function renderAdminWorkbench(root, { access, client }) {
   const { main, rail: railElement } = renderAdminShell(root, {
     state: "allowed",
     eyebrow: "Staff workbench",
@@ -47,40 +110,140 @@ export function renderAdminWorkbench(root, { access, client, data }) {
   `;
   text(root, ".admin-role", `Signed in as ${roleOf(access)}.`);
   const rail = /** @type {HTMLElement} */ (railElement);
-  const panels = required(root, ".admin-panels");
+  const panelsContainer = required(root, ".admin-panels");
+  const permitted = PANEL_DEFS.filter((def) => can(access, def.permission));
+  /** @type {Map<string, unknown>} */
+  const cache = new Map();
+  /** @type {Map<string, Promise<unknown>>} */
+  const inFlight = new Map();
+  /** @type {string | null} */
+  let currentId = null;
 
-  if (can(access, "refunds:issue")) {
-    addPanel(rail, panels, "metrics", "Operations pulse", (panel) =>
-      renderMetrics(panel, data.metrics)
-    );
+  for (const def of permitted) {
+    const link = document.createElement("a");
+    link.href = `/admin?panel=${def.id}`;
+    link.textContent = def.title;
+    link.dataset.panelLink = def.id;
+    link.addEventListener("click", (event) => {
+      // A modified click (new tab, download, etc.) keeps the browser's own
+      // handling; only a plain left click becomes in-app navigation.
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      event.preventDefault();
+      void selectPanel(def.id, { pushHistory: true });
+    });
+    rail.append(link);
   }
-  if (can(access, "users:read")) {
-    addPanel(rail, panels, "users", "Explorer directory", (panel) =>
-      renderUsers(panel, data.users, {
-        mayChangeRoles: can(access, "users:roles:write"),
-        mayExport: can(access, "export:any")
-      })
-    );
+
+  /**
+   * @param {string} id
+   * @param {{ pushHistory: boolean }} options
+   */
+  async function selectPanel(id, { pushHistory }) {
+    const def = permitted.find((candidate) => candidate.id === id);
+    if (!def) {
+      return;
+    }
+    // Re-clicking the nav link for the panel already showing re-renders it
+    // (a legitimate retry after a failed fetch) but does not push a second,
+    // identical history entry the back button would have to click through.
+    const isSamePanel = id === currentId;
+    currentId = id;
+    for (const link of rail.querySelectorAll("a")) {
+      if (link instanceof HTMLAnchorElement) {
+        if (link.dataset.panelLink === id) {
+          link.setAttribute("aria-current", "page");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      }
+    }
+    if (pushHistory && !isSamePanel) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("panel", id);
+      window.history.pushState({}, "", url);
+    }
+
+    panelsContainer.innerHTML = "";
+    const panel = document.createElement("section");
+    panel.className = "admin-panel";
+    panel.id = `admin-${id}`;
+    panel.setAttribute("aria-labelledby", `admin-${id}-title`);
+    const heading = document.createElement("h3");
+    heading.id = `admin-${id}-title`;
+    heading.textContent = def.title;
+    panel.append(heading);
+    const content = element("div", "admin-panel__content");
+    panel.append(content);
+    panelsContainer.append(panel);
+
+    if (!def.fetch) {
+      def.render(content, undefined, access);
+      return;
+    }
+    if (cache.has(id)) {
+      def.render(content, cache.get(id), access);
+      return;
+    }
+    panel.setAttribute("aria-busy", "true");
+    content.append(emptyState("Loading…"));
+    // A rapid double-click on the same still-loading nav link would
+    // otherwise start a second, redundant fetch; both would resolve
+    // correctly, but only one needs to run.
+    let request = inFlight.get(id);
+    if (!request) {
+      request = def.fetch(client);
+      inFlight.set(id, request);
+      // A second, independent consumer of the same promise: rejection is
+      // already handled at the `await request` below, but that does not
+      // stop *this* chain from reporting its own unhandled rejection.
+      void request.catch(() => {}).finally(() => inFlight.delete(id));
+    }
+    let value;
+    try {
+      value = await request;
+      cache.set(id, value);
+    } catch {
+      value = null;
+    }
+    // The Explorer may have already navigated elsewhere while this was in
+    // flight; a stale response has nowhere correct left to render.
+    if (!panelsContainer.contains(panel)) {
+      return;
+    }
+    panel.removeAttribute("aria-busy");
+    content.innerHTML = "";
+    if (value === null) {
+      content.append(errorState(`${def.title} could not be loaded.`));
+      return;
+    }
+    def.render(content, value, access);
   }
-  if (can(access, "questions:read")) {
-    addPanel(rail, panels, "questions", "Warden Question bank", (panel) =>
-      renderQuestions(panel, data.questions, access)
+
+  window.addEventListener("popstate", () => {
+    const requested = new URL(window.location.href).searchParams.get(
+      "panel"
     );
-  }
-  if (can(access, "refunds:issue")) {
-    addPanel(rail, panels, "membership", "Membership support", (panel) =>
-      renderMembership(panel)
-    );
-  }
-  if (can(access, "audit:read")) {
-    addPanel(rail, panels, "audit", "Audit trail", (panel) =>
-      renderAudit(panel, data.audit)
-    );
-  }
-  if (can(access, "webhooks:read")) {
-    addPanel(rail, panels, "dead", "Dead deliveries", (panel) =>
-      renderDeadDeliveries(panel, data.dead)
-    );
+    if (permitted.some((def) => def.id === requested)) {
+      void selectPanel(/** @type {string} */ (requested), {
+        pushHistory: false
+      });
+    }
+  });
+
+  const requested = new URL(window.location.href).searchParams.get("panel");
+  const initial = permitted.some((def) => def.id === requested)
+    ? /** @type {string} */ (requested)
+    : permitted[0]?.id;
+  if (initial) {
+    await selectPanel(initial, { pushHistory: false });
   }
 
   root.addEventListener("click", (event) => {
@@ -89,31 +252,6 @@ export function renderAdminWorkbench(root, { access, client, data }) {
   root.addEventListener("submit", (event) => {
     void handleSubmit(event, root, client);
   });
-}
-
-/**
- * @param {HTMLElement} rail
- * @param {HTMLElement} panels
- * @param {string} id
- * @param {string} title
- * @param {(panel: HTMLElement) => void} render
- */
-function addPanel(rail, panels, id, title, render) {
-  const link = document.createElement("a");
-  link.href = `#admin-${id}`;
-  link.textContent = title;
-  rail.append(link);
-
-  const panel = document.createElement("section");
-  panel.className = "admin-panel";
-  panel.id = `admin-${id}`;
-  panel.setAttribute("aria-labelledby", `admin-${id}-title`);
-  const heading = document.createElement("h3");
-  heading.id = `admin-${id}-title`;
-  heading.textContent = title;
-  panel.append(heading);
-  render(panel);
-  panels.append(panel);
 }
 
 /** @param {HTMLElement} panel @param {unknown} value */

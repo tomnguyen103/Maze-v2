@@ -1,7 +1,6 @@
 import { resolveAdminAccess } from "./admin-access.js";
 import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
-import { can } from "../player/can.js";
 import { renderAdminWorkbench } from "./admin-view.js";
 import { renderAdminShell } from "./admin-shell.js";
 import "./admin.css";
@@ -82,34 +81,8 @@ export async function renderAdmin(root, dependencies = {}) {
     renderFrame(root, copy.body, result.reason, copy.title, true);
     return result;
   }
-  const data = await loadWorkbenchData(result.access, client);
-  renderAdminWorkbench(root, { access: result.access, client, data });
+  await renderAdminWorkbench(root, { access: result.access, client });
   return result;
-}
-
-/** @param {unknown} access @param {AdminClient} client */
-async function loadWorkbenchData(access, client) {
-  /** @type {[string, string, () => Promise<unknown>][]} */
-  const tasks = [
-    ["users", "users:read", () => client.listAdminUsers()],
-    ["questions", "questions:read", () => client.listAdminQuestions()],
-    ["audit", "audit:read", () => client.listAdminAudit()],
-    ["metrics", "refunds:issue", () => client.getAdminMetrics()],
-    ["dead", "webhooks:read", () => client.listDeadWebhooks()]
-  ];
-  const values = await Promise.all(
-    tasks.map(async ([key, permission, load]) => {
-      if (!can(access, permission)) {
-        return [key, null];
-      }
-      try {
-        return [key, await load()];
-      } catch {
-        return [key, null];
-      }
-    })
-  );
-  return Object.fromEntries(values);
 }
 
 /** @returns {AdminClient} */

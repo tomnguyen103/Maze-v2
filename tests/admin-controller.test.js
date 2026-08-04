@@ -14,6 +14,10 @@ let root;
 beforeEach(() => {
   document.body.innerHTML = "<div id='admin-root'></div>";
   root = /** @type {HTMLElement} */ (document.getElementById("admin-root"));
+  // SHELL-04's routing pushes real history state (?panel=...); without a
+  // reset here, a later test inherits whichever panel an earlier test last
+  // navigated to instead of getting its own default.
+  window.history.replaceState({}, "", "/admin");
 });
 
 describe("the /admin route itself", () => {
@@ -176,10 +180,26 @@ describe("renderAdmin", () => {
     expect(root.textContent).toContain(
       "Additional accounts are not shown in this directory."
     );
+    // SHELL-04: only the current panel's dataset fetches, not all five.
+    // "Explorer directory" is the first tool a moderator holds permission
+    // for, so it is the one selected by default.
     expect(client.listAdminUsers).toHaveBeenCalledTimes(1);
-    expect(client.listAdminQuestions).toHaveBeenCalledTimes(1);
-    expect(client.listAdminAudit).toHaveBeenCalledTimes(1);
+    expect(client.listAdminQuestions).not.toHaveBeenCalled();
+    expect(client.listAdminAudit).not.toHaveBeenCalled();
     expect(client.getAdminMetrics).not.toHaveBeenCalled();
+
+    // Switching panels fetches on demand, exactly once, and does not
+    // re-fetch the panel already visited.
+    root
+      .querySelector("[data-panel-link='questions']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(client.listAdminQuestions).toHaveBeenCalledTimes(1);
+    });
+    expect(client.listAdminUsers).toHaveBeenCalledTimes(1);
+    expect(new URL(window.location.href).searchParams.get("panel")).toBe(
+      "questions"
+    );
   });
 
   it("renders the complete workbench for an admin", async () => {
@@ -204,13 +224,37 @@ describe("renderAdmin", () => {
       }),
       client
     });
+    // "Operations pulse" is first in the tool order, so it is the admin's
+    // default panel; the other five are nav-link text, not yet rendered.
     expect(root.textContent).toContain("Operations pulse");
     expect(root.textContent).toContain("Membership support");
     expect(root.textContent).toContain("Dead deliveries");
-    expect(root.querySelector("[data-action='publish-question']")).not.toBeNull();
-    expect(root.querySelector("[data-action='export-user']")).not.toBeNull();
     expect(client.getAdminMetrics).toHaveBeenCalledTimes(1);
-    expect(client.listDeadWebhooks).toHaveBeenCalledTimes(1);
+    expect(client.listAdminUsers).not.toHaveBeenCalled();
+    expect(client.listAdminQuestions).not.toHaveBeenCalled();
+
+    root
+      .querySelector("[data-panel-link='users']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(root.querySelector("[data-action='export-user']")).not.toBeNull();
+    });
+
+    root
+      .querySelector("[data-panel-link='questions']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(
+        root.querySelector("[data-action='publish-question']")
+      ).not.toBeNull();
+    });
+
+    root
+      .querySelector("[data-panel-link='dead']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(client.listDeadWebhooks).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("previews the exact reviewed Echo Lens before publication", async () => {
@@ -360,6 +404,14 @@ describe("renderAdmin", () => {
         }
       }),
       client
+    });
+    // "Operations pulse" (also refunds:issue) is first in the tool order and
+    // is this admin's default panel; membership support needs navigating to.
+    root
+      .querySelector("[data-panel-link='membership']")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(root.querySelector("[data-form='membership']")).not.toBeNull();
     });
     const form = root.querySelector("[data-form='membership']");
     const input = root.querySelector("[name='membership-user']");

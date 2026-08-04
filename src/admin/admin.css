@@ -82,6 +82,18 @@
   background: var(--color-panel);
 }
 
+/*
+ * SHELL-04: the rail is real navigation now (a URL per tool), so the
+ * current one needs a visible marker, not just the aria-current a screen
+ * reader gets. Border and background both change, not colour alone, so
+ * this still reads under forced-colors.
+ */
+.admin-rail a[aria-current="page"] {
+  border-color: var(--color-line);
+  background: var(--color-signal-soft);
+  font-weight: 700;
+}
+
 .admin-main {
   min-width: 0;
   padding: var(--space-6) var(--space-4) var(--space-16);
