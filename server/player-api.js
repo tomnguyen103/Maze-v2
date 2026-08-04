@@ -7,6 +7,8 @@ import {
   CLERK_WEBHOOK_PATH,
   createClerkWebhookHandler
 } from "./clerk-webhook-route.js";
+import { dispatch } from "./dispatch.js";
+import { offlineReplayConfigFor } from "./run-replay.js";
 import { setRetryAfter } from "./http-retry.js";
 import { createAdminHandler, isAdminPath } from "./admin-route.js";
 import { createAdminStore } from "./admin-store.js";
@@ -134,8 +136,6 @@ import {
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
 import { URL } from "node:url";
-import { getLabyrinthConfig, getDifficultyBand } from "../src/questions/quest-levels.js";
-import { normalizeRunRuleset } from "../src/game/run-ruleset.js";
 
 const DATABASE_REVISION_PATTERN = /^database:(.+):v([1-9]\d*)$/;
 
@@ -246,7 +246,7 @@ export function createPlayerApi(env = process.env) {
       }
       logRequest(request, response);
       if (isHealthPath(pathname)) {
-        void healthHandler(request, response, next);
+        void dispatch(healthHandler, request, response, next);
         return;
       }
       if (isAdminPath(pathname) || isInternalPath(pathname)) {
@@ -437,22 +437,7 @@ export function createPlayerApi(env = process.env) {
                   runId,
                   deviceHash
                 ),
-              labyrinthConfigFor: (levelId, labyrinthNumber, revision) => {
-                const ruleset = normalizeRunRuleset(
-                  {
-                    atlasRegionId: getDifficultyBand(labyrinthNumber).id,
-                    revision
-                  },
-                  labyrinthNumber
-                );
-                if (!ruleset) {
-                  throw new Error("Offline replay ruleset is invalid.");
-                }
-                return {
-                  ...getLabyrinthConfig(levelId, labyrinthNumber),
-                  ruleset
-                };
-              },
+              labyrinthConfigFor: offlineReplayConfigFor,
               contentPackFor: async (_receipt, actionLog) => {
                 /** @type {Awaited<ReturnType<typeof questionBankStore.publishedQuestionRevisions>>} */
                 let publishedQuestionRevisions = [];
@@ -837,71 +822,71 @@ export function createPlayerApi(env = process.env) {
         logRequest(request, response);
       }
       if (isHealthPath(pathname)) {
-        void healthHandler(request, response, next);
+        void dispatch(healthHandler, request, response, next);
         return;
       }
       if (pathname === CLERK_WEBHOOK_PATH) {
-        void clerkWebhookHandler(request, response, next);
+        void dispatch(clerkWebhookHandler, request, response, next);
         return;
       }
       if (isInternalPath(pathname)) {
         // Internal routes never needed Clerk, so they work here unchanged.
-        void internalHandler(request, response, next);
+        void dispatch(internalHandler, request, response, next);
         return;
       }
       if (isAdminPath(pathname)) {
         // No Clerk means no admin identity, so every admin route is 401 rather
         // than silently unguarded.
-        void unavailableAdminHandler(request, response, next);
+        void dispatch(unavailableAdminHandler, request, response, next);
         return;
       }
       if (isClassroomPath(pathname)) {
-        void unavailableClassroomHandler(request, response, next);
+        void dispatch(unavailableClassroomHandler, request, response, next);
         return;
       }
       if (ACCESS_PATHS.has(pathname)) {
-        void unavailableAccessHandler(request, response, next);
+        void dispatch(unavailableAccessHandler, request, response, next);
         return;
       }
       if (LIFETIME_PATHS.has(pathname)) {
-        void unavailableLifetimeHandler(request, response, next);
+        void dispatch(unavailableLifetimeHandler, request, response, next);
         return;
       }
       if (pathname === LEARNING_JOURNAL_PATH) {
-        void unavailableLearningJournalHandler(request, response, next);
+        void dispatch(unavailableLearningJournalHandler, request, response, next);
         return;
       }
       if (pathname === ECHO_FOSSIL_PATH) {
-        void unavailableEchoFossilHandler(request, response, next);
+        void dispatch(unavailableEchoFossilHandler, request, response, next);
         return;
       }
       if (pathname === DATA_EXPORT_PATH) {
         // No Clerk means no identity, so the export answers 401 rather than
         // falling through.
-        void unavailableDataExportHandler(request, response, next);
+        void dispatch(unavailableDataExportHandler, request, response, next);
         return;
       }
       if (pathname === ACCESS_SETTINGS_PATH) {
-        void unavailableAccessSettingsHandler(request, response, next);
+        void dispatch(unavailableAccessSettingsHandler, request, response, next);
         return;
       }
       if (QUEST_PROGRESS_PATHS.has(pathname)) {
-        void unavailableQuestProgressHandler(request, response, next);
+        void dispatch(unavailableQuestProgressHandler, request, response, next);
         return;
       }
       if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
-        void offlineReceiptHandler(request, response, next);
+        void dispatch(offlineReceiptHandler, request, response, next);
         return;
       }
       if (OFFLINE_SUBMISSION_PATHS.has(pathname)) {
-        void offlineSubmissionHandler(request, response, next);
+        void dispatch(offlineSubmissionHandler, request, response, next);
         return;
       }
       if (DAILY_PATHS.has(pathname)) {
-        void unavailableDailyHandler(request, response, next);
+        void dispatch(unavailableDailyHandler, request, response, next);
         return;
       }
-      void unavailableAuthHandler(request, response, next);
+      void dispatch(unavailableAuthHandler, request, response, next);
     };
   }
 
@@ -929,21 +914,21 @@ export function createPlayerApi(env = process.env) {
     }
     logRequest(request, response);
     if (isHealthPath(pathname)) {
-      void healthHandler(request, response, next);
+      void dispatch(healthHandler, request, response, next);
       return;
     }
     if (isInternalPath(pathname)) {
       // Authenticated by shared secret, not Clerk: the caller is Vercel cron
       // and has no Explorer identity.
-      void internalHandler(request, response, next);
+      void dispatch(internalHandler, request, response, next);
       return;
     }
     if (pathname === "/api/stripe-webhook") {
-      void lifetimeHandler(request, response, next);
+      void dispatch(lifetimeHandler, request, response, next);
       return;
     }
     if (pathname === CLERK_WEBHOOK_PATH) {
-      void clerkWebhookHandler(request, response, next);
+      void dispatch(clerkWebhookHandler, request, response, next);
       return;
     }
     if (
@@ -956,14 +941,14 @@ export function createPlayerApi(env = process.env) {
         pathname === "/api/access/config" ||
         pathname === "/api/access/guest-runs"
       ) {
-        void accessHandler(request, response, next);
+        void dispatch(accessHandler, request, response, next);
         return;
       }
       if (pathname === DAILY_LEADERBOARD_PATH) {
-        void dailyHandler(request, response, next);
+        void dispatch(dailyHandler, request, response, next);
         return;
       }
-      void handler(request, response, next);
+      void dispatch(handler, request, response, next);
       return;
     }
     authenticate(
@@ -975,54 +960,54 @@ export function createPlayerApi(env = process.env) {
           return;
         }
         if (isAdminPath(pathname)) {
-          void adminHandler(request, response, next);
+          void dispatch(adminHandler, request, response, next);
           return;
         }
         if (isClassroomPath(pathname)) {
-          void classroomHandler(request, response, next);
+          void dispatch(classroomHandler, request, response, next);
           return;
         }
         if (ACCESS_PATHS.has(pathname)) {
-          void accessHandler(request, response, next);
+          void dispatch(accessHandler, request, response, next);
           return;
         }
         if (OFFLINE_RECEIPT_PATHS.has(pathname)) {
-          void offlineReceiptHandler(request, response, next);
+          void dispatch(offlineReceiptHandler, request, response, next);
           return;
         }
         if (OFFLINE_SUBMISSION_PATHS.has(pathname)) {
-          void offlineSubmissionHandler(request, response, next);
+          void dispatch(offlineSubmissionHandler, request, response, next);
           return;
         }
         if (LIFETIME_PATHS.has(pathname)) {
-          void lifetimeHandler(request, response, next);
+          void dispatch(lifetimeHandler, request, response, next);
           return;
         }
         if (pathname === LEARNING_JOURNAL_PATH) {
-          void learningJournalHandler(request, response, next);
+          void dispatch(learningJournalHandler, request, response, next);
           return;
         }
         if (pathname === ECHO_FOSSIL_PATH) {
-          void echoFossilHandler(request, response, next);
+          void dispatch(echoFossilHandler, request, response, next);
           return;
         }
         if (pathname === DATA_EXPORT_PATH) {
-          void dataExportHandler(request, response, next);
+          void dispatch(dataExportHandler, request, response, next);
           return;
         }
         if (pathname === ACCESS_SETTINGS_PATH) {
-          void accessSettingsHandler(request, response, next);
+          void dispatch(accessSettingsHandler, request, response, next);
           return;
         }
         if (QUEST_PROGRESS_PATHS.has(pathname)) {
-          void questProgressHandler(request, response, next);
+          void dispatch(questProgressHandler, request, response, next);
           return;
         }
         if (DAILY_PATHS.has(pathname)) {
-          void dailyHandler(request, response, next);
+          void dispatch(dailyHandler, request, response, next);
           return;
         }
-        void handler(request, response, next);
+        void dispatch(handler, request, response, next);
       }
     );
   };

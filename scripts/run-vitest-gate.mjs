@@ -117,7 +117,25 @@ export async function runVitestGate({ run = runVitest, expected = null } = {}) {
   const expectedManifest =
     expected ?? JSON.parse(await readFile(countPath, "utf8"));
   const result = await run();
-  const summary = parseVitestSummary(result.output);
+  const exitDescription = result.signal
+    ? `signal ${result.signal}`
+    : `code ${result.code}`;
+  const exited = result.code !== 0 || result.signal;
+
+  /** @type {import("./vitest-gate.mjs").VitestSummary} */
+  let summary;
+  try {
+    summary = parseVitestSummary(result.output);
+  } catch (error) {
+    // A child that died before printing its summary used to be reported as
+    // "did not emit a complete test summary", which names the symptom and
+    // hides the cause.
+    throw exited
+      ? new Error(
+          `Vitest exited with ${exitDescription} before emitting a summary.`
+        )
+      : error;
+  }
   const gate = assertVitestGate({
     summary,
     output: result.output,
@@ -126,10 +144,8 @@ export async function runVitestGate({ run = runVitest, expected = null } = {}) {
     workerLossDetected: result.workerLossDetected
   });
 
-  if (result.code !== 0 || result.signal) {
-    throw new Error(
-      `Vitest exited with ${result.signal ? `signal ${result.signal}` : `code ${result.code}`}.`
-    );
+  if (exited) {
+    throw new Error(`Vitest exited with ${exitDescription}.`);
   }
 
   return gate;

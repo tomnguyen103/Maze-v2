@@ -56,6 +56,7 @@ describe("setRetryAfter", () => {
 
 describe("route wiring", () => {
   const serverDir = fileURLToPath(new URL("../server/", import.meta.url));
+  const PROSE_ONLY = new Set(["deleted-user-guard.js"]);
 
   it("gives every route that emits a 503 a retry-after", () => {
     /** @type {string[]} */
@@ -64,7 +65,10 @@ describe("route wiring", () => {
       if (!name.endsWith(".js")) continue;
       const source = readFileSync(serverDir + name, "utf8");
       if (!/\b503\b/.test(source)) continue;
-      if (!source.includes("setRetryAfter(response, status)")) {
+      // Modules that only mention 503 in prose. An explicit list, so adding
+      // one is a decision rather than a side effect of a looser pattern.
+      if (PROSE_ONLY.has(name)) continue;
+      if (!source.includes("setRetryAfter(response,")) {
         missing.push(name);
       }
     }

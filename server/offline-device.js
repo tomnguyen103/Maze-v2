@@ -2,13 +2,16 @@ import { createHmac } from "node:crypto";
 
 export const OFFLINE_DEVICE_NONCE_PATTERN = /^[A-Za-z0-9_-]{16,256}$/;
 
+/** A caller-supplied device nonce this module can name a problem with. */
+export class OfflineDeviceInputError extends Error {}
+
 /** @param {unknown} value */
 export function validateOfflineDeviceInstallationNonce(value) {
   if (
     typeof value !== "string" ||
     !OFFLINE_DEVICE_NONCE_PATTERN.test(value)
   ) {
-    throw new Error(
+    throw new OfflineDeviceInputError(
       "Device installation nonce must be 16-256 URL-safe characters."
     );
   }

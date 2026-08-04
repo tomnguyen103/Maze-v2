@@ -3,6 +3,7 @@ import {
   getDailyQuestion,
   utcDateKey
 } from "../src/game/daily-labyrinth.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { setRetryAfter } from "./http-retry.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 import { collectTrailMarkers } from "./constellation-markers.js";
@@ -277,6 +278,9 @@ export function createDailyHandler({
         }
       );
     } catch (error) {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
       if (error instanceof DailyInputError || error instanceof ReplayInputError) {
         sendJson(
           response,

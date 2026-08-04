@@ -7,6 +7,29 @@ export class DeletedUserError extends Error {
   }
 }
 
+/**
+ * Answer a request that reached a store guarding a deleted account.
+ *
+ * Four routes classified this and the rest did not, so the same deleted
+ * account was a clean 410 on one path and a 500 or 503 on another — and a
+ * client reads those as "retry", forever, for an account that will never come
+ * back. Every route that can reach a guarded store calls this.
+ *
+ * @param {unknown} error
+ * @param {import("node:http").ServerResponse} response
+ * @returns {boolean} whether the error was answered
+ */
+export function answerDeletedUser(error, response) {
+  if (!(error instanceof DeletedUserError)) {
+    return false;
+  }
+  response.statusCode = 410;
+  response.setHeader("content-type", "application/json; charset=utf-8");
+  response.setHeader("cache-control", "no-store");
+  response.end(JSON.stringify({ error: "This account has been deleted." }));
+  return true;
+}
+
 /** @param {string} userId */
 export function deletedUserHash(userId) {
   return createHash("sha256").update(userId).digest("hex");

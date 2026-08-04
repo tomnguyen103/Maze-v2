@@ -162,6 +162,35 @@ const DEFAULT_CONFIG = Object.freeze({
   pulses: 2
 });
 
+/**
+ * Whether an action moved the Run forward. Both replay readers ask this, and
+ * they used to answer it separately: the device-local viewer compared `moves`
+ * for every movement action, while the server verifier compared `moves` for a
+ * Move and a Pulse and fell back to object identity for everything else — so
+ * the two disagreed about `ring-bell`. Object identity is not a statement
+ * about the Run either way; a handler is free to return a fresh object that
+ * changed nothing but the event message.
+ *
+ * @param {GameRun} previous
+ * @param {GameRun} next
+ * @param {{ type: string }} action
+ * @returns {boolean}
+ */
+export function actionAdvancedRun(previous, next, action) {
+  if (
+    action.type === "move" ||
+    action.type === "pulse" ||
+    action.type === "ring-bell"
+  ) {
+    // These three spend a turn. Nothing else about the Run is required to
+    // change — a Pulse into already-revealed Fog is still a legal action.
+    return next.moves === previous.moves + 1;
+  }
+  // Challenge actions have no single field that always moves, so the engine's
+  // own signal is that it built a new Run rather than returning the old one.
+  return next !== previous;
+}
+
 const HUNT_DISTANCE = 7;
 const INTERCEPT_DISTANCE = 10;
 const INTERCEPT_STEPS = 2;

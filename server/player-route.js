@@ -4,6 +4,7 @@ import {
   validateScorePartition,
   validateScoreInput
 } from "./player-validation.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { setRetryAfter } from "./http-retry.js";
 import { safeErrorName } from "./safe-error-log.js";
 import { UNMETERED } from "./rate-limit-config.js";
@@ -255,6 +256,9 @@ export function createPlayerApiHandler({
         verification: "casual-v1"
       });
     } catch (error) {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
       if (
         error instanceof InputError ||
         isUniqueViolation(error) ||

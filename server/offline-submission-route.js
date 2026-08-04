@@ -5,6 +5,7 @@ import { safeErrorName } from "./safe-error-log.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { RUN_REPLAY_LIMITS } from "./run-replay.js";
 import { setRetryAfter } from "./http-retry.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 
 /**
  * @typedef {import("../shared/offline-receipt.js").OfflineReceipt} OfflineReceipt
@@ -207,6 +208,9 @@ export function createOfflineSubmissionHandler({
       };
       sendJson(response, 200, body);
     } catch (error) {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
       if (error instanceof SubmissionInputError) {
         sendJson(response, 400, { error: error.message });
         return;

@@ -1,4 +1,9 @@
-import { applyAction, createRun, normalizeSeed } from "./game-session.js";
+import {
+  actionAdvancedRun,
+  applyAction,
+  createRun,
+  normalizeSeed
+} from "./game-session.js";
 import { getLabyrinthConfig } from "../questions/quest-levels.js";
 import { normalizeRunReplay } from "./run-replay-contract.js";
 import { normalizeRunRuleset } from "./run-ruleset.js";
@@ -91,7 +96,7 @@ export function buildRunReplayTimeline(record) {
             : { type: "pulse" }
       );
     }
-    if (!changedAsExpected(previous, run, entry.type)) {
+    if (!actionAdvancedRun(previous, run, { type: entry.type })) {
       throw new RunReplayError(
         "Run Replay contains an impossible or unchanged action."
       );
@@ -201,18 +206,6 @@ function provideReplayQuestion(run) {
       learningObjectiveId: "scout-equal-groups"
     }
   });
-}
-
-/**
- * @param {ReturnType<typeof createRun>} previous
- * @param {ReturnType<typeof createRun>} next
- * @param {"move" | "pulse" | "ring-bell" | "hint" | "challenge-outcome"} type
- */
-function changedAsExpected(previous, next, type) {
-  if (type === "move" || type === "pulse" || type === "ring-bell") {
-    return next.moves === previous.moves + 1;
-  }
-  return next !== previous;
 }
 
 /**

@@ -2,6 +2,8 @@ import { QUEST_LEVELS } from "../src/questions/quest-levels.js";
 import { UNMETERED } from "./rate-limit-config.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { URL } from "node:url";
+import { safeErrorName } from "./safe-error-log.js";
+import { setRetryAfter } from "./http-retry.js";
 import { getPublishedLearningDeckOption } from "../src/questions/learning-deck-catalog.js";
 import { isPublishedLearningDeckRevision } from "../src/questions/learning-deck-identity.js";
 
@@ -17,7 +19,7 @@ function parseQuestId(value) {
     return undefined;
   }
   if (!QUEST_ID_PATTERN.test(value)) {
-    throw new Error("Quest ID is not valid.");
+    throw new QuestionInputError("Quest ID is not valid.");
   }
   return value;
 }
@@ -31,7 +33,7 @@ function parseQuestId(value) {
 function boundedInteger(value, name, minimum, maximum) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(
+    throw new QuestionInputError(
       `${name} must be a whole number from ${minimum} to ${maximum}.`
     );
   }
@@ -54,11 +56,11 @@ function parseUsedQuestionIds(value) {
     return [];
   }
   if (!Array.isArray(value) || value.length > MAX_USED_QUESTION_IDS) {
-    throw new Error("Used Question identifiers are not valid.");
+    throw new QuestionInputError("Used Question identifiers are not valid.");
   }
   for (const id of value) {
     if (typeof id !== "string" || !QUESTION_ID_PATTERN.test(id)) {
-      throw new Error("Used Question identifiers are not valid.");
+      throw new QuestionInputError("Used Question identifiers are not valid.");
     }
   }
   return /** @type {string[]} */ (value);
@@ -77,13 +79,20 @@ function parseLearningDeck(deckId, deckRevision) {
   // above it. An unpublished revision is rejected rather than silently
   // serving Mixed content under the Deck's name.
   if (!deckId || !getPublishedLearningDeckOption(deckId)) {
-    throw new Error("Learning Deck is not supported.");
+    throw new QuestionInputError("Learning Deck is not supported.");
   }
   if (!isPublishedLearningDeckRevision(deckId, deckRevision)) {
-    throw new Error("Learning Deck revision is not supported.");
+    throw new QuestionInputError("Learning Deck revision is not supported.");
   }
   return { learningDeckId: deckId, learningDeckRevision: deckRevision };
 }
+
+/**
+ * A request this route can name a problem with. Anything else is a fault on
+ * our side and must not have its own text returned: a `pg` failure carries the
+ * failing SQL in `message`, and this route answers unauthenticated callers.
+ */
+export class QuestionInputError extends Error {}
 
 /** @param {URL} url */
 export function parseQuestionRequest(url) {
@@ -92,13 +101,13 @@ export function parseQuestionRequest(url) {
   const challengeKind = url.searchParams.get("challenge") ?? "warden";
 
   if (!LEVEL_IDS.has(levelId)) {
-    throw new Error("Quest Level is not supported.");
+    throw new QuestionInputError("Quest Level is not supported.");
   }
   if (!SEED_PATTERN.test(seed)) {
-    throw new Error("Run seed is not valid.");
+    throw new QuestionInputError("Run seed is not valid.");
   }
   if (!CHALLENGE_KINDS.has(challengeKind)) {
-    throw new Error("Challenge kind is not supported.");
+    throw new QuestionInputError("Challenge kind is not supported.");
   }
 
   const questId = parseQuestId(url.searchParams.get("quest"));
@@ -139,7 +148,7 @@ export function parseQuestionRequest(url) {
  */
 export function parseQuestionBody(body) {
   if (!body || typeof body !== "object") {
-    throw new Error("Question request must be an object.");
+    throw new QuestionInputError("Question request must be an object.");
   }
   const url = new URL("http://local/api/question");
   for (const [key, parameter] of [
@@ -173,13 +182,13 @@ async function readJsonBody(request) {
   for await (const chunk of request) {
     body += chunk;
     if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      throw new Error("Question request body is too large.");
+      throw new QuestionInputError("Question request body is too large.");
     }
   }
   try {
     return JSON.parse(body);
   } catch {
-    throw new Error("Request body must be valid JSON.");
+    throw new QuestionInputError("Request body must be valid JSON.");
   }
 }
 
@@ -300,11 +309,22 @@ export function createQuestionHandler(questionService, options = {}) {
       response.setHeader("cache-control", "no-store");
       response.end(JSON.stringify(result));
     } catch (error) {
-      response.statusCode = 400;
+      if (error instanceof QuestionInputError) {
+        response.statusCode = 400;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.end(JSON.stringify({ error: error.message }));
+        return;
+      }
+      console.error("[question] request failed", {
+        name: safeErrorName(error)
+      });
+      response.statusCode = 503;
       response.setHeader("content-type", "application/json; charset=utf-8");
+      response.setHeader("cache-control", "no-store");
+      setRetryAfter(response, 503);
       response.end(
         JSON.stringify({
-          error: error instanceof Error ? error.message : "Question request failed."
+          error: "Question scrolls are unavailable. Try again."
         })
       );
     }

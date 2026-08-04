@@ -41,6 +41,8 @@
  * @typedef {{ version: 2, actions: RunActionV2Entry[] }} RunActionLogV2
  */
 
+import { actionAdvancedRun } from "./game-session.js";
+
 export const RUN_ACTION_LOG_V2_VERSION = 2;
 export const RUN_ACTION_LOG_V2_MAX_ACTIONS = 4096;
 
@@ -82,13 +84,16 @@ export function tryAppendRunActionV2(log, previous, action, next) {
  */
 function replayEntryV2(previous, action, next) {
   const elapsedMs = Math.max(0, Math.round(next.elapsedMs));
-  if (action.type === "move" && next.moves === previous.moves + 1) {
+  // One owner for "did this advance the Run", shared with both replay
+  // readers: a log written under a different rule than the server verifies
+  // against is a Run that cannot be verified.
+  if (action.type === "move" && actionAdvancedRun(previous, next, action)) {
     return { type: "move", direction: action.direction, elapsedMs };
   }
-  if (action.type === "pulse" && next.moves === previous.moves + 1) {
+  if (action.type === "pulse" && actionAdvancedRun(previous, next, action)) {
     return { type: "pulse", elapsedMs };
   }
-  if (action.type === "ring-bell" && next !== previous) {
+  if (action.type === "ring-bell" && actionAdvancedRun(previous, next, action)) {
     return { type: "ring-bell", elapsedMs };
   }
   const revisionId = questionRevisionOf(previous);

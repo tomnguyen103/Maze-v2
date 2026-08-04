@@ -8,6 +8,7 @@ import {
   logProviderFallback,
   safeErrorName
 } from "./safe-error-log.js";
+import { dispatch } from "./dispatch.js";
 
 /**
  * The `/api/question` composition root, alongside `createPlayerApi`: env
@@ -85,7 +86,7 @@ export function createQuestionApi(env = process.env, dependencies = {}) {
       /** @type {import("express").Request} */ (request),
       /** @type {import("express").Response} */ (response),
       () => {
-        void handler(request, response, next);
+        void dispatch(handler, request, response, next);
       }
     );
   };

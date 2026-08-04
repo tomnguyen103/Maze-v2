@@ -8,7 +8,7 @@ import { safeErrorName } from "./safe-error-log.js";
 import {
   JournalClearConflictError
 } from "./learning-journal-store.js";
-import { DeletedUserError } from "./deleted-user-guard.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import {
   ClassroomAccessDeniedError,
   ClassroomContextError,
@@ -143,10 +143,7 @@ export function createLearningJournalHandler({
         });
         return;
       }
-      if (error instanceof DeletedUserError) {
-        sendJson(response, 410, {
-          error: "This account has been deleted."
-        });
+      if (answerDeletedUser(error, response)) {
         return;
       }
       console.error("[learning-journal] API request failed", {

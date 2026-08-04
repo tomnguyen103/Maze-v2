@@ -2,6 +2,7 @@ import {
   LifetimeVerificationError,
   LifetimeWebhookVerificationError
 } from "./lifetime-domain.js";
+import { answerDeletedUser } from "./deleted-user-guard.js";
 import { setRetryAfter } from "./http-retry.js";
 import {
   LifetimeOwnershipError
@@ -140,6 +141,9 @@ export function createLifetimeHandler({
       });
       sendJson(response, 200, confirmation);
     } catch (error) {
+      if (answerDeletedUser(error, response)) {
+        return;
+      }
       if (error instanceof LifetimeInputError) {
         sendJson(response, 400, { error: error.message });
         return;
