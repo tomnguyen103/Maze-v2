@@ -299,6 +299,38 @@
   font-family: var(--font-utility);
 }
 
+.admin-appearance-option {
+  display: flex;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
+  border: 2px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.admin-appearance-option:has(input:checked) {
+  background: var(--color-panel);
+  font-weight: 700;
+}
+
+/*
+ * .admin-field input (below) is a descendant selector meant for the
+ * fieldset's own text/select/textarea controls elsewhere in this file, but
+ * it does not care about nesting depth, so it also reaches these radios and
+ * would otherwise stretch each one into a full-width, 45px bordered box.
+ * Same fix as .learning-deck-option input in daylight.css.
+ */
+.admin-appearance-option input {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  accent-color: var(--color-ink);
+}
+
 .admin-field input:focus-visible,
 .admin-field select:focus-visible,
 .admin-field textarea:focus-visible,
