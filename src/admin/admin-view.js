@@ -1,6 +1,7 @@
 import { can } from "../player/can.js";
 import { describeEchoLensVisual } from "../questions/echo-lens-presentation.js";
 import { normalizeQuestion } from "../questions/question-contract.js";
+import { renderAdminShell } from "./admin-shell.js";
 
 /**
  * @typedef {{
@@ -28,33 +29,24 @@ import { normalizeQuestion } from "../questions/question-contract.js";
  * }} options
  */
 export function renderAdminWorkbench(root, { access, client, data }) {
-  root.dataset.adminState = "allowed";
-  root.innerHTML = `
-    <a class="skip-link" href="#admin-main">Skip to the admin area</a>
-    <header class="admin-command">
-      <a class="wordmark" href="/" aria-label="Echo Maze home">Echo Maze</a>
-      <div>
-        <p class="admin-command__eyebrow">Staff workbench</p>
-        <h1>Admin</h1>
-      </div>
-      <a class="admin-command__exit" href="/play">Return to Maze</a>
+  const { main, rail: railElement } = renderAdminShell(root, {
+    state: "allowed",
+    eyebrow: "Staff workbench",
+    exit: { href: "/play", label: "Return to Maze" },
+    withRail: true
+  });
+  main.innerHTML = `
+    <header class="admin-intro">
+      <p class="section-label">Operations field guide</p>
+      <h2>Keep the Quest safe and moving.</h2>
+      <p>Review people, questions, purchases, and delivery failures from one permission-aware workbench.</p>
+      <p class="admin-role"></p>
     </header>
-    <div class="admin-layout">
-      <nav class="admin-rail" aria-label="Admin tools"></nav>
-      <main class="admin-main" id="admin-main">
-        <header class="admin-intro">
-          <p class="section-label">Operations field guide</p>
-          <h2>Keep the Quest safe and moving.</h2>
-          <p>Review people, questions, purchases, and delivery failures from one permission-aware workbench.</p>
-          <p class="admin-role"></p>
-        </header>
-        <div class="admin-panels"></div>
-        <p class="admin-toast" role="status" aria-live="polite"></p>
-      </main>
-    </div>
+    <div class="admin-panels"></div>
+    <p class="admin-toast" role="status" aria-live="polite"></p>
   `;
   text(root, ".admin-role", `Signed in as ${roleOf(access)}.`);
-  const rail = required(root, ".admin-rail");
+  const rail = /** @type {HTMLElement} */ (railElement);
   const panels = required(root, ".admin-panels");
 
   if (can(access, "refunds:issue")) {

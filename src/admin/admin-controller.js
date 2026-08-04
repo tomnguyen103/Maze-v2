@@ -3,6 +3,7 @@ import { createClerkBrowser } from "../player/clerk-browser.js";
 import { createPlayerApiClient } from "../player/player-client.js";
 import { can } from "../player/can.js";
 import { renderAdminWorkbench } from "./admin-view.js";
+import { renderAdminShell } from "./admin-shell.js";
 import "./admin.css";
 
 const DENIAL_COPY = {
@@ -151,19 +152,13 @@ function renderFrame(
   withHomeLink = false,
   detail = ""
 ) {
-  root.dataset.adminState = state;
-  root.innerHTML = `
-    <a class="skip-link" href="#admin-main">Skip to the admin area</a>
-    <header class="landing-header">
-      <a class="wordmark" href="/" aria-label="Echo Maze home">Echo Maze</a>
-    </header>
-    <main class="landing-page" id="admin-main">
-      <p class="section-label">Admin</p>
-      <h1 id="admin-title"></h1>
-      <p id="admin-detail"${detail ? "" : " hidden"}></p>
-      <p class="admin-status" id="admin-status" role="status"></p>
-      ${withHomeLink ? '<a class="primary-button" href="/">Back to Echo Maze</a>' : ""}
-    </main>
+  const { main } = renderAdminShell(root, { state });
+  main.innerHTML = `
+    <p class="section-label">Admin</p>
+    <h2 id="admin-title"></h2>
+    <p id="admin-detail"${detail ? "" : " hidden"}></p>
+    <p class="admin-status" id="admin-status" role="status"></p>
+    ${withHomeLink ? '<a class="primary-button" href="/">Back to Echo Maze</a>' : ""}
   `;
   setText(root, "#admin-title", title);
   setText(root, "#admin-detail", detail);
