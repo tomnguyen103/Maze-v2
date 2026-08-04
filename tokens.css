@@ -1,6 +1,7 @@
 /* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful storybook expedition | macrostructure: Workbench + focused encounter | theme: Hum | anchor: electric pear | signature: quest cards and Warden knowledge duel | playfield: sea glass | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
 :root {
   color-scheme: light;
+  --theme-surface: daylight;
 
   --font-display: "Bricolage Grotesque Variable", "Arial Narrow", sans-serif;
   --font-body: "Geist Variable", Arial, sans-serif;
@@ -136,4 +137,89 @@
   --duration-recoil: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --text-compact: 0.7rem;
+}
+
+/*
+ * Night. `design.md`'s Theme section is the contract: the daylight Ink becomes
+ * the surface, the daylight Paper becomes the text, and electric pear does not
+ * move because it is the signature.
+ *
+ * Only the tokens that define a surface, a text weight, a line or a semantic
+ * state are restated. Everything else — spacing, radii, motion, the playfield
+ * palettes, the per-region tints — is the same system in both, which is what
+ * keeps this a lighting change rather than a second design.
+ *
+ * Declared once and applied two ways: `@media (prefers-color-scheme: dark)`
+ * for a player who has expressed no preference here, and
+ * `:root[data-theme="dark"]` for one who has. The explicit attribute wins in
+ * both directions, so choosing Light on a dark OS actually gives light.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --theme-surface: night;
+
+    --color-ink: oklch(95% 0.012 96);
+    --color-ink-muted: oklch(78% 0.02 96);
+    --color-ink-faint: oklch(68% 0.02 96);
+    --color-paper: oklch(19% 0.035 255);
+    --color-paper-deep: oklch(15% 0.03 255);
+    --color-stone: oklch(24% 0.035 255);
+    --color-stone-raised: oklch(28% 0.035 255);
+    --color-line: oklch(72% 0.03 250);
+    --color-line-soft: oklch(38% 0.035 250);
+    --color-panel: oklch(23% 0.035 255);
+    --color-nav: oklch(19% 0.035 255 / 94%);
+    --color-shadow: oklch(8% 0.02 255 / 46%);
+    --color-overlay: oklch(10% 0.03 255 / 82%);
+
+    --color-signal-soft: oklch(34% 0.09 108);
+    --color-signal-deep: oklch(88% 0.15 108);
+    --color-accent-ink: oklch(16% 0.04 255);
+    --color-echo-soft: oklch(32% 0.06 226);
+    --color-warden: oklch(70% 0.19 24);
+    --color-warden-text: oklch(78% 0.16 24);
+    --color-warden-soft: oklch(30% 0.07 25);
+    --color-gate: oklch(72% 0.14 155);
+    --color-gate-text: oklch(80% 0.12 155);
+    --color-focus: oklch(80% 0.14 245);
+
+    --color-band-1: oklch(30% 0.05 108);
+    --color-band-2: oklch(42% 0.1 108);
+    --color-band-3: oklch(56% 0.15 108);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --theme-surface: night;
+
+  --color-ink: oklch(95% 0.012 96);
+  --color-ink-muted: oklch(78% 0.02 96);
+  --color-ink-faint: oklch(68% 0.02 96);
+  --color-paper: oklch(19% 0.035 255);
+  --color-paper-deep: oklch(15% 0.03 255);
+  --color-stone: oklch(24% 0.035 255);
+  --color-stone-raised: oklch(28% 0.035 255);
+  --color-line: oklch(72% 0.03 250);
+  --color-line-soft: oklch(38% 0.035 250);
+  --color-panel: oklch(23% 0.035 255);
+  --color-nav: oklch(19% 0.035 255 / 94%);
+  --color-shadow: oklch(8% 0.02 255 / 46%);
+  --color-overlay: oklch(10% 0.03 255 / 82%);
+
+  --color-signal-soft: oklch(34% 0.09 108);
+  --color-signal-deep: oklch(88% 0.15 108);
+  --color-accent-ink: oklch(16% 0.04 255);
+  --color-echo-soft: oklch(32% 0.06 226);
+  --color-warden: oklch(70% 0.19 24);
+  --color-warden-text: oklch(78% 0.16 24);
+  --color-warden-soft: oklch(30% 0.07 25);
+  --color-gate: oklch(72% 0.14 155);
+  --color-gate-text: oklch(80% 0.12 155);
+  --color-focus: oklch(80% 0.14 245);
+
+  --color-band-1: oklch(30% 0.05 108);
+  --color-band-2: oklch(42% 0.1 108);
+  --color-band-3: oklch(56% 0.15 108);
 }

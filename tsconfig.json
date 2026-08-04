@@ -13,6 +13,7 @@
   },
   "include": [
     "api/**/*.js",
+    "public/theme-boot.js",
     "server.js",
     "server/**/*.js",
     "src/**/*.d.ts",
