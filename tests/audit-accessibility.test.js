@@ -137,6 +137,18 @@ describe("FE-UI-1 — the primary call to action stays on screen", () => {
   });
 });
 
+describe("FE-UI-2 — .primary-button has a real hit target on every tag", () => {
+  it("gives the class its own geometry instead of relying on the button tag", () => {
+    // The admin denial gate's only way back is `<a class="primary-button">`,
+    // which measured 141x21px because the sizing rule only matched `button`.
+    const css = source("src/daylight.css");
+    expect(css).toMatch(/button,\s*\.primary-button\s*\{/);
+    const rule = css.slice(css.search(/button,\s*\.primary-button\s*\{/));
+    expect(rule.slice(0, 400)).toContain("min-height: 2.8125rem");
+    expect(rule.slice(0, 400)).toContain("min-width: 2.8125rem");
+  });
+});
+
 describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
   it("steps monotonically from Quiet to Bright", () => {
     const bands = ["--color-band-1", "--color-band-2", "--color-band-3"].map(
