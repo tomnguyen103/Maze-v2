@@ -14,13 +14,26 @@ export function createClassroomDomainStore(database) {
      * @param {string} userId
      * @param {string} classroomId
      * @param {string} domain
+     * @param {boolean | null} [autoJoinEnabled] ADR 0023: auto-join is
+     *   opt-in, so a first registration defaults to off. `null` means the
+     *   caller said nothing, which leaves an already-armed Classroom armed —
+     *   re-registering a domain is not a decision about auto-join. It used to
+     *   be a `TRUE` literal in SQL, so registering armed it and
+     *   re-registering re-armed it.
      */
-    async registerDomain(userId, classroomId, domain) {
+    async registerDomain(userId, classroomId, domain, autoJoinEnabled = null) {
       try {
         const result = await database.query(
           `SELECT domain, auto_join_enabled
-           FROM register_classroom_domain($1, $2, $3)`,
-          [classroomId, userId, domain]
+           FROM register_classroom_domain($1, $2, $3, $4)`,
+          [
+            classroomId,
+            userId,
+            domain,
+            autoJoinEnabled === null || autoJoinEnabled === undefined
+              ? null
+              : autoJoinEnabled === true
+          ]
         );
         return domainRecord(result.rows[0]);
       } catch (error) {

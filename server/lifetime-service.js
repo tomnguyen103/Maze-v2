@@ -58,6 +58,16 @@ export function createLifetimeService({
             state: "lifetime_active"
           };
         }
+        if (reservation.state === "membership-blocked") {
+          // `refunded` is absorbing: no later provider event restores
+          // membership from it, so a second Checkout would take a parent's
+          // money and change nothing. This is a state a person resolves.
+          return {
+            checkoutUrl: null,
+            purchaseId: reservation.purchaseId,
+            state: "membership_blocked"
+          };
+        }
         if (reservation.sessionId) {
           try {
             const checkoutUrl = await provider.retrieveCheckoutLink(

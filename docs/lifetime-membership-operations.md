@@ -109,9 +109,19 @@ new Run while an active Run may finish.
 3. Confirm the event is idempotently recorded and that `/api/access` reports
    `membership-blocked` before the next new Run.
 4. Do not interrupt a Run that already received a Run Grant.
-5. For restored funds, accept only a newer
+5. For restored funds after a **dispute**, accept only a newer
    `charge.dispute.funds_reinstated` or winning
    `charge.dispute.closed` event. Confirm future starts return to `member`.
+6. A **refund** has no such path, by design. `refunded` is absorbing in
+   `transitionLifetimeState`: no later provider event restores membership from
+   it. Checkout creation now refuses from that state rather than taking a
+   second payment that would change nothing — `/api/lifetime-checkout` answers
+   `membership-blocked`, and the account stays exactly as it is.
+
+   Do not tell a parent to buy again. There is no supported self-service
+   recovery from `refunded`; restoring one is a deliberate operator action on
+   the account, and the policy for when that is appropriate needs
+   product/legal approval before production billing.
 6. Do not promise a refund timeline or outcome. Player-facing policy language
    requires product/legal approval before production billing.
 

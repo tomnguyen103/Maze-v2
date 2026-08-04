@@ -192,6 +192,12 @@ function compactReplayResult(result, questId) {
  *   }>,
  *   completeSubmission: (idempotencyKey: string) => Promise<void>,
  *   pendingApply?: (idempotencyKey: string) => Promise<boolean>,
+ *   findRecordedSubmission?: (idempotencyKey: string) => Promise<{
+ *     runId: string,
+ *     accepted: boolean,
+ *     applied: boolean,
+ *     result: Record<string, unknown> | null
+ *   } | null>,
  *   applyCloudOutcome: (outcome: {
  *     runId: string,
  *     playerId: string | null,
@@ -230,6 +236,7 @@ export function createOfflineSubmissionService({
   recordSubmission,
   completeSubmission,
   pendingApply = async () => false,
+  findRecordedSubmission = async () => null,
   applyCloudOutcome,
   now = () => new Date()
 }) {
@@ -327,6 +334,33 @@ export function createOfflineSubmissionService({
       ) {
         return { status: "expired", duplicate: false, reason: "submission" };
       }
+      // The ledger decides a resubmission, so ask it before spending the
+      // replay rather than after. A receipt is a nine-day reusable primitive
+      // and the replay is the expensive part of this route — measured at
+      // 4,594 ms for a 207.7 KiB action log — so answering a duplicate from
+      // one indexed read is the difference between a bounded cost and an
+      // unbounded one an attacker controls the size of.
+      const settled = await findRecordedSubmission(submission.idempotencyKey);
+      if (settled && settled.runId === stored.runId) {
+        if (!settled.accepted) {
+          // A terminal rejection is durable. Never re-run the replay that
+          // produced it, and never turn it into any other answer.
+          return { status: "rejected", duplicate: true, reason: "replay" };
+        }
+        if (settled.applied && settled.result) {
+          return {
+            status: "accepted",
+            duplicate: true,
+            result:
+              /** @type {ReturnType<typeof verifyOfflineRunReplay>} */ (
+                settled.result
+              )
+          };
+        }
+        // Recorded but not finished: the cloud write still has to complete,
+        // so fall through to the resume path below, which owns that.
+      }
+
       const pack = await contentPackFor(
         submission.receipt,
         submission.actionLog

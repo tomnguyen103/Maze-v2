@@ -6,6 +6,12 @@ import { createPlayerApi } from "./server/player-api.js";
 import { createSecurityHeadersMiddleware } from "./server/security-headers.js";
 import { safeErrorName } from "./server/safe-error-log.js";
 import { setRetryAfter } from "./server/http-retry.js";
+import { resolveEnforcementEnabled } from "./server/lifetime-config.js";
+
+// The long-running deployment refuses to boot on a misconfiguration that the
+// serverless one can only log: here there is one process, a supervisor to
+// notice, and no other route to take down with it.
+resolveEnforcementEnabled(process.env);
 
 const app = express();
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));

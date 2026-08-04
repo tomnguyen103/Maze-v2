@@ -23,6 +23,60 @@ const IDEMPOTENCY_PATTERN = /^[a-z0-9_-]{12,128}$/i;
 export class InputError extends Error {}
 
 /**
+ * Stems that cannot appear inside an ordinary name, matched anywhere after
+ * confusables are resolved and spacing and punctuation are folded away.
+ */
+const SCREENED_SUBSTRINGS = Object.freeze([
+  "fuck",
+  "shit",
+  "cunt",
+  "bitch",
+  "bastard",
+  "wanker",
+  "nigger",
+  "nigga",
+  "faggot",
+  "retard",
+  "hitler",
+  "porn",
+  "boobs",
+  "penis",
+  "vagina",
+  "killyourself",
+  "echomazestaff"
+]);
+
+/**
+ * Words that are only a problem on their own. `rape` is inside Draper and
+ * Grape, `nazi` is inside Nazir, `admin` is inside Administrator, `kys` is
+ * inside Kysia. A screen that rejects a child's actual name is worse than one
+ * that misses a case: it teaches them to work around it, and it is the kind
+ * of mistake nobody reports.
+ */
+const SCREENED_WORDS = Object.freeze([
+  "rape",
+  "nazi",
+  "kkk",
+  "sexy",
+  "kys",
+  "suicide",
+  "admin",
+  "moderator",
+  "staff"
+]);
+
+/**
+ * Characters that look Latin and are not. One of these used to defeat the
+ * screen entirely, because folding to `[a-z0-9]` deleted them rather than
+ * resolving them.
+ */
+const CONFUSABLES = Object.freeze({
+  а: "a", в: "b", е: "e", к: "k", м: "m", н: "h", о: "o", р: "p",
+  с: "c", т: "t", у: "y", х: "x", ѕ: "s", і: "i", ј: "j", ԁ: "d",
+  ο: "o", ρ: "p", τ: "t", ν: "v", ι: "i", κ: "k", α: "a", ε: "e"
+});
+
+/**
  * @param {unknown} value
  * @returns {Record<string, unknown>}
  */
@@ -70,7 +124,67 @@ function normalizedUsername(value) {
       "Username must be 3–20 letters, numbers, spaces, underscores, or hyphens."
     );
   }
+  if (looksLikeContactDetail(username)) {
+    throw new InputError(
+      "Please choose a name that is not an email address, a phone number, or a link."
+    );
+  }
+  if (containsScreenedTerm(username)) {
+    throw new InputError("Please choose a different name.");
+  }
   return username;
+}
+
+/**
+ * A username is shown to anonymous readers on the Global Scoreboard, and the
+ * Explorers choosing them are children. This is not a vulnerability and no
+ * word list makes it one; it is a child-safety screen, and its job is to stop
+ * the obvious cases before a person has to look.
+ *
+ * Deliberately small and deliberately not clever. A long list of slurs in a
+ * public repository is its own problem, and leetspeak substitution catches
+ * `cl4ss` more often than anything worth catching. Staff have a proportionate
+ * remedy for what gets through: `POST /api/admin/username` blanks one name
+ * without touching the child's account.
+ *
+ * @param {string} username
+ */
+function containsScreenedTerm(username) {
+  const latin = [...username.toLowerCase().normalize("NFKD")]
+    .map((character) => Reflect.get(CONFUSABLES, character) ?? character)
+    .join("")
+    .replace(/\p{M}/gu, "");
+  const squashed = latin.replace(/[^a-z0-9]/g, "");
+  if (SCREENED_SUBSTRINGS.some((term) => squashed.includes(term))) {
+    return true;
+  }
+  // Word-wise for the ambiguous ones: digits count as part of a word so
+  // `admin1` is still caught, but `Administrator` is not.
+  const words = latin.split(/[^a-z0-9]+/).filter(Boolean);
+  return words.some((word) =>
+    SCREENED_WORDS.some(
+      (term) => word === term || word.replace(/\d+$/, "") === term
+    )
+  );
+}
+
+/**
+ * Contact details are the specific thing a public name must never carry: an
+ * adult reading the Scoreboard must not be handed a way to reach a child off
+ * the platform.
+ *
+ * @param {string} username
+ */
+function looksLikeContactDetail(username) {
+  // `USERNAME_PATTERN` has already rejected `@`, `.`, `:` and `+`, so an
+  // address or a URL cannot arrive here intact. What can is the shape that
+  // survives that charset: a bare number long enough to dial, or a handle
+  // naming the platform to find them on.
+  const compact = username.replace(/[\s_-]/g, "").toLowerCase();
+  return (
+    /^\d{7,}$/.test(compact) ||
+    /(?:snap|kik|insta|discord|telegram|whatsapp|tiktok)/.test(compact)
+  );
 }
 
 /** @param {unknown} value */

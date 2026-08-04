@@ -1,5 +1,9 @@
 import { createServer } from "node:http";
 import { createPlayerApi } from "../server/player-api.js";
+import {
+  LifetimeConfigurationError,
+  resolveEnforcementEnabled
+} from "../server/lifetime-config.js";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -27,12 +31,64 @@ async function withServer(handler, callback) {
 }
 
 describe("composed player API", () => {
-  it("keeps enforcement disabled when payment recovery is unavailable", async () => {
+  it("refuses to boot the long-running server on a misconfiguration", () => {
+    // This used to resolve silently to `enforcementEnabled: false`, and
+    // `/api/access/config` then reported a state operators read as an
+    // intentional billing-disable. A live `sk_live_` key is exactly that
+    // case: it fails the `sk_test_` gate, so switching enforcement on with
+    // real credentials switched it off.
+    expect(() =>
+      resolveEnforcementEnabled({
+        RUN_ACCESS_ENFORCEMENT_ENABLED: "true",
+        STRIPE_SECRET_KEY: "sk_live_realkey",
+        STRIPE_PRICE_ID: "price_1",
+        STRIPE_WEBHOOK_SECRET: "whsec_1",
+        ECHO_MAZE_APP_ORIGIN: "https://example.test"
+      })
+    ).toThrow(LifetimeConfigurationError);
+  });
+
+  it("says what to fix rather than only that something is wrong", async () => {
+    const { ENFORCEMENT_REFUSAL } = await import(
+      "../server/lifetime-config.js"
+    );
+    for (const name of [
+      "RUN_ACCESS_ENFORCEMENT_ENABLED",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_PRICE_ID",
+      "STRIPE_WEBHOOK_SECRET",
+      "ECHO_MAZE_APP_ORIGIN"
+    ]) {
+      expect(ENFORCEMENT_REFUSAL).toContain(name);
+    }
+  });
+
+  it("degrades rather than crashing every serverless route", async () => {
+    // `createPlayerApi` is constructed at module load in every `api/*.js`
+    // entry point. A throw here would cold-start-crash the Scoreboard, the
+    // Runs, and the Stripe webhook needed to fix the billing state.
     const handler = createPlayerApi({
       CLERK_PUBLISHABLE_KEY: "pk_test_example",
       CLERK_SECRET_KEY: "sk_test_example",
       DATABASE_URL: "postgresql://test:test@127.0.0.1:1/echo",
       RUN_ACCESS_ENFORCEMENT_ENABLED: "true"
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/access/config`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        enforcementEnabled: false
+      });
+    });
+  });
+
+  it("still starts with enforcement deliberately off", async () => {
+    const handler = createPlayerApi({
+      CLERK_PUBLISHABLE_KEY: "pk_test_example",
+      CLERK_SECRET_KEY: "sk_test_example",
+      DATABASE_URL: "postgresql://test:test@127.0.0.1:1/echo",
+      RUN_ACCESS_ENFORCEMENT_ENABLED: "false"
     });
 
     await withServer(handler, async (origin) => {

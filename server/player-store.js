@@ -5,6 +5,21 @@ import {
 } from "./deleted-user-guard.js";
 import { assertClassroomMembership } from "./classroom-context.js";
 import { withTenantContext } from "./tenant-context.js";
+import { createHash } from "node:crypto";
+
+/**
+ * The name a retired one is replaced with. Derived from the account
+ * identifier so it is stable and unique; the 20-character column limit is why
+ * the digest is short. Nine hex characters over the account population here is
+ * not a collision risk, and a collision would surface as a unique-violation
+ * rather than as one Explorer taking another's name.
+ *
+ * @param {string} userId
+ */
+function retiredUsername(userId) {
+  const digest = createHash("sha256").update(userId).digest("hex");
+  return `Explorer ${digest.slice(0, 9)}`;
+}
 
 const PROFILE_COLUMNS = `
   username,
@@ -101,6 +116,47 @@ export function createPlayerStore(pool) {
       );
       if (!result.rows[0]) throw new DeletedUserError();
       return mapProfile(result.rows[0]);
+    },
+
+    /**
+     * @param {{ atlasRegionId: string, rulesetRevision: string }} partition
+     */
+    /**
+     * Retire one public username, leaving every other fact about the account
+     * alone: Quest Progress, Run Records, Journal and Score Entries are all
+     * untouched, and the Explorer picks a new name on their next visit.
+     *
+     * The column is `NOT NULL UNIQUE` in migration 0001, which is applied, so
+     * the name is replaced rather than emptied. The replacement is derived
+     * from the account identifier, never from the name being retired: it is
+     * stable across repeated calls, unique without a lookup, and says nothing
+     * about what was there.
+     *
+     * Answers whether a name was actually retired. A second report on the
+     * same account is a no-op, not a failure.
+     *
+     * @param {string} userId
+     * @returns {Promise<{ cleared: boolean, previousUsername: string | null }>}
+     */
+    async clearUsername(userId) {
+      const retired = retiredUsername(userId);
+      const result = await pool.query(
+        `UPDATE players AS updated
+         SET username = $2, username_key = lower($2)
+         FROM players AS previous
+         WHERE updated.clerk_user_id = $1
+           AND previous.clerk_user_id = updated.clerk_user_id
+           AND updated.username <> $2
+         RETURNING previous.username AS previous_username`,
+        [userId, retired]
+      );
+      const row = result.rows?.[0];
+      return {
+        cleared: Boolean(row),
+        // A moderation action against a child's account has to be appealable,
+        // and it cannot be without a record of what was actually retired.
+        previousUsername: row ? String(row.previous_username) : null
+      };
     },
 
     /**
@@ -261,6 +317,50 @@ export function createPlayerStore(pool) {
         ]
       );
       const row = result.rows[0];
+
+      // Best-only per `(player, partition)` — exactly one row, including the
+      // one just inserted if it is not the best. Every escaped Run used to
+      // add a row, so one Explorer could grow the partition the anonymous
+      // Scoreboard sorts without bound, and the Scoreboard only ever reads
+      // their best one anyway.
+      //
+      // Everything except the winner goes, chosen by the Scoreboard's own
+      // ordering with `idempotency_key` as the final discriminator so exact
+      // ties resolve to one row rather than accumulating. Deleted here rather
+      // than filtered at read time: the cost belongs to the submitter, not to
+      // every anonymous reader.
+      //
+      // A Score Entry removed here leaves the GDPR export too, which is
+      // correct — the export describes what is stored, and a superseded Run
+      // is no longer stored.
+      if (row?.inserted === true && classroomId === null) {
+        await database.query(
+          `DELETE FROM score_entries AS superseded
+           WHERE superseded.player_id = $1
+             AND superseded.classroom_id IS NULL
+             AND superseded.atlas_region_id = $2
+             AND superseded.ruleset_revision = $3
+             AND superseded.escaped = TRUE
+             AND superseded.idempotency_key <> (
+               SELECT best.idempotency_key
+               FROM score_entries AS best
+               WHERE best.player_id = $1
+                 AND best.classroom_id IS NULL
+                 AND best.atlas_region_id = $2
+                 AND best.ruleset_revision = $3
+                 AND best.escaped = TRUE
+               ORDER BY
+                 best.score DESC,
+                 best.labyrinth_number DESC,
+                 best.moves ASC,
+                 best.elapsed_ms ASC,
+                 best.created_at ASC,
+                 best.idempotency_key ASC
+               LIMIT 1
+             )`,
+          [userId, run.atlasRegionId, run.rulesetRevision]
+        );
+      }
       if (!row) {
         throw new Error("Score entry could not be saved.");
       }

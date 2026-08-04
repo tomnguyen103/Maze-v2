@@ -24,10 +24,20 @@ export const ROLE_PERMISSIONS = {
     "questions:write",
     "refunds:issue",
     "users:read",
+    "users:names:write",
     "users:roles:write",
     "webhooks:read"
   ],
-  moderator: ["audit:read", "questions:read", "questions:write", "users:read"],
+  // A Moderator can retire a public name. That is the proportionate remedy a
+  // report needs, and it is deliberately smaller than deleting a child's
+  // account, which used to be the only one available.
+  moderator: [
+    "audit:read",
+    "questions:read",
+    "questions:write",
+    "users:names:write",
+    "users:read"
+  ],
   // An Explorer's own play needs no permission. Their own data is reached
   // through ownership, not through the matrix.
   player: []

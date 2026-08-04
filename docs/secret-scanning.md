@@ -54,10 +54,14 @@ key's value:
                "keyword"      read as the secret
 ```
 
-`.gitleaks.toml` allowlists this, scoped three ways: to that one file, to that
-one rule, and to values shaped like a domain name. An actual key committed to
-the same file would still be reported. The allowlist is a statement about
+`.gitleaks.toml` allowlists this, scoped three ways: to that one rule, to
+named files, and to values shaped like a domain name. An actual key committed
+to either file would still be reported. The allowlist is a statement about
 those strings, not a way to make the scan quiet.
+
+This document is the second named file, for the same reason and no other: the
+block above quotes the migration line verbatim, so the scan reports on its own
+explanation.
 
 ## What a real finding means
 

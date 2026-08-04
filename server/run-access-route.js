@@ -3,6 +3,7 @@ import { sendRateLimited } from "./rate-limit-request.js";
 import { setRetryAfter } from "./http-retry.js";
 import { answerDeletedUser } from "./deleted-user-guard.js";
 import { RunAccessConflictError } from "./run-access-store.js";
+import { safeErrorName } from "./safe-error-log.js";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
@@ -274,10 +275,16 @@ export function createRunAccessHandler({
               runRequest
             );
             metered = true;
-          } catch {
-            // The demo boundary must never make the game unavailable. If either
-            // durable auditing or the counter store is down, admit the Run
-            // without claiming it was metered.
+          } catch (error) {
+            // The demo boundary must never make the game unavailable. If
+            // either durable auditing or the counter store is down, admit the
+            // Run without claiming it was metered — but say what failed. A
+            // silent fail-open is indistinguishable from a store that is
+            // simply not configured, and `degraded: true` alone cannot tell
+            // an operator which.
+            console.error("[access] guest metering failed open", {
+              name: safeErrorName(error)
+            });
             degraded = true;
             result = guestDemoFallback();
           }

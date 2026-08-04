@@ -16,6 +16,23 @@ if (sourcePackage !== "free-email-domains" || sourceVersion !== "1.9.77") {
   throw new Error("The vendored public email domain source is invalid.");
 }
 
+// Migration 0017 is applied to the live database. Regenerating its block would
+// rewrite history: the next environment would build a schema no existing one
+// has. Domains added by review after 0017 shipped live in a forward migration
+// instead, so the runtime list is deliberately a superset of 0017's block and
+// this script must refuse to reconcile them by editing backwards.
+//
+// To add a domain now: append it to `data/public-email-domains.json`'s
+// `reviewedSupplements` and INSERT it in a new numbered migration. See
+// docs/migration-safety.md.
+const reviewedSupplements =
+  PUBLIC_EMAIL_DOMAIN_SOURCE?.reviewedSupplementsAfterMigration0017 ?? [];
+if (reviewedSupplements.length > 0) {
+  throw new Error(
+    `Refusing to regenerate migration 0017: it is applied to the live database, and ${reviewedSupplements.length} domain(s) have been added forward since it shipped (${reviewedSupplements.join(", ")}). Add new domains in a forward migration instead — see docs/migration-safety.md.`
+  );
+}
+
 const domains = [...PUBLIC_EMAIL_DOMAINS].sort();
 const chunkSize = 12;
 const values = [];

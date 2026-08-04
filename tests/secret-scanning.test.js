@@ -33,8 +33,13 @@ describe("secret scanning", () => {
     // same file is still reported.
     expect(config).toContain("regexTarget = \"match\"");
     expect(config).not.toMatch(/^\s*stopwords/m);
-    const paths = config.match(/paths = \[[^\]]*\]/g) ?? [];
-    expect(paths.length).toBe(1);
+    // One allowlist block, and a second would be the point at which this
+    // stops being a statement about specific strings.
+    expect(config.match(/\[rules\.allowlist\]/g)?.length).toBe(1);
+    expect(config).toContain("docs/secret-scanning");
+    // Every path in it is constrained by the same domain-shaped value regex,
+    // so a real key committed to either file is still reported.
+    expect(config.match(/regexes = /g)?.length).toBe(1);
   });
 
   it("records a result that can be checked against a re-run", async () => {

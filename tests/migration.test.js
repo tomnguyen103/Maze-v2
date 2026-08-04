@@ -404,8 +404,30 @@ describe("Verified Classroom Domain migration", () => {
     expect(sql).toContain(
       "char_length(p_domain) NOT BETWEEN 4 AND 253"
     );
-    const generatedDomains = generatedPublicEmailDomains(sql);
-    expect(generatedDomains).toEqual([...PUBLIC_EMAIL_DOMAINS].sort());
+    // Migration 0017 is applied to the live database and is never edited, so
+    // the denylist it generated is a snapshot. Later additions arrive as
+    // forward inserts; the runtime list must equal their union, not 0017
+    // alone.
+    const forward = await readFile(
+      new URL(
+        "../db/migrations/0030_domain_autojoin_and_leaderboard_index.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    const supplements = [
+      ...(forward
+        .match(
+          /INSERT INTO public_email_domains \(domain\)\s*VALUES([\s\S]*?)ON CONFLICT/
+        )?.[1]
+        .matchAll(/'([^']+)'/g) ?? [])
+    ].map((match) => match[1]);
+    expect(supplements).toContain("tuta.com");
+
+    const storedDomains = [
+      ...new Set([...generatedPublicEmailDomains(sql), ...supplements])
+    ].sort();
+    expect(storedDomains).toEqual([...PUBLIC_EMAIL_DOMAINS].sort());
     expect(sql).not.toContain("INSERT INTO classroom_memberships");
   });
 });

@@ -23,7 +23,10 @@ describe("Clerk user deletion store", () => {
               daily_trail_contributions_deleted: true,
               offline_run_receipts_deleted: true,
               offline_pending_submissions_deleted: true,
-              echo_fossils_deleted: true
+              echo_fossils_deleted: true,
+              roles_deleted: true,
+              rate_limit_counters_deleted: true,
+              classroom_authority_versions_deleted: true
             }]
           : []
         };
@@ -45,6 +48,12 @@ describe("Clerk user deletion store", () => {
       expect.stringContaining("DELETE FROM explorer_access_settings"),
       expect.stringContaining("DELETE FROM echo_fossil_collections"),
       expect.stringContaining("DELETE FROM players"),
+      expect.stringContaining("DELETE FROM user_roles"),
+      expect.stringContaining("DELETE FROM rate_limit_counters"),
+      // Ordered before the Membership rows go: this table records a
+      // Membership by its Clerk membership id, so the join back to the
+      // Explorer only exists while `classroom_memberships` still does.
+      expect.stringContaining("DELETE FROM classroom_authority_versions"),
       expect.stringContaining("DELETE FROM player_access"),
       expect.stringContaining("AS tombstone_present"),
       "COMMIT"
@@ -78,7 +87,10 @@ describe("Clerk user deletion store", () => {
               daily_trail_contributions_deleted: true,
               offline_run_receipts_deleted: true,
               offline_pending_submissions_deleted: true,
-              echo_fossils_deleted: true
+              echo_fossils_deleted: true,
+              roles_deleted: true,
+              rate_limit_counters_deleted: true,
+              classroom_authority_versions_deleted: true
             }]
           : []
         };
@@ -161,7 +173,10 @@ describe("Clerk user deletion store", () => {
               daily_trail_contributions_deleted: false,
               offline_run_receipts_deleted: true,
               offline_pending_submissions_deleted: true,
-              echo_fossils_deleted: true
+              echo_fossils_deleted: true,
+              roles_deleted: true,
+              rate_limit_counters_deleted: true,
+              classroom_authority_versions_deleted: true
             }]
           : []
         };

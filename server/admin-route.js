@@ -8,6 +8,8 @@ import { setRetryAfter } from "./http-retry.js";
 const MAX_BODY_BYTES = 4 * 1024;
 const ROLE_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/role$/;
 const EXPORT_PATH = /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/export$/;
+const USERNAME_PATH =
+  /^\/api\/admin\/users\/([A-Za-z0-9_-]{1,255})\/username$/;
 const USERS_PATH = /^\/api\/admin\/users$/;
 const QUESTIONS_PATH = /^\/api\/admin\/questions$/;
 const QUESTION_PATH =
@@ -77,6 +79,10 @@ export function isAdminPath(pathname) {
  *   }) => Promise<{ refundId: string, status: string }>,
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   mirrorRole?: (userId: string, role: string) => Promise<void>
+ *   clearUsername?: ((userId: string) => Promise<{
+ *     cleared: boolean,
+ *     previousUsername: string | null
+ *   }>) | null
  * }} dependencies
  */
 export function createAdminHandler({
@@ -93,7 +99,8 @@ export function createAdminHandler({
     throw new Error("Refunds are not configured.");
   },
   recordAudit = async () => {},
-  mirrorRole = async () => {}
+  mirrorRole = async () => {},
+  clearUsername = null
 }) {
   // Each sub-path carries its own permission — they are separate grants — but
   // the check still runs before any shape check, so an unauthorized caller
@@ -110,6 +117,11 @@ export function createAdminHandler({
       pattern: EXPORT_PATH,
       permissions: { GET: "export:any" },
       handle: handleExport
+    },
+    {
+      pattern: USERNAME_PATH,
+      permissions: { POST: "users:names:write" },
+      handle: handleUsername
     },
     {
       pattern: USERS_PATH,
@@ -287,6 +299,60 @@ export function createAdminHandler({
    * unchanged, so the payload an admin sees is byte-identical to the one the
    * Explorer can download themselves — one schema, one code path.
    *
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {{ userId: string, role: import("../shared/permissions.js").Role }} decision
+   * @param {string} targetUserId
+   */
+  /**
+   * `POST /api/admin/users/:id/username` — retire one public name.
+   *
+   * A username is shown to anonymous readers on the Global Scoreboard and the
+   * Explorers choosing them are children. Screening at write time stops the
+   * obvious cases; what gets past it needed a remedy, and until now the only
+   * one staff had was deleting the child's account. This blanks the name and
+   * nothing else: Quest Progress, Run Records and Journal are untouched, and
+   * the Explorer picks a new one on their next visit.
+   *
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {{ userId: string, role: import("../shared/permissions.js").Role }} decision
+   * @param {string} targetUserId
+   */
+  async function handleUsername(request, response, decision, targetUserId) {
+    if (request.method !== "POST") {
+      response.setHeader("allow", "POST");
+      sendJson(response, 405, { error: "Use POST to retire a username." });
+      return;
+    }
+    if (!clearUsername) {
+      sendJson(response, 503, { error: "Username changes are unavailable." });
+      return;
+    }
+    try {
+      const { cleared, previousUsername } = await clearUsername(targetUserId);
+      // Recorded whether or not a name was there to clear: the attempt is
+      // what an operator needs to see, and an absent one is not an error.
+      // The retired name is recorded too, because an action taken against a
+      // child's account has to be appealable.
+      await recordAudit(request, {
+        actorId: decision.userId,
+        actorRole: decision.role,
+        action: "user.username.clear",
+        resource: { type: "player_account", id: targetUserId },
+        before: { username: previousUsername },
+        after: { cleared }
+      });
+      sendJson(response, 200, { cleared });
+    } catch (error) {
+      console.error("[admin] username clear failed", {
+        name: safeErrorName(error)
+      });
+      sendJson(response, 503, { error: "Username changes are unavailable." });
+    }
+  }
+
+  /**
    * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
    * @param {{ userId: string, role: import("../shared/permissions.js").Role }} decision

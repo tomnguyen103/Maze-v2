@@ -161,6 +161,21 @@ export function createPlayerApiHandler({
           atlasRegionId: url.searchParams.get("region"),
           rulesetRevision: url.searchParams.get("rules")
         });
+        // Metered before the read, not after: the cost this budget exists to
+        // bound is the query itself.
+        const leaderboardDecision = await rateLimit(
+          "leaderboard.read",
+          request,
+          null
+        );
+        if (!leaderboardDecision.allowed) {
+          sendRateLimited(
+            response,
+            leaderboardDecision,
+            "The Global Scoreboard is busy. Try again shortly."
+          );
+          return;
+        }
         const leaderboard = await store.getLeaderboard(partition);
         sendJson(response, 200, {
           entries: leaderboard.entries.map(publicScoreEntry),
