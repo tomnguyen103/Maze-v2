@@ -2087,7 +2087,7 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
 }) => {
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await expectGameReady(page);
-  const settingsButton = page.getByRole("button", { name: "Settings" });
+  const settingsButton = page.getByRole("button", { name: "Settings", exact: true });
   const initialRunFacts = await page.evaluate(() => ({
     seed: document.querySelector("#seed-value")?.textContent,
     moves: document.querySelector("#moves-value")?.textContent,
@@ -2205,7 +2205,7 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
     "data-access-type",
     "reader"
   );
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Reset to defaults" }).click();
   await expect(page.locator("#access-settings-status")).toHaveText(
     "Canonical design restored."
@@ -2226,7 +2226,7 @@ test("keeps a Run paused when Settings is activated twice while loading", async 
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await expectGameReady(page);
 
-  await page.getByRole("button", { name: "Settings" }).dblclick({
+  await page.getByRole("button", { name: "Settings", exact: true }).dblclick({
     delay: 20
   });
   const dialog = page.getByRole("dialog", {
@@ -2253,7 +2253,7 @@ test("retries the Settings view after its first chunk request fails", async ({
   });
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await expectGameReady(page);
-  const settingsButton = page.getByRole("button", { name: "Settings" });
+  const settingsButton = page.getByRole("button", { name: "Settings", exact: true });
 
   await settingsButton.click();
   await expect(page.locator("#live-region")).toContainText(
@@ -2274,7 +2274,7 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?seed=ACCESS-FOLD&level=trail-scout");
   await expectGameReady(page);
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Stronger Fog contrast").check();
   await page.getByLabel("Larger maze marks").check();
   await page.getByLabel("Reader-friendly Question text").check();
@@ -2305,7 +2305,7 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
     document.documentElement.style.fontSize = "32px";
     document.querySelector("#canvas-frame")?.classList.add("is-hurt");
   });
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   const overflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -
