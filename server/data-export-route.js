@@ -1,6 +1,7 @@
 import { URL } from "node:url";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { safeErrorName } from "./safe-error-log.js";
+import { setRetryAfter } from "./http-retry.js";
 
 export const DATA_EXPORT_PATH = "/api/me/export";
 
@@ -11,6 +12,7 @@ export const DATA_EXPORT_PATH = "/api/me/export";
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));

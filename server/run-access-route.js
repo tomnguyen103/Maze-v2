@@ -1,5 +1,6 @@
 import { URL } from "node:url";
 import { sendRateLimited } from "./rate-limit-request.js";
+import { setRetryAfter } from "./http-retry.js";
 
 const MAX_BODY_BYTES = 4 * 1024;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]{12,128}$/;
@@ -22,6 +23,7 @@ function noStore(response) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   noStore(response);
   response.end(JSON.stringify(body));

@@ -176,6 +176,10 @@ const SECTION_QUERIES = {
  * exists so tests can drive a fake adapter and so phase 7's admin export can
  * reuse the same section list.
  *
+ * `query` must tolerate several calls in flight at once: the Explorer's own
+ * sections are all issued together. `selectClassroom` is never concurrent with
+ * anything — the Classroom loop is deliberately sequential.
+ *
  * @param {{
  *   query: (sql: string, values?: unknown[]) => Promise<{
  *     rows: Record<string, unknown>[]
@@ -197,23 +201,45 @@ export async function buildUserExport(
   const rowsOf = async (section, values = [userId]) =>
     (await adapter.query(SECTION_QUERIES[section], values)).rows;
 
-  const profile = await rowsOf("profile");
-  const personalScores = await rowsOf("personal_scores");
-  const access = await rowsOf("access");
-  const grants = await rowsOf("grants");
-  const lifetimePurchases = await rowsOf("lifetime_purchases");
-  const classroomMemberships = await rowsOf("classroom_memberships");
-  const personalQuestProgress = await rowsOf("quest_progress");
-  const personalJournal = await rowsOf("journal");
-  const fossilCollection = await rowsOf("fossil_collection");
-  const accessSettings = await rowsOf("access_settings");
-  const verifiedDailyResults = await rowsOf("verified_daily_results");
-  const verifiedDailyBestResults = await rowsOf(
-    "verified_daily_best_results"
-  );
-  const offlineReceipts = await rowsOf("offline_receipts");
-  const offlineSubmissions = await rowsOf("offline_submissions");
-  const role = await rowsOf("role");
+  // Every section below reads only the Explorer's own rows and none of them
+  // touches the transaction-local Classroom GUC, so they can all be in flight
+  // at once. The single transaction client still executes them in order on the
+  // wire; issuing them together is what removes the per-section await turn
+  // between each one. The membership loop further down is deliberately NOT
+  // included — it mutates `set_config` state that its own queries then read.
+  const [
+    profile,
+    personalScores,
+    access,
+    grants,
+    lifetimePurchases,
+    classroomMemberships,
+    personalQuestProgress,
+    personalJournal,
+    fossilCollection,
+    accessSettings,
+    verifiedDailyResults,
+    verifiedDailyBestResults,
+    offlineReceipts,
+    offlineSubmissions,
+    role
+  ] = await Promise.all([
+    rowsOf("profile"),
+    rowsOf("personal_scores"),
+    rowsOf("access"),
+    rowsOf("grants"),
+    rowsOf("lifetime_purchases"),
+    rowsOf("classroom_memberships"),
+    rowsOf("quest_progress"),
+    rowsOf("journal"),
+    rowsOf("fossil_collection"),
+    rowsOf("access_settings"),
+    rowsOf("verified_daily_results"),
+    rowsOf("verified_daily_best_results"),
+    rowsOf("offline_receipts"),
+    rowsOf("offline_submissions"),
+    rowsOf("role")
+  ]);
 
   /** @type {Record<string, unknown>[]} */
   const classQuestProgress = [];

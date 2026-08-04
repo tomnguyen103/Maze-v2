@@ -1,4 +1,5 @@
 import { URL } from "node:url";
+import { setRetryAfter } from "./http-retry.js";
 
 export const HEALTH_PATH = "/api/health";
 export const READY_PATH = "/api/ready";
@@ -15,6 +16,7 @@ export function isHealthPath(pathname) {
  */
 function sendJson(response, status, body) {
   response.statusCode = status;
+  setRetryAfter(response, status);
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));
