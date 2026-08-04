@@ -2366,7 +2366,9 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 #first-light-title:focus-visible,
-#level-title:focus-visible,
+#level-title-1:focus-visible,
+#level-title-2:focus-visible,
+#level-title-3:focus-visible,
 #result-title:focus-visible {
   outline: none;
 }
@@ -2432,30 +2434,79 @@ body[data-run-mode="first-light"] .play-workbench {
   gap: var(--space-2);
 }
 
-.level-dialog__first-light {
-  display: flex;
-  min-width: 0;
-  margin-top: var(--space-5);
-  padding: var(--space-3) var(--space-4);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  border: 2px solid var(--color-line);
-  background: var(--color-signal-glow);
-}
-
-.level-dialog__first-light p {
-  max-width: 62ch;
-  margin: 0;
-  color: var(--color-ink);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.level-dialog__first-light button,
 .first-light-dialog__actions button {
   min-height: 2.75rem;
   white-space: nowrap;
+}
+
+/*
+ * HM-01: the level dialog is one decision per step (Practice Intention,
+ * Learning Deck, Quest Level), not three at once. `data-step` on the
+ * dialog names the visible one; every other step's markup stays in the DOM
+ * (main.js reads and writes their form state across the whole flow) but is
+ * removed from layout and the accessibility tree.
+ */
+.level-dialog__step {
+  display: none;
+}
+
+.level-dialog[data-step="1"] .level-dialog__step[data-step="1"],
+.level-dialog[data-step="2"] .level-dialog__step[data-step="2"],
+.level-dialog[data-step="3"] .level-dialog__step[data-step="3"] {
+  display: block;
+}
+
+.level-dialog__header {
+  display: flex;
+  margin-bottom: var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.level-dialog__progress {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/*
+ * First Light replay has to stay reachable from every step of this modal
+ * flow — it is an alternative to picking a level at all, and `showModal()`
+ * makes the rest of the page inert while this dialog is open, so it cannot
+ * live outside it. Demoted to a plain link (no border, no callout box) so
+ * it stops competing with the step's actual decision, which was the
+ * audit's complaint (HM-01): the min-height floor from the shared
+ * `button, .primary-button` rule still holds, so the touch target stays
+ * real even though the box around it is gone.
+ */
+.level-dialog__first-light {
+  padding: 0 var(--space-2);
+  border: none;
+  background: none;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.level-dialog__first-light:hover {
+  color: var(--color-ink);
+}
+
+.level-dialog__step-actions {
+  display: flex;
+  margin-top: var(--space-6);
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.level-dialog__step-actions:has(#level-dialog-back-2, #level-dialog-back-3) {
+  justify-content: space-between;
 }
 
 .level-dialog__intro {
@@ -3189,9 +3240,9 @@ body[data-run-mode="first-light"] .play-workbench {
     flex-direction: column;
   }
 
-  .level-dialog__first-light {
+  .level-dialog__step-actions {
     align-items: stretch;
-    flex-direction: column;
+    flex-direction: column-reverse;
   }
 
   .learning-deck-options {
@@ -3210,7 +3261,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .first-light-dialog__actions button,
-  .level-dialog__first-light button {
+  .level-dialog__step-actions button {
     width: 100%;
   }
 

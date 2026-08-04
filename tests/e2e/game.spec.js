@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expectGameReady } from "./game-ready.js";
+import { expectGameReady, goToLevelStep } from "./game-ready.js";
 import { installSignedInQuestPlayer } from "./signed-player.js";
 import { applyAction, createRun } from "../../src/game/game-session.js";
 import { getBundledQuestion } from "../../src/questions/question-bank.js";
@@ -619,6 +619,7 @@ async function pinQuestSeed(page) {
 
 /** @param {import("@playwright/test").Page} page */
 async function chooseTrailScout(page) {
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
 }
 
@@ -743,12 +744,12 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   const review = intentionGroup.getByRole("radio", { name: /Review/ });
   await expect(review).toBeChecked();
   await expect(page.locator("#practice-intention-guidance")).toHaveText(
-    /Review keeps .* selected below\./
+    /Review keeps .* selected as you continue\./
   );
   await review.press("ArrowRight");
   await expect(explore).toBeChecked();
   await expect(page.locator("#practice-intention-guidance")).toHaveText(
-    "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both below."
+    "Explore leaves the reviewed Quest Level and Learning Deck choices open. Choose both ahead."
   );
   expect(
     await intentionGroup.evaluate((element) =>
@@ -760,6 +761,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
     .getByRole("radio", { name: /Review/ })
     .check();
   const beforeRejectedReview = await readPracticeStorage(page);
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Bright Start/ }).click();
   await expect(page.locator("#practice-intention-status")).toHaveText(
     "Review keeps your current Quest Level and Learning Deck."
@@ -769,6 +771,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
   });
+  await goToLevelStep(page, 1);
   await explore.check();
   await chooseTrailScout(page);
   await expect(page.locator("#level-dialog")).not.toBeVisible();
@@ -779,6 +782,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   await intentionGroup
     .getByRole("radio", { name: /Challenge/ })
     .check();
+  await goToLevelStep(page, 3);
   await page.getByRole("button", { name: /Trail Scout/ }).click();
   await expect(page.locator("#practice-intention-status")).toHaveText(
     "Choose a higher Quest Level for Challenge."
@@ -835,6 +839,7 @@ test("locks one published Learning Deck into a new Quest", async ({
   );
   await page.goto("/play");
   await expectGameReady(page);
+  await goToLevelStep(page, 2);
 
   const deckGroup = page.getByRole("group", {
     name: "Choose a Learning Deck"
@@ -923,6 +928,7 @@ test("announces the Mixed Trail continuation once per Quest", async ({
   await pinQuestSeed(page);
   await page.goto("/play");
   await expectGameReady(page);
+  await goToLevelStep(page, 2);
   await page
     .getByRole("group", { name: "Choose a Learning Deck" })
     .getByRole("radio", { name: /Number Trail/ })
@@ -1045,7 +1051,7 @@ test("starts a playable maze and responds to keyboard actions", async ({
   await expectGameReady(page);
 
   await expect(
-    page.getByRole("heading", { name: "Choose your Quest Level" })
+    page.getByRole("heading", { name: "Choose your Intention" })
   ).toBeVisible();
   await expect(page.locator('[data-level="trail-scout"]')).toContainText(
     "times tables"
@@ -2610,7 +2616,7 @@ test("restores a completed five-Sigil Atlas until New Quest is chosen", async ({
 
   await page.getByRole("button", { name: "New Quest", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Choose your Quest Level" })
+    page.getByRole("heading", { name: "Choose your Intention" })
   ).toBeVisible();
 });
 

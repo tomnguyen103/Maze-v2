@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getFirstLightQuestion } from "../../src/game/first-light.js";
-import { expectGameReady } from "./game-ready.js";
+import { expectGameReady, goToLevelStep } from "./game-ready.js";
 
 const ACTIVE_RUN_RECOVERY_KEY =
   "echo-maze:active-run-recovery:v1";
@@ -154,10 +154,10 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
   await expect(skipToQuest).toBeFocused();
   await skipToQuest.press("Enter");
   const levelChoice = page.getByRole("dialog", {
-    name: "Choose your Quest Level"
+    name: "Choose your Intention"
   });
   await expect(levelChoice).toBeVisible();
-  await expect(page.locator("#level-title")).toBeFocused();
+  await expect(page.locator("#level-title-1")).toBeFocused();
   await expect
     .poll(() =>
       page.evaluate((key) => localStorage.getItem(key), ACTIVE_RUN_RECOVERY_KEY)
@@ -230,6 +230,7 @@ test("keeps First Light isolated through replay, Quest handoff, Continue, and Re
       name: "Continue from the Campfire?"
     })
   ).not.toBeVisible();
+  await goToLevelStep(page, 3);
   const trailScout = page.locator('[data-level="trail-scout"]');
   await expect(trailScout).toBeEnabled();
   await trailScout.focus();
@@ -413,9 +414,10 @@ test("keeps First Light and Campfire choices accessible at exact release viewpor
   await page
     .getByRole("button", { name: "Skip to Quest" })
     .click();
+  await goToLevelStep(page, 3);
   await page.locator('[data-level="trail-scout"]').click();
   await expect(
-    page.getByRole("dialog", { name: "Choose your Quest Level" })
+    page.getByRole("dialog", { name: "Choose your Intention" })
   ).not.toBeVisible({ timeout: 15000 });
   await expect(page.locator("body")).toHaveAttribute(
     "data-run-mode",
