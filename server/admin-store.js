@@ -106,6 +106,12 @@ export function createAdminStore(pool) {
     },
 
     async dashboardMetrics() {
+      // Explorers, lifetime conversions, active memberships, published
+      // questions, and dead deliveries are running totals: a snapshot has no
+      // natural "vs previous period" comparison, and DASH-01 does not
+      // fabricate one for them. Daily active Explorers and Runs started
+      // today are period-scoped counts, so a real yesterday figure exists to
+      // compare against — the only two tiles that get a delta.
       const result = await pool.query(
         `SELECT (
            SELECT COUNT(*) FROM (
@@ -118,8 +124,14 @@ export function createAdminStore(pool) {
          ) AS explorers,
          (SELECT COUNT(DISTINCT player_id) FROM run_access_grants
           WHERE created_at >= date_trunc('day', now())) AS daily_active_explorers,
+         (SELECT COUNT(DISTINCT player_id) FROM run_access_grants
+          WHERE created_at >= date_trunc('day', now() - interval '1 day')
+            AND created_at < date_trunc('day', now())) AS daily_active_explorers_yesterday,
          (SELECT COUNT(*) FROM run_access_grants
           WHERE created_at >= date_trunc('day', now())) AS runs_started_today,
+         (SELECT COUNT(*) FROM run_access_grants
+          WHERE created_at >= date_trunc('day', now() - interval '1 day')
+            AND created_at < date_trunc('day', now())) AS runs_started_yesterday,
          (SELECT COUNT(*) FROM lifetime_purchases
           WHERE paid_at IS NOT NULL) AS lifetime_conversions,
          (SELECT COUNT(*) FROM player_access
@@ -133,7 +145,11 @@ export function createAdminStore(pool) {
       return {
         explorers: Number(row.explorers ?? 0),
         dailyActiveExplorers: Number(row.daily_active_explorers ?? 0),
+        dailyActiveExplorersYesterday: Number(
+          row.daily_active_explorers_yesterday ?? 0
+        ),
         runsStartedToday: Number(row.runs_started_today ?? 0),
+        runsStartedYesterday: Number(row.runs_started_yesterday ?? 0),
         lifetimeConversions: Number(row.lifetime_conversions ?? 0),
         activeMemberships: Number(row.active_memberships ?? 0),
         publishedQuestions: Number(row.published_questions ?? 0),

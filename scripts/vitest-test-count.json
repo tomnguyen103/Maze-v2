@@ -1,6 +1,6 @@
 {
   "testFiles": 187,
-  "tests": 1645,
+  "tests": 1647,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-08-04 after SHELL-15 (Appearance panel, admin workbench). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-08-04 after DASH-01 (Operations pulse hero tile + real deltas). `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }
