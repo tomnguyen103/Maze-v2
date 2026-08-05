@@ -435,6 +435,64 @@ describe("renderAdmin", () => {
   });
 });
 
+describe("DASH-01 — Operations pulse claims one hero and never fabricates a trend", () => {
+  it("gives the daily-count tiles a real delta and leaves snapshot tiles without one", async () => {
+    const client = staffClient();
+    client.getAdminMetrics.mockResolvedValue({
+      metrics: {
+        explorers: 50,
+        dailyActiveExplorers: 12,
+        dailyActiveExplorersYesterday: 9,
+        runsStartedToday: 30,
+        runsStartedYesterday: 34,
+        lifetimeConversions: 4,
+        activeMemberships: 6,
+        publishedQuestions: 20,
+        deadDeliveries: 2
+      }
+    });
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: { role: "admin", permissions: ["audit:read", "refunds:issue"] }
+      }),
+      client
+    });
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-metric--hero")).not.toBeNull();
+    });
+    const hero = root.querySelector(".admin-metric--hero");
+    expect(hero?.textContent).toContain("Runs started today");
+    expect(hero?.textContent).toContain("30");
+    // 30 - 34 = a real decline, not hidden as a positive.
+    expect(hero?.querySelector(".admin-metric__delta--down")).not.toBeNull();
+    expect(hero?.textContent).toContain("-4 vs yesterday (34)");
+
+    const tiles = [...root.querySelectorAll(".admin-metric")];
+    const explorersTile = tiles.find((tile) =>
+      tile.textContent?.includes("Explorers") &&
+      !tile.textContent?.includes("Daily active")
+    );
+    expect(explorersTile?.querySelector(".admin-metric__delta")).toBeNull();
+    expect(explorersTile?.textContent).toContain("All-time");
+  });
+
+  it("keeps the delta's color rule undefeated by a bare element selector", () => {
+    // A prior version of this file styled the caption as a bare
+    // `.admin-metric span`, which — element selectors carry the same
+    // specificity regardless of source order — silently beat
+    // `.admin-metric__delta--up/--down/--flat` and killed the change
+    // indicator's color entirely. jsdom does not apply real CSS cascade,
+    // so this is a source check for the shape of the regression rather
+    // than a computed-style one.
+    const css = readFileSync("src/admin/admin.css", "utf8");
+    expect(css).not.toMatch(/^\.admin-metric span \{/m);
+    expect(css).toContain(".admin-metric__caption {");
+    expect(css).toContain(".admin-metric__delta--up {");
+    expect(css).toContain(".admin-metric__delta--down {");
+  });
+});
+
 describe("SHELL-15 — the theme choice is reachable from the workbench", () => {
   it("adds an Appearance panel with the three theme choices, and applies a change", async () => {
     localStorage.removeItem("echo-maze:theme");
@@ -559,7 +617,9 @@ function staffClient() {
       metrics: {
         explorers: 1,
         dailyActiveExplorers: 1,
+        dailyActiveExplorersYesterday: 1,
         runsStartedToday: 2,
+        runsStartedYesterday: 1,
         lifetimeConversions: 0,
         activeMemberships: 0,
         publishedQuestions: 0,

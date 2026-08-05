@@ -174,10 +174,46 @@
   letter-spacing: -0.06em;
 }
 
-.admin-metric span {
+.admin-metric__caption {
   color: var(--color-ink-muted);
   font-size: 0.78rem;
   font-weight: 680;
+}
+
+/* DASH-01: one tile claims primacy instead of seven identical ones. */
+.admin-metric--hero {
+  grid-column: 1 / -1;
+  min-height: 9rem;
+  background: var(--color-signal);
+}
+
+.admin-metric--hero strong {
+  font-size: clamp(2.5rem, 10vw, 4.5rem);
+}
+
+.admin-metric__grain {
+  display: block;
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-metric__delta {
+  font-weight: 700;
+}
+
+.admin-metric__delta--up {
+  color: var(--color-gate-text);
+}
+
+.admin-metric__delta--down {
+  color: var(--color-warden-text);
+}
+
+.admin-metric__delta--flat {
+  color: var(--color-ink-muted);
 }
 
 .admin-table {

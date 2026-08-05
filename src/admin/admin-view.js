@@ -300,7 +300,17 @@ export async function renderAdminWorkbench(root, { access, client }) {
   });
 }
 
-/** @param {HTMLElement} panel @param {unknown} value */
+/**
+ * DASH-01: seven identical tiles, no comparison, no primacy, one metrics
+ * bag with no dictionary. "Runs started today" — the tool's own name is
+ * "Operations pulse" — is the hero: bigger, first, the only tile besides
+ * Daily active Explorers with a real vs-yesterday delta, because those are
+ * the only two metrics this query has ever computed as period-scoped
+ * counts rather than running totals. The other five are lifetime/current
+ * snapshots and say so instead of pretending to a trend they don't have.
+ *
+ * @param {HTMLElement} panel @param {unknown} value
+ */
 function renderMetrics(panel, value) {
   const metrics = record(value, "metrics");
   if (!metrics) {
@@ -308,26 +318,64 @@ function renderMetrics(panel, value) {
     return;
   }
   const grid = element("div", "admin-metrics");
-  /** @type {[string, unknown][]} */
-  const values = [
-    ["Daily active Explorers", metrics.dailyActiveExplorers],
-    ["Runs started today", metrics.runsStartedToday],
-    ["Lifetime conversions", metrics.lifetimeConversions],
-    ["Explorers", metrics.explorers],
-    ["Active memberships", metrics.activeMemberships],
-    ["Published questions", metrics.publishedQuestions],
-    ["Dead deliveries", metrics.deadDeliveries]
-  ];
-  for (const [label, count] of values) {
-    const card = element("article", "admin-metric");
-    const number = element("strong");
-    number.textContent = String(Number(count ?? 0));
-    const caption = element("span");
-    caption.textContent = label;
-    card.append(number, caption);
-    grid.append(card);
-  }
+  grid.append(
+    metricTile("Runs started today", metrics.runsStartedToday, {
+      hero: true,
+      comparedTo: metrics.runsStartedYesterday,
+      grain: "Today"
+    }),
+    metricTile(
+      "Daily active Explorers",
+      metrics.dailyActiveExplorers,
+      { comparedTo: metrics.dailyActiveExplorersYesterday, grain: "Today" }
+    ),
+    metricTile("Explorers", metrics.explorers, { grain: "All-time" }),
+    metricTile("Active memberships", metrics.activeMemberships, {
+      grain: "Current"
+    }),
+    metricTile("Lifetime conversions", metrics.lifetimeConversions, {
+      grain: "All-time"
+    }),
+    metricTile("Published questions", metrics.publishedQuestions, {
+      grain: "Current"
+    }),
+    metricTile("Dead deliveries", metrics.deadDeliveries, {
+      grain: "Current"
+    })
+  );
   panel.append(grid);
+}
+
+/**
+ * @param {string} label
+ * @param {unknown} rawValue
+ * @param {{ hero?: boolean, comparedTo?: unknown, grain: string }} options
+ */
+function metricTile(label, rawValue, { hero = false, comparedTo, grain }) {
+  const value = Number(rawValue ?? 0);
+  const card = element(
+    "article",
+    hero ? "admin-metric admin-metric--hero" : "admin-metric"
+  );
+  const number = element("strong");
+  number.textContent = value.toLocaleString("en-US");
+  const caption = element("span", "admin-metric__caption");
+  caption.textContent = label;
+  const grainLabel = element("small", "admin-metric__grain");
+  grainLabel.textContent = grain;
+  card.append(number, caption, grainLabel);
+  if (comparedTo !== undefined) {
+    const previous = Number(comparedTo ?? 0);
+    const delta = value - previous;
+    const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const deltaEl = element(
+      "span",
+      `admin-metric__delta admin-metric__delta--${direction}`
+    );
+    deltaEl.textContent = `${delta > 0 ? "+" : ""}${delta.toLocaleString("en-US")} vs yesterday (${previous.toLocaleString("en-US")})`;
+    card.append(deltaEl);
+  }
+  return card;
 }
 
 /**

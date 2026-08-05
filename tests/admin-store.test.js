@@ -123,7 +123,9 @@ describe("admin store", () => {
       {
         explorers: "12",
         daily_active_explorers: "4",
+        daily_active_explorers_yesterday: "6",
         runs_started_today: "9",
+        runs_started_yesterday: "7",
         lifetime_conversions: "3",
         active_memberships: "3",
         published_questions: "8",
@@ -134,12 +136,19 @@ describe("admin store", () => {
     await expect(store.dashboardMetrics()).resolves.toEqual({
       explorers: 12,
       dailyActiveExplorers: 4,
+      dailyActiveExplorersYesterday: 6,
       runsStartedToday: 9,
+      runsStartedYesterday: 7,
       lifetimeConversions: 3,
       activeMemberships: 3,
       publishedQuestions: 8,
       deadDeliveries: 1
     });
     expect(pool.queries[0].sql).toContain("COUNT");
+    // DASH-01: the two period-scoped metrics get a real yesterday
+    // comparison; the five running-total metrics do not get a fabricated
+    // one.
+    expect(pool.queries[0].sql).toContain("daily_active_explorers_yesterday");
+    expect(pool.queries[0].sql).toContain("runs_started_yesterday");
   });
 });
