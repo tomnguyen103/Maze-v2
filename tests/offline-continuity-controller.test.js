@@ -667,6 +667,7 @@ describe("offline continuity controller", () => {
       storage,
       workerClient: worker,
       receiptVerifier: { verify: async () => ({ valid: true }) },
+      now: () => new Date("2026-08-01T13:00:00.000Z"),
       accountScope: "user_offline_01"
     });
 
