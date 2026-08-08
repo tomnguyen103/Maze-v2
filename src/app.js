@@ -67,6 +67,7 @@ if (url.pathname === "/" && url.searchParams.has("seed")) {
               <h1>Admin could not load.</h1>
               <p>Reload to try again. Your Quest is unaffected.</p>
               <a class="primary-button" href="/admin">Try again</a>
+              <a class="control-link" href="/">Back to Echo Maze</a>
             </main>
           `;
         });
