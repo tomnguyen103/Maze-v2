@@ -203,7 +203,7 @@ async function requestGemini(
   previousQuestion,
   reviewedQuestion
 ) {
-  const model = options.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
+  const model = options.env.GEMINI_MODEL ?? "gemini-3.7-flash";
   const apiKey = options.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("Gemini API key is missing.");

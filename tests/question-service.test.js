@@ -204,7 +204,7 @@ describe("Quest Questions", () => {
     expect(result.source).toBe("gemini");
     const geminiCall = calls[0];
     expect(geminiCall?.url).toContain(
-      "gemini-3.5-flash-lite:generateContent"
+      "gemini-3.7-flash:generateContent"
     );
     expect(
       new globalThis.Headers(geminiCall?.options.headers).get("x-goog-api-key")
