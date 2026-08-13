@@ -174,7 +174,7 @@ describe("Quest Questions", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("uses Gemini 3.5 Flash-Lite for production generation", async () => {
+  it("uses Gemini 3.7 Flash for production generation", async () => {
     /** @type {{ url: string, options: RequestInit }[]} */
     const calls = [];
     const service = createQuestionService({
