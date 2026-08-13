@@ -174,7 +174,7 @@ describe("Quest Questions", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("uses Gemini 3.5 Flash-Lite for production generation", async () => {
+  it("uses Gemini 3.7 Flash for production generation", async () => {
     /** @type {{ url: string, options: RequestInit }[]} */
     const calls = [];
     const service = createQuestionService({
@@ -204,7 +204,7 @@ describe("Quest Questions", () => {
     expect(result.source).toBe("gemini");
     const geminiCall = calls[0];
     expect(geminiCall?.url).toContain(
-      "gemini-3.5-flash-lite:generateContent"
+      "gemini-3.7-flash:generateContent"
     );
     expect(
       new globalThis.Headers(geminiCall?.options.headers).get("x-goog-api-key")
