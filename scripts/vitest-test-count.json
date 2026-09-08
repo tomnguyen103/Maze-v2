@@ -1,6 +1,6 @@
 {
-  "testFiles": 187,
-  "tests": 1648,
+  "testFiles": 188,
+  "tests": 1653,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-09-08 after Gemini 3.8 Flash migration. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-09-08 after Gemini 3.8 Flash contract and schema evals suite added. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }
