@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getBundledQuestion } from "../src/questions/question-bank.js";
 import {
   QUESTION_SCHEMA,
@@ -199,14 +199,20 @@ describe("Gemini 3.8 Flash Contract & Schema Evals", () => {
       }
     });
 
-    await service.getQuestion(EVAL_REQUEST);
-    const body = JSON.parse(String(calls[0].options.body));
+    const timeoutSpy = vi.spyOn(globalThis.AbortSignal, "timeout");
+    try {
+      await service.getQuestion(EVAL_REQUEST);
+      const body = JSON.parse(String(calls[0].options.body));
 
-    expect(body.generationConfig.maxOutputTokens).toBe(320);
+      expect(body.generationConfig.maxOutputTokens).toBe(320);
+      expect(timeoutSpy).toHaveBeenCalledWith(5000);
 
-    const signal = calls[0].options.signal;
-    expect(signal).toBeInstanceOf(globalThis.AbortSignal);
-    expect(signal?.aborted).toBe(false);
+      const signal = calls[0].options.signal;
+      expect(signal).toBeInstanceOf(globalThis.AbortSignal);
+      expect(signal?.aborted).toBe(false);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 
   it("Assertion 5: Deterministic fallback guarantee seamlessly returns bundled questions without throwing", async () => {
