@@ -27,7 +27,7 @@ server secrets and database credentials stay server-side.
 
 ## Deploy
 
-Production defaults to Gemini 3.7 Flash when `GEMINI_API_KEY` is set. The
+Production defaults to Gemini 3.8 Flash when `GEMINI_API_KEY` is set. The
 Express server owns the key, rate-limits and caches requests, and validates
 structured model output. Child-facing output must match a reviewed curriculum
 card exactly; changed or unsafe output falls back to the bundled deck.
@@ -204,7 +204,7 @@ AUDIT_CHECKPOINT_SECRET_ACCESS_KEY=your-dedicated-checkpoint-secret
 AUDIT_CHECKPOINT_HMAC_KEY=your-random-32-byte-or-longer-signing-key
 AUDIT_CHECKPOINT_RETENTION_DAYS=your-approved-positive-retention-period
 GEMINI_API_KEY=your-secret-key
-GEMINI_MODEL=gemini-3.7-flash
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
 ### Operations scripts

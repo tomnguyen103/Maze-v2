@@ -14,7 +14,7 @@ are not deterministic.
 
 The Run state owns only the Warden Challenge and the accepted Warden Question.
 A separate question module requests structured output from local Ollama during
-development and Gemini 3.7 Flash in production. Every response is validated
+development and Gemini 3.8 Flash in production. Every response is validated
 before it enters the Run. For child safety, model output must reproduce a
 reviewed Quest-Level question template exactly; the model cannot introduce new
 child-facing wording or facts. Gemini's strict safety filters provide an

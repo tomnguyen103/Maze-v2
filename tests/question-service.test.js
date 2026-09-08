@@ -174,7 +174,7 @@ describe("Quest Questions", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("uses Gemini 3.7 Flash for production generation", async () => {
+  it("uses Gemini 3.8 Flash for production generation", async () => {
     /** @type {{ url: string, options: RequestInit }[]} */
     const calls = [];
     const service = createQuestionService({
@@ -204,13 +204,50 @@ describe("Quest Questions", () => {
     expect(result.source).toBe("gemini");
     const geminiCall = calls[0];
     expect(geminiCall?.url).toContain(
-      "gemini-3.7-flash:generateContent"
+      "gemini-3.8-flash:generateContent"
     );
     expect(
       new globalThis.Headers(geminiCall?.options.headers).get("x-goog-api-key")
     ).toBe("test-key");
     const geminiBody = JSON.parse(String(geminiCall?.options.body));
     expect(geminiBody.generationConfig).not.toHaveProperty("temperature");
+  });
+
+  it("respects GEMINI_MODEL env override or defaults to gemini-3.8-flash when empty", async () => {
+    /** @type {{ url: string, options: RequestInit }[]} */
+    const calls = [];
+    /** @param {string} [modelEnv] */
+    const makeService = (modelEnv) =>
+      createQuestionService({
+        env: {
+          NODE_ENV: "production",
+          GEMINI_API_KEY: "test-key",
+          GEMINI_MODEL: modelEnv
+        },
+        fetchImpl: async (url, options) => {
+          calls.push({ url, options });
+          return {
+            ok: true,
+            json: async () => ({
+              candidates: [
+                {
+                  content: {
+                    parts: [{ text: JSON.stringify(PROVIDER_QUESTION) }]
+                  }
+                }
+              ]
+            })
+          };
+        }
+      });
+
+    const customService = makeService("custom-gemini-model");
+    await customService.getQuestion(REQUEST);
+    expect(calls[0]?.url).toContain("custom-gemini-model:generateContent");
+
+    const emptyModelService = makeService("");
+    await emptyModelService.getQuestion(REQUEST);
+    expect(calls[1]?.url).toContain("gemini-3.8-flash:generateContent");
   });
 
   it("falls back to the bundled deck when a provider is unavailable", async () => {
