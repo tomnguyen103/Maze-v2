@@ -666,7 +666,7 @@ issue/spec/ticket, test-first, local review, CodeRabbit, and merge rules.
 Work:
 
 - add ADR 0007 superseding signed-in-unlimited behavior in ADR 0006;
-- update `CONTEXT.md` with trial, lifetime, refund, and dispute invariants;
+- update `GLOSSARY.md` with trial, lifetime, refund, and dispute invariants;
 - lock the `$5.99 once` language and non-DRM boundary.
 
 Verify:

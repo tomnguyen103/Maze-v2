@@ -1054,7 +1054,7 @@ rules, then update the domain glossary.
 
 - [ ] ADR 0007 supersedes signed-in-unlimited behavior from ADR 0006.
 - [ ] ADR 0008 locks Atlas and Gate Warden invariants.
-- [ ] `CONTEXT.md` distinguishes Run access, Quest Progress, Atlas projection,
+- [ ] `GLOSSARY.md` distinguishes Run access, Quest Progress, Atlas projection,
       and payment state.
 
 **Verification:**
@@ -1065,7 +1065,7 @@ rules, then update the domain glossary.
 
 **Dependencies:** None
 
-**Files likely touched:** `CONTEXT.md`, `docs/adr/0007-*.md`,
+**Files likely touched:** `GLOSSARY.md`, `docs/adr/0007-*.md`,
 `docs/adr/0008-*.md`
 
 **Estimated scope:** Medium, 3 files

@@ -332,7 +332,7 @@ Never a must-fix, never a termination blocker.
   nothing celebrates (`--color-gate` used 12× sitewide, never there); 9
   transitions against 25 `:hover` + 13 `:active` rules; the playfield is a uniform
   dark slate grid, so "storybook expedition" lives only in the chrome.
-- **Glossary drift** — `usedMapFingerprints` uses the term `CONTEXT.md` tells you
+- **Glossary drift** — `usedMapFingerprints` uses the term `GLOSSARY.md` tells you
   to avoid for **Labyrinth**, baked into the cloud and GDPR-export contract;
   "Map marks" ships as a player-visible heading.
 - **Dead but signed-off code** — `src/learning/offline-practice.js` is spec'd,

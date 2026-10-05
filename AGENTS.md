@@ -12,7 +12,7 @@ Use the five canonical Matt Pocock triage labels. See `docs/agents/triage-labels
 
 ### Domain docs
 
-This is a single-context repository. Read `CONTEXT.md` and relevant ADRs under `docs/adr/` before changing game rules.
+This is a single-context repository. Read `GLOSSARY.md` and relevant ADRs under `docs/adr/` before changing game rules.
 
 ## Local validation
 

@@ -68,7 +68,7 @@ alone.
 - Graphify: 2,199 nodes, 3,984 edges, and 183 communities; graph rebuilt from
   the reviewed commit with no import cycle reported.
 - Product contracts reviewed:
-  - `CONTEXT.md`
+  - `GLOSSARY.md`
   - `design.md`
   - `tokens.css`
   - ADRs 0001–0037 relevant to gameplay, Atlas, Journal, Daily, access,
@@ -608,7 +608,7 @@ to a durable recovery checkpoint is preserved; it does not promise
 millisecond-perfect persistence during abrupt process termination.
 
 **Terminology resolved:** The canonical domain term is **Active Run Recovery**
-and its player-facing label is **Campfire Resume**. `CONTEXT.md` distinguishes
+and its player-facing label is **Campfire Resume**. `GLOSSARY.md` distinguishes
 it from forbidden active Run cloud synchronization and cross-device resume.
 
 **Question continuity decision — resolved:** Recovery pins the exact reviewed
@@ -1555,7 +1555,7 @@ not cancel a named production promise.
 Each feature must follow the repository's default engineering workflow after
 approval:
 
-1. run `grill-with-docs` to align the feature, update `CONTEXT.md`, and
+1. run `grill-with-docs` to align the feature, update `GLOSSARY.md`, and
    add/supersede ADRs only where the domain or a locked decision changes;
 2. run `to-spec` to publish the agreed feature spec in GitHub Issues;
 3. run `to-tickets` to create vertically sliced tickets with dependency edges;

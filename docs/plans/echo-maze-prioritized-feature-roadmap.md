@@ -72,7 +72,7 @@ not only in README claims.
 - Graphify was refreshed at `85c485f`: 560 concept nodes, 889 edges, no import
   cycles.
 - Governing documents reviewed:
-  - `CONTEXT.md`
+  - `GLOSSARY.md`
   - `design.md`
   - ADRs `0001` through `0006`
   - the completed entry-experience plan
@@ -527,7 +527,7 @@ pure classifier and Warden-budget configuration needed to make that slice pass.
 
 **Dependencies:** None
 
-**Files likely touched:** `CONTEXT.md`,
+**Files likely touched:** `GLOSSARY.md`,
 `docs/adr/0007-echo-atlas-and-gate-wardens.md`,
 `tests/quest-levels.test.js`, `tests/game-session.test.js`
 

@@ -244,7 +244,7 @@ separate marketing template.
 ### 6.3 Copy constraints
 
 - Use `Explorer`, `Labyrinth`, `Run`, `Quest`, `Quest Level`, `Echo`, `Gate`,
-  and `Warden` according to `CONTEXT.md`.
+  and `Warden` according to `GLOSSARY.md`.
 - Use plain, encouraging, kid-friendly language.
 - Do not invent player counts, testimonials, awards, or learning claims.
 - Do not describe account sign-in as Quest Progress synchronization.

@@ -7,7 +7,7 @@ merge, and merged-main runtime evidence is recorded in the PR and handoff.
 pull request.
 
 **Authoritative inputs:** `/goal` contract dated 2026-07-28,
-`docs/UNFINISHED-FEATURES.md`, `CONTEXT.md`, ADRs 0001, 0003, 0005, 0012, and
+`docs/UNFINISHED-FEATURES.md`, `GLOSSARY.md`, ADRs 0001, 0003, 0005, 0012, and
 0024, plus the Daily sections of both product plans referenced by the backlog.
 
 ## Reconciliation

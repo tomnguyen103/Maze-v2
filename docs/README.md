@@ -1,7 +1,7 @@
 # Echo Maze documentation
 
 The root [`README.md`](../README.md) covers gameplay, local development,
-deployment, and validation. Root [`CONTEXT.md`](../CONTEXT.md) is the domain
+deployment, and validation. Root [`GLOSSARY.md`](../GLOSSARY.md) is the domain
 glossary — use its canonical terms in issues, tests, and code. This directory
 holds everything else, organised by how authoritative it is.
 
