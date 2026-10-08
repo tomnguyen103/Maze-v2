@@ -3145,8 +3145,8 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
       };
     });
     expect(
-      fit.scrollWidth <= fit.boxWidth &&
-        fit.scrollHeight <= fit.boxHeight &&
+      fit.scrollWidth <= fit.clientWidth &&
+        fit.scrollHeight <= fit.clientHeight &&
         fit.boxWidth >= 44 &&
         fit.boxHeight >= 44,
       `${fit.id || fit.text} must not clip: ${JSON.stringify(fit)}`
@@ -3346,12 +3346,14 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
         boxHeight: bounds.height,
         boxWidth: bounds.width,
         scrollHeight: element.scrollHeight,
-        scrollWidth: element.scrollWidth
+        scrollWidth: element.scrollWidth,
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth
       };
     });
     expect(
-      fit.scrollWidth <= fit.boxWidth &&
-        fit.scrollHeight <= fit.boxHeight &&
+      fit.scrollWidth <= fit.clientWidth &&
+        fit.scrollHeight <= fit.clientHeight &&
         fit.boxWidth >= 44 &&
         fit.boxHeight >= 44,
       `Region 4 command must remain readable: ${JSON.stringify(fit)}`
