@@ -255,12 +255,12 @@ export async function renderAdminWorkbench(root, { access, client }) {
     let value;
     try {
       value = await request;
-      cache.set(id, value);
     } catch {
       value = null;
     }
     // The Explorer may have already navigated elsewhere while this was in
-    // flight; a stale response has nowhere correct left to render.
+    // flight; a stale response has nowhere correct left to render. It is not
+    // cached either, because only a payload that renders cleanly is kept.
     if (!panelsContainer.contains(panel)) {
       return;
     }
@@ -272,9 +272,10 @@ export async function renderAdminWorkbench(root, { access, client }) {
       def.render(content, value, access);
     }
     // A renderer shows `.admin-error` when it rejects a malformed payload.
-    if (content.querySelector(".admin-error")) {
-      // Drop the bad entry so Try again and later visits fetch again.
-      cache.delete(id);
+    // Keep only a clean payload, so Try again and later visits fetch again.
+    if (value !== null && !content.querySelector(".admin-error")) {
+      cache.set(id, value);
+    } else {
       const retry = button("Try again");
       retry.addEventListener("click", () => {
         void selectPanel(id, { pushHistory: false });

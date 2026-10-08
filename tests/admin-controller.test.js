@@ -489,6 +489,44 @@ describe("a tool panel that fails to load", () => {
     });
     expect(client.getAdminMetrics).toHaveBeenCalledTimes(2);
   });
+
+  it("does not keep a malformed payload that lands after the admin left the panel", async () => {
+    const client = staffClient();
+    /** @type {(value: any) => void} */
+    let resolveMetrics = () => {};
+    client.getAdminMetrics.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMetrics = resolve;
+      })
+    );
+    const rendered = renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: { role: "admin", permissions: ["audit:read", "refunds:issue"] }
+      }),
+      client
+    });
+    /** @param {string} id */
+    const open = (id) =>
+      root
+        .querySelector(`[data-panel-link='${id}']`)
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(client.getAdminMetrics).toHaveBeenCalledTimes(1);
+    });
+    open("membership");
+    resolveMetrics({ unexpected: true });
+    await rendered;
+    await vi.waitFor(() => {
+      expect(root.querySelector("[data-form='membership']")).not.toBeNull();
+    });
+
+    open("metrics");
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-metric--hero")).not.toBeNull();
+    });
+    expect(client.getAdminMetrics).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("DASH-01 — Operations pulse claims one hero and never fabricates a trend", () => {

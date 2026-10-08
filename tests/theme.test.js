@@ -342,4 +342,55 @@ describe("onThemeChoiceChange", () => {
     fire("pageshow", { persisted: true });
     expect(seen).toEqual([]);
   });
+
+  it("keeps the choice in memory when the storage getter itself throws", () => {
+    // A plain target calls the listener directly, so a throw reaches the test.
+    /** @type {Record<string, (event: any) => void>} */
+    const listeners = {};
+    /** @type {string[]} */
+    const seen = [];
+    onThemeChoiceChange((choice) => seen.push(choice), {
+      target: /** @type {any} */ ({
+        /** @param {string} type @param {(event: any) => void} listener */
+        addEventListener: (type, listener) => {
+          listeners[type] = listener;
+        }
+      }),
+      root: fakeRoot(),
+      document: { querySelectorAll: () => [] }
+    });
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("SecurityError");
+      }
+    });
+    try {
+      expect(() => listeners.pageshow({ persisted: true })).not.toThrow();
+      expect(seen).toEqual([]);
+    } finally {
+      // @ts-expect-error the stub is an own property this test added
+      delete globalThis.localStorage;
+    }
+  });
+
+  it("keeps a choice that storage refused when Back restores the page", () => {
+    const { storage, seen, fire } = setup({ [THEME_STORAGE_KEY]: "light" });
+    const refusing = {
+      setItem() {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem() {}
+    };
+    applyThemeChoice("dark", { root: fakeRoot(), storage: refusing, document: null });
+    try {
+      fire("pageshow", { persisted: true });
+      expect(seen).toEqual([]);
+    } finally {
+      // A write that lands clears the flag for the tests after this one.
+      applyThemeChoice("light", { root: fakeRoot(), storage, document: null });
+    }
+    fire("pageshow", { persisted: true });
+    expect(seen).toEqual(["light"]);
+  });
 });

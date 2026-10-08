@@ -124,11 +124,16 @@ export function applyThemeChoice(choice, options = {}) {
     } else {
       storage?.setItem(THEME_STORAGE_KEY, choice);
     }
+    unsavedChoice = false;
   } catch {
     // The preference is a convenience; failing to persist it must not break
     // the change the player just asked for.
+    unsavedChoice = true;
   }
 }
+
+// True after a write failed: storage then holds an older choice than this page.
+let unsavedChoice = false;
 
 /**
  * Keep this page in step when the choice changes elsewhere: in another tab
@@ -147,8 +152,12 @@ export function applyThemeChoice(choice, options = {}) {
  */
 export function onThemeChoiceChange(listener, options = {}) {
   const sync = () => {
-    const storage = options.storage ?? globalThis.localStorage;
+    // Storage that refused this page's last write holds an older choice.
+    if (unsavedChoice) return;
+    let storage;
     try {
+      // A blocked origin throws on the `localStorage` getter itself.
+      storage = options.storage ?? globalThis.localStorage;
       storage?.getItem(THEME_STORAGE_KEY);
     } catch {
       // Blocked storage holds no newer choice; keep the one in memory.
