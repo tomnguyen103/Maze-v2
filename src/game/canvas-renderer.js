@@ -65,17 +65,17 @@ export function createCanvasRenderer(canvas) {
         revealed.add(destinationKey);
       }
     }
+    // Each frame starts from the default line, text, and fill state.
+    context.save();
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = palette.fog;
     context.fillRect(0, 0, canvas.width, canvas.height);
+    drawFogGrid(size, tile, revealed);
 
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         const key = `${row},${col}`;
-        if (!revealed.has(key)) {
-          drawFogTile(row, col, tile);
-          continue;
-        }
+        if (!revealed.has(key)) continue;
         drawKnownTile(run.labyrinth[row][col] === 1, row, col, tile);
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
           const inset = tile * 0.035;
@@ -151,6 +151,7 @@ export function createCanvasRenderer(canvas) {
         canvas.height / 2 + Math.max(28, canvas.width * 0.055)
       );
     }
+    context.restore();
   }
 
   /**
@@ -248,12 +249,21 @@ export function createCanvasRenderer(canvas) {
     context.fill();
   }
 
-  /** @param {number} row @param {number} col @param {number} tile */
-  function drawFogTile(row, col, tile) {
-    // Unseen ground is plain paper with a faint grid.
+  /** @param {number} size @param {number} tile @param {Set<string>} revealed */
+  function drawFogGrid(size, tile, revealed) {
+    // Unseen ground is plain paper with a faint grid. One stroke blends each
+    // shared edge once, so the translucent grid rasterizes the same every time.
+    context.beginPath();
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) {
+        if (!revealed.has(`${row},${col}`)) {
+          context.rect(col * tile, row * tile, tile, tile);
+        }
+      }
+    }
     context.strokeStyle = palette.fogGrid;
     context.lineWidth = Math.max(0.75, tile * 0.012);
-    context.strokeRect(col * tile, row * tile, tile, tile);
+    context.stroke();
   }
 
   /** @param {Explorer} explorer @param {number} tile */

@@ -40,7 +40,7 @@ function stubCanvas({ width = 640 } = {}) {
     save: vi.fn(),
     setLineDash: vi.fn(),
     stroke: record("stroke"),
-    strokeRect: vi.fn(),
+    rect: record("rect"),
     translate: vi.fn()
   };
   const canvas = {
@@ -77,6 +77,36 @@ describe("Canvas renderer", () => {
     expect(labels).toEqual(
       run.echoBridges.map((bridge) => String(bridge.echoIndex + 1))
     );
+  });
+
+  it("strokes the whole Fog grid as one path", () => {
+    const { calls, context, renderer } = stubCanvas();
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+    const size = run.labyrinth.length;
+
+    renderer.render({ ...run, pulseVisible: [], revealed: [] });
+
+    expect(calls.slice(1, size * size + 3)).toEqual([
+      "beginPath",
+      ...Array(size * size).fill("rect"),
+      "stroke"
+    ]);
+    expect(context.rect).toHaveBeenCalledTimes(size * size);
+  });
+
+  it("restores the canvas state after each frame", () => {
+    const { context, renderer } = stubCanvas();
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+
+    renderer.render({ ...run, pulseVisible: [], revealed: [] });
+
+    const order = (/** @type {import("vitest").Mock} */ mock) =>
+      mock.mock.invocationCallOrder;
+    expect(order(context.save)[0]).toBeLessThan(order(context.clearRect)[0]);
+    expect(order(context.restore).at(-1)).toBeGreaterThan(
+      Math.max(...order(context.fill))
+    );
+    expect(context.restore).toHaveBeenCalledTimes(context.save.mock.calls.length);
   });
 
   it("draws every Tide Door and its shared visible phase through Fog", () => {

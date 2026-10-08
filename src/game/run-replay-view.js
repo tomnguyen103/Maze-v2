@@ -220,7 +220,7 @@ function createElements() {
   const intro = document.createElement("p");
   intro.className = "dialog-intro";
   intro.textContent =
-    "Outcome-only playback. It contains no selected answers or Question text.";
+    "Outcome-only playback, saved on this device. It contains no selected answers or Question text.";
   const layout = document.createElement("div");
   layout.className = "run-replay-layout";
   const stage = document.createElement("section");
