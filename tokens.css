@@ -60,7 +60,7 @@
   --color-fog-grid: oklch(80% 0.03 235 / 45%);
   --color-passage: oklch(95% 0.05 165);
   --color-wall: oklch(78% 0.07 250);
-  --color-wall-grid: oklch(88% 0.04 250 / 50%);
+  --color-wall-grid: oklch(62% 0.07 250 / 60%);
   --color-wall-mark: oklch(93% 0.03 250 / 80%);
   --color-grid: oklch(70% 0.03 240 / 40%);
   --color-pulse: oklch(68.5% 0.169 237 / 30%);
@@ -183,11 +183,19 @@
     --color-band-3: oklch(55% 0.13 237);
 
     --color-paper-grid: oklch(28% 0.03 262 / 60%);
-    --color-tile-mosslight: oklch(32% 0.06 165);
-    --color-tile-windcall: oklch(32% 0.07 237);
-    --color-tile-sunspan: oklch(34% 0.06 80);
-    --color-tile-tideglass: oklch(32% 0.08 275);
-    --color-tile-bellroot: oklch(32% 0.08 350);
+    --color-tile-mosslight: oklch(38% 0.08 165);
+    --color-tile-windcall: oklch(38% 0.08 237);
+    --color-tile-sunspan: oklch(40% 0.07 80);
+    --color-tile-tideglass: oklch(38% 0.09 275);
+    --color-tile-bellroot: oklch(38% 0.09 350);
+    --color-fog: oklch(21% 0.03 262);
+    --color-fog-soft: oklch(23% 0.03 262);
+    --color-fog-grid: oklch(36% 0.03 255 / 55%);
+    --color-passage: oklch(38% 0.08 165);
+    --color-wall: oklch(54% 0.05 250);
+    --color-wall-grid: oklch(12% 0.03 262 / 70%);
+    --color-wall-mark: oklch(70% 0.04 250 / 70%);
+    --color-grid: oklch(62% 0.03 240 / 35%);
   }
 }
 
@@ -225,9 +233,17 @@
   --color-band-3: oklch(55% 0.13 237);
 
   --color-paper-grid: oklch(28% 0.03 262 / 60%);
-  --color-tile-mosslight: oklch(32% 0.06 165);
-  --color-tile-windcall: oklch(32% 0.07 237);
-  --color-tile-sunspan: oklch(34% 0.06 80);
-  --color-tile-tideglass: oklch(32% 0.08 275);
-  --color-tile-bellroot: oklch(32% 0.08 350);
+  --color-tile-mosslight: oklch(38% 0.08 165);
+  --color-tile-windcall: oklch(38% 0.08 237);
+  --color-tile-sunspan: oklch(40% 0.07 80);
+  --color-tile-tideglass: oklch(38% 0.09 275);
+  --color-tile-bellroot: oklch(38% 0.09 350);
+  --color-fog: oklch(21% 0.03 262);
+  --color-fog-soft: oklch(23% 0.03 262);
+  --color-fog-grid: oklch(36% 0.03 255 / 55%);
+  --color-passage: oklch(38% 0.08 165);
+  --color-wall: oklch(54% 0.05 250);
+  --color-wall-grid: oklch(12% 0.03 262 / 70%);
+  --color-wall-mark: oklch(70% 0.04 250 / 70%);
+  --color-grid: oklch(62% 0.03 240 / 35%);
 }

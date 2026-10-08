@@ -1,22 +1,32 @@
 /* A Region tints the quest card and rings the Labyrinth in its own hue. */
 body[data-region-theme="mosslight-grove"] {
   --region-hue: var(--region-mosslight);
+  --region-tile: var(--color-tile-mosslight);
 }
 
 body[data-region-theme="windcall-ridge"] {
   --region-hue: var(--region-windcall);
+  --region-tile: var(--color-tile-windcall);
 }
 
 body[data-region-theme="sunspan-crossing"] {
   --region-hue: var(--region-sunspan);
+  --region-tile: var(--color-tile-sunspan);
 }
 
 body[data-region-theme="tideglass-reach"] {
   --region-hue: var(--region-tideglass);
+  --region-tile: var(--color-tile-tideglass);
 }
 
 body[data-region-theme="bellroot-summit"] {
   --region-hue: var(--region-bellroot);
+  --region-tile: var(--color-tile-bellroot);
+}
+
+/* The default palette paints Labyrinth passages in the Region tile hue. */
+:root:is([data-playground-palette="daylight"], :not([data-playground-palette])):not([data-access-contrast="strong"]) body[data-region-theme] {
+  --color-passage: var(--region-tile, var(--color-tile-mosslight));
 }
 
 body[data-region-theme] .quest-card {

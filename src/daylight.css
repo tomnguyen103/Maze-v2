@@ -1153,61 +1153,73 @@ kbd {
 .legend-mark--explorer {
   border: 0.16rem solid var(--color-explorer);
   border-radius: 50%;
+  background: var(--color-on-fill);
 }
 
 .legend-mark--echo {
-  border: 0.14rem solid var(--color-echo);
-  transform: rotate(45deg);
+  border-radius: 50%;
+  background: var(--color-echo);
+  box-shadow: 0 0 0 0.14rem color-mix(in oklab, var(--color-echo) 28%, transparent);
 }
 
+/* Gate marks copy the canvas arch door. */
 .legend-mark--gate-locked,
 .legend-mark--gate-open {
   position: relative;
-  border: 3px double var(--color-gate);
+  border: 0.14rem solid var(--color-gate);
+  border-radius: 0.4rem 0.4rem 0.1rem 0.1rem;
+}
+
+.legend-mark--gate-locked {
+  background: var(--color-gate);
 }
 
 .legend-mark--gate-locked::after {
   position: absolute;
-  inset: 0.24rem;
-  background: var(--color-gate);
+  inset: 0.14rem 0.2rem 0.16rem;
+  border-radius: 50% 50% 0.05rem 0.05rem;
+  background: var(--color-on-fill);
   content: "";
 }
 
 .legend-mark--gate-sealed {
   position: relative;
-  border: 3px double var(--color-warden);
+  border: 0.14rem solid var(--color-warden);
+  border-radius: 0.4rem 0.4rem 0.1rem 0.1rem;
 }
 
 .legend-mark--gate-sealed::after {
   position: absolute;
-  inset: 0.08rem;
+  inset: 0.04rem;
   background:
     linear-gradient(
       45deg,
-      transparent 43%,
-      var(--color-warden) 44% 56%,
-      transparent 57%
+      transparent 40%,
+      var(--color-warden) 41% 59%,
+      transparent 60%
     );
   content: "";
 }
 
+.legend-mark--gate-open {
+  border-color: var(--color-explorer);
+}
+
 .legend-mark--gate-open::after {
   position: absolute;
-  inset: -0.22rem 0 0;
-  color: var(--color-gate);
+  inset: -0.12rem 0 0;
+  color: var(--color-explorer);
   content: "↑";
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1;
   text-align: center;
 }
 
+/* The Warden mark copies the rounded canvas creature. */
 .legend-mark--warden {
-  width: 0;
-  height: 0;
-  border-right: 0.4rem solid transparent;
-  border-bottom: 0.72rem solid var(--color-warden);
-  border-left: 0.4rem solid transparent;
+  border-radius: 50% 50% 0.12rem 0.12rem;
+  background: var(--color-warden);
 }
 
 .field-note {

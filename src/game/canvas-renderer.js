@@ -78,8 +78,16 @@ export function createCanvasRenderer(canvas) {
         }
         drawKnownTile(run.labyrinth[row][col] === 1, row, col, tile);
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
+          const inset = tile * 0.035;
+          traceRoundedRect(
+            col * tile + inset,
+            row * tile + inset,
+            tile - inset * 2,
+            tile - inset * 2,
+            tile * 0.24
+          );
           context.fillStyle = palette.pulse;
-          context.fillRect(col * tile, row * tile, tile, tile);
+          context.fill();
         }
       }
     }
@@ -146,6 +154,51 @@ export function createCanvasRenderer(canvas) {
   }
 
   /**
+   * Traces a rounded rectangle path with plain arcs.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} width
+   * @param {number} height
+   * @param {number} radius
+   */
+  function traceRoundedRect(x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.lineTo(x + width - r, y);
+    context.arc(x + width - r, y + r, r, -Math.PI / 2, 0);
+    context.lineTo(x + width, y + height - r);
+    context.arc(x + width - r, y + height - r, r, 0, Math.PI / 2);
+    context.lineTo(x + r, y + height);
+    context.arc(x + r, y + height - r, r, Math.PI / 2, Math.PI);
+    context.lineTo(x, y + r);
+    context.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
+    context.closePath();
+  }
+
+  /**
+   * Draws a dark rounded label badge with light text.
+   * @param {string} text
+   * @param {number} x
+   * @param {number} y
+   * @param {number} tile
+   * @param {number} fontScale
+   */
+  function drawLabel(text, x, y, tile, fontScale) {
+    const fontSize = Math.max(7, tile * fontScale * palette.markScale);
+    const width = Math.max(tile * 0.3, fontSize * (text.length * 0.68 + 0.9));
+    const height = fontSize * 1.55;
+    traceRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
+    context.fillStyle = palette.night;
+    context.fill();
+    context.fillStyle = palette.onFill;
+    context.font = `700 ${fontSize}px ${palette.fontBody}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(text, x, y);
+  }
+
+  /**
    * @param {boolean} isPassage
    * @param {number} row
    * @param {number} col
@@ -154,12 +207,13 @@ export function createCanvasRenderer(canvas) {
   function drawKnownTile(isPassage, row, col, tile) {
     const x = col * tile;
     const y = row * tile;
-    context.fillStyle = isPassage ? palette.passage : palette.wall;
-    context.fillRect(x, y, tile + 0.5, tile + 0.5);
-    context.strokeStyle = isPassage ? palette.grid : palette.wallGrid;
-    context.lineWidth = Math.max(0.75, tile * 0.02);
-    context.strokeRect(x, y, tile, tile);
+    const radius = tile * 0.24;
     if (isPassage) {
+      // A passage is a soft island tile in the Region hue.
+      const inset = tile * 0.035;
+      traceRoundedRect(x + inset, y + inset, tile - inset * 2, tile - inset * 2, radius);
+      context.fillStyle = palette.passage;
+      context.fill();
       if ((row + col) % 2 === 0) {
         context.fillStyle = palette.grid;
         const markerSize = 1.5 * deviceRatio;
@@ -171,62 +225,42 @@ export function createCanvasRenderer(canvas) {
           markerSize
         );
       }
-    } else {
-      // Modern architectural masonry: sleek inner block with subtle corner accents
-      const inset = Math.max(2, tile * 0.12);
-      const innerW = tile - inset * 2;
-      context.strokeStyle = palette.wallMark;
-      context.lineWidth = Math.max(0.75, tile * 0.025);
-      context.strokeRect(x + inset, y + inset, innerW, innerW);
-      // Subtle corner bracket accents
-      const bracket = Math.max(1.5, tile * 0.06);
-      context.beginPath();
-      context.moveTo(x + inset, y + inset + bracket);
-      context.lineTo(x + inset, y + inset);
-      context.lineTo(x + inset + bracket, y + inset);
-      context.moveTo(x + tile - inset - bracket, y + inset);
-      context.lineTo(x + tile - inset, y + inset);
-      context.lineTo(x + tile - inset, y + inset + bracket);
-      context.moveTo(x + inset, y + tile - inset - bracket);
-      context.lineTo(x + inset, y + tile - inset);
-      context.lineTo(x + inset + bracket, y + tile - inset);
-      context.moveTo(x + tile - inset - bracket, y + tile - inset);
-      context.lineTo(x + tile - inset, y + tile - inset);
-      context.lineTo(x + tile - inset, y + tile - inset - bracket);
-      context.stroke();
+      return;
     }
+    // A wall is a raised block: a base shadow, the body, then a lit top edge.
+    const inset = tile * 0.06;
+    const width = tile - inset * 2;
+    const lift = tile * 0.07;
+    traceRoundedRect(x + inset, y + inset + lift, width, width - lift, radius);
+    context.fillStyle = palette.wallGrid;
+    context.fill();
+    traceRoundedRect(x + inset, y + inset, width, width - lift, radius);
+    context.fillStyle = palette.wall;
+    context.fill();
+    traceRoundedRect(
+      x + inset + tile * 0.12,
+      y + inset + tile * 0.08,
+      width - tile * 0.24,
+      tile * 0.12,
+      tile * 0.06
+    );
+    context.fillStyle = palette.wallMark;
+    context.fill();
   }
 
   /** @param {number} row @param {number} col @param {number} tile */
   function drawFogTile(row, col, tile) {
-    const x = col * tile;
-    const y = row * tile;
-    context.fillStyle = (row + col) % 2 === 0 ? palette.fogSoft : palette.fog;
-    context.fillRect(x, y, tile + 0.5, tile + 0.5);
+    // Unseen ground is plain paper with a faint grid.
     context.strokeStyle = palette.fogGrid;
-    context.lineWidth = Math.max(0.75, tile * 0.015);
-    context.strokeRect(x, y, tile, tile);
-    // Subtle tactical exploration grid marker
-    if ((row + col) % 2 === 0) {
-      const crossSize = Math.max(1, tile * 0.05);
-      const cx = x + tile * 0.5;
-      const cy = y + tile * 0.5;
-      context.strokeStyle = palette.fogGrid;
-      context.lineWidth = Math.max(0.75, tile * 0.02);
-      context.beginPath();
-      context.moveTo(cx - crossSize, cy);
-      context.lineTo(cx + crossSize, cy);
-      context.moveTo(cx, cy - crossSize);
-      context.lineTo(cx, cy + crossSize);
-      context.stroke();
-    }
+    context.lineWidth = Math.max(0.75, tile * 0.012);
+    context.strokeRect(col * tile, row * tile, tile, tile);
   }
 
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
     const scale = palette.markScale;
-    const radius = tile * 0.28 * scale;
+    const radius = tile * 0.3 * scale;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -240,26 +274,29 @@ export function createCanvasRenderer(canvas) {
     context.fillStyle = glow;
     context.fillRect(x - tile, y - tile, tile * 2, tile * 2);
 
-    // Outer tactical ring
+    // A white disc with a sky ring carries the Explorer flag.
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = palette.night;
+    context.fillStyle = palette.onFill;
     context.fill();
-    context.lineWidth = Math.max(2, tile * 0.09 * scale);
+    context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.strokeStyle = palette.signal;
     context.stroke();
 
-    // Intermediate precision bezel
+    const poleX = x - radius * 0.28;
     context.beginPath();
-    context.arc(x, y, radius * 0.65, 0, Math.PI * 2);
-    context.strokeStyle = palette.signalBright;
-    context.lineWidth = Math.max(1, tile * 0.03 * scale);
+    context.moveTo(poleX, y + radius * 0.52);
+    context.lineTo(poleX, y - radius * 0.55);
+    context.lineWidth = Math.max(1.5, tile * 0.04 * scale);
+    context.lineCap = "round";
+    context.strokeStyle = palette.night;
     context.stroke();
-
-    // Radiant core beacon
     context.beginPath();
-    context.arc(x, y, tile * 0.08 * scale, 0, Math.PI * 2);
-    context.fillStyle = palette.signalBright;
+    context.moveTo(poleX, y - radius * 0.55);
+    context.lineTo(poleX + radius * 0.72, y - radius * 0.3);
+    context.lineTo(poleX, y - radius * 0.04);
+    context.closePath();
+    context.fillStyle = palette.signal;
     context.fill();
   }
 
@@ -271,33 +308,21 @@ export function createCanvasRenderer(canvas) {
   function drawEcho(echo, tile, pairNumber) {
     const { x, y } = centerOf(echo, tile);
     const scale = palette.markScale;
-    context.save();
-    context.translate(x, y);
-    context.rotate(Math.PI / 4);
+    // An Echo is a soft lantern: a halo, a lit core, and its pair number.
+    context.beginPath();
+    context.arc(x, y, tile * 0.34 * scale, 0, Math.PI * 2);
+    context.fillStyle = palette.pulse;
+    context.fill();
+    context.beginPath();
+    context.arc(x, y, tile * 0.22 * scale, 0, Math.PI * 2);
+    context.fillStyle = palette.echo;
+    context.fill();
+    context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
+    context.strokeStyle = palette.onFill;
+    context.stroke();
 
-    // Multifaceted crystalline diamond shard
-    context.strokeStyle = palette.echo;
-    context.lineWidth = Math.max(1.5, tile * 0.07 * scale);
-    context.strokeRect(
-      -tile * 0.2 * scale,
-      -tile * 0.2 * scale,
-      tile * 0.4 * scale,
-      tile * 0.4 * scale
-    );
-    // Inner crystalline facet
-    context.strokeStyle = palette.echo;
-    context.lineWidth = Math.max(1, tile * 0.03 * scale);
-    context.strokeRect(
-      -tile * 0.1 * scale,
-      -tile * 0.1 * scale,
-      tile * 0.2 * scale,
-      tile * 0.2 * scale
-    );
-    context.restore();
-
-    // Clean tabular numeral badge
     context.save();
-    context.fillStyle = palette.night;
+    context.fillStyle = palette.onFill;
     context.font =
       `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
@@ -310,44 +335,50 @@ export function createCanvasRenderer(canvas) {
   function drawGate(gate, tile) {
     const { x, y } = centerOf(gate, tile);
     const scale = palette.markScale;
-    context.strokeStyle = gate.open
+    const half = tile * 0.27 * scale;
+    const color = gate.open
       ? gate.sealed
         ? palette.warden
         : palette.signal
       : palette.gate;
-    context.lineWidth = Math.max(1.5, tile * 0.07 * scale);
+
+    // The Gate is a rounded arch door.
     context.beginPath();
-    context.arc(x, y, tile * 0.27 * scale, Math.PI, 0);
-    context.lineTo(x + tile * 0.27 * scale, y + tile * 0.27 * scale);
-    context.moveTo(x - tile * 0.27 * scale, y);
-    context.lineTo(x - tile * 0.27 * scale, y + tile * 0.27 * scale);
-    for (const offset of [-0.13, 0, 0.13]) {
-      context.moveTo(x + tile * offset * scale, y - tile * 0.23 * scale);
-      context.lineTo(x + tile * offset * scale, y + tile * 0.25 * scale);
-    }
+    context.arc(x, y, half, Math.PI, 0);
+    context.lineTo(x + half, y + half);
+    context.lineTo(x - half, y + half);
+    context.closePath();
+    context.fillStyle = gate.open ? palette.onFill : color;
+    context.fill();
+    context.strokeStyle = color;
+    context.lineWidth = Math.max(1.5, tile * 0.06 * scale);
+    context.lineJoin = "round";
+    context.lineCap = "round";
     context.stroke();
+
+    context.beginPath();
     if (gate.open && gate.sealed) {
-      context.beginPath();
-      context.moveTo(x - tile * 0.22 * scale, y - tile * 0.2 * scale);
-      context.lineTo(x + tile * 0.22 * scale, y + tile * 0.22 * scale);
-      context.moveTo(x + tile * 0.22 * scale, y - tile * 0.2 * scale);
-      context.lineTo(x - tile * 0.22 * scale, y + tile * 0.22 * scale);
+      context.moveTo(x - tile * 0.13 * scale, y - tile * 0.09 * scale);
+      context.lineTo(x + tile * 0.13 * scale, y + tile * 0.17 * scale);
+      context.moveTo(x + tile * 0.13 * scale, y - tile * 0.09 * scale);
+      context.lineTo(x - tile * 0.13 * scale, y + tile * 0.17 * scale);
       context.stroke();
     } else if (gate.open) {
-      context.beginPath();
-      context.moveTo(x, y + tile * 0.2 * scale);
+      context.moveTo(x, y + tile * 0.18 * scale);
       context.lineTo(x, y - tile * 0.12 * scale);
-      context.moveTo(x - tile * 0.12 * scale, y);
-      context.lineTo(x, y - tile * 0.14 * scale);
-      context.lineTo(x + tile * 0.12 * scale, y);
+      context.moveTo(x - tile * 0.1 * scale, y - tile * 0.02 * scale);
+      context.lineTo(x, y - tile * 0.13 * scale);
+      context.lineTo(x + tile * 0.1 * scale, y - tile * 0.02 * scale);
       context.stroke();
     } else {
-      context.fillStyle = palette.gate;
+      context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
+      context.fillStyle = palette.onFill;
+      context.fill();
       context.fillRect(
-        x - tile * 0.08 * scale,
-        y + tile * 0.02 * scale,
-        tile * 0.16 * scale,
-        tile * 0.16 * scale
+        x - tile * 0.025 * scale,
+        y,
+        tile * 0.05 * scale,
+        tile * 0.14 * scale
       );
     }
   }
@@ -367,18 +398,16 @@ export function createCanvasRenderer(canvas) {
     const sideY = colDelta;
 
     context.save();
+    context.beginPath();
+    context.arc(source.x, source.y, tile * 0.18 * scale, 0, Math.PI * 2);
+    context.fillStyle = palette.onFill;
+    context.fill();
     context.strokeStyle = palette.signal;
-    context.lineWidth = Math.max(2, tile * 0.09 * scale);
+    context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.lineCap = "round";
     context.lineJoin = "round";
+    context.stroke();
     context.beginPath();
-    context.arc(
-      source.x,
-      source.y,
-      tile * 0.18 * scale,
-      0,
-      Math.PI * 2
-    );
     context.moveTo(startX, startY);
     context.lineTo(endX, endY);
     context.lineTo(
@@ -403,60 +432,61 @@ export function createCanvasRenderer(canvas) {
       y: (from.y + to.y) / 2
     };
     const scale = palette.markScale;
+    const color = bridge.open ? palette.signal : palette.gate;
+    const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    const sideX = (-(to.y - from.y) / length) * tile * 0.09 * scale;
+    const sideY = ((to.x - from.x) / length) * tile * 0.09 * scale;
+
     context.save();
-    context.strokeStyle = bridge.open ? palette.signal : palette.gate;
-    context.lineWidth = Math.max(2, tile * 0.1 * scale);
+    context.strokeStyle = color;
     context.lineCap = "round";
+    // A rope bridge: two rails, with planks once the bridge is open.
+    context.lineWidth = Math.max(1.5, tile * 0.035 * scale);
     context.setLineDash(
-      bridge.open
-        ? []
-        : [tile * 0.16 * scale, tile * 0.13 * scale]
+      bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale]
     );
     context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
+    for (const side of [-1, 1]) {
+      context.moveTo(from.x + sideX * side, from.y + sideY * side);
+      context.lineTo(to.x + sideX * side, to.y + sideY * side);
+    }
     context.stroke();
     context.setLineDash([]);
+    if (bridge.open) {
+      const planks = Math.max(2, Math.round(length / (tile * 0.3)));
+      context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
+      context.beginPath();
+      for (let index = 1; index < planks; index += 1) {
+        const px = from.x + ((to.x - from.x) * index) / planks;
+        const py = from.y + ((to.y - from.y) * index) / planks;
+        context.moveTo(px - sideX, py - sideY);
+        context.lineTo(px + sideX, py + sideY);
+      }
+      context.stroke();
+    }
+    context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
     for (const endpoint of [from, to]) {
       context.beginPath();
-      context.arc(
-        endpoint.x,
-        endpoint.y,
-        tile * 0.12 * scale,
-        0,
-        Math.PI * 2
-      );
-      context.fillStyle = palette.night;
+      context.arc(endpoint.x, endpoint.y, tile * 0.12 * scale, 0, Math.PI * 2);
+      context.fillStyle = palette.onFill;
       context.fill();
       context.stroke();
     }
     if (!bridge.open) {
+      context.lineWidth = Math.max(2, tile * 0.06 * scale);
       context.beginPath();
-      context.moveTo(midpoint.x - tile * 0.11, midpoint.y - tile * 0.11);
-      context.lineTo(midpoint.x + tile * 0.11, midpoint.y + tile * 0.11);
-      context.moveTo(midpoint.x + tile * 0.11, midpoint.y - tile * 0.11);
-      context.lineTo(midpoint.x - tile * 0.11, midpoint.y + tile * 0.11);
+      context.moveTo(midpoint.x - tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
+      context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
       context.stroke();
     }
-    context.beginPath();
-    context.arc(
-      midpoint.x,
-      midpoint.y - tile * 0.24 * scale,
-      tile * 0.13 * scale,
-      0,
-      Math.PI * 2
-    );
-    context.fillStyle = palette.night;
-    context.fill();
-    context.fillStyle = palette.paper;
-    context.font =
-      `700 ${Math.max(8, tile * 0.19 * scale)}px ${palette.fontBody}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(
+    drawLabel(
       String(bridge.echoIndex + 1),
       midpoint.x,
-      midpoint.y - tile * 0.24 * scale
+      midpoint.y - tile * 0.26 * scale,
+      tile,
+      0.19
     );
     context.restore();
   }
@@ -488,22 +518,12 @@ export function createCanvasRenderer(canvas) {
       context.stroke();
     }
     context.setLineDash([]);
-    context.fillStyle = palette.night;
-    context.fillRect(
-      midpoint.x - tile * 0.27,
-      midpoint.y - tile * 0.16,
-      tile * 0.54,
-      tile * 0.22
-    );
-    context.fillStyle = palette.paper;
-    context.font =
-      `700 ${Math.max(7, tile * 0.14 * palette.markScale)}px ${palette.fontBody}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(
+    drawLabel(
       door.open ? "OPEN" : "SEALED",
       midpoint.x,
-      midpoint.y - tile * 0.05
+      midpoint.y - tile * 0.05,
+      tile,
+      0.14
     );
     context.restore();
   }
@@ -512,47 +532,37 @@ export function createCanvasRenderer(canvas) {
   function drawSignalBell(bell, tile) {
     const { x, y } = centerOf(bell, tile);
     const scale = palette.markScale;
+    const color = bell.spent ? palette.gate : palette.signal;
     context.save();
-    context.strokeStyle = bell.spent ? palette.gate : palette.signal;
-    context.fillStyle = palette.night;
-    context.lineWidth = Math.max(2, tile * 0.07 * scale);
+    context.strokeStyle = color;
+    context.fillStyle = palette.onFill;
+    context.lineWidth = Math.max(2, tile * 0.06 * scale);
+    context.lineJoin = "round";
     context.beginPath();
-    context.arc(
-      x,
-      y - tile * 0.02,
-      tile * 0.2 * scale,
-      Math.PI,
-      0
-    );
-    context.lineTo(x + tile * 0.23 * scale, y + tile * 0.2 * scale);
-    context.lineTo(x - tile * 0.23 * scale, y + tile * 0.2 * scale);
+    context.arc(x, y - tile * 0.04, tile * 0.2 * scale, Math.PI, 0);
+    context.lineTo(x + tile * 0.25 * scale, y + tile * 0.2 * scale);
+    context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
     context.closePath();
     context.fill();
     context.stroke();
     context.beginPath();
     context.arc(
       x,
-      y + tile * 0.25 * scale,
-      tile * 0.055 * scale,
+      y + tile * 0.27 * scale,
+      tile * 0.06 * scale,
       0,
       Math.PI * 2
     );
-    context.fillStyle = bell.spent ? palette.gate : palette.signal;
+    context.fillStyle = color;
     context.fill();
     if (bell.spent) {
+      context.lineCap = "round";
       context.beginPath();
       context.moveTo(x - tile * 0.22, y - tile * 0.22);
       context.lineTo(x + tile * 0.22, y + tile * 0.24);
-      context.moveTo(x + tile * 0.22, y - tile * 0.22);
-      context.lineTo(x - tile * 0.22, y + tile * 0.24);
       context.stroke();
     }
-    context.fillStyle = palette.paper;
-    context.font =
-      `700 ${Math.max(7, tile * 0.12 * scale)}px ${palette.fontBody}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04);
+    drawLabel(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04, tile, 0.12);
     context.restore();
   }
 
@@ -560,22 +570,34 @@ export function createCanvasRenderer(canvas) {
   function drawWarden(warden, tile) {
     const { x, y } = centerOf(warden, tile);
     const scale = palette.markScale;
+    const radius = tile * 0.27 * scale;
+    const top = y - tile * 0.02 * scale;
+    const bottom = y + tile * 0.27 * scale;
+    // A Warden is a rounded creature with a scalloped hem.
     context.beginPath();
-    context.moveTo(x, y - tile * 0.3 * scale);
-    context.lineTo(x + tile * 0.28 * scale, y + tile * 0.24 * scale);
-    context.lineTo(x, y + tile * 0.15 * scale);
-    context.lineTo(x - tile * 0.28 * scale, y + tile * 0.24 * scale);
+    context.arc(x, top, radius, Math.PI, 0);
+    context.lineTo(x + radius, bottom);
+    const scallop = (radius * 2) / 3;
+    for (let index = 0; index < 3; index += 1) {
+      const right = x + radius - scallop * index;
+      context.lineTo(right - scallop / 2, bottom - tile * 0.07 * scale);
+      context.lineTo(right - scallop, bottom);
+    }
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
     context.strokeStyle = palette.night;
-    context.lineWidth = Math.max(1, tile * 0.03 * scale);
+    context.lineWidth = Math.max(1, tile * 0.025 * scale);
+    context.lineJoin = "round";
     context.stroke();
-    context.fillStyle = palette.night;
+
+    // Each mode has its own face, so the mode never rests on hue alone.
+    context.fillStyle = palette.onFill;
+    context.strokeStyle = palette.onFill;
+    context.lineCap = "round";
+    context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
 
     if (warden.mode === "lured") {
-      context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
-      context.strokeStyle = palette.paper;
       for (const direction of [-1, 1]) {
         context.beginPath();
         context.arc(
@@ -591,10 +613,15 @@ export function createCanvasRenderer(canvas) {
     }
 
     if (warden.mode === "hunt") {
-      for (const offset of [-0.09, 0.09]) {
+      // Angry brows over two eyes.
+      for (const side of [-1, 1]) {
+        context.beginPath();
+        context.moveTo(x + side * tile * 0.15 * scale, y - tile * 0.09 * scale);
+        context.lineTo(x + side * tile * 0.04 * scale, y - tile * 0.03 * scale);
+        context.stroke();
         context.beginPath();
         context.arc(
-          x + tile * offset * scale,
+          x + side * tile * 0.09 * scale,
           y + tile * 0.04 * scale,
           tile * 0.045 * scale,
           0,
@@ -613,7 +640,7 @@ export function createCanvasRenderer(canvas) {
         Math.max(2, tile * 0.07 * scale)
       );
       context.fillRect(
-        x - tile * 0.06 * scale,
+        x - tile * 0.035 * scale,
         y - tile * 0.11 * scale,
         Math.max(2, tile * 0.07 * scale),
         tile * 0.27 * scale
@@ -621,11 +648,12 @@ export function createCanvasRenderer(canvas) {
       return;
     }
 
+    // Patrol: one calm eye.
     context.beginPath();
     context.arc(
       x,
       y + tile * 0.03 * scale,
-      tile * 0.055 * scale,
+      tile * 0.065 * scale,
       0,
       Math.PI * 2
     );
@@ -653,7 +681,8 @@ function getCanvasContext(canvas) {
 }
 
 function readPalette() {
-  const styles = getComputedStyle(document.documentElement);
+  // Read from body so the Region tile hue on body reaches the canvas.
+  const styles = getComputedStyle(document.body ?? document.documentElement);
   /** @param {string} name */
   const color = (name) => styles.getPropertyValue(name).trim();
   return {
@@ -667,6 +696,7 @@ function readPalette() {
     ink: color("--color-ink"),
     markScale: Number.parseFloat(color("--maze-mark-scale")) || 1,
     night: color("--color-night-deep"),
+    onFill: color("--color-on-fill"),
     overlay: color("--color-overlay"),
     paper: color("--color-paper"),
     passage: color("--color-passage"),
