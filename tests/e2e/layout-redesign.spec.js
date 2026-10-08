@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expectGameReady } from "./game-ready.js";
 
 test.describe("layout redesign & edge viewports", () => {
   const edgeViewports = [
@@ -23,7 +24,7 @@ test.describe("layout redesign & edge viewports", () => {
     test(`renders cleanly without horizontal overflow at ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto("/?seed=LAYOUT-AUDIT&level=trail-scout");
-      await page.waitForSelector("#maze-canvas");
+      await expectGameReady(page);
 
       if (vp.fontSize) {
         await page.evaluate((size) => {
@@ -152,7 +153,7 @@ test.describe("layout redesign & edge viewports", () => {
 
   test("provides tactile feedback on interactive buttons and controls", async ({ page }) => {
     await page.goto("/?seed=TACTILE-AUDIT&level=trail-scout");
-    await page.waitForSelector("#maze-canvas");
+    await expectGameReady(page);
 
     // Check pulse button has active and hover transitions
     const pulseButton = page.locator("#pulse-action");
@@ -190,7 +191,7 @@ test.describe("layout redesign & edge viewports", () => {
     for (const sv of sampleViewports) {
       await page.setViewportSize({ width: sv.width, height: sv.height });
       await page.goto("/?seed=AUDIT-SHOTS&level=trail-scout");
-      await page.waitForSelector("#maze-canvas");
+      await expectGameReady(page);
       await page.screenshot({
         path: `.scratch/layout-audit/${sv.name}.png`,
         fullPage: false

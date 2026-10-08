@@ -415,8 +415,8 @@ a:active {
 }
 
 .scoreboard-button:hover {
-  background: var(--color-echo);
-  color: var(--color-paper);
+  background: var(--color-signal-bright);
+  color: var(--color-ink);
 }
 
 .scoreboard-button:active {
