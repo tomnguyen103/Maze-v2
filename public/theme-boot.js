@@ -8,14 +8,21 @@
  *
  * Deliberately not a module and deliberately not inline: `script-src` is
  * `'self'` with neither `'unsafe-inline'` nor a nonce, and this runs before
- * the bundle exists. It duplicates one storage key and two string comparisons
- * from `src/player/theme.js`; `tests/theme.test.js` fails if the two drift.
+ * the bundle exists. It duplicates one storage key, two string comparisons,
+ * and the two browser bar colours from `src/player/theme.js`;
+ * `tests/theme.test.js` fails if they drift.
  */
 (function () {
   try {
     var stored = window.localStorage.getItem("echo-maze:theme");
     if (stored === "light" || stored === "dark") {
       document.documentElement.setAttribute("data-theme", stored);
+      // The browser bar follows the choice too, not only the OS.
+      var color = stored === "dark" ? "#0a0f1e" : "#f5fbff";
+      var metas = document.querySelectorAll('meta[name="theme-color"]');
+      for (var i = 0; i < metas.length; i += 1) {
+        metas[i].setAttribute("content", color);
+      }
     }
   } catch (error) {
     // Private browsing or a blocked origin. The media query decides, and the
