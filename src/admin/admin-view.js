@@ -223,6 +223,7 @@ export async function renderAdminWorkbench(root, { access, client }) {
     const heading = document.createElement("h3");
     heading.id = `admin-${id}-title`;
     heading.textContent = def.title;
+    heading.tabIndex = -1;
     panel.append(heading);
     const content = element("div", "admin-panel__content");
     panel.append(content);
@@ -265,10 +266,13 @@ export async function renderAdminWorkbench(root, { access, client }) {
     panel.removeAttribute("aria-busy");
     content.innerHTML = "";
     if (value === null) {
-      // A failed fetch is not cached, so the same load fetches again.
       const retry = button("Try again");
       retry.addEventListener("click", () => {
+        // A fetch that resolved to null was cached; drop it so the load fetches again.
+        cache.delete(id);
         void selectPanel(id, { pushHistory: false });
+        // The re-render removes this button; keep keyboard focus in the panel.
+        panelsContainer.querySelector("h3")?.focus();
       });
       content.append(errorState(`${def.title} could not be loaded.`), retry);
       return;

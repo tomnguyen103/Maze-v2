@@ -455,6 +455,7 @@ describe("a tool panel that fails to load", () => {
     expect(retry).toBeDefined();
 
     retry?.click();
+    expect(document.activeElement?.tagName).toBe("H3");
     await vi.waitFor(() => {
       expect(root.querySelector(".admin-metric--hero")).not.toBeNull();
     });
