@@ -1,6 +1,4 @@
 @import "../tokens.css";
-/* Hallmark · macrostructure: Workbench · genre: playful · design-system: design.md · theme: Hum · anchor: electric pear · nav: N7 compact slab · footer: Ft8 static record strip · slop: pass (1–58) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
 
 * {
   box-sizing: border-box;
@@ -16,7 +14,11 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--color-ink);
-  background: var(--color-paper);
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(var(--color-paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-paper-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
   font-family: var(--font-body);
   line-height: 1.45;
   overflow-x: clip;
@@ -97,26 +99,21 @@ a {
   touch-action: manipulation;
 }
 
-/*
- * `.primary-button` ships on both `<button>` and `<a>` (the admin denial
- * gate's only way back is a link). Geometry has to reach both tags, or the
- * link keeps its browser-default box: no min-height, no padding.
- */
+/* `.primary-button` ships on both <button> and <a>, so the box must reach both tags. */
 button,
 .primary-button {
   min-width: 2.8125rem;
   min-height: 2.8125rem;
   padding: var(--space-3) var(--space-4);
   color: inherit;
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
   background: var(--color-panel);
   font: 650 0.84rem/1 var(--font-body);
   cursor: pointer;
   white-space: nowrap;
   transition:
     background-color var(--duration-press) var(--ease-out),
-    box-shadow var(--duration-press) var(--ease-out),
     transform var(--duration-press) var(--ease-out);
 }
 
@@ -124,9 +121,10 @@ button:hover:not(:disabled) {
   background: var(--color-stone-raised);
 }
 
-button:active:not(:disabled) {
-  box-shadow: none;
-  transform: translate(0.12rem, 0.12rem);
+button:active:not(:disabled),
+.primary-button:active {
+  background: var(--color-paper-deep);
+  transform: translateY(1px);
 }
 
 button:disabled {
@@ -136,14 +134,11 @@ button:disabled {
 
 a {
   color: inherit;
+  border-radius: 0.5rem;
 }
 
 a:hover {
   text-decoration-thickness: 2px;
-}
-
-a:active {
-  color: var(--color-focus);
 }
 
 :focus-visible {
@@ -151,13 +146,7 @@ a:active {
   outline-offset: 0.2rem;
 }
 
-/*
- * `:focus-visible` alone leaves focus invisible whenever the browser decides
- * the interaction was pointer-driven — and, more to the point, whenever
- * script moves focus, which is what the skip link and every dialog do. A
- * probe found 15 of 18 focusables with no visible indicator for that reason.
- * This is the floor; `:focus-visible` above still supplies the wider ring.
- */
+/* Script moves focus (skip link, dialogs) without :focus-visible; this is the floor. */
 :focus {
   outline: 0.15rem solid var(--color-focus);
   outline-offset: 0.15rem;
@@ -190,18 +179,32 @@ a:active {
   display: grid;
   min-height: 4rem;
   padding: var(--space-2) max(var(--space-4), calc((100vw - 84rem) / 2));
-  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "mark theme" "title title" "actions actions";
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-line-soft);
   background: var(--color-nav);
   backdrop-filter: blur(12px);
 }
 
+@media (min-width: 85rem) {
+  .command-bar {
+    grid-template-areas: "title mark actions theme";
+    grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr) auto;
+  }
+
+  .command-bar__actions {
+    justify-content: flex-end;
+  }
+}
+
 .wordmark {
   display: inline-flex;
+  grid-area: mark;
   min-height: 45px;
   align-items: center;
+  color: var(--color-sky-deep);
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 780;
@@ -213,12 +216,10 @@ a:active {
 .command-bar h1 {
   min-width: 0;
   margin: 0;
-  grid-column: 2;
-  grid-row: 1;
+  grid-area: title;
   color: var(--color-ink-muted);
   font-size: 0.92rem;
   font-weight: 560;
-  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 
@@ -227,38 +228,94 @@ a:active {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  /* Wrap rather than overflow. Without this the action row kept laying out
-     past the viewport on a 390px screen, putting "New Quest" — the primary
-     call to action — at left=471 where nothing could reach it. */
+  /* Wrap rather than overflow: "New Quest" must stay reachable at 390px. */
   flex-wrap: wrap;
   min-width: 0;
 }
 
 .command-bar__actions {
-  grid-column: 3;
-  grid-row: 1;
+  grid-area: actions;
+  justify-content: center;
+  gap: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 1.75rem;
+  background: var(--color-stone);
 }
 
-.control-button {
+.command-bar__actions > * {
+  border-color: transparent;
+  border-radius: 1.5rem;
+}
+
+.control-button,
+.control-link {
   background: transparent;
 }
 
-.primary-button {
-  color: var(--color-accent-ink);
-  background: var(--color-signal);
-  border-color: var(--color-line);
-  box-shadow: 0.125rem 0.125rem 0 var(--color-line);
+.control-link {
+  display: inline-flex;
+  min-height: 2.8125rem;
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  font-size: 0.84rem;
+  font-weight: 650;
+  text-decoration: none;
 }
 
+.theme-button {
+  display: grid;
+  grid-area: theme;
+  padding: 0;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.theme-button svg {
+  stroke: currentcolor;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.theme-button [data-icon] {
+  display: none;
+}
+
+.theme-button[data-choice="light"] [data-icon="light"],
+.theme-button[data-choice="dark"] [data-icon="dark"],
+.theme-button[data-choice="system"] [data-icon="system"] {
+  display: block;
+}
+
+.primary-button {
+  --fill: var(--color-sky-deep);
+  --ink: #fff;
+  color: var(--ink);
+  background: var(--fill);
+  border-color: var(--fill);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .primary-button {
+    --fill: var(--color-sky);
+    --ink: var(--color-accent-ink);
+  }
+}
+
+:root[data-theme="dark"] .primary-button {
+  --fill: var(--color-sky);
+  --ink: var(--color-accent-ink);
+}
+
+.primary-button:active:not(:disabled),
 .primary-button:hover:not(:disabled) {
-  background: var(--color-signal-bright);
+  background: color-mix(in oklch, var(--fill), black 12%);
 }
 
 .danger-button {
   color: var(--color-ink);
   border-color: var(--color-warden);
   background: var(--color-warden-soft);
-  box-shadow: 0.125rem 0.125rem 0 var(--color-line);
 }
 
 .danger-button:hover:not(:disabled) {
@@ -293,9 +350,9 @@ a:active {
   padding: var(--space-4);
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel);
   gap: var(--space-3);
   background: var(--color-stone);
+  box-shadow: var(--shadow-panel);
 }
 
 .player-console {
@@ -323,15 +380,6 @@ a:active {
   transition: background var(--duration-press) var(--ease-out);
 }
 
-.player-console__identity:hover {
-  background: var(--color-stone);
-}
-
-.player-console__identity:active {
-  background: var(--color-paper-deep);
-  transform: scale(0.98);
-}
-
 .player-console__identity span:last-child {
   min-width: 0;
 }
@@ -344,10 +392,7 @@ a:active {
 .player-console__identity small,
 .player-score dt {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .player-console__identity strong {
@@ -392,7 +437,6 @@ a:active {
 }
 
 .player-score dd {
-  font-family: var(--font-utility);
   font-size: 0.85rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -406,22 +450,14 @@ a:active {
   border-radius: var(--radius-sm);
   background: var(--color-stone);
   color: var(--color-ink);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   cursor: pointer;
-  transition: all var(--duration-press) var(--ease-out);
 }
 
 .scoreboard-button:hover {
   background: var(--color-stone-raised);
   border-color: var(--color-line);
-}
-
-.scoreboard-button:active {
-  transform: translate(1px, 1px);
 }
 
 .intel-deck > div:first-child {
@@ -444,11 +480,8 @@ a:active {
 .run-metrics dt,
 .record-strip__label {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-size: 0.66rem;
-  font-weight: 650;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: var(--text-compact);
+  font-weight: 700;
 }
 
 .run-state {
@@ -457,17 +490,13 @@ a:active {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-signal);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 .quest-stage {
   margin: 0;
   color: var(--color-ink);
-  font-family: var(--font-utility);
   font-size: var(--text-label);
   font-weight: 650;
   line-height: 1.3;
@@ -476,7 +505,6 @@ a:active {
 .quest-sync-status {
   margin: 0;
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
 }
 
@@ -531,7 +559,6 @@ a:active {
 
 .run-metrics dd {
   margin: 0;
-  font-family: var(--font-utility);
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -549,11 +576,8 @@ a:active {
   border-radius: var(--radius-sm);
   background: var(--color-stone-raised);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .echo-meter,
@@ -625,7 +649,6 @@ a:active {
 
 .warden-readout[data-mode="hunt"] strong::before {
   content: "!! ";
-  font-family: var(--font-utility);
   font-size: 0.8em;
 }
 
@@ -636,7 +659,6 @@ a:active {
 
 .warden-readout[data-mode="lured"] strong::before {
   content: "))) " / "";
-  font-family: var(--font-utility);
   font-size: 0.8em;
 }
 
@@ -672,7 +694,6 @@ a:active {
   background: var(--color-stone);
   text-align: left;
   cursor: pointer;
-  transition: all var(--duration-press) var(--ease-out);
 }
 
 .seed-copy:hover:not(:disabled) {
@@ -683,7 +704,6 @@ a:active {
 
 .seed-copy strong {
   max-width: 16rem;
-  font-family: var(--font-utility);
   font-size: var(--text-label);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -738,10 +758,8 @@ a:active {
   border: 0 solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-night-deep);
-  font-family: var(--font-utility);
   font-size: var(--text-label);
   font-weight: 650;
-  letter-spacing: 0.02em;
   text-align: center;
   opacity: 0;
   transform: translateY(var(--space-2));
@@ -831,11 +849,9 @@ html .trail-compass[hidden] {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-signal);
-  box-shadow: 0.125rem 0.125rem 0 var(--color-line);
   text-align: left;
   white-space: normal;
   cursor: pointer;
-  transition: all var(--duration-press) var(--ease-out);
 }
 
 .pulse-button:hover:not(:disabled) {
@@ -893,7 +909,7 @@ kbd {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-panel);
-  font-family: var(--font-utility);
+  color: var(--color-ink);
   font-size: var(--text-compact);
   font-weight: 700;
 }
@@ -907,7 +923,6 @@ kbd {
   border: 1px solid var(--color-line);
   border-radius: 50%;
   background: var(--color-echo);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 800;
   box-shadow: 0 0 0.35rem var(--color-echo-soft);
@@ -1005,7 +1020,6 @@ kbd {
 
 .echo-lens__number-marker strong,
 .echo-lens__number-marker small {
-  font-family: var(--font-utility);
   font-size: 1rem;
 }
 
@@ -1059,7 +1073,6 @@ kbd {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line);
   background: var(--color-panel);
-  font-family: var(--font-utility);
 }
 
 .echo-lens__pattern strong {
@@ -1112,7 +1125,6 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 600;
 }
@@ -1174,7 +1186,6 @@ kbd {
   inset: -0.22rem 0 0;
   color: var(--color-gate);
   content: "↑";
-  font-family: var(--font-utility);
   font-size: 0.9rem;
   font-weight: 800;
   line-height: 1;
@@ -1220,7 +1231,6 @@ kbd {
 
 .record-strip p {
   margin: 0;
-  font-family: var(--font-utility);
   font-size: 0.78rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1333,7 +1343,6 @@ kbd {
 
 .quest-conflict-choice > span:last-child {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.72rem;
 }
 
@@ -1364,7 +1373,6 @@ kbd {
 .daily-contract > span:last-child,
 .daily-record {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.8rem;
 }
 
@@ -1395,7 +1403,6 @@ kbd {
 .daily-board__status,
 .daily-board__note {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.78rem;
   line-height: 1.45;
 }
@@ -1443,7 +1450,6 @@ kbd {
 .daily-board__rank,
 .daily-board__score,
 .daily-board__moves {
-  font-family: var(--font-utility);
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -1502,7 +1508,6 @@ kbd {
 .offline-continuity__note {
   margin: var(--space-2) 0;
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.78rem;
   line-height: 1.45;
 }
@@ -1523,99 +1528,6 @@ kbd {
   border-left: 0.25rem solid var(--color-warden);
   background: var(--color-warden-soft);
   font-weight: 700;
-}
-
-.daily-constellation__heading {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.daily-constellation__heading h3 {
-  min-width: 0;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.daily-constellation__status {
-  min-height: 1.45em;
-  margin: var(--space-2) 0;
-  color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.daily-constellation__status[data-state="error"] {
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-ink);
-  border-left: 0.25rem solid var(--color-warden);
-  background: var(--color-warden-soft);
-  font-weight: 700;
-}
-
-.daily-constellation {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 2px solid var(--color-line);
-}
-
-/*
- * One square per Labyrinth position, placed on the Daily's own grid. The map
- * is decorative to assistive technology — the status line beside it carries
- * the meaning — so nothing here needs to be readable as text.
- */
-.daily-constellation__map {
-  display: grid;
-  aspect-ratio: 1;
-  width: 100%;
-  max-width: 22rem;
-  margin: var(--space-3) 0;
-  padding: var(--space-2);
-  grid-template-columns: repeat(var(--constellation-size, 13), 1fr);
-  grid-template-rows: repeat(var(--constellation-size, 13), 1fr);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--color-night-deep);
-}
-
-/* `display: grid` above would otherwise defeat the hidden attribute. */
-.daily-constellation__map[hidden] {
-  display: none;
-}
-
-.daily-constellation__tile {
-  grid-column: calc(var(--constellation-x, 0) + 1);
-  grid-row: calc(var(--constellation-y, 0) + 1);
-  border-radius: var(--radius-sm);
-  background: var(--color-signal);
-}
-
-.daily-constellation__tile[data-band="quiet"] {
-  opacity: 0.28;
-}
-
-.daily-constellation__tile[data-band="glowing"] {
-  opacity: 0.62;
-}
-
-.daily-constellation__tile[data-band="bright"] {
-  opacity: 1;
-  box-shadow: 0 0 0.35rem var(--color-signal-bright);
-}
-
-.daily-constellation__tile[data-kind="pulse"] {
-  border-radius: 50%;
-  background: var(--color-echo);
-}
-
-.daily-constellation__retry {
-  margin-bottom: var(--space-3);
 }
 
 .daily-dialog__actions {
@@ -1666,7 +1578,6 @@ body[data-run-mode="first-light"] .play-workbench {
   height: 100%;
   place-items: center;
   color: var(--color-ink);
-  font-family: var(--font-utility);
   font-size: 1rem;
   font-weight: 800;
   line-height: 1;
@@ -1773,7 +1684,6 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .journal-counts li {
-  font-family: var(--font-utility);
   font-size: 0.7rem;
 }
 
@@ -1959,7 +1869,6 @@ body[data-run-mode="first-light"] .play-workbench {
   place-items: center;
   border: 1px solid var(--color-line);
   background: var(--color-paper-deep);
-  font-family: var(--font-utility);
 }
 
 .access-answer-preview strong {
@@ -2084,7 +1993,6 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .result-atlas strong {
-  font-family: var(--font-utility);
   font-size: 0.8rem;
 }
 
@@ -2118,7 +2026,6 @@ body[data-run-mode="first-light"] .play-workbench {
 .lifetime-offer span,
 .lifetime-storage-note {
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.78rem;
   line-height: 1.45;
 }
@@ -2308,7 +2215,6 @@ body[data-run-mode="first-light"] .play-workbench {
   display: grid;
   gap: var(--space-2);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-weight: 700;
 }
 
@@ -2347,7 +2253,6 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink);
   border: 1px solid var(--color-line-soft);
   background: var(--color-stone-raised);
-  font-family: var(--font-utility);
 }
 
 .scoreboard-list {
@@ -2369,7 +2274,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .scoreboard-list__rank,
 .scoreboard-list li > strong {
-  font-family: var(--font-utility);
   font-weight: 750;
 }
 
@@ -2416,7 +2320,6 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .run-records strong {
-  font-family: var(--font-utility);
 }
 
 .run-records span {
@@ -2446,7 +2349,6 @@ body[data-run-mode="first-light"] .play-workbench {
 .result-dialog__stats strong {
   display: block;
   color: var(--color-ink);
-  font-family: var(--font-utility);
   font-size: 0.92rem;
   overflow-wrap: anywhere;
 }
@@ -2631,10 +2533,7 @@ body[data-run-mode="first-light"] .play-workbench {
 .level-dialog__progress {
   margin: 0;
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
   font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /*
@@ -2819,10 +2718,7 @@ body[data-run-mode="first-light"] .play-workbench {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line);
   background: var(--color-signal);
-  font-family: var(--font-utility);
   font-size: 0.66rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .level-card strong {
@@ -2850,7 +2746,6 @@ body[data-run-mode="first-light"] .play-workbench {
 .level-card small {
   margin-top: auto;
   color: var(--color-ink);
-  font-family: var(--font-utility);
   font-size: 0.68rem;
   line-height: 1.5;
 }
@@ -2978,7 +2873,6 @@ body[data-run-mode="first-light"] .play-workbench {
   place-items: center;
   border: 1px solid var(--color-line);
   background: var(--color-paper-deep);
-  font-family: var(--font-utility);
 }
 
 .challenge-choice strong {
@@ -3032,7 +2926,6 @@ body[data-run-mode="first-light"] .play-workbench {
 .challenge-source {
   margin: var(--space-4) 0 0;
   color: var(--color-ink-faint);
-  font-family: var(--font-utility);
   font-size: 1rem;
 }
 
@@ -3063,38 +2956,6 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 58rem) {
-  .command-bar {
-    margin-bottom: var(--space-6);
-    grid-template-columns: auto 1fr;
-  }
-
-  .command-bar h1 {
-    grid-column: 1 / -1;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    left: 0;
-    display: block;
-    min-height: 1.6rem;
-    padding: var(--space-1) var(--space-2);
-    color: var(--color-ink-muted);
-    background: var(--color-stone-raised);
-    border-bottom: 1px solid var(--color-line-soft);
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-align: center;
-  }
-
-  .command-bar__actions {
-    min-width: 0;
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--space-1);
-  }
-
   .command-bar__actions > * {
     padding-inline: var(--space-3);
   }
@@ -3107,6 +2968,11 @@ body[data-run-mode="first-light"] .play-workbench {
     width: min(38rem, calc(100% - 1rem));
     grid-template-columns: 1fr;
     gap: var(--space-2);
+  }
+
+  /* The Labyrinth comes first on a phone; the status deck follows it. */
+  .labyrinth-panel {
+    order: -1;
   }
 
   .status-deck {
@@ -3233,11 +3099,8 @@ body[data-run-mode="first-light"] .play-workbench {
     border-radius: var(--radius-sm);
     background: var(--color-stone-raised);
     color: var(--color-ink);
-    font-family: var(--font-utility);
     font-size: 1.15rem;
     font-weight: 700;
-    box-shadow: 0.125rem 0.125rem 0 var(--color-line);
-    transition: all var(--duration-press) var(--ease-out);
   }
 
   .direction-button:hover:not(:disabled) {
@@ -3245,8 +3108,9 @@ body[data-run-mode="first-light"] .play-workbench {
     border-color: var(--color-signal);
   }
 
-  .direction-button:active {
-    background: var(--color-signal);
+  .direction-button:active:not(:disabled) {
+    background: var(--color-sky-deep);
+    color: var(--color-accent-ink);
   }
 
   .direction-button--up {
@@ -3311,34 +3175,13 @@ body[data-run-mode="first-light"] .play-workbench {
 
 @media (max-width: 32rem) {
   .command-bar {
-    display: block;
-    min-height: 3.5rem;
-    padding: var(--space-1) var(--space-2);
-  }
-
-  .wordmark {
-    display: none;
-  }
-
-  .command-bar__actions {
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: var(--space-1);
+    padding-inline: var(--space-2);
   }
 
   .command-bar__actions > * {
     min-width: max-content;
-    min-height: 2.75rem;
-    padding-block: var(--space-1);
     padding-inline: var(--space-2);
-    flex: 0 0 auto;
     font-size: var(--text-compact);
-    line-height: 1.05;
-    overflow-wrap: normal;
-    white-space: nowrap;
   }
 
   .play-grid {

@@ -67,6 +67,17 @@ export function nextTheme(current) {
 }
 
 /**
+ * The choice a cycle button moves to next: light, dark, system, then light.
+ *
+ * @param {ThemeChoice} choice
+ * @returns {ThemeChoice}
+ */
+export function nextThemeChoice(choice) {
+  if (choice === "light") return "dark";
+  return choice === "dark" ? "system" : "light";
+}
+
+/**
  * Apply a choice: stamp the root so CSS can see it, and remember it.
  *
  * `system` removes the attribute rather than writing one, so the media query

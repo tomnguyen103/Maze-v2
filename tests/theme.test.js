@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyThemeChoice,
   isThemeChoice,
+  nextThemeChoice,
   nextTheme,
   readThemeChoice,
   resolveTheme,
@@ -184,5 +185,13 @@ describe("SHELL-07 — night is declared, and both ways", () => {
     const design = source("design.md");
     expect(design).toContain("**Night**");
     expect(design).toContain("prefers-color-scheme");
+  });
+});
+
+describe("nextThemeChoice", () => {
+  it("cycles light, dark, system, then back to light", () => {
+    expect(nextThemeChoice("light")).toBe("dark");
+    expect(nextThemeChoice("dark")).toBe("system");
+    expect(nextThemeChoice("system")).toBe("light");
   });
 });

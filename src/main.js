@@ -3,6 +3,11 @@ import {
   loadActiveRunLocator,
   saveActiveRunLocator
 } from "./game/active-run-locator.js";
+import {
+  applyThemeChoice,
+  nextThemeChoice,
+  readThemeChoice
+} from "./player/theme.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import {
   clearPendingGuestDemo,
@@ -225,6 +230,7 @@ const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   workshopButton: requiredElement("workshop-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
+  themeButton: requiredElement("theme-button", HTMLButtonElement),
   trailCompassDiscover: requiredElement(
     "trail-compass-discover",
     HTMLButtonElement
@@ -1119,6 +1125,20 @@ elements.recordsButton.addEventListener("click", () => {
 elements.trailCompassDiscover.addEventListener("click", () => {
   elements.settingsButton.click();
 });
+function showThemeChoice() {
+  const choice = readThemeChoice();
+  elements.themeButton.dataset.choice = choice;
+  elements.themeButton.setAttribute(
+    "aria-label",
+    `Theme: ${choice}. Switch to ${nextThemeChoice(choice)}.`
+  );
+}
+showThemeChoice();
+elements.themeButton.addEventListener("click", () => {
+  applyThemeChoice(nextThemeChoice(readThemeChoice()));
+  showThemeChoice();
+});
+
 elements.settingsButton.addEventListener("click", async () => {
   if (accessSettingsOpening) {
     return;
