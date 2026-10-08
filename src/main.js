@@ -4919,6 +4919,9 @@ function addStory(message, kind) {
 }
 
 function renderStory() {
+  const wasAtEnd =
+    elements.storyLog.scrollTop + elements.storyLog.clientHeight >=
+    elements.storyLog.scrollHeight - 1;
   elements.storyLog.replaceChildren(
     ...storyEntries.map((entry) => {
       const item = document.createElement("li");
@@ -4927,6 +4930,9 @@ function renderStory() {
       return item;
     })
   );
+  if (wasAtEnd) {
+    elements.storyLog.scrollTop = elements.storyLog.scrollHeight;
+  }
 }
 
 /** @param {string} message */

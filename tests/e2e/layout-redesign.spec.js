@@ -80,6 +80,9 @@ test.describe("layout redesign & edge viewports", () => {
         if (seedValue) seedValue.textContent = "LONG-QUEST-SEED-42";
       });
 
+      await expect(page.locator("#seed-copy")).toBeVisible();
+      await expect(page.locator("#pause-run")).toBeVisible();
+
       const arenaInfo = await page.evaluate(() => {
         const seed = document.querySelector("#seed-copy");
         const pause = document.querySelector("#pause-run");
@@ -162,16 +165,21 @@ test.describe("layout redesign & edge viewports", () => {
     // Check direction buttons have active press state
     const downButton = page.locator("[data-move='down']");
     if (await downButton.isVisible()) {
-      const activeTransform = await downButton.evaluate((el) => {
-        el.classList.add(":active"); // test styling availability
-        const style = window.getComputedStyle(el);
-        return {
-          cursor: style.cursor,
-          fontFamily: style.fontFamily,
-          boxShadow: style.boxShadow
-        };
-      });
-      expect(activeTransform.fontFamily).toBeTruthy();
+      const box = await downButton.boundingBox();
+      if (box) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        const hoverBackground = await downButton.evaluate(
+          (el) => window.getComputedStyle(el).backgroundColor
+        );
+        await page.mouse.down();
+        try {
+          await expect
+            .poll(() => downButton.evaluate((el) => window.getComputedStyle(el).backgroundColor))
+            .not.toBe(hoverBackground);
+        } finally {
+          await page.mouse.up();
+        }
+      }
     }
   });
 

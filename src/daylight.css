@@ -3520,7 +3520,6 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 22rem) {
-  #sound-toggle,
   .seed-copy__hint {
     display: none;
   }
