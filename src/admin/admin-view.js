@@ -140,13 +140,11 @@ function renderAppearanceSettings(panel) {
 export async function renderAdminWorkbench(root, { access, client }) {
   const { main, rail: railElement } = renderAdminShell(root, {
     state: "allowed",
-    eyebrow: "Staff workbench",
     exit: { href: "/play", label: "Return to Maze" },
     withRail: true
   });
   main.innerHTML = `
     <header class="admin-intro">
-      <p class="section-label">Operations field guide</p>
       <h2>Keep the Quest safe and moving.</h2>
       <p>Review people, questions, purchases, and delivery failures from one permission-aware workbench.</p>
       <p class="admin-role"></p>
@@ -517,7 +515,7 @@ function renderQuestions(panel, value, access) {
     if (can(access, "questions:publish")) {
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "admin-danger";
+      remove.className = "danger-button";
       remove.dataset.action = "delete-question";
       remove.dataset.questionId = String(question.id ?? "");
       remove.textContent = "Delete";
@@ -606,7 +604,7 @@ function questionEditor() {
   contentField.append(label, textarea, helper);
   const submit = document.createElement("button");
   submit.type = "submit";
-  submit.className = "admin-primary";
+  submit.className = "primary-button";
   submit.textContent = "Save draft";
   form.append(grid, contentField, submit);
   details.append(summary, form);
@@ -879,7 +877,7 @@ function renderMembershipResult(root, membership, userId) {
     membership.purchaseStatus === "paid"
   ) {
     const refund = button("Issue full refund");
-    refund.className = "admin-danger";
+    refund.className = "danger-button";
     refund.dataset.action = "issue-refund";
     refund.dataset.userId = userId;
     target.append(refund);

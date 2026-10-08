@@ -1,12 +1,11 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
-/* Hallmark · genre: playful · macrostructure: Workbench · theme: Hum · enrichment: none · nav: N7 compact slab · footer: none · slop: pass (1–58) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+/* Hallmark · macrostructure: Workbench · genre: playful · design-system: design.md · theme: Journey · anchor: hued metric cards · slop: pass (1–58) · contrast: pass (40–41) · tokens: pass (48) · responsive: pass (49) · mobile: pass (34, 49, 50–57) */
 
 .admin-command {
   position: sticky;
   z-index: 8;
   top: 0;
   display: grid;
-  min-height: 4.5rem;
+  min-height: 4rem;
   padding: var(--space-2) max(var(--space-4), calc((100% - 82rem) / 2));
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -17,37 +16,37 @@
   -webkit-backdrop-filter: blur(12px);
 }
 
-.admin-command h1,
-.admin-command p {
-  margin: 0;
-}
-
 .admin-command .wordmark {
-  display: inline-flex;
+  /* The shared rule places the wordmark in the game command bar grid area. */
+  grid-area: auto;
 }
 
 .admin-command h1 {
   min-width: 0;
-  font: 760 1rem/1.1 var(--font-display);
-  letter-spacing: -0.025em;
-  overflow-wrap: anywhere;
-}
-
-.admin-command__eyebrow {
+  margin: 0;
   color: var(--color-ink-muted);
-  font: 650 var(--text-compact)/1.1 var(--font-utility);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 600 var(--text-label)/1.2 var(--font-body);
+  overflow-wrap: anywhere;
 }
 
 .admin-command__exit {
   display: inline-flex;
-  min-height: 45px;
-  padding-inline: var(--space-3);
+  min-height: 2.8125rem;
+  padding-inline: var(--space-4);
   align-items: center;
-  font-weight: 680;
+  justify-self: start;
   grid-column: 1 / -1;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.5rem;
+  background: var(--color-panel);
+  font: 650 0.84rem/1 var(--font-body);
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.admin-command__exit:hover {
+  border-color: var(--color-sky);
+  background: var(--color-signal-soft);
 }
 
 .admin-layout {
@@ -59,43 +58,42 @@
 
 .admin-rail {
   display: flex;
-  padding: var(--space-3) var(--space-4);
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--color-line-soft);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-1);
+  gap: var(--space-1);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.75rem;
   background: var(--color-stone);
   overflow-x: auto;
 }
 
 .admin-rail a {
   display: inline-flex;
-  min-height: 44px;
+  min-height: 2.75rem;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font: 600 0.82rem/1 var(--font-body);
+  border-radius: 0.5rem;
   color: var(--color-ink-muted);
+  font: 600 0.875rem/1 var(--font-body);
   text-decoration: none;
   white-space: nowrap;
-  transition: all var(--duration-press) var(--ease-out);
+  transition: background-color var(--duration-press) var(--ease-out);
 }
 
 .admin-rail a:hover {
-  border-color: var(--color-line-soft);
   background: var(--color-stone-raised);
   color: var(--color-ink);
 }
 
 /*
- * SHELL-04: the rail is real navigation now (a URL per tool), so the
- * current one needs a visible marker, not just the aria-current a screen
- * reader gets. Border and background both change, not colour alone, so
- * this still reads under forced-colors.
+ * SHELL-04: the rail is real navigation (a URL per tool), so the current
+ * tool needs a visible marker, not only the aria-current a screen reader
+ * gets. The fill and the weight both change, so the marker still reads
+ * under forced-colors.
  */
 .admin-rail a[aria-current="page"] {
-  border-color: var(--color-line);
-  background: var(--color-signal);
-  color: var(--color-accent-ink);
+  background: var(--color-sky-deep);
+  color: var(--color-on-fill);
   font-weight: 700;
 }
 
@@ -106,21 +104,21 @@
 
 .admin-intro {
   max-width: 52rem;
-  margin-block-end: var(--space-8);
+  margin-block-end: var(--space-6);
 }
 
 .admin-intro h2 {
-  max-width: 16ch;
-  margin: var(--space-2) 0 var(--space-3);
-  font: 760 clamp(2rem, 7vw, 4rem)/0.98 var(--font-display);
-  letter-spacing: -0.03em;
+  margin: 0 0 var(--space-2);
+  font: 700 clamp(1.75rem, 5vw, 2.5rem)/1.1 var(--font-body);
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
-.admin-intro > p:not(.section-label, .admin-role) {
+.admin-intro > p:not(.admin-role) {
   max-width: 62ch;
+  margin: 0;
   color: var(--color-ink-muted);
-  font-size: 1rem;
+  font-size: var(--text-body);
 }
 
 .admin-role {
@@ -129,11 +127,10 @@
   margin: var(--space-3) 0 0;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 2px solid var(--color-line);
+  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
   border-radius: var(--radius-pill);
-  background: var(--color-signal-bright);
-  font: 650 var(--text-compact)/1 var(--font-utility);
-  text-transform: uppercase;
+  background: var(--color-signal-soft);
+  font: 600 var(--text-label)/1 var(--font-body);
 }
 
 .admin-panels {
@@ -143,18 +140,18 @@
 
 .admin-panel {
   min-width: 0;
-  padding: var(--space-6);
+  padding: var(--space-5);
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-lg);
-  background: var(--color-stone);
+  background: var(--color-panel);
   box-shadow: var(--shadow-panel);
   scroll-margin-top: 6rem;
 }
 
 .admin-panel > h3 {
   margin: 0 0 var(--space-5);
-  font: 740 1.35rem/1.1 var(--font-display);
-  letter-spacing: -0.03em;
+  font: 700 1.25rem/1.2 var(--font-body);
+  letter-spacing: -0.01em;
 }
 
 .admin-metrics {
@@ -163,54 +160,71 @@
   gap: var(--space-3);
 }
 
+/* Each card takes a region hue: 9% fill, 44% border, as in the Atlas. */
 .admin-metric {
+  --island: var(--region-windcall);
   display: grid;
   min-width: 0;
   min-height: 7rem;
   padding: var(--space-4);
   align-content: space-between;
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone);
-  box-shadow: 0 1px 3px 0 oklch(20% 0.035 255 / 4%);
-  transition: all var(--duration-press) var(--ease-out);
+  gap: var(--space-1);
+  border: 1px solid color-mix(in oklab, var(--island) 44%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--island) 9%, var(--color-panel));
+  box-shadow: 0 10px 24px -20px color-mix(in oklab, var(--island) 80%, transparent);
+}
+
+.admin-metric:nth-child(5n + 2) {
+  --island: var(--region-mosslight);
+}
+
+.admin-metric:nth-child(5n + 3) {
+  --island: var(--region-sunspan);
+}
+
+.admin-metric:nth-child(5n + 4) {
+  --island: var(--region-tideglass);
+}
+
+.admin-metric:nth-child(5n) {
+  --island: var(--region-bellroot);
 }
 
 .admin-metric strong {
-  font: 780 clamp(2rem, 9vw, 3.5rem)/0.9 var(--font-display);
+  font: 650 clamp(1.75rem, 7vw, 2.75rem)/1 var(--font-utility);
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
 .admin-metric__caption {
-  color: var(--color-ink-muted);
-  font-size: 0.78rem;
-  font-weight: 680;
+  color: var(--color-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
 }
 
 /* DASH-01: one tile claims primacy instead of seven identical ones. */
 .admin-metric--hero {
   grid-column: 1 / -1;
   min-height: 9rem;
-  border-color: var(--color-line);
-  background: var(--color-signal-soft);
 }
 
 .admin-metric--hero strong {
-  font-size: clamp(2.5rem, 10vw, 4.5rem);
+  font-size: clamp(2.25rem, 9vw, 3.75rem);
 }
 
 .admin-metric__grain {
   display: block;
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-size: var(--text-compact);
+  font: 600 var(--text-compact)/1.2 var(--font-body);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .admin-metric__delta {
+  font-size: var(--text-label);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-metric__delta--up {
@@ -229,7 +243,7 @@
   display: block;
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: var(--text-label);
 }
 
 .admin-table thead {
@@ -249,9 +263,9 @@
 
 .admin-table tr {
   margin-block-end: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
 }
@@ -268,7 +282,8 @@
 .admin-table td::before {
   content: attr(data-label);
   color: var(--color-ink-muted);
-  font: 650 var(--text-compact)/1.35 var(--font-utility);
+  font: 600 var(--text-compact)/1.35 var(--font-body);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -285,16 +300,16 @@
 
 .admin-editor {
   margin-block-end: var(--space-5);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
 }
 
 .admin-editor summary {
-  min-height: 46px;
+  min-height: 2.875rem;
   padding: var(--space-3) var(--space-4);
   align-content: center;
-  font-weight: 700;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -316,8 +331,8 @@
 }
 
 .admin-field label {
-  font-size: 0.78rem;
-  font-weight: 680;
+  font-size: var(--text-label);
+  font-weight: 600;
 }
 
 .admin-field input,
@@ -327,15 +342,15 @@
 .admin-lookup input {
   width: 100%;
   min-width: 0;
-  min-height: 45px;
+  min-height: 2.8125rem;
   padding: var(--space-3);
   color: var(--color-ink);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
   outline: 0.2rem solid transparent;
   outline-offset: 0.1rem;
   background: var(--color-panel);
-  font: 500 0.88rem/1.35 var(--font-body);
+  font: 500 var(--text-body)/1.35 var(--font-body);
 }
 
 .admin-field textarea {
@@ -346,22 +361,23 @@
 
 .admin-appearance-option {
   display: flex;
-  min-height: 44px;
+  min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
   align-items: center;
   gap: var(--space-2);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.5rem;
   cursor: pointer;
 }
 
 .admin-appearance-option:has(input:checked) {
-  background: var(--color-panel);
+  border-color: var(--color-sky);
+  background: var(--color-signal-soft);
   font-weight: 700;
 }
 
 /*
- * .admin-field input (below) is a descendant selector meant for the
+ * .admin-field input (above) is a descendant selector meant for the
  * fieldset's own text/select/textarea controls elsewhere in this file, but
  * it does not care about nesting depth, so it also reaches these radios and
  * would otherwise stretch each one into a full-width, 45px bordered box.
@@ -373,7 +389,7 @@
   min-height: 0;
   padding: 0;
   border: none;
-  accent-color: var(--color-ink);
+  accent-color: var(--color-sky-deep);
 }
 
 .admin-field input:focus-visible,
@@ -388,7 +404,7 @@
   min-height: 1lh;
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: var(--text-compact);
+  font-size: var(--text-label);
 }
 
 .admin-records {
@@ -399,8 +415,8 @@
 .admin-record {
   min-width: 0;
   padding: var(--space-4);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
 }
 
@@ -420,7 +436,7 @@
 .admin-support-result h4 {
   min-width: 0;
   margin: 0;
-  font: 720 1rem/1.2 var(--font-display);
+  font: 650 var(--text-body)/1.3 var(--font-body);
   overflow-wrap: anywhere;
 }
 
@@ -430,28 +446,24 @@
 
 .admin-record__prompt {
   color: var(--color-ink) !important;
-  font-weight: 620;
+  font-weight: 600;
 }
 
 .admin-lens-preview {
   padding: var(--space-3);
   border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--color-stone-raised);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
 }
 
 .admin-lens-preview summary {
   min-height: 2.8125rem;
-  font-weight: 700;
+  font-weight: 650;
   cursor: pointer;
 }
 
 .admin-lens-preview summary:hover {
-  background: var(--color-panel);
-}
-
-.admin-lens-preview summary:active {
-  background: var(--color-signal-glow);
+  color: var(--color-signal-deep);
 }
 
 .admin-lens-preview strong {
@@ -470,25 +482,14 @@
 
 .admin-badge {
   display: inline-flex;
-  min-height: 1.8rem;
-  padding-inline: var(--space-2);
+  min-height: 1.75rem;
+  padding-inline: var(--space-3);
   align-items: center;
   color: var(--color-ink);
-  border: 1px solid var(--color-line);
+  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
   border-radius: var(--radius-pill);
-  background: var(--color-explorer-bright);
-  font: 650 var(--text-compact)/1 var(--font-utility);
-}
-
-.admin-primary {
-  color: var(--color-accent-ink);
-  background: var(--color-signal);
-}
-
-.admin-danger {
-  color: var(--color-ink);
-  border-color: var(--color-warden);
-  background: var(--color-warden-soft);
+  background: var(--color-signal-soft);
+  font: 600 var(--text-compact)/1 var(--font-body);
 }
 
 .admin-lookup {
@@ -504,8 +505,8 @@
   min-height: 5rem;
   margin-block-start: var(--space-4);
   padding: var(--space-4);
-  border: 1px dashed var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-line-soft);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
 }
 
@@ -513,14 +514,13 @@
   display: grid;
   margin: 0 0 var(--space-4);
   padding: 0;
-  gap: var(--space-2);
   list-style: none;
 }
 
 .admin-audit li {
   display: grid;
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-2);
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);
   border-bottom: 1px solid var(--color-line-soft);
@@ -537,18 +537,19 @@
 .admin-empty,
 .admin-error {
   margin: 0;
-  padding: var(--space-4);
-  border-radius: var(--radius-sm);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-md);
 }
 
 .admin-empty {
   color: var(--color-ink-muted);
-  border: 1px dashed var(--color-line);
+  border: 1px dashed var(--color-line-soft);
   background: var(--color-paper);
+  text-align: center;
 }
 
 .admin-error {
-  border: 2px solid var(--color-warden);
+  border: 1px solid color-mix(in oklab, var(--color-warden) 44%, transparent);
   background: var(--color-warden-soft);
 }
 
@@ -560,9 +561,9 @@
   max-width: min(28rem, calc(100% - 2rem));
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  color: var(--color-paper);
-  border-radius: var(--radius-sm);
-  background: var(--color-ink);
+  color: var(--color-on-fill);
+  border-radius: var(--radius-md);
+  background: var(--color-night);
   box-shadow: var(--shadow-panel);
 }
 
@@ -570,23 +571,19 @@
   display: none;
 }
 
-@media (min-width: 40rem) {
+@media (min-width: 24rem) {
   .admin-command {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .admin-command__exit {
     grid-column: auto;
-    min-height: 45px;
-    padding-inline: var(--space-3);
   }
+}
 
+@media (min-width: 40rem) {
   .admin-main {
     padding-inline: var(--space-6);
-  }
-
-  .admin-panel {
-    box-shadow: var(--shadow-panel);
   }
 
   .admin-form-grid {
@@ -640,8 +637,8 @@
 
   .admin-table th {
     color: var(--color-ink-muted);
-    font: 650 var(--text-compact)/1.2 var(--font-utility);
-    letter-spacing: 0.06em;
+    font: 600 var(--text-compact)/1.2 var(--font-body);
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
 
@@ -666,13 +663,12 @@
 
   .admin-rail {
     position: sticky;
-    top: 4.5rem;
+    top: 5rem;
     display: grid;
-    height: calc(100dvh - 4.5rem);
-    padding: var(--space-6) var(--space-4);
+    align-self: start;
+    max-height: calc(100dvh - 6rem);
+    margin: var(--space-10) 0 0 var(--space-4);
     align-content: start;
-    border-right: 1px solid var(--color-line-soft);
-    border-bottom: 0;
     overflow: auto;
   }
 
@@ -692,16 +688,18 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .admin-metric--hero {
+    grid-column: span 2;
+  }
+
   .admin-form-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .admin-record:hover,
-  .admin-metric:hover {
-    color: var(--color-ink);
-    background: var(--color-stone-raised);
+  .admin-record:hover {
+    border-color: color-mix(in oklab, var(--color-sky) 44%, transparent);
   }
 }
 

@@ -80,6 +80,22 @@ The presentation identity of one Atlas Region across Atlas, Labyrinth, Warden,
 sound, and Gate Warden staging. It never changes Run rules by itself.
 _Avoid_: Gameplay modifier, paid skin, hidden difficulty
 
+**Region Hue**:
+The one colour each Atlas Region owns: Mosslight mint, Windcall sky, Sunspan
+amber, Tideglass indigo, Bellroot pink. Atlas islands, Labyrinth tiles, and
+tinted cards on the admin and Classroom surfaces reuse it as decoration only.
+_Avoid_: Island colour, status colour, difficulty colour
+
+**Journey**:
+The visual design system of every Echo Maze surface: sky-tinted grid paper,
+white panels, and Region Hue cards. It names presentation, never a game rule.
+_Avoid_: Theme (alone), skin, mode
+
+**Theme Choice**:
+An Explorer setting of light, dark, or system appearance for the Journey
+design system. It changes no Run, score, or progress.
+_Avoid_: Palette, Region Theme
+
 **Warden Guild**:
 The authored regional appearance shared by Wardens in one Atlas Region.
 Universal Patrol, Hunt, Intercept, Lured, and Gate Warden markers remain

@@ -1,25 +1,31 @@
-/* Hallmark · macrostructure: Workbench (locked by design.md) · genre: playful · theme: Hum · page: Classroom · nav: N7 compact slab · footer: none (app workspace) · pre-emit critique: P5 H5 E5 S5 R5 V4 · slop: pass (1–58) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+/* Hallmark · macrostructure: Workbench (locked by design.md) · genre: playful · theme: Journey · page: Classroom · nav: glass top bar · footer: none (app workspace) · anchor: hued class cards · slop: pass (1–58) · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
 
 .classroom-nav {
+  position: sticky;
+  z-index: 8;
+  top: 0;
   display: grid;
   min-height: 4rem;
-  padding: var(--space-2) max(var(--space-4), calc((100vw - 76rem) / 2));
+  padding: var(--space-2) max(var(--space-4), calc((100% - 76rem) / 2));
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-5);
-  border-bottom: 2px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line-soft);
   background: var(--color-nav);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .classroom-nav > p {
   min-width: 0;
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 0.92rem;
-  font-weight: 560;
+  font: 600 var(--text-label)/1.2 var(--font-body);
 }
 
 .classroom-nav .wordmark {
+  /* The shared rule places the wordmark in the game command bar grid area. */
+  grid-area: auto;
   display: inline-flex;
   font-size: 1.25rem;
 }
@@ -39,14 +45,17 @@
   padding: var(--space-3) var(--space-4);
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: 0.84rem;
-  font-weight: 650;
-  line-height: 1;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 0.5rem;
+  background: var(--color-panel);
+  font: 650 0.875rem/1 var(--font-body);
   text-decoration: none;
   white-space: nowrap;
+}
+
+.control-link:hover {
+  border-color: var(--color-sky);
+  background: var(--color-signal-soft);
 }
 
 .classroom-workbench {
@@ -65,9 +74,9 @@
   max-width: 16ch;
   margin: var(--space-2) 0 0;
   font-family: var(--font-display);
-  font-size: clamp(2.1rem, 5vw, 4.8rem);
-  line-height: 0.96;
-  letter-spacing: -0.055em;
+  font-size: clamp(2.1rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
 }
 
@@ -75,18 +84,14 @@
   max-width: 42rem;
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: clamp(1rem, 1.8vw, 1.16rem);
+  font-size: clamp(1rem, 1.8vw, 1.125rem);
 }
 
 .classroom-status {
   min-height: 1.5rem;
   margin: var(--space-6) 0 var(--space-4);
-  padding-block: var(--space-2);
-  border-block: 1px solid var(--color-line-soft);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-weight: 600;
-  font-size: 0.78rem;
+  font: 600 var(--text-label)/1.4 var(--font-body);
 }
 
 .classroom-grid {
@@ -98,18 +103,10 @@
 .classroom-message {
   min-width: 0;
   padding: clamp(var(--space-5), 4vw, var(--space-8));
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
   background: var(--color-panel);
   box-shadow: var(--shadow-panel);
-}
-
-.classroom-panel--memberships {
-  background: var(--color-stone-raised);
-}
-
-.classroom-panel--create {
-  background: var(--color-nav);
 }
 
 .classroom-panel--teacher {
@@ -121,16 +118,15 @@
 }
 
 .classroom-message--error {
-  border-color: var(--color-warden);
+  border-color: color-mix(in oklab, var(--color-warden) 44%, transparent);
+  background: color-mix(in oklab, var(--color-warden) 6%, var(--color-panel));
 }
 
 .classroom-panel h2,
 .classroom-message h2 {
   margin: var(--space-2) 0 var(--space-3);
-  font-family: var(--font-display);
-  font-size: clamp(1.55rem, 3vw, 2.3rem);
-  line-height: 1;
-  letter-spacing: -0.04em;
+  font: 700 clamp(1.5rem, 3vw, 2rem)/1.1 var(--font-body);
+  letter-spacing: -0.02em;
 }
 
 .classroom-panel__heading,
@@ -153,10 +149,44 @@
 .progress-card,
 .classroom-expedition-card,
 .classroom-empty {
+  min-width: 0;
   padding: var(--space-4);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
   background: var(--color-paper);
+}
+
+/* Each class and Expedition card takes a region hue: 9% fill, 44% border. */
+.classroom-card,
+.classroom-expedition-card {
+  --island: var(--region-windcall);
+  border-color: color-mix(in oklab, var(--island) 44%, transparent);
+  background: color-mix(in oklab, var(--island) 9%, var(--color-panel));
+}
+
+.classroom-card:nth-child(5n + 2),
+.classroom-expedition-card:nth-child(5n + 2) {
+  --island: var(--region-mosslight);
+}
+
+.classroom-card:nth-child(5n + 3),
+.classroom-expedition-card:nth-child(5n + 3) {
+  --island: var(--region-sunspan);
+}
+
+.classroom-card:nth-child(5n + 4),
+.classroom-expedition-card:nth-child(5n + 4) {
+  --island: var(--region-tideglass);
+}
+
+.classroom-card:nth-child(5n),
+.classroom-expedition-card:nth-child(5n) {
+  --island: var(--region-bellroot);
+}
+
+.classroom-empty {
+  border-style: dashed;
+  text-align: center;
 }
 
 .classroom-expeditions {
@@ -171,8 +201,7 @@
 
 .classroom-expedition-card h4 {
   margin: var(--space-1) 0;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
+  font: 700 1.25rem/1.2 var(--font-body);
 }
 
 .classroom-expedition-card > p {
@@ -189,7 +218,7 @@
 .classroom-constellation__status {
   margin: var(--space-2) 0 var(--space-3);
   color: var(--color-ink-muted);
-  font-size: 0.86rem;
+  font-size: var(--text-label);
 }
 
 .classroom-constellation__markers {
@@ -200,8 +229,9 @@
 
 .classroom-constellation-marker {
   min-width: 0;
-  padding: var(--space-2);
-  border: 2px solid var(--color-line);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
   /* The lowest band, not the page. It used to inherit the surface exactly,
      so a Quiet marker was invisible at 1.00:1 against what it sat on. */
   background: var(--color-band-1);
@@ -213,16 +243,14 @@
 }
 
 .classroom-constellation-marker h4 {
-  font-family: var(--font-display);
-  font-size: 0.9rem;
+  font: 700 0.9375rem/1.2 var(--font-body);
 }
 
 .classroom-constellation-marker p {
   margin-block-start: var(--space-1);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font: 600 var(--text-compact)/1.2 var(--font-body);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -242,8 +270,7 @@
 .classroom-empty h3,
 .progress-card h4 {
   margin: var(--space-1) 0;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
+  font: 700 1.25rem/1.2 var(--font-body);
 }
 
 .classroom-card > p:not(.section-label),
@@ -259,13 +286,12 @@
 .classroom-domain {
   margin-block-start: var(--space-6);
   padding-block-end: var(--space-6);
-  border-block-end: 2px solid var(--color-line);
+  border-block-end: 1px solid var(--color-line-soft);
 }
 
 .classroom-domain h3 {
   margin: var(--space-1) 0 var(--space-2);
-  font-family: var(--font-display);
-  font-size: 1.25rem;
+  font: 700 1.25rem/1.2 var(--font-body);
 }
 
 .classroom-domain__copy {
@@ -277,7 +303,8 @@
 .classroom-form label {
   display: block;
   margin-block-end: var(--space-2);
-  font-weight: 700;
+  font-size: var(--text-label);
+  font-weight: 600;
 }
 
 .classroom-form__row {
@@ -285,26 +312,28 @@
   gap: var(--space-2);
 }
 
-.classroom-form input {
+.classroom-form input,
+.classroom-form select {
   width: 100%;
   min-width: 0;
   min-height: 2.8125rem;
   padding: var(--space-3);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius: 0.5rem;
   outline: 2px solid transparent;
   outline-offset: 1px;
-  background: var(--color-paper);
+  background: var(--color-panel);
   color: var(--color-ink);
-  font: 500 1rem/1.2 var(--font-body);
+  font: 500 var(--text-body)/1.2 var(--font-body);
 }
 
-.classroom-form input:focus-visible {
+.classroom-form input:focus-visible,
+.classroom-form select:focus-visible {
   outline-color: var(--color-focus);
 }
 
 .classroom-form input:hover:not(:disabled) {
-  background: var(--color-stone-raised);
+  border-color: var(--color-sky);
 }
 
 .classroom-form input:user-invalid {
@@ -320,12 +349,12 @@
 }
 
 .classroom-form[data-state="error"] .classroom-form__status {
-  color: var(--color-ink);
+  color: var(--color-warden-text);
   font-weight: 650;
 }
 
 .classroom-form[data-state="success"] .classroom-form__status {
-  color: var(--color-ink);
+  color: var(--color-gate-text);
   font-weight: 650;
 }
 
@@ -351,28 +380,26 @@
   min-height: 2rem;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 2px solid var(--color-line);
-  border-radius: 999px;
-  background: var(--color-signal);
+  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--color-signal-soft);
   color: var(--color-ink);
-  font-family: var(--font-utility);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font: 600 var(--text-compact)/1 var(--font-body);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .classroom-progress {
   margin-block-start: var(--space-7);
   padding-block-start: var(--space-5);
-  border-block-start: 2px solid var(--color-line);
+  border-block-start: 1px solid var(--color-line-soft);
 }
 
 .progress-card__objective {
   margin: var(--space-1) 0 var(--space-3);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
+  font-size: var(--text-label);
   font-weight: 600;
-  font-size: 0.78rem;
   text-transform: capitalize;
 }
 
@@ -386,23 +413,24 @@
 }
 
 .progress-card li {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-line);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-pill);
   background: var(--color-stone);
-  font-size: 0.8rem;
-  font-weight: 650;
+  font-size: var(--text-label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .classroom-debrief__next-steps {
   margin-block-start: var(--space-6);
   padding-block-start: var(--space-5);
-  border-block-start: 1px solid var(--color-line);
+  border-block-start: 1px solid var(--color-line-soft);
 }
 
 .classroom-debrief__next-steps h3 {
   margin: var(--space-1) 0 var(--space-4);
-  font-family: var(--font-display);
-  font-size: 1.35rem;
+  font: 700 1.375rem/1.2 var(--font-body);
 }
 
 .next-step-list {
@@ -411,15 +439,15 @@
 }
 
 .next-step-card {
-  padding: var(--space-3);
-  border-inline-start: 4px solid var(--color-signal);
-  background: var(--color-stone);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--color-sky) 9%, var(--color-panel));
 }
 
 .next-step-card h4 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
+  font: 700 1.0625rem/1.25 var(--font-body);
 }
 
 .next-step-card p {
@@ -428,23 +456,21 @@
 }
 
 .next-step-card__topic {
-  font-family: var(--font-utility);
+  font-size: var(--text-label);
   font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
 }
 
 .classroom-reflection {
   margin-block-start: var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid var(--color-line);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
   background: var(--color-stone);
 }
 
 .classroom-reflection h5 {
   margin: var(--space-1) 0 var(--space-2);
-  font-family: var(--font-display);
-  font-size: 1.05rem;
+  font: 700 1.0625rem/1.25 var(--font-body);
 }
 
 .classroom-reflection > p:not(.section-label) {
@@ -463,20 +489,21 @@
 
 .classroom-inline-error {
   padding: var(--space-3);
-  border: 2px solid var(--color-warden);
+  border: 1px solid color-mix(in oklab, var(--color-warden) 44%, transparent);
+  border-radius: var(--radius-md);
   color: var(--color-ink);
-  background: var(--color-paper);
+  background: var(--color-warden-soft);
 }
 
 .classroom-inline-note {
   margin-block: var(--space-3);
   padding: var(--space-3);
-  border: 2px solid var(--color-line);
+  border: 1px dashed var(--color-line-soft);
+  border-radius: var(--radius-md);
   background: var(--color-stone);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
+  font-size: var(--text-label);
   font-weight: 600;
-  font-size: 0.78rem;
 }
 
 .classroom-loading {
@@ -487,8 +514,7 @@
 .classroom-loading span {
   display: block;
   height: 3.5rem;
-  border: 2px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-stone);
   animation: classroom-pulse 1.4s var(--ease-out) infinite alternate;
 }
@@ -544,19 +570,19 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .classroom-card:hover,
+  .classroom-expedition-card:hover {
+    border-color: color-mix(in oklab, var(--island) 70%, transparent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .classroom-loading span {
     animation: none;
   }
-}
 
-.classroom-form select {
-  width: 100%;
-  max-width: 100%;
-  min-height: 44px;
-  padding-inline: var(--space-2);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-paper);
-  font: inherit;
+  .classroom-nav {
+    backdrop-filter: none;
+  }
 }

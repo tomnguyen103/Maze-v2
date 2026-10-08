@@ -127,7 +127,6 @@ function renderFrame(
 ) {
   const { main } = renderAdminShell(root, { state });
   main.innerHTML = `
-    <p class="section-label">Admin</p>
     <h2 id="admin-title"></h2>
     <p id="admin-detail"${detail ? "" : " hidden"}></p>
     <p class="admin-status" id="admin-status" role="status"></p>
