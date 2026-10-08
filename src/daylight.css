@@ -204,7 +204,7 @@ a:hover {
   grid-area: mark;
   min-height: 45px;
   align-items: center;
-  color: var(--color-sky-deep);
+  color: var(--color-signal-deep);
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 780;
@@ -2412,97 +2412,12 @@ body[data-run-mode="first-light"] .play-workbench {
   padding: var(--space-8);
 }
 
-.first-light-dialog {
-  width: min(42rem, calc(100% - 2rem));
-  padding: var(--space-8);
-  border-width: 3px;
-  box-shadow:
-    0.65rem 0.7rem 0 var(--color-shadow),
-    0 0 0 0.45rem var(--color-signal-glow);
-}
-
-.first-light-dialog h2 {
-  min-width: 0;
-  margin: var(--space-2) 0 0;
-  font-family: var(--font-display);
-  font-size: clamp(2.25rem, 7vw, 4rem);
-  letter-spacing: -0.03em;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
 #first-light-title:focus-visible,
 #level-title-1:focus-visible,
 #level-title-2:focus-visible,
 #level-title-3:focus-visible,
 #result-title:focus-visible {
   outline: none;
-}
-
-.first-light-dialog .dialog-intro {
-  max-width: 62ch;
-  margin: var(--space-4) 0 0;
-  color: var(--color-ink);
-  font-size: var(--text-body);
-  line-height: 1.55;
-}
-
-.first-light-route {
-  display: flex;
-  margin: var(--space-6) 0;
-  padding: 0;
-  align-items: stretch;
-  gap: var(--space-2);
-  list-style: none;
-}
-
-.first-light-route li {
-  display: grid;
-  min-width: 0;
-  min-height: 6rem;
-  padding: var(--space-3);
-  flex: 1 1 0;
-  align-content: center;
-  gap: var(--space-1);
-  border-block: 2px solid var(--color-line);
-  background: var(--color-panel);
-}
-
-.first-light-route strong {
-  min-width: 0;
-  font-family: var(--font-display);
-  font-size: 1.3rem;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.first-light-route span {
-  min-width: 0;
-  color: var(--color-ink-muted);
-  font-size: var(--text-body);
-  overflow-wrap: anywhere;
-}
-
-.first-light-boundary {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  color: var(--color-ink);
-  border: 2px solid var(--color-line);
-  background: var(--color-signal-glow);
-  font-size: var(--text-body);
-  line-height: 1.5;
-}
-
-.first-light-dialog__actions {
-  display: flex;
-  margin-top: var(--space-5);
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.first-light-dialog__actions button {
-  min-height: 2.75rem;
-  white-space: nowrap;
 }
 
 /*
@@ -3266,7 +3181,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .atlas-dialog,
   .access-settings-dialog,
-  .first-light-dialog,
   .level-dialog,
   .daily-dialog,
   .challenge-dialog,
@@ -3282,7 +3196,6 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .daily-dialog__actions,
-  .first-light-dialog__actions,
   .lifetime-dialog__actions,
   .quest-conflict-dialog__actions,
   .result-dialog__actions {
@@ -3297,17 +3210,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .learning-deck-options {
     grid-template-columns: 1fr;
-  }
-
-  .first-light-route {
-    flex-wrap: wrap;
-    gap: var(--space-1);
-  }
-
-  .first-light-route li {
-    min-height: 6rem;
-    padding: var(--space-2);
-    flex: 1 1 5.5rem;
   }
 
   .first-light-dialog__actions button,
@@ -3445,12 +3347,28 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero {
+  position: relative;
+  isolation: isolate;
   min-height: min(42rem, calc(100svh - 7rem));
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
   align-items: center;
   gap: clamp(var(--space-8), 7vw, var(--space-16));
   padding-block: var(--space-8) var(--space-12);
+}
+
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: -2rem;
+  z-index: -1;
+  /* closest-side fades each blob to nothing at its own layer edge. */
+  background:
+    radial-gradient(closest-side, var(--region-windcall), transparent) 0 0 / 50% 70% no-repeat,
+    radial-gradient(closest-side, var(--region-mosslight), transparent) 100% 0 / 45% 65% no-repeat,
+    radial-gradient(closest-side, var(--region-sunspan), transparent) 85% 100% / 45% 60% no-repeat,
+    radial-gradient(closest-side, var(--region-tideglass), transparent) 10% 100% / 40% 60% no-repeat;
+  opacity: 0.3;
 }
 
 .landing-hero__copy {
@@ -3467,7 +3385,7 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero h1 {
-  margin-block: var(--space-3) var(--space-4);
+  margin-block: 0 var(--space-3);
   font-size: clamp(3.2rem, 7.5vw, 5.5rem);
   line-height: 0.88;
 }
@@ -3506,39 +3424,54 @@ body[data-run-mode="first-light"] .play-workbench {
   justify-self: end;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-fog-soft);
-  box-shadow: var(--shadow-panel);
+  gap: var(--space-4);
 }
 
 .landing-labyrinth-mark span {
-  min-width: 0;
-  border: 2px solid var(--color-grid);
-  border-radius: var(--radius-sm);
-  background: var(--color-passage);
+  position: relative;
+  visibility: hidden;
+  border: 2px solid var(--island);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--island) 14%, var(--color-stone));
 }
 
-.landing-labyrinth-mark span:nth-child(2),
-.landing-labyrinth-mark span:nth-child(4),
-.landing-labyrinth-mark span:nth-child(6),
-.landing-labyrinth-mark span:nth-child(8),
-.landing-labyrinth-mark span:nth-child(10),
-.landing-labyrinth-mark span:nth-child(12),
-.landing-labyrinth-mark span:nth-child(14),
-.landing-labyrinth-mark span:nth-child(16),
-.landing-labyrinth-mark span:nth-child(18),
-.landing-labyrinth-mark span:nth-child(20),
-.landing-labyrinth-mark span:nth-child(22) {
-  background: var(--color-wall);
+.landing-labyrinth-mark span:is(:nth-child(1), :nth-child(2), :nth-child(3)) {
+  --island: var(--region-mosslight);
+  visibility: visible;
 }
 
-.landing-labyrinth-mark span:nth-child(1),
-.landing-labyrinth-mark span:nth-child(25) {
-  border-radius: var(--radius-pill);
-  background: var(--color-signal);
+.landing-labyrinth-mark span:is(:nth-child(8), :nth-child(13)) {
+  --island: var(--region-windcall);
+  visibility: visible;
+}
+
+.landing-labyrinth-mark span:is(:nth-child(14), :nth-child(15)) {
+  --island: var(--region-sunspan);
+  visibility: visible;
+}
+
+.landing-labyrinth-mark span:is(:nth-child(20), :nth-child(25)) {
+  --island: var(--region-tideglass);
+  visibility: visible;
+}
+
+/* Rope bridge to the next island: planks across one grid gap. */
+.landing-labyrinth-mark span:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  left: 100%;
+  width: calc(var(--space-4) + 4px);
+  height: 8px;
+  background: repeating-linear-gradient(var(--plank, 90deg), var(--color-ink-muted) 0 2px, transparent 2px 5px);
+}
+
+.landing-labyrinth-mark span:is(:nth-child(3), :nth-child(8), :nth-child(15), :nth-child(20))::after {
+  --plank: 180deg;
+  top: 100%;
+  left: calc(50% - 4px);
+  width: 8px;
+  height: calc(var(--space-4) + 4px);
 }
 
 .landing-path,
@@ -3563,26 +3496,17 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .landing-path ol {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr 1.1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
 }
 
 .landing-path li {
-  min-width: 0;
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border-left: 2px solid var(--color-line);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
   background: var(--color-stone);
-}
-
-.landing-path li:nth-child(2) {
-  margin-top: var(--space-6);
-  background: var(--color-echo-soft);
-}
-
-.landing-path li:nth-child(3) {
-  background: var(--color-signal-bright);
 }
 
 .landing-path strong,
@@ -3615,7 +3539,7 @@ body[data-run-mode="first-light"] .play-workbench {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-3) 0;
+  padding-block: var(--space-3);
   border-bottom: 1px solid var(--color-line-soft);
 }
 
@@ -3636,7 +3560,8 @@ body[data-run-mode="first-light"] .play-workbench {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-5);
-  border-left: 2px solid var(--color-line);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
   background: var(--color-stone);
 }
 
@@ -3667,14 +3592,9 @@ body[data-run-mode="first-light"] .play-workbench {
   line-height: 1.5;
 }
 
-.landing-membership-preview p:last-child {
-  font-size: 1rem;
-}
-
 .landing-auth-status {
   margin: var(--space-3) 0 0;
   color: var(--color-ink-muted);
-  line-height: 1.5;
 }
 
 .landing-page :is(a, button):focus-visible {
@@ -3689,7 +3609,6 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .landing-labyrinth-mark {
-    width: min(100%, 24rem);
     justify-self: start;
   }
 
@@ -3698,24 +3617,20 @@ body[data-run-mode="first-light"] .play-workbench {
   .landing-account {
     grid-template-columns: 1fr;
   }
-
-  .landing-path li:nth-child(2) {
-    margin-top: 0;
-  }
 }
 
 @media (max-width: 32rem) {
-  .landing-header,
-  .landing-page {
-    width: min(100% - var(--space-6), 72rem);
-  }
-
   .landing-hero h1 {
     font-size: clamp(3rem, 18vw, 4.4rem);
   }
 
   .landing-hero__actions {
     display: grid;
+  }
+
+  .landing-labyrinth-mark {
+    width: min(100%, 20rem);
+    justify-self: center;
   }
 
   .landing-hero__actions :is(.primary-button, .control-button) {

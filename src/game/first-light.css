@@ -1,0 +1,108 @@
+/* The First Light dialog loads with the game chunk, not with the landing. */
+.first-light-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  padding: var(--space-8);
+  border-width: 3px;
+  box-shadow:
+    0.65rem 0.7rem 0 var(--color-shadow),
+    0 0 0 0.45rem var(--color-signal-glow);
+}
+
+.first-light-dialog h2 {
+  min-width: 0;
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 7vw, 4rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+
+.first-light-dialog .dialog-intro {
+  max-width: 62ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+
+.first-light-route {
+  display: flex;
+  margin: var(--space-6) 0;
+  padding: 0;
+  align-items: stretch;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.first-light-route li {
+  display: grid;
+  min-width: 0;
+  min-height: 6rem;
+  padding: var(--space-3);
+  flex: 1 1 0;
+  align-content: center;
+  gap: var(--space-1);
+  border-block: 2px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.first-light-route strong {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.first-light-route span {
+  min-width: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+}
+
+.first-light-boundary {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-ink);
+  border: 2px solid var(--color-line);
+  background: var(--color-signal-glow);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+.first-light-dialog__actions {
+  display: flex;
+  margin-top: var(--space-5);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.first-light-dialog__actions button {
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 32rem) {
+  .first-light-dialog {
+    padding: var(--space-4);
+  }
+
+  .first-light-dialog__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .first-light-route {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .first-light-route li {
+    min-height: 6rem;
+    padding: var(--space-2);
+    flex: 1 1 5.5rem;
+  }
+}

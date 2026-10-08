@@ -1,3 +1,4 @@
+import "./game/first-light.css";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
