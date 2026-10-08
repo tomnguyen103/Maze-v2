@@ -175,50 +175,54 @@
             </button>
           </div>
 
-          <div class="status-deck__heading">
-            <span class="section-label" id="quest-level-name">Trail Scout</span>
-            <span class="run-state" id="run-state">Exploring</span>
+          <div class="quest-card">
+            <div class="status-deck__heading">
+              <span class="section-label" id="quest-level-name">Trail Scout</span>
+              <span class="run-state" id="run-state">Exploring</span>
+            </div>
+            <p class="quest-stage" id="quest-stage">
+              Labyrinth 1 of 20 · Foundation
+            </p>
+
+            <p
+              class="quest-sync-status"
+              id="quest-sync-status"
+              data-state="local"
+              role="status"
+              aria-live="polite"
+            >
+              Device save
+            </p>
           </div>
-          <p class="quest-stage" id="quest-stage">
-            Labyrinth 1 of 20 · Foundation
-          </p>
 
-          <p
-            class="quest-sync-status"
-            id="quest-sync-status"
-            data-state="local"
-            role="status"
-            aria-live="polite"
-          >
-            Device save
-          </p>
+          <div class="run-card">
+            <dl class="run-metrics">
+              <div>
+                <dt>Time</dt>
+                <dd id="time-value">00:00</dd>
+              </div>
+              <div>
+                <dt>Moves</dt>
+                <dd id="moves-value">000</dd>
+              </div>
+              <div>
+                <dt>Echoes</dt>
+                <dd id="echo-count">0 / 3</dd>
+              </div>
+              <div>
+                <dt>Vitality</dt>
+                <dd id="vitality-count">3 / 3</dd>
+              </div>
+            </dl>
 
-          <dl class="run-metrics">
-            <div>
-              <dt>Time</dt>
-              <dd id="time-value">00:00</dd>
+            <div class="meter-row">
+              <span>Echo signal</span>
+              <div class="echo-meter" id="echo-meter" aria-hidden="true"></div>
             </div>
-            <div>
-              <dt>Moves</dt>
-              <dd id="moves-value">000</dd>
+            <div class="meter-row">
+              <span>Vitality</span>
+              <div class="vitality-meter" id="vitality-meter" aria-hidden="true"></div>
             </div>
-            <div>
-              <dt>Echoes</dt>
-              <dd id="echo-count">0 / 3</dd>
-            </div>
-            <div>
-              <dt>Vitality</dt>
-              <dd id="vitality-count">3 / 3</dd>
-            </div>
-          </dl>
-
-          <div class="meter-row">
-            <span>Echo signal</span>
-            <div class="echo-meter" id="echo-meter" aria-hidden="true"></div>
-          </div>
-          <div class="meter-row">
-            <span>Vitality</span>
-            <div class="vitality-meter" id="vitality-meter" aria-hidden="true"></div>
           </div>
 
           <div class="warden-readout" id="warden-readout" data-mode="patrol">

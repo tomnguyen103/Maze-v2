@@ -145,7 +145,7 @@
 
   --text-body: 1rem;
   --text-label: 0.875rem;
-  --text-compact: 0.7rem;
+  --text-compact: 0.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
