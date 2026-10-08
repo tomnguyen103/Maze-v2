@@ -23,10 +23,10 @@ Decoration supports reading, movement, and Warden Challenges. It never competes 
 
 ## Theme and surfaces
 
-Light is the default. Dark keeps the same hues on a deep night-blue ground.
+Light is the default. Night keeps the same hues on a deep night-blue ground.
 
 **Light**
-- **Paper**: sky-tinted paper (`oklch(98.5% 0.008 230)`) with a 24px grid-paper pattern (`--color-grid`).
+- **Paper**: sky-tinted paper (`oklch(98.5% 0.008 230)`) with a 24px grid-paper pattern (`--color-paper-grid`).
 - **Stone**: white panel (`oklch(100% 0 0)`) with a 1px slate border (`--color-line-soft`).
 - **Ink**: slate ink (`oklch(27% 0.035 257)`). Muted ink is slate-500.
 - **Primary (sky)**: `oklch(68.5% 0.169 237)`. Deep sky (`oklch(50% 0.15 242)`) carries text on paper.
@@ -36,7 +36,7 @@ Light is the default. Dark keeps the same hues on a deep night-blue ground.
 - **Tinted card**: the hue at 9% on the background, 44% on the border, and a soft hue shadow (`--region-*`).
 - **Warden**: coral (`oklch(58% 0.2 24)`). **Gate**: leaf green (`oklch(54% 0.14 155)`).
 
-**Dark**
+**Night**
 - **Paper**: night blue (`oklch(16% 0.03 262)`). The header is glass at 85% with a blur.
 - **Stone**: raised night panel (`oklch(21% 0.03 262)`).
 - **Ink**: cool white (`oklch(96% 0.01 240)`).
