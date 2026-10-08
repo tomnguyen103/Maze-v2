@@ -435,6 +435,35 @@ describe("renderAdmin", () => {
   });
 });
 
+describe("a tool panel that fails to load", () => {
+  it("offers Try again, and the retry fetches again", async () => {
+    const client = staffClient();
+    client.getAdminMetrics.mockRejectedValueOnce(new Error("Network down"));
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: { role: "admin", permissions: ["audit:read", "refunds:issue"] }
+      }),
+      client
+    });
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-error")).not.toBeNull();
+    });
+    const retry = [...root.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === "Try again"
+    );
+    expect(retry).toBeDefined();
+
+    retry?.click();
+    expect(document.activeElement?.tagName).toBe("H3");
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-metric--hero")).not.toBeNull();
+    });
+    expect(client.getAdminMetrics).toHaveBeenCalledTimes(2);
+    expect(root.querySelector(".admin-error")).toBeNull();
+  });
+});
+
 describe("DASH-01 — Operations pulse claims one hero and never fabricates a trend", () => {
   it("gives the daily-count tiles a real delta and leaves snapshot tiles without one", async () => {
     const client = staffClient();
