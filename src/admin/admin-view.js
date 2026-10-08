@@ -6,6 +6,7 @@ import {
   THEME_CHOICES,
   applyThemeChoice,
   isThemeChoice,
+  onThemeChoiceChange,
   readThemeChoice
 } from "../player/theme.js";
 
@@ -254,31 +255,42 @@ export async function renderAdminWorkbench(root, { access, client }) {
     let value;
     try {
       value = await request;
-      cache.set(id, value);
     } catch {
       value = null;
     }
     // The Explorer may have already navigated elsewhere while this was in
-    // flight; a stale response has nowhere correct left to render.
+    // flight; a stale response has nowhere correct left to render. It is not
+    // cached either, because only a payload that renders cleanly is kept.
     if (!panelsContainer.contains(panel)) {
       return;
     }
     panel.removeAttribute("aria-busy");
     content.innerHTML = "";
     if (value === null) {
+      content.append(errorState(`${def.title} could not be loaded.`));
+    } else {
+      def.render(content, value, access);
+    }
+    // A renderer shows `.admin-error` when it rejects a malformed payload.
+    // Keep only a clean payload, so Try again and later visits fetch again.
+    if (value !== null && !content.querySelector(".admin-error")) {
+      cache.set(id, value);
+    } else {
       const retry = button("Try again");
       retry.addEventListener("click", () => {
-        // A fetch that resolved to null was cached; drop it so the load fetches again.
-        cache.delete(id);
         void selectPanel(id, { pushHistory: false });
         // The re-render removes this button; keep keyboard focus in the panel.
         panelsContainer.querySelector("h3")?.focus();
       });
-      content.append(errorState(`${def.title} could not be loaded.`), retry);
-      return;
+      content.append(retry);
     }
-    def.render(content, value, access);
   }
+
+  onThemeChoiceChange((choice) => {
+    for (const input of root.querySelectorAll('input[name="admin-theme"]')) {
+      if (input instanceof HTMLInputElement) input.checked = input.value === choice;
+    }
+  });
 
   window.addEventListener("popstate", () => {
     const requested = new URL(window.location.href).searchParams.get(
