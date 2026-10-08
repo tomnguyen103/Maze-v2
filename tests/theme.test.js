@@ -9,6 +9,7 @@ import {
   readThemeChoice,
   resolveTheme,
   THEME_CHOICES,
+  THEME_COLORS,
   THEME_STORAGE_KEY
 } from "../src/player/theme.js";
 
@@ -142,6 +143,59 @@ describe("theme choice", () => {
   });
 });
 
+/** The two browser bar metas from `index.html`, as a fake document. */
+function fakeThemeColorDocument() {
+  const metas = [
+    { media: "(prefers-color-scheme: light)", content: THEME_COLORS.light },
+    { media: "(prefers-color-scheme: dark)", content: THEME_COLORS.dark }
+  ].map((attributes) => ({
+    attributes: /** @type {Record<string, string>} */ (attributes),
+    getAttribute(/** @type {string} */ name) {
+      return this.attributes[name] ?? null;
+    },
+    setAttribute(/** @type {string} */ name, /** @type {string} */ value) {
+      this.attributes[name] = value;
+    }
+  }));
+  return {
+    metas,
+    querySelectorAll: (/** @type {string} */ selector) =>
+      selector === 'meta[name="theme-color"]' ? metas : []
+  };
+}
+
+describe("the Theme Choice sets the browser bar", () => {
+  it("paints both metas dark for a dark choice on a light system", () => {
+    // The repro: before the fix the light meta kept its light colour, so a
+    // light system showed a light bar above a dark page.
+    const document = fakeThemeColorDocument();
+    applyThemeChoice("dark", { root: fakeRoot(), storage: fakeStorage(), document });
+    expect(document.metas.map((meta) => meta.attributes.content)).toEqual([
+      THEME_COLORS.dark,
+      THEME_COLORS.dark
+    ]);
+  });
+
+  it("paints both metas light for a light choice on a dark system", () => {
+    const document = fakeThemeColorDocument();
+    applyThemeChoice("light", { root: fakeRoot(), storage: fakeStorage(), document });
+    expect(document.metas.map((meta) => meta.attributes.content)).toEqual([
+      THEME_COLORS.light,
+      THEME_COLORS.light
+    ]);
+  });
+
+  it("gives each meta its own colour back for the system choice", () => {
+    const document = fakeThemeColorDocument();
+    applyThemeChoice("dark", { root: fakeRoot(), storage: fakeStorage(), document });
+    applyThemeChoice("system", { root: fakeRoot(), storage: fakeStorage(), document });
+    expect(document.metas.map((meta) => meta.attributes.content)).toEqual([
+      THEME_COLORS.light,
+      THEME_COLORS.dark
+    ]);
+  });
+});
+
 describe("SHELL-07 — the theme is applied before first paint", () => {
   it("loads the boot script synchronously, ahead of the bundle", () => {
     const html = source("index.html");
@@ -169,6 +223,21 @@ describe("SHELL-07 — the theme is applied before first paint", () => {
     expect(source("public/theme-boot.js")).toContain(
       `"${THEME_STORAGE_KEY}"`
     );
+  });
+
+  it("keeps the page, the boot script, and the module on one bar colour pair", () => {
+    // The colours live in three files that cannot share an import. This is
+    // what stops them drifting.
+    const html = source("index.html");
+    expect(html).toContain(
+      `content="${THEME_COLORS.light}" media="(prefers-color-scheme: light)"`
+    );
+    expect(html).toContain(
+      `content="${THEME_COLORS.dark}" media="(prefers-color-scheme: dark)"`
+    );
+    const boot = source("public/theme-boot.js");
+    expect(boot).toContain(`"${THEME_COLORS.light}"`);
+    expect(boot).toContain(`"${THEME_COLORS.dark}"`);
   });
 });
 

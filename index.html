@@ -7,10 +7,12 @@
       name="description"
       content="Echo Maze is a kid-friendly text adventure where clever answers defeat Wardens and open the way home."
     />
-    <!-- The browser chrome cannot read a custom property, so this is the one
-         place a colour is written by hand. It is the exact sRGB of
+    <!-- The browser chrome cannot read a custom property, so the colour is
+         written by hand. It is the exact sRGB of
          `--color-paper: oklch(98.5% 0.008 230)` in tokens.css — re-derive it if
-         that token ever moves. -->
+         that token ever moves. `THEME_COLORS` in src/player/theme.js and
+         public/theme-boot.js repeat the pair; tests/theme.test.js fails if they
+         drift. -->
     <meta name="theme-color" content="#f5fbff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)" />
     <link

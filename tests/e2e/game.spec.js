@@ -6855,3 +6855,32 @@ test("redraws the Labyrinth and stores the last choice after two quick theme cli
   // The canvas reads its palette on a render, so an idle Run must redraw on the click.
   await expect.poll(snapshot).not.toBe(before);
 });
+
+test("paints the browser bar with the stored Theme Choice and gives it back for System", async ({
+  page
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.addInitScript(() => {
+    localStorage.setItem("echo-maze:theme", "dark");
+  });
+  await page.goto("/play");
+  await expectGameReady(page);
+  const barColors = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) =>
+        meta.getAttribute("content")
+      )
+    );
+  // The boot script paints both metas before the bundle runs.
+  expect(await barColors()).toEqual(["#0a0f1e", "#0a0f1e"]);
+
+  await chooseTrailScout(page);
+  const button = page.locator("#theme-button");
+  await expect(button).toHaveAttribute("data-choice", "dark");
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "system");
+  await expect.poll(barColors).toEqual(["#f5fbff", "#0a0f1e"]);
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "light");
+  await expect.poll(barColors).toEqual(["#f5fbff", "#f5fbff"]);
+});

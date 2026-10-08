@@ -12,6 +12,12 @@
 
 export const THEME_STORAGE_KEY = "echo-maze:theme";
 
+/**
+ * The browser bar colour of each theme: the sRGB of `--color-paper`.
+ * `index.html` and `public/theme-boot.js` repeat this pair.
+ */
+export const THEME_COLORS = Object.freeze({ light: "#f5fbff", dark: "#0a0f1e" });
+
 /** @type {readonly ThemeChoice[]} */
 export const THEME_CHOICES = Object.freeze(["system", "light", "dark"]);
 
@@ -85,10 +91,15 @@ export function nextThemeChoice(choice) {
  * takes over again — writing `data-theme="light"` for a system-light visitor
  * would silently pin them to light when their OS later changed.
  *
+ * The browser bar follows the same rule: an explicit choice paints every
+ * `theme-color` meta, and `system` gives each meta back the colour of its own
+ * `media` condition.
+ *
  * @param {ThemeChoice} choice
  * @param {{
  *   root?: Pick<HTMLElement, "setAttribute" | "removeAttribute"> | null,
- *   storage?: Pick<Storage, "setItem" | "removeItem">
+ *   storage?: Pick<Storage, "setItem" | "removeItem">,
+ *   document?: { querySelectorAll(selector: string): Iterable<Pick<Element, "getAttribute" | "setAttribute">> } | null
  * }} [options]
  */
 export function applyThemeChoice(choice, options = {}) {
@@ -99,6 +110,12 @@ export function applyThemeChoice(choice, options = {}) {
     } else {
       root.setAttribute("data-theme", choice);
     }
+  }
+  const metas =
+    (options.document ?? globalThis.document)?.querySelectorAll('meta[name="theme-color"]') ?? [];
+  for (const meta of metas) {
+    const own = meta.getAttribute("media")?.includes("dark") ? "dark" : "light";
+    meta.setAttribute("content", THEME_COLORS[choice === "system" ? own : choice]);
   }
   try {
     const storage = options.storage ?? globalThis.localStorage;
