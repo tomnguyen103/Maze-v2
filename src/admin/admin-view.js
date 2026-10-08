@@ -265,7 +265,12 @@ export async function renderAdminWorkbench(root, { access, client }) {
     panel.removeAttribute("aria-busy");
     content.innerHTML = "";
     if (value === null) {
-      content.append(errorState(`${def.title} could not be loaded.`));
+      // A failed fetch is not cached, so the same load fetches again.
+      const retry = button("Try again");
+      retry.addEventListener("click", () => {
+        void selectPanel(id, { pushHistory: false });
+      });
+      content.append(errorState(`${def.title} could not be loaded.`), retry);
       return;
     }
     def.render(content, value, access);

@@ -553,6 +553,10 @@
   background: var(--color-warden-soft);
 }
 
+.admin-error + button {
+  margin-top: var(--space-4);
+}
+
 .admin-toast {
   position: fixed;
   z-index: 12;
