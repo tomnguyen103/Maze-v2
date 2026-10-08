@@ -8,7 +8,7 @@
   gap: var(--space-3);
   margin-top: var(--space-4);
   padding-block: var(--space-3);
-  border-block: 2px solid var(--color-ink);
+  border-block: 1px solid var(--color-line-soft);
 }
 
 .practice-catalog__heading h3,
@@ -28,7 +28,7 @@
 }
 
 .practice-objectives {
-  border-bottom: 2px solid var(--color-ink);
+  border-bottom: 1px solid var(--color-line-soft);
 }
 
 .practice-objective {
@@ -39,7 +39,7 @@
   min-height: 3.25rem;
   padding: var(--space-3) var(--space-2);
   border: 0;
-  border-top: 1px solid var(--color-line);
+  border-top: 1px solid var(--color-line-soft);
   background: transparent;
   color: var(--color-ink);
   text-align: left;
@@ -50,16 +50,17 @@
 }
 
 .practice-objective span {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
   color: var(--color-ink-muted);
-  font-family: var(--font-utility);
+  background: var(--color-stone-raised);
   font-size: 1rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .practice-objective:hover,
 .practice-objective:active {
-  background: var(--color-echo-soft);
+  background: var(--color-signal-soft);
 }
 
 .practice-catalog__tools {
@@ -87,7 +88,7 @@
   gap: var(--space-2);
   margin-top: var(--space-4);
   padding-block: var(--space-3);
-  border-block: 2px solid var(--color-ink);
+  border-block: 1px solid var(--color-line-soft);
 }
 
 .practice-tactics__heading h3,
@@ -123,7 +124,7 @@
   padding: var(--space-3);
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-md);
-  background: var(--color-paper);
+  background: var(--color-panel);
   color: var(--color-ink);
   text-align: left;
   overflow-wrap: anywhere;
@@ -134,8 +135,8 @@
 .practice-tactics-card:active,
 .practice-tactics-twist:hover,
 .practice-tactics-twist:active {
-  border-color: var(--color-echo);
-  background: var(--color-echo-soft);
+  border-color: var(--color-sky);
+  background: var(--color-signal-soft);
 }
 
 .practice-tactics-card span,
@@ -143,6 +144,8 @@
   min-width: 0;
   color: var(--color-ink-muted);
   font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
@@ -155,7 +158,7 @@
   gap: var(--space-3);
   margin-top: var(--space-4);
   padding-top: var(--space-4);
-  border-top: 2px solid var(--color-ink);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 .practice-tactics__rule,
@@ -165,12 +168,13 @@
   margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--color-line-soft);
-  background: var(--color-paper);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
 }
 
 .practice-tactics__status {
-  border-color: var(--color-signal);
-  background: var(--color-signal-bright);
+  border-color: color-mix(in oklab, var(--color-sky) 40%, transparent);
+  background: var(--color-signal-soft);
 }
 
 .practice-tactics__report {
@@ -179,8 +183,8 @@
 }
 
 .practice-tactics__report strong {
-  font-family: var(--font-utility);
-  font-size: 0.8rem;
+  color: var(--color-ink-muted);
+  font-size: var(--text-compact);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -196,7 +200,7 @@
 .practice-tactics__challenge {
   display: grid;
   gap: var(--space-3);
-  border-color: var(--color-warden);
+  border-color: color-mix(in oklab, var(--color-warden) 40%, transparent);
   background: var(--color-warden-soft);
 }
 
@@ -213,9 +217,14 @@
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--color-paper);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
   text-align: left;
+}
+
+.practice-tactics__choice:hover:not(:disabled) {
+  border-color: var(--color-sky);
+  background: var(--color-signal-soft);
 }
 
 .practice-tactics__support p {
@@ -252,8 +261,9 @@ html .practice-tactics__session[hidden] {
 .practice-support p {
   margin: 0;
   padding: var(--space-3);
-  border-block: 1px solid var(--color-signal);
-  background: var(--color-signal-bright);
+  border: 1px solid color-mix(in oklab, var(--color-sky) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-signal-soft);
 }
 
 .practice-trail__actions,
@@ -270,13 +280,13 @@ html .practice-tactics__session[hidden] {
 .practice-dialog__destinations {
   margin-top: var(--space-4);
   padding-top: var(--space-4);
-  border-top: 2px solid var(--color-ink);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 .practice-completion {
   margin-top: var(--space-5);
   padding-block: var(--space-5);
-  border-block: 2px solid var(--color-ink);
+  border-block: 1px solid var(--color-line-soft);
 }
 
 .practice-completion p:not(.section-label) {

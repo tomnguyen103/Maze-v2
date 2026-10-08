@@ -1,3 +1,5 @@
+// Dialog rules first: the First Light and Constellation sheets override them.
+import "./game/game-dialogs.css";
 import "./game/daily-constellation.css";
 import "./game/first-light.css";
 import {

@@ -209,21 +209,18 @@ function createElements() {
   const heading = document.createElement("div");
   heading.className = "dialog-heading";
   const headingCopy = document.createElement("div");
-  const kicker = document.createElement("span");
-  kicker.className = "section-label";
-  kicker.textContent = "Device-local Run Replay";
   const title = document.createElement("h2");
   title.tabIndex = -1;
   title.textContent = "Watch Trail";
   const close = controlButton("Close");
   close.dataset.runReplayClose = "";
-  headingCopy.append(kicker, title);
+  headingCopy.append(title);
   heading.append(headingCopy, close);
 
   const intro = document.createElement("p");
   intro.className = "dialog-intro";
   intro.textContent =
-    "Outcome-only playback. It contains no selected answers or Question text.";
+    "Outcome-only playback, saved on this device. It contains no selected answers or Question text.";
   const layout = document.createElement("div");
   layout.className = "run-replay-layout";
   const stage = document.createElement("section");

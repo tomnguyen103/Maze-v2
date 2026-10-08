@@ -84,7 +84,7 @@ describe("A11Y-06/07/08 — the pairing, not just the hue", () => {
   });
 
   it("uses those weights where the text is", () => {
-    const css = source("src/daylight.css");
+    const css = source("src/game/game-dialogs.css");
     const error = css.slice(css.indexOf('.lifetime-status[data-state="error"]'));
     expect(error.slice(0, 90)).toContain("--color-warden-text");
     const success = css.slice(
@@ -232,13 +232,23 @@ describe("TYPE — body copy has a real 16px floor", () => {
     // these anchors should depend on.
     const daylight = source("src/daylight.css").replace(/\r\n/g, "\n");
     const bodyCopySelectors = [
-      ".dialog-intro,",
       ".trail-compass p {",
       ".objective-copy {",
+      ".field-note {"
+    ];
+    for (const selector of bodyCopySelectors) {
+      const rule = daylight.slice(daylight.indexOf(selector));
+      const closingBrace = rule.indexOf("}");
+      expect(rule.slice(0, closingBrace)).toContain("var(--text-body)");
+    }
+
+    // The game dialog rules load with the game chunk, not the shared sheet.
+    const dialogs = source("src/game/game-dialogs.css").replace(/\r\n/g, "\n");
+    const dialogCopySelectors = [
+      ".dialog-intro,",
       ".access-settings-status {",
       ".learning-deck-picker > p {",
       ".level-dialog__note {",
-      ".field-note {",
       // Not just ".question-hint {" — that substring also opens inside
       // `:root[data-access-type="reader"] .question-hint {`, an unrelated
       // reader-mode override earlier in the file.
@@ -247,8 +257,8 @@ describe("TYPE — body copy has a real 16px floor", () => {
       // with no font-size (margin: 0 only) before this one.
       ".access-settings-preset p {\n  color"
     ];
-    for (const selector of bodyCopySelectors) {
-      const rule = daylight.slice(daylight.indexOf(selector));
+    for (const selector of dialogCopySelectors) {
+      const rule = dialogs.slice(dialogs.indexOf(selector));
       const closingBrace = rule.indexOf("}");
       expect(rule.slice(0, closingBrace)).toContain("var(--text-body)");
     }
@@ -263,8 +273,8 @@ describe("TYPE — body copy has a real 16px floor", () => {
     // `.access-setting small` is declared twice — once in a selector group
     // with no font-size, once on its own with the description copy's size —
     // so this one needs its own, more specific anchor.
-    const settingSmall = daylight.slice(
-      daylight.indexOf(".access-setting small {\n  margin-top")
+    const settingSmall = dialogs.slice(
+      dialogs.indexOf(".access-setting small {\n  margin-top")
     );
     expect(settingSmall.slice(0, settingSmall.indexOf("}"))).toContain(
       "var(--text-body)"

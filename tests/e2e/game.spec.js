@@ -1218,6 +1218,13 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
   await expect(page.locator("#atlas-title")).toBeFocused();
   await expect(page.locator("[data-atlas-region]")).toHaveCount(5);
   await expect(page.locator("[data-atlas-node]")).toHaveCount(20);
+  const islandFills = await page
+    .locator(".atlas-illustration__region")
+    .evaluateAll((regions) =>
+      regions.map((region) => getComputedStyle(region).fill)
+    );
+  expect(islandFills).toHaveLength(5);
+  expect(new Set(islandFills).size).toBe(5);
   await expect(page.locator("[data-atlas-node='4']")).toHaveAttribute(
     "aria-current",
     "step"
