@@ -28,9 +28,15 @@ Node also imports must stay free of CSS imports.
 
 ## Fix
 
-Import the split sheets from the lazy game entry, `src/main.js:1-2`. The rules
+Import the split sheets from the lazy game entry, `src/main.js:1-4`. The rules
 then load with the game chunk, after `src/daylight.css`, so they win at equal
 specificity. The view module itself has no CSS import.
+
+Only move rules that apply after the game chunk runs. `src/app.js` clones the
+workbench template into `#game-root` before it imports `src/main.js`, so the
+workbench layout stays in the shared sheet; moved there, it would flash unstyled.
+Dialogs open only after the chunk runs, so `src/game/game-dialogs.css` holds them.
+Import it first: later split sheets override it at equal specificity.
 
 The split must not hide weight from the gate. The "game styles" budget in
 `scripts/check-bundle-budget.mjs` measures `main-*.css`.

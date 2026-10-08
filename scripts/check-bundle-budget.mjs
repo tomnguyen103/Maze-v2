@@ -31,7 +31,9 @@ const budgets = [
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 13 },
   // Game-only rules split out of the shared sheet to hold its ceiling.
   // Budgeted so the bytes moved out stay measured rather than growing unpoliced.
-  { label: "game styles", prefix: "main-", suffix: ".css", maxKb: 2 },
+  // The game dialog rules moved here too: 4.88 KB measured, plus room for the
+  // Journey dialog restyle. The shared sheet fell from 12.88 KB to 9.20 KB.
+  { label: "game styles", prefix: "main-", suffix: ".css", maxKb: 6 },
   {
     label: "Trail Compass JavaScript",
     prefix: "trail-compass-",
