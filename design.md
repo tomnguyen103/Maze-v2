@@ -4,100 +4,74 @@ stitch-project: 754643373869195468
 
 # Design - Echo Maze
 
-A locked design system for the Echo Maze app. Gameplay function carries the
-page; decoration stays secondary to reading, movement, and Warden Challenges.
+A locked design system for Echo Maze and its operational dashboard.
+Tactile exploration and cockpit precision carry every surface; decoration stays
+secondary to reading, movement, telemetry, and Warden Challenges.
 
-## Genre
+## Genre & Atmosphere
 
-Playful storybook expedition with tactile field-guide controls.
+- **Genre**: Playful storybook expedition meets modern tactile field-guide cockpit.
+- **Atmosphere**: Daily App Balanced (Density 6, Variance 6, Motion 5).
+- **Macrostructure family**:
+  - App Workbench: Telemetry status deck supports the central fluid Labyrinth playfield.
+  - Operations Dashboard: Responsive command cockpit, fluid KPI metric tiles, sticky table views.
+  - Dialogs: Focused encounter. One decision per view with no competing actions.
+  - Records: Compact field notes. Outcomes remain scannable on narrow screens.
 
-## Macrostructure family
+## Theme & Surfaces
 
-- App pages: Workbench. Quest status supports the central Labyrinth.
-- Dialogs: Focused encounter. One decision per view with no competing actions.
-- Records: Compact field notes. Outcomes remain scannable on narrow screens.
-
-## Theme
-
-Two surfaces, one identity. Warm daylight is the default and the one the
-genre is written around; night is the same expedition after dark, not a
-second design.
+Two surfaces, one identity. Warm daylight is the default; night is the same
+expedition after dark, lit by deep midnight stone rather than a second design.
 
 **Daylight**
-
-- Paper: warm daylight
-- Ink: deep navy
-- Accent: electric pear
-- Exploration: sea-glass cyan
-- Danger: coral red
-- Success: leaf green
+- **Paper**: warm daylight canvas (`oklch(97% 0.018 96)`)
+- **Stone**: elevated neutral surfaces (`oklch(99% 0.008 96)`)
+- **Ink**: deep charcoal navy (`oklch(20% 0.035 255)`)
+- **Lines**: subtle architectural boundaries (`oklch(29% 0.04 252)` and `--color-line-soft`)
+- **Signature Accent**: electric pear (`oklch(84% 0.18 108)`). The iconic mark that never shifts.
+- **Exploration**: sea-glass cyan (`oklch(61% 0.17 205)`)
+- **Danger / Warden**: coral red (`oklch(58% 0.22 24)`)
+- **Success / Gate**: leaf green (`oklch(54% 0.14 155)`)
 
 **Night**
+- **Paper**: deep midnight navy (`oklch(19% 0.035 255)`) — daylight Ink becomes the surface
+- **Stone**: elevated dark panel (`oklch(24% 0.035 255)`)
+- **Ink**: warm daylight text (`oklch(95% 0.012 96)`)
+- **Signature Accent**: electric pear, unchanged. It is the signature and does not move.
+- **Exploration, Danger, Success**: adjusted lightness clearing AA contrast on midnight navy.
 
-- Paper: deep navy — the daylight Ink, become the surface
-- Ink: warm daylight — the daylight Paper, become the text
-- Accent: electric pear, unchanged. It is the signature and it does not move
-- Exploration, Danger, Success: the same hues, lifted in lightness so each
-  clears AA against navy rather than against paper
+Persisted preference via `:root[data-theme="dark"]` and system `prefers-color-scheme`.
+All colors flow through `tokens.css`. Raw hex/rgb values in components are forbidden.
 
-The inversion is the point: an Explorer who plays at night is in the same
-Labyrinth, lit differently. Nothing changes role, only which side of the
-paper/ink pair carries the surface.
+## Typography Architecture
 
-**Which one a player gets.** System by default, honouring
-`prefers-color-scheme`, with an explicit override the player can set and that
-persists. The override is applied before first paint — a flash of the wrong
-theme is a defect, not a nicety.
+- **Display**: Bricolage Grotesque Variable, upright 700–780. Tight tracking (-0.025em to -0.03em).
+- **Body**: Geist Variable, 450–700. Clean humanist legibility with line-height 1.5–1.6x. Minimum 16px in decision dialogs.
+- **Utility & Data**: Geist Mono Variable, 600–700. Tabular numerals (`font-variant-numeric: tabular-nums`) across all metrics, scores, time, coordinates, and seeds.
 
-All colors come from `tokens.css`. Raw color values do not belong in
-components, and neither does a hard-coded `color-scheme`.
+## Spacing & Component Geometry
 
-## Typography
+- 4-point spacing scale from `tokens.css` (`--space-1` through `--space-16`).
+- Minimum tap targets: 44px by 44px with >= 8px separation between interactive controls.
+- Radii: Compact, crisp corner radius system (`--radius-sm: 0.3rem`, `--radius-md: 0.6rem`, `--radius-lg: 0.9rem`, `--radius-pill: 999px`).
+- Tactile feedback: Buttons feature active transform press (`transform: translateY(2px)` or `scale(0.98)`).
+- Elevation: Crisp, non-blurry borders paired with subtle, grounded offsets (`--shadow-panel`). Zero neon halos.
 
-- Display: Bricolage Grotesque Variable, upright, 700-780
-- Body: Geist Variable, 450-700
-- Utility: Geist Mono Variable, 600-700
-- Body copy starts at 16px in decision-heavy dialogs.
+## Layout Principles & Responsive Strategy
 
-## Spacing
+- **Workbench**: Fluid, full-width viewport utilization (`max-w-[1920px]`). Centered arena canvas flanked by telemetry metrics and tactile controls.
+- **Dashboard**: Sticky navigation header with breadcrumb hierarchy, horizontal scrolling rail on mobile, fluid grid KPI cards, and full-width data tables with horizontal scroll overflow safety.
+- **Responsive Guarantee**: Clean rendering without horizontal document scroll across all 15 edge viewports (2560x1080 ultrawide to 280x653 narrow foldable, landscape mobile, and 250% zoom).
 
-Use the 4-point scale in `tokens.css`. Interactive targets are at least 44 by
-44 pixels with at least 8 pixels between adjacent targets.
+## Hallmark Anti-Slop & Craft Invariants
 
-## Motion
+- **Banned**: AI purple/blue neon glows, generic radial spotlights, 4px thick 1-sided borders.
+- **Banned**: Eyebrows/kickers floating directly above section headings.
+- **Banned**: Cliché 3-equal-card horizontal feature grids without functional differentiation.
+- **Banned**: Nested cards inside cards.
+- **Banned**: Pure black (`#000000`) or unstyled raw browser defaults.
+- **Banned**: Animating layout dimensions (`width`, `height`, `margin`, `padding`).
 
-- Movement feedback: short transform-only press.
-- Warden contact: one focused recoil and dialog reveal.
-- Correct answer: one quiet success transition.
-- Reduced motion: no spatial motion, 150ms or faster opacity change.
+## Canonical Export
 
-## Microinteractions stance
-
-- Every action has hover, focus, active, disabled, loading, error, and success
-  treatment where the state applies.
-- Feedback is immediate and encouraging, never shaming.
-- No timer appears inside a Warden Challenge.
-
-## CTA voice
-
-- Primary: solid electric pear, short verb phrase.
-- Secondary: paper fill with navy outline.
-- Answer choices: large full-width targets labeled by their content.
-
-## What pages MUST share
-
-- Workbench structure, warm daylight paper, and electric pear accent.
-- Display, body, and utility type roles.
-- Two-pixel navy outlines and the existing compact radius system.
-- Plain, kid-friendly vocabulary and visible keyboard focus.
-
-## What pages MAY differ on
-
-- Quest-Level cards may use exploration, Echo, or success tints.
-- Warden Challenges may use coral as semantic danger feedback.
-- Results may emphasize success or recovery based on the Run outcome.
-
-## Exports
-
-`tokens.css` is the canonical export. Existing projects should import it before
-page styles and consume named variables only.
+`tokens.css` is the canonical design token export. All app surfaces and admin views consume its custom properties.
