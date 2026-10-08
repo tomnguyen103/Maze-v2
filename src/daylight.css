@@ -111,6 +111,7 @@ button,
   background: var(--color-panel);
   font: 650 0.84rem/1 var(--font-body);
   cursor: pointer;
+  text-decoration: none;
   white-space: nowrap;
   transition:
     background-color var(--duration-press) var(--ease-out),

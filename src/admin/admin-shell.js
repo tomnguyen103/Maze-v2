@@ -10,22 +10,18 @@
  * @param {HTMLElement} root
  * @param {{
  *   state: string,
- *   eyebrow?: string,
  *   exit?: { href: string, label: string },
  *   withRail?: boolean
  * }} options
  * @returns {{ main: HTMLElement, rail: HTMLElement | null }}
  */
-export function renderAdminShell(root, { state, eyebrow, exit, withRail = false }) {
+export function renderAdminShell(root, { state, exit, withRail = false }) {
   root.dataset.adminState = state;
   root.innerHTML = `
     <a class="skip-link" href="#admin-main">Skip to the admin area</a>
     <header class="admin-command">
       <a class="wordmark" href="/" aria-label="Echo Maze home">Echo Maze</a>
-      <div>
-        ${eyebrow ? `<p class="admin-command__eyebrow">${eyebrow}</p>` : ""}
-        <h1>Admin</h1>
-      </div>
+      <h1>Admin</h1>
       ${exit ? `<a class="admin-command__exit" href="${exit.href}">${exit.label}</a>` : ""}
     </header>
     <div class="admin-layout">
