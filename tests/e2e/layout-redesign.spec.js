@@ -168,14 +168,20 @@ test.describe("layout redesign & edge viewports", () => {
       const box = await downButton.boundingBox();
       if (box) {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.waitForTimeout(100);
         const hoverBackground = await downButton.evaluate(
           (el) => window.getComputedStyle(el).backgroundColor
         );
         await page.mouse.down();
         try {
           await expect
-            .poll(() => downButton.evaluate((el) => window.getComputedStyle(el).backgroundColor))
-            .not.toBe(hoverBackground);
+            .poll(() =>
+              downButton.evaluate((el, hover) => ({
+                isActive: el.matches(":active"),
+                bgChanged: window.getComputedStyle(el).backgroundColor !== hover
+              }), hoverBackground)
+            )
+            .toEqual({ isActive: true, bgChanged: true });
         } finally {
           await page.mouse.up();
         }
