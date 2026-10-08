@@ -462,6 +462,33 @@ describe("a tool panel that fails to load", () => {
     expect(client.getAdminMetrics).toHaveBeenCalledTimes(2);
     expect(root.querySelector(".admin-error")).toBeNull();
   });
+
+  it("offers Try again when the payload is malformed, and does not keep it", async () => {
+    const client = staffClient();
+    client.getAdminMetrics.mockResolvedValueOnce(
+      /** @type {any} */ ({ unexpected: true })
+    );
+    await renderAdmin(root, {
+      clerk: stubClerk("admin"),
+      loadProfile: async () => ({
+        access: { role: "admin", permissions: ["audit:read", "refunds:issue"] }
+      }),
+      client
+    });
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-error")).not.toBeNull();
+    });
+    const retry = [...root.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === "Try again"
+    );
+    expect(retry).toBeDefined();
+
+    retry?.click();
+    await vi.waitFor(() => {
+      expect(root.querySelector(".admin-metric--hero")).not.toBeNull();
+    });
+    expect(client.getAdminMetrics).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("DASH-01 — Operations pulse claims one hero and never fabricates a trend", () => {

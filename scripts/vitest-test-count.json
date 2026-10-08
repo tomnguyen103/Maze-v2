@@ -1,6 +1,6 @@
 {
   "testFiles": 188,
-  "tests": 1667,
+  "tests": 1672,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-10-08 after the admin panel retry test added. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-10-08 after the Theme Choice sync and malformed-payload retry tests were added. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

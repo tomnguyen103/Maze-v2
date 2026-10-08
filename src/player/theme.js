@@ -129,3 +129,45 @@ export function applyThemeChoice(choice, options = {}) {
     // the change the player just asked for.
   }
 }
+
+/**
+ * Keep this page in step when the choice changes elsewhere: in another tab
+ * (`storage`), or on another page before a Back press restores this one from
+ * the back-forward cache (`pageshow` with `persisted`). The stored choice is
+ * applied and handed to `listener`. Storage is not written again, so two tabs
+ * cannot echo a change between them.
+ *
+ * @param {(choice: ThemeChoice) => void} listener
+ * @param {{
+ *   target?: Pick<Window, "addEventListener">,
+ *   storage?: Pick<Storage, "getItem">,
+ *   root?: Pick<HTMLElement, "setAttribute" | "removeAttribute"> | null,
+ *   document?: { querySelectorAll(selector: string): Iterable<Pick<Element, "getAttribute" | "setAttribute">> } | null
+ * }} [options] each defaults to the page global
+ */
+export function onThemeChoiceChange(listener, options = {}) {
+  const sync = () => {
+    const storage = options.storage ?? globalThis.localStorage;
+    try {
+      storage?.getItem(THEME_STORAGE_KEY);
+    } catch {
+      // Blocked storage holds no newer choice; keep the one in memory.
+      return;
+    }
+    const choice = readThemeChoice(storage);
+    applyThemeChoice(choice, {
+      root: options.root,
+      document: options.document,
+      storage: { setItem() {}, removeItem() {} }
+    });
+    listener(choice);
+  };
+  const target = options.target ?? globalThis.window;
+  target.addEventListener("storage", (event) => {
+    // A `null` key means another tab cleared all storage.
+    if (event.key === THEME_STORAGE_KEY || event.key === null) sync();
+  });
+  target.addEventListener("pageshow", (event) => {
+    if (event.persisted) sync();
+  });
+}

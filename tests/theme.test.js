@@ -6,6 +6,7 @@ import {
   isThemeChoice,
   nextThemeChoice,
   nextTheme,
+  onThemeChoiceChange,
   readThemeChoice,
   resolveTheme,
   THEME_CHOICES,
@@ -282,5 +283,63 @@ describe("nextThemeChoice", () => {
     expect(nextThemeChoice("light")).toBe("dark");
     expect(nextThemeChoice("dark")).toBe("system");
     expect(nextThemeChoice("system")).toBe("light");
+  });
+});
+
+describe("onThemeChoiceChange", () => {
+  function setup(initial = {}) {
+    const target = new EventTarget();
+    const storage = fakeStorage(initial);
+    const root = fakeRoot();
+    /** @type {string[]} */
+    const seen = [];
+    onThemeChoiceChange((choice) => seen.push(choice), {
+      target: /** @type {any} */ (target),
+      storage,
+      root,
+      document: { querySelectorAll: () => [] }
+    });
+    /** @param {string} type @param {object} fields */
+    const fire = (type, fields) =>
+      target.dispatchEvent(Object.assign(new Event(type), fields));
+    return { storage, root, seen, fire };
+  }
+
+  it("applies a choice another tab stored, and does not write it back", () => {
+    const { storage, root, seen, fire } = setup();
+    storage.values[THEME_STORAGE_KEY] = "dark";
+    let writes = 0;
+    const setItem = storage.setItem;
+    storage.setItem = (key, value) => {
+      writes += 1;
+      setItem(key, value);
+    };
+    fire("storage", { key: THEME_STORAGE_KEY });
+    expect(seen).toEqual(["dark"]);
+    expect(root.attributes["data-theme"]).toBe("dark");
+    expect(writes).toBe(0);
+  });
+
+  it("applies the stored choice when Back restores the page from the cache", () => {
+    const { root, seen, fire } = setup({ [THEME_STORAGE_KEY]: "light" });
+    fire("pageshow", { persisted: true });
+    expect(seen).toEqual(["light"]);
+    expect(root.attributes["data-theme"]).toBe("light");
+  });
+
+  it("ignores other keys and a fresh page load", () => {
+    const { seen, fire } = setup({ [THEME_STORAGE_KEY]: "dark" });
+    fire("storage", { key: "echo-maze:other" });
+    fire("pageshow", { persisted: false });
+    expect(seen).toEqual([]);
+  });
+
+  it("keeps the choice in memory when storage is blocked", () => {
+    const { storage, seen, fire } = setup();
+    storage.getItem = () => {
+      throw new Error("blocked");
+    };
+    fire("pageshow", { persisted: true });
+    expect(seen).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import {
   THEME_CHOICES,
   applyThemeChoice,
   isThemeChoice,
+  onThemeChoiceChange,
   readThemeChoice
 } from "../player/theme.js";
 
@@ -266,19 +267,29 @@ export async function renderAdminWorkbench(root, { access, client }) {
     panel.removeAttribute("aria-busy");
     content.innerHTML = "";
     if (value === null) {
+      content.append(errorState(`${def.title} could not be loaded.`));
+    } else {
+      def.render(content, value, access);
+    }
+    // A renderer shows `.admin-error` when it rejects a malformed payload.
+    if (content.querySelector(".admin-error")) {
+      // Drop the bad entry so Try again and later visits fetch again.
+      cache.delete(id);
       const retry = button("Try again");
       retry.addEventListener("click", () => {
-        // A fetch that resolved to null was cached; drop it so the load fetches again.
-        cache.delete(id);
         void selectPanel(id, { pushHistory: false });
         // The re-render removes this button; keep keyboard focus in the panel.
         panelsContainer.querySelector("h3")?.focus();
       });
-      content.append(errorState(`${def.title} could not be loaded.`), retry);
-      return;
+      content.append(retry);
     }
-    def.render(content, value, access);
   }
+
+  onThemeChoiceChange((choice) => {
+    for (const input of root.querySelectorAll('input[name="admin-theme"]')) {
+      if (input instanceof HTMLInputElement) input.checked = input.value === choice;
+    }
+  });
 
   window.addEventListener("popstate", () => {
     const requested = new URL(window.location.href).searchParams.get(

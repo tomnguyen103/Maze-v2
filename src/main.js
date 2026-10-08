@@ -10,6 +10,7 @@ import {
 import {
   applyThemeChoice,
   nextThemeChoice,
+  onThemeChoiceChange,
   readThemeChoice
 } from "./player/theme.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
@@ -1144,6 +1145,11 @@ elements.themeButton.addEventListener("click", () => {
   applyThemeChoice(themeChoice);
   showThemeChoice();
   // The canvas reads its palette only on a render, so redraw it in the new theme.
+  renderer.render(run);
+});
+onThemeChoiceChange((choice) => {
+  themeChoice = choice;
+  showThemeChoice();
   renderer.render(run);
 });
 
