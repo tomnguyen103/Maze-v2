@@ -32,6 +32,9 @@ Import the split sheets from the lazy game entry, `src/main.js:1-2`. The rules
 then load with the game chunk, after `src/daylight.css`, so they win at equal
 specificity. The view module itself has no CSS import.
 
+The split must not hide weight from the gate. The "game styles" budget in
+`scripts/check-bundle-budget.mjs` measures `main-*.css`.
+
 ## Verification
 
 `tests/e2e/game.spec.js:6674` aborts any `daily-constellation-*.css` request.

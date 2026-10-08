@@ -29,6 +29,9 @@ const budgets = [
   // things the stylesheet has to carry. 12.02 KB against a 12 KB ceiling was
   // a real signal; this is the new honest number plus a little room.
   { label: "shared styles", prefix: "index-", suffix: ".css", maxKb: 13 },
+  // Game-only rules split out of the shared sheet to hold its ceiling.
+  // Budgeted so the bytes moved out stay measured rather than growing unpoliced.
+  { label: "game styles", prefix: "main-", suffix: ".css", maxKb: 2 },
   {
     label: "Trail Compass JavaScript",
     prefix: "trail-compass-",

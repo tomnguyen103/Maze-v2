@@ -1141,6 +1141,8 @@ elements.themeButton.addEventListener("click", () => {
   themeChoice = nextThemeChoice(themeChoice);
   applyThemeChoice(themeChoice);
   showThemeChoice();
+  // The canvas reads its palette only on a render, so redraw it in the new theme.
+  renderer.render(run);
 });
 
 elements.settingsButton.addEventListener("click", async () => {

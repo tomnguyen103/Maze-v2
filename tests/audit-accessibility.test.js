@@ -253,7 +253,7 @@ describe("TYPE — body copy has a real 16px floor", () => {
       expect(rule.slice(0, closingBrace)).toContain("var(--text-body)");
     }
 
-    // The First Light dialog rules load with the game chunk, not the shared sheet.
+    // The First Light Tutorial dialog rules load with the game chunk, not the shared sheet.
     const firstLight = source("src/game/first-light.css").replace(/\r\n/g, "\n");
     for (const selector of [".first-light-route span {", ".first-light-boundary {"]) {
       const rule = firstLight.slice(firstLight.indexOf(selector));

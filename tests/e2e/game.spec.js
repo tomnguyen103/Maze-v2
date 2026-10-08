@@ -6690,7 +6690,7 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
   await expect(page.locator("#daily-constellation-status")).toHaveText(
     "The Constellation could not be loaded. Your Daily result is unaffected."
   );
-  // The Constellation styles ride the game chunk, so they survive a failed view chunk.
+  // The Daily Trail Constellation styles ride the game chunk, so they survive a failed view chunk.
   await expect(page.locator("#daily-constellation-status")).not.toHaveCSS(
     "border-left-width",
     "0px"
@@ -6820,4 +6820,31 @@ test("cycles the theme button even when storage refuses writes", async ({
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "system");
   await expect(root).not.toHaveAttribute("data-theme", /./);
+});
+
+test("redraws the Labyrinth and stores the last choice after two quick theme clicks", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  const button = page.locator("#theme-button");
+  const canvas = page.locator("#maze-canvas");
+  const snapshot = () =>
+    canvas.evaluate((node) =>
+      /** @type {HTMLCanvasElement} */ (node).toDataURL()
+    );
+  // A paused Run draws nothing on its own, so the click is the only cause of a redraw.
+  await page.locator("#pause-run").click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  const before = await snapshot();
+
+  await button.click();
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "dark");
+  expect(
+    await page.evaluate(() => localStorage.getItem("echo-maze:theme"))
+  ).toBe("dark");
+  // The canvas reads its palette on a render, so an idle Run must redraw on the click.
+  await expect.poll(snapshot).not.toBe(before);
 });

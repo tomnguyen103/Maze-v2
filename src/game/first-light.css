@@ -1,4 +1,4 @@
-/* The First Light dialog loads with the game chunk, not with the landing. */
+/* The First Light Tutorial dialog loads with the game chunk, not with the landing. */
 .first-light-dialog {
   width: min(42rem, calc(100% - 2rem));
   padding: var(--space-8);
@@ -17,7 +17,6 @@
   line-height: 1;
   overflow-wrap: anywhere;
 }
-
 
 .first-light-dialog .dialog-intro {
   max-width: 62ch;
@@ -101,7 +100,6 @@
   }
 
   .first-light-route li {
-    min-height: 6rem;
     padding: var(--space-2);
     flex: 1 1 5.5rem;
   }
