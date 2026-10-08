@@ -113,7 +113,7 @@
   max-width: 16ch;
   margin: var(--space-2) 0 var(--space-3);
   font: 760 clamp(2rem, 7vw, 4rem)/0.98 var(--font-display);
-  letter-spacing: -0.055em;
+  letter-spacing: -0.03em;
   overflow-wrap: anywhere;
 }
 
@@ -178,7 +178,7 @@
 
 .admin-metric strong {
   font: 780 clamp(2rem, 9vw, 3.5rem)/0.9 var(--font-display);
-  letter-spacing: -0.06em;
+  letter-spacing: -0.03em;
 }
 
 .admin-metric__caption {

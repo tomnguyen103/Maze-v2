@@ -4,9 +4,9 @@ stitch-project: 754643373869195468
 
 # Design - Echo Maze
 
-A locked design system for Echo Maze and its operational dashboard.
+A modern, locked design system for Echo Maze and its operational dashboard.
 Tactile exploration and cockpit precision carry every surface; decoration stays
-secondary to reading, movement, telemetry, and Warden Challenges.
+strictly secondary to reading, movement, telemetry, and Warden Challenges.
 
 ## Genre & Atmosphere
 
@@ -45,7 +45,7 @@ All colors flow through `tokens.css`. Raw hex/rgb values in components are forbi
 
 ## Typography Architecture
 
-- **Display**: Bricolage Grotesque Variable, upright 700–780. Tight tracking (-0.025em to -0.03em).
+- **Display**: Bricolage Grotesque Variable, upright 700–780. Tight tracking (-0.025em to -0.03em). Headline clamp capped at 5.5rem.
 - **Body**: Geist Variable, 450–700. Clean humanist legibility with line-height 1.5–1.6x. Minimum 16px in decision dialogs.
 - **Utility & Data**: Geist Mono Variable, 600–700. Tabular numerals (`font-variant-numeric: tabular-nums`) across all metrics, scores, time, coordinates, and seeds.
 
@@ -57,11 +57,27 @@ All colors flow through `tokens.css`. Raw hex/rgb values in components are forbi
 - Tactile feedback: Buttons feature active transform press (`transform: translateY(2px)` or `scale(0.98)`).
 - Elevation: Crisp, non-blurry borders paired with subtle, grounded offsets (`--shadow-panel`). Zero neon halos.
 
-## Layout Principles & Responsive Strategy
+## Canvas Game Rendering Architecture
 
-- **Workbench**: Fluid, full-width viewport utilization (`max-w-[1920px]`). Centered arena canvas flanked by telemetry metrics and tactile controls.
-- **Dashboard**: Sticky navigation header with breadcrumb hierarchy, horizontal scrolling rail on mobile, fluid grid KPI cards, and full-width data tables with horizontal scroll overflow safety.
-- **Responsive Guarantee**: Clean rendering without horizontal document scroll across all 15 edge viewports (2560x1080 ultrawide to 280x653 narrow foldable, landscape mobile, and 250% zoom).
+The central Labyrinth canvas is a high-precision tactical radar grid rendered via 2D Canvas:
+- **Architectural Masonry**: Labyrinth walls render as clean, modern architectural blocks with subtle inner chamfer framing, removing retro cartoon hatch marks.
+- **Exploration Radar Fog**: Unrevealed tiles present a calm, muted exploration field with micro-dot grid alignment instead of random noise specks.
+- **Illuminated Explorer**: The player is an illuminated tactical beacon: an outer ambient pulse ring, an obsidian core disc with signal accent rim, and a radiant inner core.
+- **Crystalline Echo Shards**: Echoes render as multifaceted crystalline diamonds with luminous internal facets and high-contrast centered numerals.
+- **Sentinel Wardens**: Sleek geometric sentinel drones featuring distinct tactical state visors:
+  - `patrol`: Steady subtle circular optical sensor.
+  - `hunt`: Sharp dual alert visors.
+  - `intercept`: Tactical horizontal bracket visor.
+  - `lured`: Concentric acoustic disturbance resonance rings.
+- **Gate Portals**: Vaulted architectural portals with threshold energy filaments, transitioning from locked iron to energetic signal green, or Warden coral red when sealed.
+
+## Operations Dashboard Architecture
+
+The operations cockpit provides staff with dense, clean telemetry:
+- **Command Cockpit**: Sticky navigation header with clear route breadcrumbs and status indicators.
+- **Responsive Nav Rail**: Clean horizontal scrolling rail on mobile, vertical sidebar on desktop with subtle pill badges.
+- **KPI Metric Tiles**: High-contrast neutral cards with bold tabular figures, subtle borders, and dedicated hero accent.
+- **Data Grids**: Full-width responsive tables with horizontal scroll overflow protection, crisp line dividers, and alternating hover feedback.
 
 ## Hallmark Anti-Slop & Craft Invariants
 

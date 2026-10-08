@@ -205,7 +205,7 @@ a:active {
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 780;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.03em;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -828,10 +828,10 @@ html .trail-compass[hidden] {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-accent-ink);
-  border: 2px solid var(--color-line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-signal);
-  box-shadow: 0.2rem 0.2rem 0 var(--color-line);
+  box-shadow: 0.125rem 0.125rem 0 var(--color-line);
   text-align: left;
   white-space: normal;
   cursor: pointer;
@@ -841,7 +841,7 @@ html .trail-compass[hidden] {
 .pulse-button:hover:not(:disabled) {
   background: var(--color-signal-bright);
   transform: translateY(-1px);
-  box-shadow: 0.25rem 0.25rem 0 var(--color-line);
+  box-shadow: 0.15rem 0.15rem 0 var(--color-line);
 }
 
 .pulse-button:active:not(:disabled) {
@@ -1246,10 +1246,10 @@ kbd {
   padding: var(--space-6);
   overflow-y: auto;
   color: var(--color-ink);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
   background: var(--color-paper);
-  box-shadow: 0.65rem 0.7rem 0 var(--color-shadow);
+  box-shadow: var(--shadow-panel);
 }
 
 .atlas-dialog::backdrop,
@@ -1284,7 +1284,7 @@ kbd {
   margin: var(--space-1) 0 0;
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 6vw, 2.7rem);
-  letter-spacing: -0.055em;
+  letter-spacing: -0.03em;
   line-height: 1;
   overflow-wrap: anywhere;
 }
@@ -2098,10 +2098,10 @@ body[data-run-mode="first-light"] .play-workbench {
   margin: var(--space-6) 0;
   padding: var(--space-4);
   gap: var(--space-1);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-paper-deep);
-  box-shadow: 0.25rem 0.25rem 0 var(--color-line);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-stone-raised);
+  box-shadow: 0 2px 8px -2px var(--color-shadow);
 }
 
 .lifetime-offer[hidden] {
@@ -2111,7 +2111,7 @@ body[data-run-mode="first-light"] .play-workbench {
 .lifetime-offer strong {
   font-family: var(--font-display);
   font-size: clamp(2rem, 8vw, 3.2rem);
-  letter-spacing: -0.055em;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
@@ -2524,7 +2524,7 @@ body[data-run-mode="first-light"] .play-workbench {
   margin: var(--space-2) 0 0;
   font-family: var(--font-display);
   font-size: clamp(2.25rem, 7vw, 4rem);
-  letter-spacing: -0.06em;
+  letter-spacing: -0.03em;
   line-height: 1;
   overflow-wrap: anywhere;
 }
@@ -2683,7 +2683,7 @@ body[data-run-mode="first-light"] .play-workbench {
   margin: var(--space-2) 0 0;
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.4rem);
-  letter-spacing: -0.06em;
+  letter-spacing: -0.03em;
   line-height: 0.95;
   overflow-wrap: anywhere;
 }
@@ -2829,7 +2829,7 @@ body[data-run-mode="first-light"] .play-workbench {
   max-width: 9ch;
   font-family: var(--font-display);
   font-size: clamp(1.55rem, 3vw, 2.2rem);
-  letter-spacing: -0.05em;
+  letter-spacing: -0.03em;
   line-height: 0.98;
 }
 
@@ -2965,8 +2965,10 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .challenge-choice:hover:not(:disabled) {
+  border-color: var(--color-line);
   background: var(--color-signal-bright);
-  box-shadow: 0.2rem 0.2rem 0 var(--color-line);
+  box-shadow: 0 2px 8px -2px var(--color-shadow);
+  transform: translateY(-1px);
 }
 
 .challenge-choice span {
@@ -3123,8 +3125,8 @@ body[data-run-mode="first-light"] .play-workbench {
   .player-console {
     margin: 0;
     padding: var(--space-1) var(--space-2);
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-line-soft);
+    border-radius: var(--radius-md);
     grid-template-columns: minmax(7rem, 1fr) auto auto;
     align-items: center;
   }
@@ -3618,12 +3620,12 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink);
   font-family: var(--font-display);
   font-weight: 760;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.03em;
 }
 
 .landing-hero h1 {
   margin-block: var(--space-3) var(--space-4);
-  font-size: clamp(3.4rem, 8vw, 6.8rem);
+  font-size: clamp(3.2rem, 7.5vw, 5.5rem);
   line-height: 0.88;
 }
 
