@@ -4,96 +4,94 @@ stitch-project: 3244739478942983822
 
 # Design - Echo Maze
 
-A modern, high-precision tactical design system for Echo Maze and its operational dashboard,
-inspired by the WebGemma interface philosophy (https://web-gemma.vercel.app/).
-Clean geometry, floating translucent controls, high-contrast typography, and tactile feedback
-carry every surface; decoration stays strictly secondary to reading, movement, telemetry,
-and Warden Challenges.
+Echo Maze is a bright, playful journey. The player walks a Labyrinth of small islands,
+lights Echoes, and outwits friendly Wardens. The look follows the WebGemma journey
+reference (https://web-gemma.vercel.app/): sky-tinted grid paper, soft pastel colour
+fields, floating islands joined by rope bridges, and white panels with clear type.
+Decoration supports reading, movement, and Warden Challenges. It never competes with them.
 
-## Genre & Atmosphere
+## Genre and atmosphere
 
-- **Genre**: Playful storybook expedition meets modern tactile WebGemma cockpit.
-- **Atmosphere**: Daily App Balanced (Density 6, Variance 6, Motion 5).
-- **Macrostructure family**:
-  - App Workbench: Floating translucent command pill header, telemetry status deck, fluid central Labyrinth radar.
-  - Operations Dashboard: Responsive command cockpit, fluid KPI metric tiles, sticky data tables.
-  - Dialogs: Focused encounter. One decision per view with frosted glass backdrop and protected keyboard focus.
-  - Records & Replays: Compact field notes and tactical replay timelines scannable across all viewports.
+- **Genre**: storybook journey map with a calm study-desk workbench.
+- **Atmosphere**: daily app, balanced (density 6, variance 6, motion 4).
+- **Surfaces**:
+  - Landing: one journey hero on grid paper with an island-path illustration.
+  - Game workbench: header, tinted card rail, the Labyrinth in a white panel, and a quiet adventure log.
+  - Echo Atlas: a journey map. Each Atlas Region is an island in its own hue.
+  - Dialogs: one decision per view in a white panel.
+  - Dashboard and Classroom: tinted metric cards, white table panels, and a pill section strip.
 
-## Theme & Surfaces
+## Theme and surfaces
 
-Two surfaces, one identity. Warm daylight is the default; night is the deep midnight exploration canvas.
+Light is the default. Dark keeps the same hues on a deep night-blue ground.
 
-**Daylight**
-- **Paper**: warm daylight canvas (`oklch(97% 0.018 96)`)
-- **Stone**: elevated neutral surfaces (`oklch(99% 0.008 96)`)
-- **Ink**: deep charcoal navy (`oklch(20% 0.035 255)`)
-- **Lines**: subtle architectural boundaries (`oklch(29% 0.04 252)` and `--color-line-soft`)
-- **Signature Accent**: electric pear (`oklch(84% 0.18 108)`). The iconic brand mark that never shifts.
-- **Tactical Cyan**: WebGemma sky accent (`oklch(72% 0.16 220)`) for active segmented pills and focus states.
-- **Exploration**: sea-glass cyan (`oklch(61% 0.17 205)`)
-- **Danger / Warden**: coral red (`oklch(58% 0.22 24)`)
-- **Success / Gate**: leaf green (`oklch(54% 0.14 155)`)
-- **Glass Panel**: translucent paper (`oklch(99% 0.008 96 / 85%)`) with 16px backdrop blur.
+**Light**
+- **Paper**: sky-tinted paper (`oklch(98.5% 0.008 230)`) with a 24px grid-paper pattern (`--color-grid`).
+- **Stone**: white panel (`oklch(100% 0 0)`) with a 1px slate border (`--color-line-soft`).
+- **Ink**: slate ink (`oklch(27% 0.035 257)`). Muted ink is slate-500.
+- **Primary (sky)**: `oklch(68.5% 0.169 237)`. Deep sky (`oklch(50% 0.15 242)`) carries text on paper.
+- **Pastel fields**: sky, mint, pear, and lilac blobs on the landing and the Atlas only.
+- **Region hues**: Mosslight Grove mint, Windcall Ridge sky, Sunspan Crossing amber,
+  Tideglass Reach indigo, Bellroot Summit pink.
+- **Tinted card**: the hue at 9% on the background, 44% on the border, and a soft hue shadow (`--region-*`).
+- **Warden**: coral (`oklch(58% 0.2 24)`). **Gate**: leaf green (`oklch(54% 0.14 155)`).
 
-**Night**
-- **Paper**: deep midnight navy (`oklch(19% 0.035 255)`) — daylight Ink becomes the surface
-- **Stone**: elevated dark panel (`oklch(24% 0.035 255)`)
-- **Ink**: warm daylight text (`oklch(95% 0.012 96)`)
-- **Signature Accent**: electric pear, unchanged. It is the signature and does not move.
-- **Tactical Cyan**: vibrant electric cyan (`oklch(76% 0.16 218)`)
-- **Exploration, Danger, Success**: adjusted lightness clearing AA contrast on midnight navy.
-- **Glass Panel**: translucent midnight (`oklch(22% 0.035 255 / 82%)`) with 16px backdrop blur.
+**Dark**
+- **Paper**: night blue (`oklch(16% 0.03 262)`). The header is glass at 85% with a blur.
+- **Stone**: raised night panel (`oklch(21% 0.03 262)`).
+- **Ink**: cool white (`oklch(96% 0.01 240)`).
+- Cards keep their hue tints. Every text pair clears WCAG AA.
 
-Persisted preference via `:root[data-theme="dark"]` and system `prefers-color-scheme`.
-All colors flow through `tokens.css`. Raw hex/rgb values in components are forbidden.
+The saved choice sits in `:root[data-theme]`; "system" follows `prefers-color-scheme`.
+The header theme button cycles light, dark, and system. All colours flow through
+`tokens.css`. Components use no raw hex or rgb values.
 
-## Typography Architecture
+## Typography
 
-- **Display**: Bricolage Grotesque Variable, upright 700–780. Tight tracking (-0.025em to -0.03em). Headline clamp capped at 5.5rem.
-- **Body**: Geist Variable, 450–700. Clean humanist legibility with line-height 1.5–1.6x. Minimum 16px in decision dialogs.
-- **Utility & Data**: Geist Mono Variable, 600–700. Tabular numerals (`font-variant-numeric: tabular-nums`) across all metrics, scores, time, coordinates, and seeds.
+- **Display**: Bricolage Grotesque Variable, 700. Only the wordmark and the page h1.
+- **Body and UI**: Geist Variable, 400 to 650. Body text is 16px with line height 1.5.
+- **Numbers**: Geist Mono Variable with tabular numerals for scores, time, seeds, and metrics.
+- **Section labels**: 12px, 600, uppercase, wide tracking, slate-500. A label names a group.
+  A label never floats above a heading as an eyebrow.
 
-## Spacing & Component Geometry
+## Shape and spacing
 
-- 4-point spacing scale from `tokens.css` (`--space-1` through `--space-16`).
-- Minimum tap targets: 44px by 44px with >= 8px separation between interactive controls.
-- Radii: Compact, crisp corner radius system (`--radius-sm: 0.375rem`, `--radius-md: 0.625rem`, `--radius-lg: 1rem`, `--radius-pill: 9999px`).
-- Tactile feedback: Buttons feature active transform press (`transform: translateY(2px)` or `scale(0.98)`).
-- Elevation: Crisp, non-blurry borders paired with subtle, grounded offsets (`--shadow-panel`, `--shadow-glass`). Zero neon halos.
+- 4-point spacing scale from `tokens.css` (`--space-1` to `--space-16`).
+- Buttons 8px radius. Pill containers and tab strips 12px. Cards and panels 16px.
+- Touch targets are at least 44px by 44px with 8px between controls.
+- Panels are white with a 1px border and a soft shadow. A card never sits inside a card.
+- The primary action is solid sky with white text. A press moves it down 1px.
 
-## Canvas Game Rendering Architecture
+## Labyrinth canvas
 
-The central Labyrinth canvas is a high-precision tactical radar grid rendered via 2D Canvas:
-- **Architectural Masonry**: Labyrinth walls render as clean, modern architectural blocks with subtle inner chamfer framing, removing retro cartoon hatch marks.
-- **Tactical Coordinate Grid**: Subtle coordinate grid underlay inspired by WebGemma navigation canvas.
-- **Exploration Radar Fog**: Unrevealed tiles present a calm, muted exploration field with micro-dot grid alignment.
-- **Illuminated Explorer**: Tactical beacon with an outer ambient pulse ring, an obsidian core disc with signal accent rim, directional movement arrow, and radiant core.
-- **Crystalline Echo Shards**: Multifaceted crystalline diamonds with luminous internal facets and high-contrast centered numerals.
-- **Sentinel Wardens**: Sleek geometric sentinel drones featuring distinct tactical state visors:
-  - `patrol`: Steady circular optical sensor sweep.
-  - `hunt`: Sharp dual alert visors.
-  - `intercept`: Tactical horizontal bracket visor.
-  - `lured`: Concentric acoustic disturbance resonance rings.
-- **Gate Portals**: Vaulted architectural portals with threshold energy filaments, transitioning from locked iron to energetic signal green, or Warden coral red when sealed.
+The Labyrinth draws a small island world on a 2D canvas. Geometry and rules never change.
+- **Known tiles**: soft rounded island tiles in the region hue.
+- **Walls**: raised pastel blocks with a lighter top edge.
+- **Fog**: plain paper with a faint grid.
+- **Explorer**: a white disc with a sky ring and a small flag.
+- **Echo**: a soft lantern dot with its pair number.
+- **Trail Twists** (gates, Tide Doors, Windways, Echo Bridges, Signal Bells): flat, friendly
+  glyphs. Bridges use a rope-plank pattern.
+- **Wardens**: round, friendly creatures. Each mode keeps a distinct mark:
+  Patrol has calm eyes, Hunt has narrowed eyes, Intercept has a side dash, and Lured has
+  sound rings.
 
-## Operations Dashboard Architecture
+## Dashboard
 
-The operations cockpit provides staff with dense, clean telemetry:
-- **Command Cockpit**: Sticky floating navigation header with clear route breadcrumbs and status indicators.
-- **Responsive Nav Rail**: Clean horizontal scrolling rail on mobile, vertical sidebar on desktop with subtle pill badges.
-- **KPI Metric Tiles**: High-contrast neutral cards with bold tabular figures, subtle borders, and dedicated hero accent.
-- **Data Grids**: Full-width responsive tables with horizontal scroll overflow protection, crisp line dividers, and alternating hover feedback.
+- A header with the page title, the wordmark, and a pill section strip.
+- Metric cards in region hues with tabular numbers.
+- White table panels that scroll sideways on narrow screens.
 
-## Hallmark Anti-Slop & Craft Invariants
+## Hallmark craft rules
 
-- **Banned**: AI purple/blue neon glows, generic radial spotlights, 4px thick 1-sided borders.
-- **Banned**: Eyebrows/kickers floating directly above section headings.
-- **Banned**: Cliché 3-equal-card horizontal feature grids without functional differentiation.
-- **Banned**: Nested cards inside cards.
-- **Banned**: Pure black (`#000000`) or unstyled raw browser defaults.
-- **Banned**: Animating layout dimensions (`width`, `height`, `margin`, `padding`).
+- **Banned**: neon glows and generic radial spotlights.
+- **Banned**: eyebrows or kickers above section headings.
+- **Banned**: grids of three equal cards with no functional difference.
+- **Banned**: nested cards.
+- **Banned**: pure black (`#000000`) and raw browser defaults.
+- **Banned**: animated layout properties (`width`, `height`, `margin`, `padding`).
 
-## Canonical Export
+## Canonical export
 
-`tokens.css` is the canonical design token export. All app surfaces and admin views consume its custom properties.
+`tokens.css` is the canonical token export. Every app surface and the dashboard use its
+custom properties.
