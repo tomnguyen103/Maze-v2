@@ -155,16 +155,30 @@ export function createCanvasRenderer(canvas) {
     context.fillStyle = isPassage ? palette.passage : palette.wall;
     context.fillRect(x, y, tile + 0.5, tile + 0.5);
     context.strokeStyle = isPassage ? palette.grid : palette.wallGrid;
-    context.lineWidth = Math.max(0.75, tile * 0.022);
+    context.lineWidth = Math.max(0.75, tile * 0.02);
     context.strokeRect(x, y, tile, tile);
     if (!isPassage) {
+      // Modern architectural masonry: sleek inner block with subtle corner accents
+      const inset = Math.max(2, tile * 0.12);
+      const innerW = tile - inset * 2;
       context.strokeStyle = palette.wallMark;
-      context.lineWidth = Math.max(1, tile * 0.035);
+      context.lineWidth = Math.max(0.75, tile * 0.025);
+      context.strokeRect(x + inset, y + inset, innerW, innerW);
+      // Subtle corner bracket accents
+      const bracket = Math.max(1.5, tile * 0.06);
       context.beginPath();
-      context.moveTo(x + tile * 0.18, y + tile * 0.72);
-      context.lineTo(x + tile * 0.72, y + tile * 0.18);
-      context.moveTo(x + tile * 0.28, y + tile * 0.82);
-      context.lineTo(x + tile * 0.82, y + tile * 0.28);
+      context.moveTo(x + inset, y + inset + bracket);
+      context.lineTo(x + inset, y + inset);
+      context.lineTo(x + inset + bracket, y + inset);
+      context.moveTo(x + tile - inset - bracket, y + inset);
+      context.lineTo(x + tile - inset, y + inset);
+      context.lineTo(x + tile - inset, y + inset + bracket);
+      context.moveTo(x + inset, y + tile - inset - bracket);
+      context.lineTo(x + inset, y + tile - inset);
+      context.lineTo(x + inset + bracket, y + tile - inset);
+      context.moveTo(x + tile - inset - bracket, y + tile - inset);
+      context.lineTo(x + tile - inset, y + tile - inset);
+      context.lineTo(x + tile - inset, y + tile - inset - bracket);
       context.stroke();
     }
   }
@@ -173,14 +187,24 @@ export function createCanvasRenderer(canvas) {
   function drawFogTile(row, col, tile) {
     const x = col * tile;
     const y = row * tile;
-    context.fillStyle = (row + col) % 3 === 0 ? palette.fogSoft : palette.fog;
+    context.fillStyle = (row + col) % 2 === 0 ? palette.fogSoft : palette.fog;
     context.fillRect(x, y, tile + 0.5, tile + 0.5);
     context.strokeStyle = palette.fogGrid;
-    context.lineWidth = Math.max(0.75, tile * 0.018);
+    context.lineWidth = Math.max(0.75, tile * 0.015);
     context.strokeRect(x, y, tile, tile);
-    if ((row * 17 + col * 11) % 7 === 0) {
-      context.fillStyle = palette.fogGrid;
-      context.fillRect(x + tile * 0.48, y + tile * 0.48, Math.max(1, tile * 0.04), Math.max(1, tile * 0.04));
+    // Subtle tactical exploration grid marker
+    if ((row + col) % 2 === 0) {
+      const crossSize = Math.max(1, tile * 0.05);
+      const cx = x + tile * 0.5;
+      const cy = y + tile * 0.5;
+      context.strokeStyle = palette.fogGrid;
+      context.lineWidth = Math.max(0.75, tile * 0.02);
+      context.beginPath();
+      context.moveTo(cx - crossSize, cy);
+      context.lineTo(cx + crossSize, cy);
+      context.moveTo(cx, cy - crossSize);
+      context.lineTo(cx, cy + crossSize);
+      context.stroke();
     }
   }
 
@@ -201,15 +225,26 @@ export function createCanvasRenderer(canvas) {
     glow.addColorStop(1, palette.transparent);
     context.fillStyle = glow;
     context.fillRect(x - tile, y - tile, tile * 2, tile * 2);
+
+    // Outer tactical ring
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.fillStyle = palette.night;
     context.fill();
-    context.lineWidth = Math.max(2, tile * 0.11 * scale);
+    context.lineWidth = Math.max(2, tile * 0.09 * scale);
     context.strokeStyle = palette.signal;
     context.stroke();
+
+    // Intermediate precision bezel
     context.beginPath();
-    context.arc(x, y, tile * 0.07 * scale, 0, Math.PI * 2);
+    context.arc(x, y, radius * 0.65, 0, Math.PI * 2);
+    context.strokeStyle = palette.signalBright;
+    context.lineWidth = Math.max(1, tile * 0.03 * scale);
+    context.stroke();
+
+    // Radiant core beacon
+    context.beginPath();
+    context.arc(x, y, tile * 0.08 * scale, 0, Math.PI * 2);
     context.fillStyle = palette.signalBright;
     context.fill();
   }
@@ -225,14 +260,19 @@ export function createCanvasRenderer(canvas) {
     context.save();
     context.translate(x, y);
     context.rotate(Math.PI / 4);
+
+    // Multifaceted crystalline diamond shard
     context.strokeStyle = palette.echo;
     context.lineWidth = Math.max(1.5, tile * 0.07 * scale);
     context.strokeRect(
-      -tile * 0.19 * scale,
-      -tile * 0.19 * scale,
-      tile * 0.38 * scale,
-      tile * 0.38 * scale
+      -tile * 0.2 * scale,
+      -tile * 0.2 * scale,
+      tile * 0.4 * scale,
+      tile * 0.4 * scale
     );
+    // Inner crystalline facet
+    context.strokeStyle = palette.echo;
+    context.lineWidth = Math.max(1, tile * 0.03 * scale);
     context.strokeRect(
       -tile * 0.1 * scale,
       -tile * 0.1 * scale,
@@ -240,10 +280,12 @@ export function createCanvasRenderer(canvas) {
       tile * 0.2 * scale
     );
     context.restore();
+
+    // Clean tabular numeral badge
     context.save();
     context.fillStyle = palette.night;
     context.font =
-      `700 ${Math.max(8, tile * 0.2 * scale)}px ${palette.fontBody}`;
+      `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(String(pairNumber), x, y);
@@ -506,11 +548,15 @@ export function createCanvasRenderer(canvas) {
     const scale = palette.markScale;
     context.beginPath();
     context.moveTo(x, y - tile * 0.3 * scale);
-    context.lineTo(x + tile * 0.29 * scale, y + tile * 0.26 * scale);
-    context.lineTo(x - tile * 0.29 * scale, y + tile * 0.26 * scale);
+    context.lineTo(x + tile * 0.28 * scale, y + tile * 0.24 * scale);
+    context.lineTo(x, y + tile * 0.15 * scale);
+    context.lineTo(x - tile * 0.28 * scale, y + tile * 0.24 * scale);
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
+    context.strokeStyle = palette.night;
+    context.lineWidth = Math.max(1, tile * 0.03 * scale);
+    context.stroke();
     context.fillStyle = palette.night;
 
     if (warden.mode === "lured") {
