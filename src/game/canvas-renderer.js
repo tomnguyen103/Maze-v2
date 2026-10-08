@@ -124,7 +124,7 @@ export function createCanvasRenderer(canvas) {
     if (run.status === "paused") {
       context.fillStyle = palette.overlay;
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.paper;
+      context.fillStyle = palette.onFill;
       context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
@@ -141,7 +141,7 @@ export function createCanvasRenderer(canvas) {
         canvas.width / 2,
         canvas.height / 2
       );
-      context.fillStyle = palette.paper;
+      context.fillStyle = palette.onFill;
       context.font = `500 ${Math.max(14, canvas.width * 0.022)}px ${palette.fontBody}`;
       context.fillText(
         run.challenge?.kind === "gate-warden"
@@ -332,7 +332,7 @@ export function createCanvasRenderer(canvas) {
     context.stroke();
 
     context.save();
-    context.fillStyle = palette.onFill;
+    context.fillStyle = palette.night;
     context.font =
       `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
@@ -602,8 +602,8 @@ export function createCanvasRenderer(canvas) {
     context.stroke();
 
     // Each mode has its own face, so the mode never rests on hue alone.
-    context.fillStyle = palette.onFill;
-    context.strokeStyle = palette.onFill;
+    context.fillStyle = palette.night;
+    context.strokeStyle = palette.night;
     context.lineCap = "round";
     context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
 
@@ -700,7 +700,6 @@ function readPalette() {
     fontBody: color("--font-body"),
     fog: color("--color-fog"),
     fogGrid: color("--color-fog-grid"),
-    fogSoft: color("--color-fog-soft"),
     gate: color("--color-gate"),
     grid: color("--color-grid"),
     ink: color("--color-ink"),
@@ -708,11 +707,9 @@ function readPalette() {
     night: color("--color-night-deep"),
     onFill: color("--color-on-fill"),
     overlay: color("--color-overlay"),
-    paper: color("--color-paper"),
     passage: color("--color-passage"),
     pulse: color("--color-pulse"),
     signal: color("--color-explorer"),
-    signalBright: color("--color-explorer-bright"),
     signalGlow: color("--color-explorer-glow"),
     transparent: "transparent",
     wall: color("--color-wall"),

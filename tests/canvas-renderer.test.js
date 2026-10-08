@@ -186,6 +186,65 @@ describe("Canvas renderer", () => {
     expect(faces).not.toContain(quiet.calls.join(" "));
   });
 
+  it("draws Echo numbers and Warden faces in the dark foreground", () => {
+    const { context, renderer } = stubCanvas();
+    const run = questRun("WARDEN-FACES", "trail-scout", 9);
+    /** @type {string[]} */
+    const markFills = [];
+    /** @type {string[][]} */
+    const textFills = [];
+    let fillStyle = "";
+    Object.defineProperty(context, "fillStyle", {
+      get: () => fillStyle,
+      set: (value) => {
+        fillStyle = value;
+      }
+    });
+    context.fillText = vi.fn((text) => textFills.push([text, fillStyle]));
+    context.fill = vi.fn(() => {
+      markFills.push(fillStyle);
+    });
+    document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
+    document.body.style.setProperty("--color-warden", "rgb(200, 0, 0)");
+
+    renderer.render({
+      ...run,
+      echoBridges: [],
+      echoes: [{ row: 1, col: 1, collected: false }],
+      explorer: { ...run.explorer, row: 0, col: 0 },
+      pulseVisible: [],
+      revealed: ["1,1", "2,2"],
+      signalBells: [],
+      tideDoors: [],
+      wardens: [{ row: 2, col: 2, id: 0, mode: "patrol" }]
+    });
+
+    expect(textFills).toEqual([["1", "rgb(7, 8, 9)"]]);
+    const wardenBody = markFills.indexOf("rgb(200, 0, 0)");
+    expect(wardenBody).toBeGreaterThan(-1);
+    expect(markFills[wardenBody + 1]).toBe("rgb(7, 8, 9)");
+  });
+
+  it("writes the pause overlay text in the on-fill color", () => {
+    const { context, renderer } = stubCanvas();
+    const run = questRun("PALETTE-REREAD", "bright-start", 1);
+    /** @type {string[][]} */
+    const textFills = [];
+    let fillStyle = "";
+    Object.defineProperty(context, "fillStyle", {
+      get: () => fillStyle,
+      set: (value) => {
+        fillStyle = value;
+      }
+    });
+    context.fillText = vi.fn((text) => textFills.push([text, fillStyle]));
+    document.body.style.setProperty("--color-on-fill", "rgb(250, 251, 252)");
+
+    renderer.render({ ...run, pulseVisible: [], revealed: [], status: "paused" });
+
+    expect(textFills).toContainEqual(["PAUSED", "rgb(250, 251, 252)"]);
+  });
+
   it("reads the canvas palette again on every frame", () => {
     const { context, renderer } = stubCanvas();
     const run = questRun("PALETTE-REREAD", "bright-start", 1);
