@@ -6670,6 +6670,10 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
     "One optional Constellation retry proof is sufficient."
   );
   let chunkRequests = 0;
+  // A lost connection takes any stylesheet split off with the view chunk too.
+  await page.route("**/assets/daily-constellation-*.css", (route) =>
+    route.abort()
+  );
   await page.route("**/assets/daily-constellation-view-*.js", async (route) => {
     chunkRequests += 1;
     if (chunkRequests === 1) {
@@ -6685,6 +6689,11 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
 
   await expect(page.locator("#daily-constellation-status")).toHaveText(
     "The Constellation could not be loaded. Your Daily result is unaffected."
+  );
+  // The Constellation styles ride the game chunk, so they survive a failed view chunk.
+  await expect(page.locator("#daily-constellation-status")).not.toHaveCSS(
+    "border-left-width",
+    "0px"
   );
   const retry = page.getByRole("button", { name: "Retry Constellation" });
   await expect(retry).toBeVisible();
@@ -6783,4 +6792,32 @@ test("labels a terminally rejected offline Run Offline—unverified", async ({
   ).toBeHidden();
 
   await recordOfflineScreenshot(page, testInfo, "offline-unverified");
+});
+
+test("cycles the theme button even when storage refuses writes", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "echo-maze:theme") throw new Error("blocked");
+      setItem.call(this, key, value);
+    };
+  });
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  const button = page.locator("#theme-button");
+  const root = page.locator("html");
+  await expect(button).toHaveAttribute("data-choice", "system");
+
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "light");
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "dark");
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "system");
+  await expect(root).not.toHaveAttribute("data-theme", /./);
 });

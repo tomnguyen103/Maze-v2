@@ -51,6 +51,7 @@
   --color-shadow: oklch(27% 0.035 257 / 12%);
   --color-overlay: oklch(20% 0.035 257 / 60%);
   --color-panel: oklch(100% 0 0);
+  --color-on-fill: oklch(100% 0 0);
   --color-nav: oklch(98.5% 0.008 230 / 85%);
   --color-night: oklch(21% 0.03 262);
   --color-night-deep: oklch(16% 0.03 262);

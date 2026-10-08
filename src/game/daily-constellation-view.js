@@ -1,4 +1,3 @@
-import "./daily-constellation.css";
 /**
  * Daily Trail Constellation projection surface.
  *

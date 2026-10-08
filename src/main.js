@@ -1,3 +1,4 @@
+import "./game/daily-constellation.css";
 import "./game/first-light.css";
 import {
   clearActiveRunLocator,
@@ -1126,17 +1127,19 @@ elements.recordsButton.addEventListener("click", () => {
 elements.trailCompassDiscover.addEventListener("click", () => {
   elements.settingsButton.click();
 });
+// Held in memory: blocked storage must not stall the cycle on its fallback.
+let themeChoice = readThemeChoice();
 function showThemeChoice() {
-  const choice = readThemeChoice();
-  elements.themeButton.dataset.choice = choice;
+  elements.themeButton.dataset.choice = themeChoice;
   elements.themeButton.setAttribute(
     "aria-label",
-    `Theme: ${choice}. Switch to ${nextThemeChoice(choice)}.`
+    `Theme: ${themeChoice}. Switch to ${nextThemeChoice(themeChoice)}.`
   );
 }
 showThemeChoice();
 elements.themeButton.addEventListener("click", () => {
-  applyThemeChoice(nextThemeChoice(readThemeChoice()));
+  themeChoice = nextThemeChoice(themeChoice);
+  applyThemeChoice(themeChoice);
   showThemeChoice();
 });
 

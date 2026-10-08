@@ -289,7 +289,7 @@ a:hover {
 
 .primary-button {
   --fill: var(--color-sky-deep);
-  --ink: #fff;
+  --ink: var(--color-on-fill);
   color: var(--ink);
   background: var(--fill);
   border-color: var(--fill);

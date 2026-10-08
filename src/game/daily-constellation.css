@@ -1,5 +1,4 @@
-/* Hallmark · macrostructure: Workbench · genre: playful · design-system: design.md · theme: Journey · anchor: sky · slop: pass · contrast: pass · tokens: pass · mobile: pass */
-/* Daily Trail Constellation styles. Load with the lazy view module. */
+/* Daily Trail Constellation styles. Load with the lazy game chunk. */
 .daily-constellation__heading {
   display: flex;
   min-width: 0;
