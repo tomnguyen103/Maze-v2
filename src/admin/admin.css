@@ -179,6 +179,7 @@
 .admin-metric strong {
   font: 780 clamp(2rem, 9vw, 3.5rem)/0.9 var(--font-display);
   letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-metric__caption {

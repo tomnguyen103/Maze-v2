@@ -157,7 +157,12 @@ export function createCanvasRenderer(canvas) {
     context.strokeStyle = isPassage ? palette.grid : palette.wallGrid;
     context.lineWidth = Math.max(0.75, tile * 0.02);
     context.strokeRect(x, y, tile, tile);
-    if (!isPassage) {
+    if (isPassage) {
+      if ((row + col) % 2 === 0) {
+        context.fillStyle = palette.grid;
+        context.fillRect(x + tile * 0.5 - 0.75, y + tile * 0.5 - 0.75, 1.5, 1.5);
+      }
+    } else {
       // Modern architectural masonry: sleek inner block with subtle corner accents
       const inset = Math.max(2, tile * 0.12);
       const innerW = tile - inset * 2;
