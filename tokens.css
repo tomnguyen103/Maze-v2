@@ -129,7 +129,7 @@
   --radius-lg: 0.9rem;
   --radius-pill: 999px;
 
-  --shadow-panel: 0.55rem 0.65rem 0 var(--color-shadow);
+  --shadow-panel: 0 4px 16px -2px var(--color-shadow);
   --shadow-signal: 0 0 0 0.28rem var(--color-signal-glow);
 
   --duration-press: 120ms;

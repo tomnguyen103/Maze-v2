@@ -11,9 +11,10 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-4);
-  border-bottom: 2px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line-soft);
   background: var(--color-nav);
-  backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .admin-command h1,
@@ -60,8 +61,8 @@
   display: flex;
   padding: var(--space-3) var(--space-4);
   gap: var(--space-2);
-  border-bottom: 2px solid var(--color-line);
-  background: var(--color-paper-deep);
+  border-bottom: 1px solid var(--color-line-soft);
+  background: var(--color-stone);
   overflow-x: auto;
 }
 
@@ -70,16 +71,19 @@
   min-height: 44px;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  font: 650 0.8rem/1 var(--font-body);
+  font: 600 0.82rem/1 var(--font-body);
+  color: var(--color-ink-muted);
   text-decoration: none;
   white-space: nowrap;
+  transition: all var(--duration-press) var(--ease-out);
 }
 
 .admin-rail a:hover {
-  border-color: var(--color-line);
-  background: var(--color-panel);
+  border-color: var(--color-line-soft);
+  background: var(--color-stone-raised);
+  color: var(--color-ink);
 }
 
 /*
@@ -90,7 +94,8 @@
  */
 .admin-rail a[aria-current="page"] {
   border-color: var(--color-line);
-  background: var(--color-signal-soft);
+  background: var(--color-signal);
+  color: var(--color-accent-ink);
   font-weight: 700;
 }
 
@@ -138,11 +143,11 @@
 
 .admin-panel {
   min-width: 0;
-  padding: var(--space-5);
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
-  box-shadow: 0.32rem 0.38rem 0 var(--color-shadow);
+  padding: var(--space-6);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-stone);
+  box-shadow: var(--shadow-panel);
   scroll-margin-top: 6rem;
 }
 
@@ -164,9 +169,11 @@
   min-height: 7rem;
   padding: var(--space-4);
   align-content: space-between;
-  border: 2px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-signal-bright);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-stone);
+  box-shadow: 0 1px 3px 0 oklch(20% 0.035 255 / 4%);
+  transition: all var(--duration-press) var(--ease-out);
 }
 
 .admin-metric strong {
@@ -184,7 +191,8 @@
 .admin-metric--hero {
   grid-column: 1 / -1;
   min-height: 9rem;
-  background: var(--color-signal);
+  border-color: var(--color-line);
+  background: var(--color-signal-soft);
 }
 
 .admin-metric--hero strong {
@@ -240,8 +248,8 @@
 
 .admin-table tr {
   margin-block-end: var(--space-3);
-  padding: var(--space-2);
-  border: 2px solid var(--color-line);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-sm);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -426,7 +434,8 @@
 
 .admin-lens-preview {
   padding: var(--space-3);
-  border-inline-start: 3px solid var(--color-signal);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
   background: var(--color-stone-raised);
 }
 
@@ -661,7 +670,7 @@
     height: calc(100dvh - 4.5rem);
     padding: var(--space-6) var(--space-4);
     align-content: start;
-    border-right: 2px solid var(--color-line);
+    border-right: 1px solid var(--color-line-soft);
     border-bottom: 0;
     overflow: auto;
   }
