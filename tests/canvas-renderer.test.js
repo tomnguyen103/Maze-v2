@@ -153,4 +153,60 @@ describe("Canvas renderer", () => {
     expect(labels).toContain("RING");
     expect(labels).toContain("SPENT");
   });
+
+  it("scales passage coordinate markers by capped device pixel ratio", () => {
+    const originalDpr = window.devicePixelRatio;
+    try {
+      window.devicePixelRatio = 2;
+      /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
+      const fillRectCalls = [];
+      const context = {
+        arc: vi.fn(),
+        beginPath: vi.fn(),
+        clearRect: vi.fn(),
+        closePath: vi.fn(),
+        createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        fill: vi.fn(),
+        fillRect: vi.fn((x, y, w, h) => fillRectCalls.push({ x, y, w, h })),
+        fillText: vi.fn(),
+        lineTo: vi.fn(),
+        moveTo: vi.fn(),
+        restore: vi.fn(),
+        rotate: vi.fn(),
+        save: vi.fn(),
+        setLineDash: vi.fn(),
+        stroke: vi.fn(),
+        strokeRect: vi.fn(),
+        translate: vi.fn()
+      };
+      const canvas = {
+        getBoundingClientRect: () => ({ width: 320, height: 320 }),
+        getContext: () => context,
+        height: 640,
+        width: 640
+      };
+      const run = createRun("PASSAGE-MARKER-TEST", {
+        ...getLabyrinthConfig("bright-start", 1),
+        ruleset: getQuestRunRuleset(1)
+      });
+
+      createCanvasRenderer(
+        /** @type {HTMLCanvasElement} */ (
+          /** @type {unknown} */ (canvas)
+        )
+      ).render({
+        ...run,
+        pulseVisible: [],
+        revealed: ["0,0", "0,1", "1,1"]
+      });
+
+      const markerDraws = fillRectCalls.filter(
+        (call) => call.w === 3 && call.h === 3
+      );
+      expect(markerDraws.length).toBeGreaterThan(0);
+    } finally {
+      window.devicePixelRatio = originalDpr;
+    }
+  });
 });
+

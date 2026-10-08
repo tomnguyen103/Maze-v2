@@ -18,12 +18,8 @@
   --color-line-soft: oklch(78% 0.035 250);
   --color-signal: oklch(84% 0.18 108);
   --color-signal-soft: oklch(93% 0.07 108);
-  /* One sequential ordinal ramp, for the Class Constellation's three bands.
-     Single hue, monotonically decreasing lightness, so "more" reads as
-     "more" without a legend. Ink and ink-muted both clear AA on every step —
-     the caption uses ink-muted, and it measured 1.95:1 before this existed.
-     The bands are Quiet, Glowing, Bright, in that order, and the previous
-     colours ran the other way. */
+
+  /* One sequential ordinal ramp, for the Class Constellation's three bands. */
   --color-band-1: oklch(94% 0.06 108);
   --color-band-2: oklch(89% 0.11 108);
   --color-band-3: oklch(82% 0.175 108);
@@ -47,10 +43,6 @@
   --color-echo: oklch(61% 0.17 232);
   --color-echo-soft: oklch(89% 0.075 226);
   --color-warden: oklch(58% 0.22 24);
-  /* Text weights. The 58%/54% pair above is a fill colour: on --color-paper
-     it measures 4.38:1 and 4.32:1, just under AA, which is how a danger
-     message and a success message both ended up unreadable on the surface
-     they are shown on. These pass on paper and on stone. */
   --color-warden-text: oklch(44% 0.22 24);
   --color-warden-soft: oklch(91% 0.06 25);
   --color-gate: oklch(54% 0.14 155);
@@ -59,7 +51,7 @@
   --color-shadow: oklch(24% 0.035 255 / 16%);
   --color-overlay: oklch(18% 0.035 255 / 72%);
   --color-panel: oklch(99% 0.008 96);
-  --color-nav: oklch(98% 0.016 96 / 94%);
+  --color-nav: oklch(98% 0.016 96 / 88%);
   --color-night: oklch(24% 0.04 255);
   --color-night-deep: oklch(18% 0.035 255);
   --color-fog: oklch(82% 0.04 205);
@@ -124,53 +116,24 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
-  --radius-sm: 0.3rem;
-  --radius-md: 0.6rem;
-  --radius-lg: 0.9rem;
-  --radius-pill: 999px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-pill: 9999px;
 
-  --shadow-panel: 0 4px 16px -2px var(--color-shadow);
-  --shadow-signal: 0 0 0 0.28rem var(--color-signal-glow);
+  --shadow-panel: 0 4px 20px -2px var(--color-shadow);
+  --shadow-signal: 0 0 0 0.24rem var(--color-signal-glow);
 
   --duration-press: 120ms;
   --duration-reveal: 280ms;
   --duration-recoil: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /*
-   * A real type scale (TYPE), not 57 hand-picked font-size values against
-   * one token. Roles, not just sizes:
-   *   --text-body   the hard floor. A player reads this to understand or
-   *                  decide something — dialog copy, guidance, status
-   *                  messages. Never smaller than 16px.
-   *   --text-label  badges, eyebrows, stat chips, short utility captions.
-   *                  Not read for understanding on its own; scanned
-   *                  alongside something bigger that carries the meaning.
-   *   --text-compact  mono utility figures (admin tables, Atlas counters).
-   *                    Existing token, unchanged.
-   * Display and headline sizes are untouched — they already scale
-   * responsively via clamp() and the audit's evidence (133 sub-16px nodes)
-   * was about the small end of the scale, not the large one.
-   */
+
   --text-body: 1rem;
   --text-label: 0.875rem;
   --text-compact: 0.7rem;
 }
 
-/*
- * Night. `design.md`'s Theme section is the contract: the daylight Ink becomes
- * the surface, the daylight Paper becomes the text, and electric pear does not
- * move because it is the signature.
- *
- * Only the tokens that define a surface, a text weight, a line or a semantic
- * state are restated. Everything else — spacing, radii, motion, the playfield
- * palettes, the per-region tints — is the same system in both, which is what
- * keeps this a lighting change rather than a second design.
- *
- * Declared once and applied two ways: `@media (prefers-color-scheme: dark)`
- * for a player who has expressed no preference here, and
- * `:root[data-theme="dark"]` for one who has. The explicit attribute wins in
- * both directions, so choosing Light on a dark OS actually gives light.
- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
@@ -186,7 +149,7 @@
     --color-line: oklch(72% 0.03 250);
     --color-line-soft: oklch(38% 0.035 250);
     --color-panel: oklch(23% 0.035 255);
-    --color-nav: oklch(19% 0.035 255 / 94%);
+    --color-nav: oklch(19% 0.035 255 / 88%);
     --color-shadow: oklch(8% 0.02 255 / 46%);
     --color-overlay: oklch(10% 0.03 255 / 82%);
 
@@ -221,7 +184,7 @@
   --color-line: oklch(72% 0.03 250);
   --color-line-soft: oklch(38% 0.035 250);
   --color-panel: oklch(23% 0.035 255);
-  --color-nav: oklch(19% 0.035 255 / 94%);
+  --color-nav: oklch(19% 0.035 255 / 88%);
   --color-shadow: oklch(8% 0.02 255 / 46%);
   --color-overlay: oklch(10% 0.03 255 / 82%);
 

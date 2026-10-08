@@ -35,10 +35,12 @@ export function createCanvasRenderer(canvas) {
   const context = getCanvasContext(canvas);
 
   let palette = readPalette();
+  let deviceRatio = 1;
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    deviceRatio = ratio;
     const width = Math.max(320, Math.round(bounds.width * ratio));
     const height = Math.max(320, Math.round(bounds.height * ratio));
     if (canvas.width !== width || canvas.height !== height) {
@@ -157,7 +159,19 @@ export function createCanvasRenderer(canvas) {
     context.strokeStyle = isPassage ? palette.grid : palette.wallGrid;
     context.lineWidth = Math.max(0.75, tile * 0.02);
     context.strokeRect(x, y, tile, tile);
-    if (!isPassage) {
+    if (isPassage) {
+      if ((row + col) % 2 === 0) {
+        context.fillStyle = palette.grid;
+        const markerSize = 1.5 * deviceRatio;
+        const offset = markerSize * 0.5;
+        context.fillRect(
+          x + tile * 0.5 - offset,
+          y + tile * 0.5 - offset,
+          markerSize,
+          markerSize
+        );
+      }
+    } else {
       // Modern architectural masonry: sleek inner block with subtle corner accents
       const inset = Math.max(2, tile * 0.12);
       const innerW = tile - inset * 2;
