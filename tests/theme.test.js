@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyThemeChoice,
   isThemeChoice,
+  nextThemeChoice,
   nextTheme,
   readThemeChoice,
   resolveTheme,
@@ -70,6 +71,26 @@ describe("theme choice", () => {
       }
     };
     expect(readThemeChoice(hostile)).toBe("system");
+  });
+
+  it("survives a localStorage getter that throws", () => {
+    // Chrome throws a SecurityError on the getter itself when site data is blocked.
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("SecurityError");
+      }
+    });
+    try {
+      const root = fakeRoot();
+      expect(readThemeChoice()).toBe("system");
+      expect(() => applyThemeChoice("dark", { root })).not.toThrow();
+      expect(root.attributes["data-theme"]).toBe("dark");
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
   });
 
   it("resolves system against the OS and an explicit choice against nothing", () => {
@@ -184,5 +205,13 @@ describe("SHELL-07 — night is declared, and both ways", () => {
     const design = source("design.md");
     expect(design).toContain("**Night**");
     expect(design).toContain("prefers-color-scheme");
+  });
+});
+
+describe("nextThemeChoice", () => {
+  it("cycles light, dark, system, then back to light", () => {
+    expect(nextThemeChoice("light")).toBe("dark");
+    expect(nextThemeChoice("dark")).toBe("system");
+    expect(nextThemeChoice("system")).toBe("light");
   });
 });

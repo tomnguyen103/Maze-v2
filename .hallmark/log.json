@@ -1,6 +1,90 @@
 {
   "entries": [
     {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Threshold",
+      "signature": "Journey hero on sky grid paper beside a five-island path joined by rope bridges",
+      "nav": "Wordmark and Sign in",
+      "footer": "None",
+      "stitch_screen": "c3b55da228544786bf2094ebae498278",
+      "fixes": [
+        "illustration sits on grid paper, not a grey box"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Workbench",
+      "signature": "Tinted region card rail, Labyrinth in a white panel, quiet adventure log",
+      "nav": "Title left, wordmark centre, segmented pill and theme button right",
+      "footer": "None",
+      "stitch_screen": "d16b1f14f4d444ecbd172a051a5110f3",
+      "mobile_screen": "79035caebb5640a08d5cf7dce2aa4298",
+      "fixes": [
+        "no eyebrow labels above card titles",
+        "drop fake telemetry chrome: coordinates, resonance, scale, MK-IV, orientation",
+        "mobile Pulse is an 8px-radius button, not a disc"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Map / Diagram inside Focused encounter",
+      "signature": "Echo Atlas islands in region hues joined by bridges, with a selected-region panel and level chips",
+      "nav": "Atlas dialog header",
+      "footer": "None",
+      "stitch_screen": "1a11447f90aa4f17a4bd3819d7395c10",
+      "fixes": [
+        "drop chapter and world-map chrome",
+        "level chips use the panel system, no eyebrow region tag"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Focused encounter",
+      "signature": "Warden Challenge as one white decision panel with lettered answers and a sky submit action",
+      "nav": "Dialog header",
+      "footer": "None",
+      "stitch_screen": "6a2dcb01617d4e858a12328b9a7c38b7",
+      "fixes": []
+    },
+    {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Dashboard",
+      "signature": "Region-hue metric cards, white run table, and region progress bars",
+      "nav": "Title left, wordmark centre, segmented pill and theme button right",
+      "footer": "None",
+      "stitch_screen": "d505b42bd863466bbfdb0c67d59d244f",
+      "fixes": [
+        "drop live-telemetry badge, sync latency and footer"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Journey",
+      "macrostructure": "Workbench",
+      "signature": "Classroom roster table with region chips beside a mint next-expedition card and constellation panel",
+      "nav": "Title left, wordmark centre, segmented pill and theme button right",
+      "footer": "None",
+      "stitch_screen": "51a354674165449abc6ed352332ea0dd",
+      "fixes": []
+    },
+    {
       "date": "2026-07-29",
       "project": "Echo Maze",
       "genre": "playful",

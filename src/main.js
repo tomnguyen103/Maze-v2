@@ -1,8 +1,15 @@
+import "./game/daily-constellation.css";
+import "./game/first-light.css";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
   saveActiveRunLocator
 } from "./game/active-run-locator.js";
+import {
+  applyThemeChoice,
+  nextThemeChoice,
+  readThemeChoice
+} from "./player/theme.js";
 import { createCanvasRenderer } from "./game/canvas-renderer.js";
 import {
   clearPendingGuestDemo,
@@ -225,6 +232,7 @@ const elements = {
   atlasButton: requiredElement("atlas-button", HTMLButtonElement),
   workshopButton: requiredElement("workshop-button", HTMLButtonElement),
   settingsButton: requiredElement("settings-button", HTMLButtonElement),
+  themeButton: requiredElement("theme-button", HTMLButtonElement),
   trailCompassDiscover: requiredElement(
     "trail-compass-discover",
     HTMLButtonElement
@@ -1119,6 +1127,24 @@ elements.recordsButton.addEventListener("click", () => {
 elements.trailCompassDiscover.addEventListener("click", () => {
   elements.settingsButton.click();
 });
+// Held in memory: blocked storage must not stall the cycle on its fallback.
+let themeChoice = readThemeChoice();
+function showThemeChoice() {
+  elements.themeButton.dataset.choice = themeChoice;
+  elements.themeButton.setAttribute(
+    "aria-label",
+    `Theme: ${themeChoice}. Switch to ${nextThemeChoice(themeChoice)}.`
+  );
+}
+showThemeChoice();
+elements.themeButton.addEventListener("click", () => {
+  themeChoice = nextThemeChoice(themeChoice);
+  applyThemeChoice(themeChoice);
+  showThemeChoice();
+  // The canvas reads its palette only on a render, so redraw it in the new theme.
+  renderer.render(run);
+});
+
 elements.settingsButton.addEventListener("click", async () => {
   if (accessSettingsOpening) {
     return;

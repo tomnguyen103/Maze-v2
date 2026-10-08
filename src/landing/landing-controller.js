@@ -19,7 +19,6 @@ export function renderLanding(root) {
     <main class="landing-page" id="landing-main">
       <section class="landing-hero" aria-labelledby="landing-title">
         <div class="landing-hero__copy">
-          <p class="section-label">A learning adventure</p>
           <h1 id="landing-title">Echo Maze</h1>
           <p>Recover every Echo, outsmart Wardens with knowledge, then find the Gate.</p>
           <div class="landing-hero__actions">

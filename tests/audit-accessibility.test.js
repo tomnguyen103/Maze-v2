@@ -236,8 +236,6 @@ describe("TYPE — body copy has a real 16px floor", () => {
       ".trail-compass p {",
       ".objective-copy {",
       ".access-settings-status {",
-      ".first-light-route span {",
-      ".first-light-boundary {",
       ".learning-deck-picker > p {",
       ".level-dialog__note {",
       ".field-note {",
@@ -253,6 +251,13 @@ describe("TYPE — body copy has a real 16px floor", () => {
       const rule = daylight.slice(daylight.indexOf(selector));
       const closingBrace = rule.indexOf("}");
       expect(rule.slice(0, closingBrace)).toContain("var(--text-body)");
+    }
+
+    // The First Light Tutorial dialog rules load with the game chunk, not the shared sheet.
+    const firstLight = source("src/game/first-light.css").replace(/\r\n/g, "\n");
+    for (const selector of [".first-light-route span {", ".first-light-boundary {"]) {
+      const rule = firstLight.slice(firstLight.indexOf(selector));
+      expect(rule.slice(0, rule.indexOf("}"))).toContain("var(--text-body)");
     }
 
     // `.access-setting small` is declared twice — once in a selector group

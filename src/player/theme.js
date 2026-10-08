@@ -27,12 +27,13 @@ export function isThemeChoice(value) {
  * not one we recognise. A corrupted entry is a reason to fall back, never to
  * throw on a code path that runs before the page paints.
  *
- * @param {Pick<Storage, "getItem">} [storage]
+ * @param {Pick<Storage, "getItem">} [storage] defaults to `localStorage`
  * @returns {ThemeChoice}
  */
-export function readThemeChoice(storage = globalThis.localStorage) {
+export function readThemeChoice(storage) {
   try {
-    const stored = storage?.getItem(THEME_STORAGE_KEY);
+    // A blocked origin throws on the `localStorage` getter itself.
+    const stored = (storage ?? globalThis.localStorage)?.getItem(THEME_STORAGE_KEY);
     return isThemeChoice(stored) ? stored : "system";
   } catch {
     // Private browsing, a blocked origin, a full quota: none of them are a
@@ -67,6 +68,17 @@ export function nextTheme(current) {
 }
 
 /**
+ * The choice a cycle button moves to next: light, dark, system, then light.
+ *
+ * @param {ThemeChoice} choice
+ * @returns {ThemeChoice}
+ */
+export function nextThemeChoice(choice) {
+  if (choice === "light") return "dark";
+  return choice === "dark" ? "system" : "light";
+}
+
+/**
  * Apply a choice: stamp the root so CSS can see it, and remember it.
  *
  * `system` removes the attribute rather than writing one, so the media query
@@ -81,7 +93,6 @@ export function nextTheme(current) {
  */
 export function applyThemeChoice(choice, options = {}) {
   const root = options.root ?? globalThis.document?.documentElement;
-  const storage = options.storage ?? globalThis.localStorage;
   if (root) {
     if (choice === "system") {
       root.removeAttribute("data-theme");
@@ -90,6 +101,7 @@ export function applyThemeChoice(choice, options = {}) {
     }
   }
   try {
+    const storage = options.storage ?? globalThis.localStorage;
     if (choice === "system") {
       storage?.removeItem(THEME_STORAGE_KEY);
     } else {

@@ -3145,8 +3145,8 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
       };
     });
     expect(
-      fit.scrollWidth <= fit.boxWidth &&
-        fit.scrollHeight <= fit.boxHeight &&
+      fit.scrollWidth <= fit.clientWidth &&
+        fit.scrollHeight <= fit.clientHeight &&
         fit.boxWidth >= 44 &&
         fit.boxHeight >= 44,
       `${fit.id || fit.text} must not clip: ${JSON.stringify(fit)}`
@@ -3346,12 +3346,14 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
         boxHeight: bounds.height,
         boxWidth: bounds.width,
         scrollHeight: element.scrollHeight,
-        scrollWidth: element.scrollWidth
+        scrollWidth: element.scrollWidth,
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth
       };
     });
     expect(
-      fit.scrollWidth <= fit.boxWidth &&
-        fit.scrollHeight <= fit.boxHeight &&
+      fit.scrollWidth <= fit.clientWidth &&
+        fit.scrollHeight <= fit.clientHeight &&
         fit.boxWidth >= 44 &&
         fit.boxHeight >= 44,
       `Region 4 command must remain readable: ${JSON.stringify(fit)}`
@@ -6668,6 +6670,10 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
     "One optional Constellation retry proof is sufficient."
   );
   let chunkRequests = 0;
+  // A lost connection takes any stylesheet split off with the view chunk too.
+  await page.route("**/assets/daily-constellation-*.css", (route) =>
+    route.abort()
+  );
   await page.route("**/assets/daily-constellation-view-*.js", async (route) => {
     chunkRequests += 1;
     if (chunkRequests === 1) {
@@ -6683,6 +6689,11 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
 
   await expect(page.locator("#daily-constellation-status")).toHaveText(
     "The Constellation could not be loaded. Your Daily result is unaffected."
+  );
+  // The Daily Trail Constellation styles ride the game chunk, so they survive a failed view chunk.
+  await expect(page.locator("#daily-constellation-status")).not.toHaveCSS(
+    "border-left-width",
+    "0px"
   );
   const retry = page.getByRole("button", { name: "Retry Constellation" });
   await expect(retry).toBeVisible();
@@ -6781,4 +6792,59 @@ test("labels a terminally rejected offline Run Offline—unverified", async ({
   ).toBeHidden();
 
   await recordOfflineScreenshot(page, testInfo, "offline-unverified");
+});
+
+test("cycles the theme button even when storage refuses writes", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "echo-maze:theme") throw new Error("blocked");
+      setItem.call(this, key, value);
+    };
+  });
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  const button = page.locator("#theme-button");
+  const root = page.locator("html");
+  await expect(button).toHaveAttribute("data-choice", "system");
+
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "light");
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "dark");
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "system");
+  await expect(root).not.toHaveAttribute("data-theme", /./);
+});
+
+test("redraws the Labyrinth and stores the last choice after two quick theme clicks", async ({
+  page
+}) => {
+  await page.goto("/play");
+  await expectGameReady(page);
+  await chooseTrailScout(page);
+  const button = page.locator("#theme-button");
+  const canvas = page.locator("#maze-canvas");
+  const snapshot = () =>
+    canvas.evaluate((node) =>
+      /** @type {HTMLCanvasElement} */ (node).toDataURL()
+    );
+  // A paused Run draws nothing on its own, so the click is the only cause of a redraw.
+  await page.locator("#pause-run").click();
+  await expect(page.locator("#pause-run")).toHaveAttribute("aria-pressed", "true");
+  const before = await snapshot();
+
+  await button.click();
+  await button.click();
+  await expect(button).toHaveAttribute("data-choice", "dark");
+  expect(
+    await page.evaluate(() => localStorage.getItem("echo-maze:theme"))
+  ).toBe("dark");
+  // The canvas reads its palette on a render, so an idle Run must redraw on the click.
+  await expect.poll(snapshot).not.toBe(before);
 });
