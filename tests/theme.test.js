@@ -73,6 +73,26 @@ describe("theme choice", () => {
     expect(readThemeChoice(hostile)).toBe("system");
   });
 
+  it("survives a localStorage getter that throws", () => {
+    // Chrome throws a SecurityError on the getter itself when site data is blocked.
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("SecurityError");
+      }
+    });
+    try {
+      const root = fakeRoot();
+      expect(readThemeChoice()).toBe("system");
+      expect(() => applyThemeChoice("dark", { root })).not.toThrow();
+      expect(root.attributes["data-theme"]).toBe("dark");
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
+
   it("resolves system against the OS and an explicit choice against nothing", () => {
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");

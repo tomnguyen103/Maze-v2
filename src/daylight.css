@@ -3450,8 +3450,13 @@ body[data-run-mode="first-light"] .play-workbench {
   visibility: visible;
 }
 
-.landing-labyrinth-mark span:is(:nth-child(20), :nth-child(25)) {
+.landing-labyrinth-mark span:nth-child(20) {
   --island: var(--region-tideglass);
+  visibility: visible;
+}
+
+.landing-labyrinth-mark span:nth-child(25) {
+  --island: var(--region-bellroot);
   visibility: visible;
 }
 

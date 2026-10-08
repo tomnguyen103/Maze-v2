@@ -27,12 +27,13 @@ export function isThemeChoice(value) {
  * not one we recognise. A corrupted entry is a reason to fall back, never to
  * throw on a code path that runs before the page paints.
  *
- * @param {Pick<Storage, "getItem">} [storage]
+ * @param {Pick<Storage, "getItem">} [storage] defaults to `localStorage`
  * @returns {ThemeChoice}
  */
-export function readThemeChoice(storage = globalThis.localStorage) {
+export function readThemeChoice(storage) {
   try {
-    const stored = storage?.getItem(THEME_STORAGE_KEY);
+    // A blocked origin throws on the `localStorage` getter itself.
+    const stored = (storage ?? globalThis.localStorage)?.getItem(THEME_STORAGE_KEY);
     return isThemeChoice(stored) ? stored : "system";
   } catch {
     // Private browsing, a blocked origin, a full quota: none of them are a
@@ -92,7 +93,6 @@ export function nextThemeChoice(choice) {
  */
 export function applyThemeChoice(choice, options = {}) {
   const root = options.root ?? globalThis.document?.documentElement;
-  const storage = options.storage ?? globalThis.localStorage;
   if (root) {
     if (choice === "system") {
       root.removeAttribute("data-theme");
@@ -101,6 +101,7 @@ export function applyThemeChoice(choice, options = {}) {
     }
   }
   try {
+    const storage = options.storage ?? globalThis.localStorage;
     if (choice === "system") {
       storage?.removeItem(THEME_STORAGE_KEY);
     } else {
