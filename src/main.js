@@ -606,7 +606,7 @@ let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
 // Set before Unlock closes the dialog to resume a saved Run, so the owner
 // link close listener starts nothing more. Without a saved Run it stays false
-// and the listener opens the normal Run entry. Only a page load clears it.
+// and the listener opens the normal Run entry. A failed resume clears it.
 let lifetimeUnlockResumed = false;
 let pendingLifetimeSessionId = "";
 let mustChooseLevel =
@@ -3235,13 +3235,16 @@ async function resumeAfterUnlock() {
     started = await resumePendingRun();
   } finally {
     if (!started) {
-      // Reopen the dialog so the Explorer can try again or choose "Not now".
       lifetimeUnlockResumed = false;
-      lifetimeView.showMembership();
+      // A refusal opens its own dialog. Otherwise reopen this one, so the
+      // Explorer can try again or choose "Not now".
+      if (!document.querySelector("dialog[open]")) {
+        lifetimeView.showMembership(
+          "Your saved Run did not start. Try again.",
+          "error"
+        );
+      }
     }
-  }
-  if (!started) {
-    throw new Error("The saved Run did not resume.");
   }
 }
 
@@ -3262,7 +3265,8 @@ async function resolveLifetimeReturn() {
     // the dialog keeps "Not now" working.
     const offerFirstLight = firstLightEntryPending;
     const enterOnClose = () => {
-      if (lifetimeUnlockResumed) {
+      // The close event is queued, so a dialog that reopened since then wins.
+      if (lifetimeUnlockResumed || elements.lifetimeDialog.open) {
         return;
       }
       elements.lifetimeDialog.removeEventListener("close", enterOnClose);

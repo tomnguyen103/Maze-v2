@@ -795,31 +795,37 @@ test("US-03.1 reopens membership when the saved Run fails to resume after Unlock
     const { client } = Reflect.get(window, "__echoMazePlayerDependencies");
     client.getRunAccessConfig = async () => ({ enforcementEnabled: true });
     client.createLifetimeCheckout = async () => ({ state: "lifetime_active" });
+    const authorizeRun = client.authorizeRun;
     Reflect.set(window, "__echoMazeRunStarts", 0);
-    client.authorizeRun = async () => {
-      Reflect.set(
-        window,
-        "__echoMazeRunStarts",
-        Number(Reflect.get(window, "__echoMazeRunStarts")) + 1
-      );
-      throw new TypeError("Failed to fetch");
+    client.authorizeRun = async (/** @type {unknown} */ locator) => {
+      const starts = Number(Reflect.get(window, "__echoMazeRunStarts")) + 1;
+      Reflect.set(window, "__echoMazeRunStarts", starts);
+      if (starts === 1) {
+        throw new TypeError("Failed to fetch");
+      }
+      return authorizeRun(locator);
     };
   });
   await page.goto("/play?membership=open");
   await expectGameReady(page);
 
+  const runStarts = () =>
+    page.evaluate(() => Reflect.get(window, "__echoMazeRunStarts"));
   await page.getByRole("button", { name: /Unlock lifetime access/ }).click();
   await expect(page.locator("#lifetime-status")).toHaveText(
-    "Checkout unavailable. Try again."
+    "Your saved Run did not start. Try again."
   );
   await expect(page.locator("#lifetime-dialog")).toBeVisible();
+  // A queued close event must not start the Run behind the reopened dialog.
+  await page.waitForTimeout(500);
+  expect(await runStarts()).toBe(1);
 
-  // "Not now" takes the normal Run entry, which retries the saved Run.
+  // "Not now" takes the normal Run entry, which retries the saved Run once.
   await page.getByRole("button", { name: "Not now" }).click();
   await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => Reflect.get(window, "__echoMazeRunStarts")))
-    .toBe(2);
+  await expect.poll(runStarts).toBe(2);
+  await page.waitForTimeout(500);
+  expect(await runStarts()).toBe(2);
 });
 
 test("US-03.1 opens the Run entry when Unlock finds access active and no saved Run", async ({
