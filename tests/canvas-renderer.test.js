@@ -450,6 +450,13 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
+  it("US-08.1 leaves the passage colour to the canvas tokens, so no Region theme tints it", () => {
+    const regionCss = readFileSync(resolve(process.cwd(), "src/game/region-theme.css"), "utf8");
+
+    expect(regionCss).not.toMatch(/--color-passage\s*:/);
+    expect(tokensCss).not.toMatch(/--color-tile-/);
+  });
+
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {
     document.body.style.setProperty("--color-warden", "rgb(200, 0, 0)");
     const modes = /** @type {const} */ (["patrol", "hunt", "intercept", "lured"]);

@@ -1,4 +1,4 @@
-/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful storybook expedition | macrostructure: Workbench + focused encounter | theme: Journey | anchor: sky | signature: quest cards and Warden knowledge duel | playfield: grid paper | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
+/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: field-journal atlas on ivory paper | macrostructure: Workbench + focused encounter | theme: Field Journal | anchor: lantern amber | signature: charcoal hairlines, drawn territories and the Warden decision panel | playfield: paper board | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
 :root {
   color-scheme: light;
   --theme-surface: daylight;
@@ -79,11 +79,6 @@
   --region-sunspan: oklch(80% 0.15 80);
   --region-tideglass: oklch(62% 0.17 275);
   --region-bellroot: oklch(72% 0.17 350);
-  --color-tile-mosslight: oklch(93% 0.06 165);
-  --color-tile-windcall: oklch(93% 0.05 237);
-  --color-tile-sunspan: oklch(94% 0.07 80);
-  --color-tile-tideglass: oklch(92% 0.05 275);
-  --color-tile-bellroot: oklch(93% 0.05 350);
   --color-playground-daylight: oklch(82% 0.04 205);
   --color-playground-twilight: oklch(62% 0.08 276);
   --color-playground-sea-glass: oklch(80% 0.09 176);
@@ -181,12 +176,6 @@
     --color-band-1: oklch(28% 0.05 75);
     --color-band-2: oklch(40% 0.09 75);
     --color-band-3: oklch(55% 0.13 75);
-
-    --color-tile-mosslight: oklch(38% 0.08 165);
-    --color-tile-windcall: oklch(38% 0.08 237);
-    --color-tile-sunspan: oklch(40% 0.07 80);
-    --color-tile-tideglass: oklch(38% 0.09 275);
-    --color-tile-bellroot: oklch(38% 0.09 350);
     --color-fog: oklch(19% 0.012 65);
     --color-fog-soft: oklch(23% 0.012 65);
     --color-fog-grid: oklch(72% 0.02 80 / 40%);
@@ -232,12 +221,6 @@
   --color-band-1: oklch(28% 0.05 75);
   --color-band-2: oklch(40% 0.09 75);
   --color-band-3: oklch(55% 0.13 75);
-
-  --color-tile-mosslight: oklch(38% 0.08 165);
-  --color-tile-windcall: oklch(38% 0.08 237);
-  --color-tile-sunspan: oklch(40% 0.07 80);
-  --color-tile-tideglass: oklch(38% 0.09 275);
-  --color-tile-bellroot: oklch(38% 0.09 350);
   --color-fog: oklch(19% 0.012 65);
   --color-fog-soft: oklch(23% 0.012 65);
   --color-fog-grid: oklch(72% 0.02 80 / 40%);
