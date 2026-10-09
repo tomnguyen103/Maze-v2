@@ -164,3 +164,40 @@ describe("Field Journal identity", () => {
     }
   });
 });
+
+describe("shared base styles", () => {
+  // The shared sheet draws the Field Journal look only. No island or rope rule remains.
+  const daylight = readFileSync(root + "src/daylight.css", "utf8").replace(
+    /\r\n/g,
+    "\n"
+  );
+
+  /** Returns the declarations of every top-level rule for one exact selector. */
+  const rules = (/** @type {string} */ selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return [
+      ...daylight.matchAll(new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`, "g"))
+    ]
+      .map((match) => match[1])
+      .join("\n");
+  };
+
+  it("draws no island, rope bridge, blob or grid ground (US-01.3)", () => {
+    expect(daylight).not.toMatch(/--island\b/);
+    expect(daylight).not.toMatch(/rope/i);
+    expect(daylight).not.toMatch(/closest-side/);
+    expect(daylight).not.toMatch(/--color-paper-grid/);
+  });
+
+  it("keeps every header opaque with no backdrop blur (US-05.3)", () => {
+    expect(daylight).not.toMatch(/backdrop-filter/);
+  });
+
+  it("fills the primary button with amber, not the legacy sky-deep token (US-01.3)", () => {
+    expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
+  });
+
+  it("sets body text to 16px (I6)", () => {
+    expect(rules("body")).toMatch(/font-size:\s*1rem/);
+  });
+});

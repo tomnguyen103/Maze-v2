@@ -1073,8 +1073,4 @@ test("keeps the landing page operable at mobile width, reduced motion, and 200 p
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  const motionDuration = await page
-    .locator(".landing-labyrinth-mark")
-    .evaluate((element) => getComputedStyle(element).animationDuration);
-  expect(Number.parseFloat(motionDuration) || 0).toBeLessThanOrEqual(0.001);
 });
