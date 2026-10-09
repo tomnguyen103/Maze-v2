@@ -198,7 +198,7 @@ function readAppearanceVariables() {
     colorForeground: readToken("--color-ink"),
     colorInput: readToken("--color-stone"),
     colorInputForeground: readToken("--color-ink"),
-    colorPrimary: readToken("--color-signal-deep"),
+    colorPrimary: readToken("--color-signal"),
     colorRing: readToken("--color-signal-deep"),
     colorSuccess: readToken("--color-gate"),
     colorWarning: readToken("--color-explorer-gold"),

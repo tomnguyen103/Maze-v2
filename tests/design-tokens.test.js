@@ -80,7 +80,7 @@ describe("custom properties", () => {
 
 describe("Field Journal identity", () => {
   // Checked-out files may use CRLF on Windows; compare LF text only.
-  const read = (relative) =>
+  const read = (/** @type {string} */ relative) =>
     readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
 
   /** Adopted palette values from the spec Palette table, light then Night. */

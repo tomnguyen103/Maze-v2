@@ -66,7 +66,7 @@ describe("Clerk browser initializer", () => {
         ui: { ClerkUI: { component: "ClerkUI" } },
         appearance: {
           variables: {
-            colorPrimary: "token:--color-signal-deep",
+            colorPrimary: "token:--color-signal",
             colorForeground: "token:--color-ink",
             colorBorder: "token:--color-ink",
             colorRing: "token:--color-signal-deep",

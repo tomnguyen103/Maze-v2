@@ -18,7 +18,7 @@
     if (stored === "light" || stored === "dark") {
       document.documentElement.setAttribute("data-theme", stored);
       // The browser bar follows the choice too, not only the OS.
-      var color = stored === "dark" ? "#0a0f1e" : "#f5fbff";
+      var color = stored === "dark" ? "oklch(19% 0.012 65)" : "oklch(97.5% 0.012 85)";
       var metas = document.querySelectorAll('meta[name="theme-color"]');
       for (var i = 0; i < metas.length; i += 1) {
         metas[i].setAttribute("content", color);

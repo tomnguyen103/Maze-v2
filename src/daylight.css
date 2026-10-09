@@ -289,7 +289,7 @@ a:hover {
 }
 
 .primary-button {
-  --fill: var(--color-sky-deep);
+  --fill: var(--color-signal-deep);
   --ink: var(--color-on-fill);
   color: var(--ink);
   background: var(--fill);
@@ -298,13 +298,13 @@ a:hover {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .primary-button {
-    --fill: var(--color-sky);
+    --fill: var(--color-signal);
     --ink: var(--color-accent-ink);
   }
 }
 
 :root[data-theme="dark"] .primary-button {
-  --fill: var(--color-sky);
+  --fill: var(--color-signal);
   --ink: var(--color-accent-ink);
 }
 
@@ -379,7 +379,7 @@ a:hover {
 }
 
 .run-card {
-  --card-hue: var(--color-sky);
+  --card-hue: var(--color-signal);
 }
 
 .player-console {
@@ -508,7 +508,7 @@ a:hover {
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);
   color: var(--color-ink);
-  border: 1px solid color-mix(in oklab, var(--card-hue, var(--color-sky)) 44%, var(--color-line-soft));
+  border: 1px solid color-mix(in oklab, var(--card-hue, var(--color-signal)) 44%, var(--color-line-soft));
   border-radius: var(--radius-pill);
   background: var(--color-stone);
   font-size: var(--text-compact);
@@ -713,7 +713,7 @@ a:hover {
 }
 
 .seed-copy:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   background: var(--color-signal-soft);
 }
 
@@ -771,7 +771,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   color: var(--color-ink);
-  border: 0 solid color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border: 0 solid color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   font-size: var(--text-label);
@@ -864,14 +864,14 @@ html .trail-compass[hidden] {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-on-fill);
-  border: 1px solid var(--color-sky-deep);
+  border: 1px solid var(--color-signal-deep);
   border-radius: var(--radius-md);
   background: linear-gradient(
     120deg,
-    var(--color-sky-deep),
-    color-mix(in oklab, var(--color-sky-deep), black 16%)
+    var(--color-signal-deep),
+    color-mix(in oklab, var(--color-signal-deep), black 16%)
   );
-  box-shadow: 0 6px 16px -8px var(--color-sky-deep);
+  box-shadow: 0 6px 16px -8px var(--color-signal-deep);
   text-align: left;
   white-space: normal;
   cursor: pointer;
@@ -882,12 +882,12 @@ html .trail-compass[hidden] {
 
 .pulse-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -10px var(--color-sky-deep);
+  box-shadow: 0 10px 22px -10px var(--color-signal-deep);
 }
 
 .pulse-button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 2px 6px -4px var(--color-sky-deep);
+  box-shadow: 0 2px 6px -4px var(--color-signal-deep);
 }
 
 .pulse-button:disabled {
@@ -945,7 +945,7 @@ kbd {
   width: 1.5rem;
   height: 1.5rem;
   place-items: center;
-  color: var(--color-sky-deep);
+  color: var(--color-signal-deep);
   border-radius: 50%;
   background: var(--color-on-fill);
   font-family: var(--font-utility);
@@ -956,7 +956,7 @@ kbd {
 /* The Signal Bell is the quiet partner of the Pulse button. */
 .bell-button {
   color: var(--color-ink);
-  border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   background: var(--color-signal-soft);
   box-shadow: none;
 }
@@ -1226,7 +1226,7 @@ kbd {
 .field-note {
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px dashed color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border: 1px dashed color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   border-radius: var(--radius-lg);
   color: var(--color-ink);
   font-size: var(--text-body);
@@ -1425,7 +1425,7 @@ body[data-run-mode="first-light"] .play-workbench {
   padding: var(--space-1) var(--space-3);
   color: var(--color-on-fill);
   border-radius: var(--radius-pill);
-  background: var(--color-sky-deep);
+  background: var(--color-signal-deep);
   font-size: 0.72rem;
   font-weight: 650;
 }
@@ -1604,11 +1604,11 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .direction-button:hover:not(:disabled) {
     background: var(--color-signal-soft);
-    border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+    border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   }
 
   .direction-button:active:not(:disabled) {
-    background: var(--color-sky-deep);
+    background: var(--color-signal-deep);
     color: var(--color-on-fill);
   }
 

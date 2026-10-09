@@ -54,7 +54,7 @@
 }
 
 .control-link:hover {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
   background: var(--color-signal-soft);
 }
 
@@ -333,7 +333,7 @@
 }
 
 .classroom-form input:hover:not(:disabled) {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
 }
 
 .classroom-form input:user-invalid {
@@ -380,7 +380,7 @@
   min-height: 2rem;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-signal) 44%, transparent);
   border-radius: var(--radius-pill);
   background: var(--color-signal-soft);
   color: var(--color-ink);
@@ -440,9 +440,9 @@
 
 .next-step-card {
   padding: var(--space-4);
-  border: 1px solid color-mix(in oklab, var(--color-sky) 44%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-signal) 44%, transparent);
   border-radius: var(--radius-md);
-  background: color-mix(in oklab, var(--color-sky) 9%, var(--color-panel));
+  background: color-mix(in oklab, var(--color-signal) 9%, var(--color-panel));
 }
 
 .next-step-card h4 {
