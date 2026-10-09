@@ -22,6 +22,18 @@ const REFUND_PATH =
   /^\/api\/admin\/memberships\/([A-Za-z0-9_-]{1,255})\/refund$/;
 const AUDIT_PATH = /^\/api\/admin\/audit$/;
 const METRICS_PATH = /^\/api\/admin\/metrics$/;
+const FUNNEL_PATH = /^\/api\/admin\/funnel$/;
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_FUNNEL_DAYS = 366;
+const DAY_MS = 86_400_000;
+/** Summary fields in CSV order, with the CSV metric name of each. */
+const FUNNEL_SUMMARY_FIELDS = /** @type {const} */ ([
+  ["grossPurchases", "gross_purchases"],
+  ["netPurchases", "net_purchases"],
+  ["refundedCount", "refunded_count"],
+  ["disputedCount", "disputed_count"],
+  ["refundedCents", "refunded_cents"]
+]);
 const DEAD_WEBHOOKS_PATH = /^\/api\/admin\/webhooks\/dead$/;
 
 /** @typedef {{ userId: string, role: import("../shared/permissions.js").Role }} AdminDecision */
@@ -51,7 +63,8 @@ export function isAdminPath(pathname) {
  *       beforeId: number | null,
  *       limit: number
  *     }) => Promise<Record<string, unknown>[]>,
- *     dashboardMetrics?: () => Promise<Record<string, number>>
+ *     dashboardMetrics?: () => Promise<Record<string, number>>,
+ *     funnelReport?: (range: FunnelRange) => Promise<FunnelReport>
  *   },
  *   questionStore?: {
  *     listQuestions: () => Promise<Record<string, unknown>[]>,
@@ -165,6 +178,12 @@ export function createAdminHandler({
       pattern: METRICS_PATH,
       permissions: { GET: "refunds:issue" },
       handle: handleMetrics
+    },
+    {
+      // Commercial totals, so the export takes the permission of the metrics.
+      pattern: FUNNEL_PATH,
+      permissions: { GET: "refunds:issue" },
+      handle: handleFunnel
     },
     {
       pattern: DEAD_WEBHOOKS_PATH,
@@ -632,6 +651,42 @@ export function createAdminHandler({
   }
 
   /**
+   * Funnel Counts and Financial Fact totals of one Billing Mode. Both hold
+   * aggregates only, so the export names no Explorer.
+   *
+   * @param {import("node:http").IncomingMessage} request
+   * @param {import("node:http").ServerResponse} response
+   * @param {AdminDecision} decision
+   */
+  async function handleFunnel(request, response, decision) {
+    if (request.method !== "GET") {
+      methodNotAllowed(response, "GET", "Use GET to export the funnel.");
+      return;
+    }
+    try {
+      const { range, format } = funnelQuery(
+        new URL(request.url ?? "", "http://local").searchParams
+      );
+      const report = await configured(
+        store.funnelReport,
+        "Funnel export"
+      )(range);
+      await auditRead(request, decision, "funnel.read", "funnel_counts");
+      if (format === "csv") {
+        sendCsv(
+          response,
+          `funnel-${range.mode}-${range.from}-${range.to}.csv`,
+          funnelCsv(report)
+        );
+        return;
+      }
+      sendJson(response, 200, { ...range, ...report });
+    } catch (error) {
+      adminFailure(response, "Funnel export", error);
+    }
+  }
+
+  /**
    * Dead deliveries the retry loop gave up on: each one is a provider state
    * change that was never applied, and until now `npm run webhooks:dead` was
    * the only way to see one. Read-only, so there is nothing to audit beyond the
@@ -725,6 +780,100 @@ export function createAdminHandler({
 }
 
 class AdminInputError extends Error {}
+
+/**
+ * @typedef {{ from: string, to: string, mode: "live" | "test" }} FunnelRange
+ * @typedef {{
+ *   counts: { day: string, metric: string, campaign: string, count: number }[],
+ *   summary: Record<(typeof FUNNEL_SUMMARY_FIELDS)[number][0], number>
+ * }} FunnelReport
+ */
+
+/**
+ * @param {URLSearchParams} params
+ * @returns {{ range: FunnelRange, format: "json" | "csv" }}
+ */
+function funnelQuery(params) {
+  const from = isoDay(params.get("from"), "From");
+  const to = isoDay(params.get("to"), "To");
+  const days = (Date.parse(to) - Date.parse(from)) / DAY_MS + 1;
+  if (days < 1 || days > MAX_FUNNEL_DAYS) {
+    throw new AdminInputError(
+      `The range must cover 1 to ${MAX_FUNNEL_DAYS} days.`
+    );
+  }
+  // Commercial reads use live data unless the admin asks for test data.
+  const mode = params.get("mode") ?? "live";
+  if (mode !== "live" && mode !== "test") {
+    throw new AdminInputError("Mode must be live or test.");
+  }
+  const format = params.get("format") ?? "json";
+  if (format !== "json" && format !== "csv") {
+    throw new AdminInputError("Format must be json or csv.");
+  }
+  return { range: { from, to, mode }, format };
+}
+
+/** @param {string | null} value @param {string} label */
+function isoDay(value, label) {
+  // The round trip rejects a day the calendar lacks, such as 2026-02-30.
+  // Postgres has no year 0, so that year is rejected here too.
+  if (
+    value === null ||
+    !ISO_DAY.test(value) ||
+    value.startsWith("0000-") ||
+    Number.isNaN(Date.parse(value)) ||
+    new Date(value).toISOString().slice(0, 10) !== value
+  ) {
+    throw new AdminInputError(`${label} must be a YYYY-MM-DD date.`);
+  }
+  return value;
+}
+
+/**
+ * One table: a `count` row per Funnel Count, then a `summary` row per fact
+ * total, so a spreadsheet reads the export in one sheet.
+ *
+ * @param {FunnelReport} report
+ */
+function funnelCsv({ counts, summary }) {
+  const rows = [["kind", "day", "metric", "campaign", "value"]];
+  for (const row of counts) {
+    rows.push(["count", row.day, row.metric, row.campaign, String(row.count)]);
+  }
+  for (const [field, metric] of FUNNEL_SUMMARY_FIELDS) {
+    rows.push(["summary", "", metric, "", String(summary[field])]);
+  }
+  return rows.map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+
+/**
+ * RFC 4180 quoting. A spreadsheet runs a cell that starts with `=`, `+`, `-`,
+ * `@`, a tab or a carriage return as a formula, so such a cell gets a leading
+ * apostrophe (OWASP CSV injection).
+ *
+ * @param {string} value
+ */
+function csvCell(value) {
+  const text = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/**
+ * @param {import("node:http").ServerResponse} response
+ * @param {string} filename
+ * @param {string} body
+ */
+function sendCsv(response, filename, body) {
+  response.statusCode = 200;
+  response.setHeader("content-type", "text/csv; charset=utf-8");
+  response.setHeader(
+    "content-disposition",
+    `attachment; filename="${filename}"`
+  );
+  response.setHeader("cache-control", "no-store");
+  response.end(body);
+}
 
 function unavailableQuestionStore() {
   const fail = async () => {
