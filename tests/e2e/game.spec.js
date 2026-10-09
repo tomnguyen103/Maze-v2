@@ -778,6 +778,50 @@ test("US-03.1 resumes the saved Run once when Unlock finds access already active
   expect(await runStarts()).toBe(1);
 });
 
+test("US-03.1 reopens membership when the saved Run fails to resume after Unlock", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 1,
+        seed: "STONE-VAULT-07",
+        levelId: "maze-master",
+        labyrinthNumber: 6
+      })
+    );
+    const { client } = Reflect.get(window, "__echoMazePlayerDependencies");
+    client.getRunAccessConfig = async () => ({ enforcementEnabled: true });
+    client.createLifetimeCheckout = async () => ({ state: "lifetime_active" });
+    Reflect.set(window, "__echoMazeRunStarts", 0);
+    client.authorizeRun = async () => {
+      Reflect.set(
+        window,
+        "__echoMazeRunStarts",
+        Number(Reflect.get(window, "__echoMazeRunStarts")) + 1
+      );
+      throw new TypeError("Failed to fetch");
+    };
+  });
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: /Unlock lifetime access/ }).click();
+  await expect(page.locator("#lifetime-status")).toHaveText(
+    "Checkout unavailable. Try again."
+  );
+  await expect(page.locator("#lifetime-dialog")).toBeVisible();
+
+  // "Not now" takes the normal Run entry, which retries the saved Run.
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, "__echoMazeRunStarts")))
+    .toBe(2);
+});
+
 test("US-03.1 opens the Run entry when Unlock finds access active and no saved Run", async ({
   page
 }) => {

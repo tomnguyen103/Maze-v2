@@ -27,6 +27,7 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   /** @type {((confirmed: boolean) => void) | null} */
   let resolveLastFreeRun = null;
   let mode = "membership";
+  let checkoutPending = false;
 
   elements.primary.addEventListener("click", () => {
     if (mode === "last-free") {
@@ -36,6 +37,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
     void openCheckout();
   });
   elements.close.addEventListener("click", () => {
+    if (checkoutPending) {
+      return;
+    }
     if (mode === "last-free") {
       settleLastFreeRun(false);
       return;
@@ -44,6 +48,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   });
   elements.dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
+    if (checkoutPending) {
+      return;
+    }
     if (mode === "last-free") {
       settleLastFreeRun(false);
       return;
@@ -136,6 +143,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   }
 
   async function openCheckout() {
+    // "Not now" waits for the Unlock answer, so one Run entry path runs.
+    checkoutPending = true;
+    elements.close.disabled = true;
     elements.primary.disabled = true;
     elements.primary.textContent = "Opening…";
     setStatus("Opening secure checkout…", "loading");
@@ -154,6 +164,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
         "error"
       );
       elements.primary.focus();
+    } finally {
+      checkoutPending = false;
+      elements.close.disabled = false;
     }
   }
 

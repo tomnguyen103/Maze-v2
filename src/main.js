@@ -3196,9 +3196,7 @@ async function openLifetimeCheckout() {
     await confirmLifetimeSession(pendingLifetimeSessionId);
     pendingLifetimeSessionId = "";
     removeCheckoutParameters(new URL(window.location.href));
-    lifetimeUnlockResumed = activeRunLocator !== null;
-    lifetimeView.close();
-    await resumePendingRun();
+    await resumeAfterUnlock();
     return;
   }
   const checkout = await playerController.createLifetimeCheckout();
@@ -3207,9 +3205,7 @@ async function openLifetimeCheckout() {
       "Lifetime access is already active. Resuming your saved Run.",
       "success"
     );
-    lifetimeUnlockResumed = activeRunLocator !== null;
-    lifetimeView.close();
-    await resumePendingRun();
+    await resumeAfterUnlock();
     return;
   }
   const checkoutUrl = String(checkout.checkoutUrl ?? "");
@@ -3228,6 +3224,27 @@ async function openLifetimeCheckout() {
   window.location.assign(destination.href);
 }
 
+async function resumeAfterUnlock() {
+  lifetimeUnlockResumed = activeRunLocator !== null;
+  lifetimeView.close();
+  if (!lifetimeUnlockResumed) {
+    return;
+  }
+  let started = false;
+  try {
+    started = await resumePendingRun();
+  } finally {
+    if (!started) {
+      // Reopen the dialog so the Explorer can try again or choose "Not now".
+      lifetimeUnlockResumed = false;
+      lifetimeView.showMembership();
+    }
+  }
+  if (!started) {
+    throw new Error("The saved Run did not resume.");
+  }
+}
+
 async function resolveLifetimeReturn() {
   const url = new URL(window.location.href);
   const checkout = url.searchParams.get("checkout");
@@ -3241,18 +3258,18 @@ async function resolveLifetimeReturn() {
     lifetimeView.showMembership();
     // "Not now" falls through to the normal Run entry. A close that already
     // resumed the saved Run (Unlock with access active) starts nothing more.
+    // The listener stays while a resume runs, so a failed resume that reopens
+    // the dialog keeps "Not now" working.
     const offerFirstLight = firstLightEntryPending;
-    elements.lifetimeDialog.addEventListener(
-      "close",
-      () => {
-        if (lifetimeUnlockResumed) {
-          return;
-        }
-        firstLightEntryPending = offerFirstLight;
-        void initializeRunEntry();
-      },
-      { once: true }
-    );
+    const enterOnClose = () => {
+      if (lifetimeUnlockResumed) {
+        return;
+      }
+      elements.lifetimeDialog.removeEventListener("close", enterOnClose);
+      firstLightEntryPending = offerFirstLight;
+      void initializeRunEntry();
+    };
+    elements.lifetimeDialog.addEventListener("close", enterOnClose);
     return false;
   }
   const sessionId = url.searchParams.get("session_id");
@@ -3323,17 +3340,19 @@ async function resumePendingRun() {
     return false;
   }
   lifetimeReturnConfirmed = true;
-  const started = await startSharedRun(
-    activeRunLocator.seed,
-    activeRunLocator.levelId,
-    activeRunLocator.labyrinthNumber,
-    false,
-    activeRunLocator.runId,
-    rulesetIdentityFromLocator(activeRunLocator)
-  );
-  // A Campfire resume returns before startRun reads the flag.
-  lifetimeReturnConfirmed = false;
-  return started;
+  try {
+    return await startSharedRun(
+      activeRunLocator.seed,
+      activeRunLocator.levelId,
+      activeRunLocator.labyrinthNumber,
+      false,
+      activeRunLocator.runId,
+      rulesetIdentityFromLocator(activeRunLocator)
+    );
+  } finally {
+    // A Campfire resume or a failed start returns before startRun reads the flag.
+    lifetimeReturnConfirmed = false;
+  }
 }
 
 function showDemoAccountGate() {

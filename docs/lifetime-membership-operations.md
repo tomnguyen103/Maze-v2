@@ -336,9 +336,9 @@ member shows no membership, because an Unclassified Purchase grants nothing.
 8. **Make and refund one purchase.** Owner action.
    Sign in with a Pilot Account and open `/play?membership=open`. Make one live
    purchase with a card you own. This charges real money, so it needs
-   the approval listed under External production approvals. Refund the purchase in
-   Stripe. Request `/api/access` before and after the refund. Expect `state`
-   `member`, then `membership-blocked`. Enforcement is still off, so
+   the approval listed under External production approvals. Request `/api/access`
+   and expect `state` `member`. Refund the purchase in Stripe. Request
+   `/api/access` again and expect `state` `membership-blocked`. Enforcement is still off, so
    `enforcementEnabled` is false and the next Run still starts. The Run block shows
    only after step 9.
 

@@ -20,8 +20,9 @@ next environment would build a schema that no existing one has. Fix forward in
 a new numbered migration instead, even when the change is a one-word
 correction.
 
-Files above the boundary may be edited in place, because no database has seen
-them yet.
+A file above the boundary may be edited in place only when the ledger check
+and the execution history show that it has not run in any environment. If that
+is not confirmed, fix forward in a new numbered migration.
 
 ## Locking
 
@@ -139,11 +140,12 @@ Global Scoreboard, so this is the worst of the three to apply hot.
 **Quiesce:** required. Stop the writers before applying; do not attempt it
 behind live traffic.
 
-### 0019 — score entry ruleset partitions (`DB-03`, not applied)
+### 0019 — score entry ruleset partitions (`DB-03`, applied state unverified)
 
 Above the boundary, so it was re-authored in place rather than documented
-around. It now uses a batched, committing backfill instead of one unbounded
-`UPDATE`, `NOT VALID` constraints validated separately, a validated
+around. That edit assumed that no environment had run it, and the ledger check
+must confirm this before an apply. A new edit needs the confirmation above. It
+now uses a batched, committing backfill instead of one unbounded `UPDATE`, `NOT VALID` constraints validated separately, a validated
 `IS NOT NULL` check so `SET NOT NULL` skips its own scan, and
 `CREATE INDEX CONCURRENTLY`. **No quiesce window is needed.**
 

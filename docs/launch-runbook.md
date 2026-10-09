@@ -50,8 +50,11 @@ terms before the live offer. The terms state one price, `$5.99 USD`, once.
 
 **Action:** Take a recoverable database snapshot. Run
 `db/inspect/migration-ledger.sql`. It reads the catalog only and writes nothing.
-Apply only the migrations that report `present` false, in file order, after a
-review of their dependencies. `docs/migration-safety.md` gives the apply command.
+A `present` false row does not prove that the migration never ran: an object
+can be removed after the run. Investigate each false row against the execution
+history and the catalog first. Apply a migration only when that review shows it
+never ran, in file order, after a review of its dependencies.
+`docs/migration-safety.md` gives the apply command.
 
 **Evidence:** _empty_
 

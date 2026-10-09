@@ -100,6 +100,27 @@ describe("Lifetime Membership dialog", () => {
     );
   });
 
+  it("ignores Not now and Escape while the Unlock answer is pending", async () => {
+    /** @type {() => void} */
+    let answer = () => {};
+    const unlock = vi.fn(() => new Promise((resolve) => { answer = () => resolve(undefined); }));
+    createLifetimeView({ onUnlock: unlock }).showMembership();
+    const dialog = /** @type {HTMLDialogElement} */ (document.getElementById("lifetime-dialog"));
+    const close = /** @type {HTMLButtonElement} */ (document.getElementById("lifetime-close"));
+    const closed = vi.fn();
+    dialog.addEventListener("close", closed);
+
+    document.getElementById("lifetime-primary")?.click();
+    expect(close.disabled).toBe(true);
+    close.click();
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+
+    expect(dialog.open).toBe(true);
+    answer();
+    await vi.waitFor(() => expect(close.disabled).toBe(false));
+    expect(closed).not.toHaveBeenCalled();
+  });
+
   it.each([
     [403, "Lifetime Membership is not on sale yet."],
     [401, "Sign in to continue."]
