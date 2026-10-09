@@ -31,7 +31,7 @@ export function renderLanding(root) {
         </div>
         <figure class="landing-hero__figure">
           <div class="landing-hero__frame">
-            <img src="/landing-gameplay.webp" width="640" height="480" alt="Echo Maze board from above: explored tiles surround the Explorer marker, a blue ring with a flag at the center." decoding="async">
+            <img src="/landing-gameplay.webp" width="640" height="480" alt="Echo Maze board from above: ivory passages between hatched charcoal walls, with the Explorer marker, a blue ring with a flag, at the center." decoding="async">
           </div>
           <svg class="landing-hero__trail" aria-hidden="true" focusable="false" viewBox="0 0 640 48"><path pathLength="1" d="M4 40C120 4 200 44 320 24S520 4 636 30"/></svg>
         </figure>

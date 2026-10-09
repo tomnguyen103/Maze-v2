@@ -54,14 +54,12 @@
   margin-inline: auto;
 }
 
+/* The tool rail is an underline tab strip that scrolls inside its own row. */
 .admin-rail {
   display: flex;
   margin: var(--space-3) var(--space-4) 0;
-  padding: var(--space-1);
   gap: var(--space-1);
-  border: 1px solid var(--color-line-soft);
-  border-radius: 0.75rem;
-  background: var(--color-stone);
+  border-bottom: 1px solid var(--color-line-soft);
   overflow-x: auto;
 }
 
@@ -70,28 +68,28 @@
   min-height: 2.75rem;
   padding-inline: var(--space-3);
   align-items: center;
-  border-radius: 0.5rem;
+  border-bottom: 2px solid transparent;
   color: var(--color-ink-muted);
   font: 600 0.875rem/1 var(--font-body);
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color var(--duration-press) var(--ease-out);
+  transition: color var(--duration-press) var(--ease-out);
 }
 
 .admin-rail a:hover {
-  background: var(--color-stone-raised);
+  border-bottom-color: var(--color-line);
   color: var(--color-ink);
 }
 
 /*
  * SHELL-04: the rail is real navigation (a URL per tool), so the current
  * tool needs a visible marker, not only the aria-current a screen reader
- * gets. The fill and the weight both change, so the marker still reads
- * under forced-colors.
+ * gets. The underline and the weight both change, so the marker still
+ * reads under forced-colors.
  */
 .admin-rail a[aria-current="page"] {
-  background: var(--color-signal-deep);
-  color: var(--color-on-signal-deep);
+  border-bottom-color: var(--color-signal);
+  color: var(--color-ink);
   font-weight: 700;
 }
 
@@ -126,7 +124,7 @@
   padding-inline: var(--space-3);
   align-items: center;
   border: 1px solid color-mix(in oklab, var(--color-signal) 44%, transparent);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   font: 600 var(--text-label)/1 var(--font-body);
 }
@@ -142,7 +140,6 @@
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-lg);
   background: var(--color-panel);
-  box-shadow: var(--shadow-panel);
   scroll-margin-top: 6rem;
 }
 
@@ -158,35 +155,34 @@
   gap: var(--space-3);
 }
 
-/* Each card takes a region hue: 9% fill, 44% border, as in the Atlas. */
+/* Each card takes a region hue for its border and marker. */
 .admin-metric {
-  --island: var(--region-windcall);
+  --territory: var(--region-windcall);
   display: grid;
   min-width: 0;
   min-height: 7rem;
   padding: var(--space-4);
   align-content: space-between;
   gap: var(--space-1);
-  border: 1px solid color-mix(in oklab, var(--island) 44%, transparent);
+  border: 1px solid color-mix(in oklab, var(--territory) 44%, transparent);
   border-radius: var(--radius-lg);
-  background: color-mix(in oklab, var(--island) 9%, var(--color-panel));
-  box-shadow: 0 10px 24px -20px color-mix(in oklab, var(--island) 80%, transparent);
+  background: color-mix(in oklab, var(--territory) 9%, var(--color-panel));
 }
 
 .admin-metric:nth-child(5n + 2) {
-  --island: var(--region-mosslight);
+  --territory: var(--region-mosslight);
 }
 
 .admin-metric:nth-child(5n + 3) {
-  --island: var(--region-sunspan);
+  --territory: var(--region-sunspan);
 }
 
 .admin-metric:nth-child(5n + 4) {
-  --island: var(--region-tideglass);
+  --territory: var(--region-tideglass);
 }
 
 .admin-metric:nth-child(5n) {
-  --island: var(--region-bellroot);
+  --territory: var(--region-bellroot);
 }
 
 .admin-metric strong {
@@ -671,7 +667,24 @@
     max-height: calc(100dvh - 6rem);
     margin: var(--space-10) 0 0 var(--space-4);
     align-content: start;
+    border-bottom: 0;
+    border-inline-start: 1px solid var(--color-line-soft);
     overflow: auto;
+  }
+
+  /* The wide rail stacks the tabs, so the marker moves to the start edge. */
+  .admin-rail a {
+    margin-inline-start: -1px;
+    border-bottom: 0;
+    border-inline-start: 2px solid transparent;
+  }
+
+  .admin-rail a:hover {
+    border-inline-start-color: var(--color-line);
+  }
+
+  .admin-rail a[aria-current="page"] {
+    border-inline-start-color: var(--color-signal);
   }
 
   .admin-main {
@@ -705,8 +718,3 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .admin-command {
-    backdrop-filter: none;
-  }
-}

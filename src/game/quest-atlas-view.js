@@ -428,38 +428,41 @@ function renderAtlas(
   applyTransform();
 }
 
+const ATLAS_REGION_IDS = ["foundation", "developing", "capable", "advanced", "mastery"];
+// Hand-cut outlines, each with its landmark stamp and Gate flag, in Region order.
+const ATLAS_TERRITORIES = Object.freeze([
+  { d: "M42 96 L120 40 L212 58 L248 128 L212 204 L120 222 L52 170 Z", stamp: [140, 128], gate: [236, 122] },
+  { d: "M330 118 L402 52 L508 66 L536 128 L498 226 L392 240 L318 188 Z", stamp: [420, 146], gate: [500, 96] },
+  { d: "M628 72 L722 34 L834 70 L862 146 L806 214 L700 226 L640 170 Z", stamp: [740, 136], gate: [806, 88] },
+  { d: "M414 332 L492 274 L592 300 L622 370 L576 452 L480 470 L414 412 Z", stamp: [520, 372], gate: [606, 326] },
+  { d: "M62 352 L150 300 L260 326 L286 398 L240 486 L144 500 L70 440 Z", stamp: [158, 408], gate: [270, 346] }
+]);
+
+/**
+ * Returns the Atlas illustration as SVG markup. Equal Region ids give equal markup.
+ * An unknown Region id draws the neutral wash. The CSS owns every fill, so the markup carries no inline style.
+ * @param {readonly string[]} regionIds one Region id per territory, in Region order
+ * @returns {string}
+ */
+export function renderAtlasIllustrationMarkup(regionIds) {
+  const territories = ATLAS_TERRITORIES.map(({ d, stamp, gate }, index) => {
+    const regionId = regionIds[index];
+    const region = ATLAS_REGION_IDS.includes(regionId) ? ` data-region="${regionId}"` : "";
+    const [sx, sy] = stamp;
+    const [gx, gy] = gate;
+    return [
+      `<path class="atlas-illustration__territory" data-atlas-region-art${region} d="${d}"/>`,
+      `<path class="atlas-illustration__stamp" d="M${sx} ${sy - 12} L${sx + 9} ${sy} L${sx} ${sy + 12} L${sx - 9} ${sy} Z"/>`,
+      `<path class="atlas-illustration__gate" d="M${gx} ${gy + 30} V${gy} L${gx + 16} ${gy + 6} L${gx} ${gy + 12}"/>`
+    ].join("");
+  }).join("");
+  return `<svg class="atlas-illustration" data-atlas-illustration aria-hidden="true" viewBox="0 0 900 620" preserveAspectRatio="none"><path class="atlas-illustration__trail" d="M130 155 C250 70 330 210 440 145 S650 80 770 170 C690 270 585 305 500 385 S285 540 145 445"/>${territories}</svg>`;
+}
+
 function createAtlasIllustration() {
-  const namespace = "http://www.w3.org/2000/svg";
-  const illustration = document.createElementNS(namespace, "svg");
-  illustration.classList.add("atlas-illustration");
-  illustration.dataset.atlasIllustration = "";
-  illustration.setAttribute("aria-hidden", "true");
-  illustration.setAttribute("viewBox", "0 0 900 620");
-  illustration.setAttribute("preserveAspectRatio", "none");
-
-  const trail = document.createElementNS(namespace, "path");
-  trail.classList.add("atlas-illustration__trail");
-  trail.setAttribute(
-    "d",
-    "M130 155 C250 70 330 210 440 145 S650 80 770 170 " +
-      "C690 270 585 305 500 385 S285 540 145 445"
-  );
-  illustration.append(trail);
-
-  for (const pathData of [
-    "M42 76 C95 18 210 34 248 102 C274 151 224 218 140 222 C58 226 8 145 42 76 Z",
-    "M315 112 C362 44 486 50 531 121 C562 171 518 240 424 246 C338 252 278 181 315 112 Z",
-    "M628 64 C706 16 829 55 858 133 C880 193 817 239 732 225 C646 211 580 112 628 64 Z",
-    "M410 329 C469 270 582 285 616 354 C646 414 589 476 505 472 C420 468 356 384 410 329 Z",
-    "M64 348 C127 286 250 306 282 380 C306 438 246 500 153 493 C66 486 18 393 64 348 Z"
-  ]) {
-    const region = document.createElementNS(namespace, "path");
-    region.classList.add("atlas-illustration__region");
-    region.dataset.atlasRegionArt = "";
-    region.setAttribute("d", pathData);
-    illustration.append(region);
-  }
-  return illustration;
+  const template = document.createElement("template");
+  template.innerHTML = renderAtlasIllustrationMarkup(ATLAS_REGION_IDS);
+  return /** @type {Element} */ (template.content.firstElementChild);
 }
 
 /**

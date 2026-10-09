@@ -630,6 +630,46 @@ describe("SHELL-15 — the theme choice is reachable from the workbench", () => 
   });
 });
 
+describe("US-09 — Admin and Class dashboards in Field Journal", () => {
+  const adminCss = readFileSync("src/admin/admin.css", "utf8");
+  const classroomCss = readFileSync("src/classroom/classroom.css", "utf8");
+
+  /** @param {string} css @param {string} selector */
+  const ruleBody = (css, selector) => {
+    const escaped = selector.replace(/[[\]().*+?]/g, "\\$&");
+    const body = css.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1];
+    if (body === undefined) throw new Error(`missing CSS rule ${selector}`);
+    return body;
+  };
+
+  it("US-09.1 draws the tool rail as an underline tab strip, not pills", () => {
+    const rail = ruleBody(adminCss, ".admin-rail");
+    const link = ruleBody(adminCss, ".admin-rail a");
+    const current = ruleBody(adminCss, '.admin-rail a[aria-current="page"]');
+    expect(rail).not.toMatch(/border-radius|background/);
+    expect(link).not.toMatch(/border-radius/);
+    expect(current).toMatch(/(?:border-bottom|box-shadow)[^;]*var\(--color-signal\)/);
+    expect(current).not.toMatch(/background/);
+  });
+
+  it("US-09.1 gives panels and cards a hairline and no blur shadow", () => {
+    expect(ruleBody(adminCss, ".admin-panel")).not.toContain("box-shadow");
+    expect(ruleBody(adminCss, ".admin-metric")).not.toContain("box-shadow");
+    expect(adminCss).not.toContain("--island");
+    expect(classroomCss).not.toContain("--island");
+  });
+
+  it("US-09.1 keeps the sticky headers solid", () => {
+    expect(adminCss).not.toContain("backdrop-filter");
+    expect(classroomCss).not.toContain("backdrop-filter");
+  });
+
+  it("US-09.2 scrolls the tab strip inside its own row", () => {
+    expect(ruleBody(adminCss, ".admin-rail")).toContain("overflow-x: auto");
+    expect(ruleBody(adminCss, ".admin-layout")).toContain("min-width: 0");
+  });
+});
+
 function staffClient() {
   return {
     listAdminUsers: vi.fn(async () => ({

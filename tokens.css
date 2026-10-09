@@ -1,4 +1,4 @@
-/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: playful storybook expedition | macrostructure: Workbench + focused encounter | theme: Journey | anchor: sky | signature: quest cards and Warden knowledge duel | playfield: grid paper | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
+/* Hallmark | pre-emit critique: P5 H5 E5 S5 R5 V5 | genre: field-journal atlas on ivory paper | macrostructure: Workbench + focused encounter | theme: Field Journal | anchor: lantern amber | signature: charcoal hairlines, drawn territories and the Warden decision panel | playfield: paper board | nav: N7 compact slab | footer: Ft8 static record strip | slop: pass (1-58) | contrast: pass (40-41) | honest: pass (46) | chrome: pass (47) | tokens: pass (48) | responsive: pass (49) | icons: pass (30) | mobile: pass (34, 49, 50-57) */
 :root {
   color-scheme: light;
   --theme-surface: daylight;
@@ -56,14 +56,17 @@
   --color-nav: oklch(97.5% 0.012 85);
   --color-night: oklch(21% 0.012 65);
   --color-night-deep: oklch(16% 0.012 65);
-  --color-fog: oklch(97% 0.01 230);
-  --color-fog-soft: oklch(99% 0.005 230);
-  --color-fog-grid: oklch(80% 0.03 235 / 45%);
-  --color-passage: oklch(95% 0.05 165);
-  --color-wall: oklch(78% 0.07 250);
-  --color-wall-grid: oklch(62% 0.07 250 / 60%);
-  --color-wall-mark: oklch(93% 0.03 250 / 80%);
-  --color-grid: oklch(70% 0.03 240 / 40%);
+  --color-fog: oklch(92% 0.018 85);
+  --color-fog-soft: oklch(97% 0.012 85);
+  --color-fog-grid: oklch(40% 0.02 60 / 45%);
+  --color-passage: oklch(98.5% 0.014 88);
+  --color-wall: oklch(30% 0.012 60);
+  --color-wall-grid: oklch(20% 0.012 60 / 85%);
+  --color-wall-mark: oklch(48% 0.014 60 / 75%);
+  --color-board-gate: var(--color-gate);
+  --color-board-warden: var(--color-warden);
+  --color-board-echo: var(--color-echo);
+  --color-grid: oklch(40% 0.02 60 / 35%);
   --color-pulse: oklch(68.5% 0.169 237 / 30%);
   --access-fog: oklch(90% 0.02 230);
   --access-fog-soft: oklch(94% 0.015 230);
@@ -79,11 +82,6 @@
   --region-sunspan: oklch(80% 0.15 80);
   --region-tideglass: oklch(62% 0.17 275);
   --region-bellroot: oklch(72% 0.17 350);
-  --color-tile-mosslight: oklch(93% 0.06 165);
-  --color-tile-windcall: oklch(93% 0.05 237);
-  --color-tile-sunspan: oklch(94% 0.07 80);
-  --color-tile-tideglass: oklch(92% 0.05 275);
-  --color-tile-bellroot: oklch(93% 0.05 350);
   --color-playground-daylight: oklch(82% 0.04 205);
   --color-playground-twilight: oklch(62% 0.08 276);
   --color-playground-sea-glass: oklch(80% 0.09 176);
@@ -181,20 +179,17 @@
     --color-band-1: oklch(28% 0.05 75);
     --color-band-2: oklch(40% 0.09 75);
     --color-band-3: oklch(55% 0.13 75);
-
-    --color-tile-mosslight: oklch(38% 0.08 165);
-    --color-tile-windcall: oklch(38% 0.08 237);
-    --color-tile-sunspan: oklch(40% 0.07 80);
-    --color-tile-tideglass: oklch(38% 0.09 275);
-    --color-tile-bellroot: oklch(38% 0.09 350);
-    --color-fog: oklch(21% 0.03 262);
-    --color-fog-soft: oklch(23% 0.03 262);
-    --color-fog-grid: oklch(36% 0.03 255 / 55%);
-    --color-passage: oklch(38% 0.08 165);
-    --color-wall: oklch(54% 0.05 250);
-    --color-wall-grid: oklch(12% 0.03 262 / 70%);
-    --color-wall-mark: oklch(70% 0.04 250 / 70%);
-    --color-grid: oklch(62% 0.03 240 / 35%);
+    --color-fog: oklch(19% 0.012 65);
+    --color-fog-soft: oklch(23% 0.012 65);
+    --color-fog-grid: oklch(72% 0.02 80 / 40%);
+    --color-passage: oklch(84% 0.02 85);
+    --color-wall: oklch(30% 0.012 65);
+    --color-wall-grid: oklch(10% 0.012 65 / 90%);
+    --color-wall-mark: oklch(50% 0.014 65 / 75%);
+    --color-board-gate: oklch(48% 0.14 155);
+    --color-board-warden: oklch(50% 0.19 24);
+    --color-board-echo: oklch(48% 0.17 237);
+    --color-grid: oklch(72% 0.02 80 / 30%);
   }
 }
 
@@ -232,18 +227,15 @@
   --color-band-1: oklch(28% 0.05 75);
   --color-band-2: oklch(40% 0.09 75);
   --color-band-3: oklch(55% 0.13 75);
-
-  --color-tile-mosslight: oklch(38% 0.08 165);
-  --color-tile-windcall: oklch(38% 0.08 237);
-  --color-tile-sunspan: oklch(40% 0.07 80);
-  --color-tile-tideglass: oklch(38% 0.09 275);
-  --color-tile-bellroot: oklch(38% 0.09 350);
-  --color-fog: oklch(21% 0.03 262);
-  --color-fog-soft: oklch(23% 0.03 262);
-  --color-fog-grid: oklch(36% 0.03 255 / 55%);
-  --color-passage: oklch(38% 0.08 165);
-  --color-wall: oklch(54% 0.05 250);
-  --color-wall-grid: oklch(12% 0.03 262 / 70%);
-  --color-wall-mark: oklch(70% 0.04 250 / 70%);
-  --color-grid: oklch(62% 0.03 240 / 35%);
+  --color-fog: oklch(19% 0.012 65);
+  --color-fog-soft: oklch(23% 0.012 65);
+  --color-fog-grid: oklch(72% 0.02 80 / 40%);
+  --color-passage: oklch(84% 0.02 85);
+  --color-wall: oklch(30% 0.012 65);
+  --color-wall-grid: oklch(10% 0.012 65 / 90%);
+  --color-wall-mark: oklch(50% 0.014 65 / 75%);
+  --color-board-gate: oklch(48% 0.14 155);
+  --color-board-warden: oklch(50% 0.19 24);
+  --color-board-echo: oklch(48% 0.17 237);
+  --color-grid: oklch(72% 0.02 80 / 30%);
 }
