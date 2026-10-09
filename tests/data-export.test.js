@@ -60,6 +60,7 @@ function fixtureAdapter() {
       checkout_session_id: "cs_test_1",
       payment_intent_id: "pi_test_1",
       stripe_price_id: "price_test_1",
+      billing_mode: "test",
       amount: 599,
       currency: "usd",
       status: "paid",
@@ -355,6 +356,20 @@ describe("buildUserExport", () => {
     expect(schema.properties.data.required.sort()).toEqual(
       sectionNames.sort()
     );
+  });
+
+  it("US-08.5 lists the Billing Mode of each purchase", async () => {
+    const adapter = fixtureAdapter();
+    const exported = await buildUserExport(adapter, USER, {
+      now: () => "2026-07-27T00:00:00.000Z"
+    });
+    const purchaseSql = adapter.queries.find((sql) =>
+      sql.includes(" FROM lifetime_purchases")
+    );
+    expect(purchaseSql).toContain("billing_mode");
+    expect(exported.data.lifetime_purchases[0]).toMatchObject({
+      billing_mode: "test"
+    });
   });
 });
 

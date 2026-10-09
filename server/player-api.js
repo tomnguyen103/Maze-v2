@@ -342,15 +342,17 @@ export function createPlayerApi(env = process.env) {
   const store = createPlayerStore(pool);
   const dailyStore = createDailyStore(pool);
   const constellationStore = createConstellationStore(pool);
-  const accessStore = createRunAccessStore(pool);
+  // An invalid Billing Mode yields a null mode; both stores then fall back to test.
+  const storeMode = billing.mode ?? "test";
+  const accessStore = createRunAccessStore(pool, { mode: storeMode });
   const guestDemoStore = createGuestDemoStore(pool);
-  const lifetimeStore = createLifetimeStore(pool);
+  const lifetimeStore = createLifetimeStore(pool, { mode: storeMode });
   const learningJournalStore = createLearningJournalStore(pool);
   const echoFossilStore = createEchoFossilStore(pool);
   const accessSettingsStore = createAccessSettingsStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(pool);
   const userDeletionStore = createUserDeletionStore(pool);
-  const adminStore = createAdminStore(pool);
+  const adminStore = createAdminStore(pool, { mode: storeMode });
   const questionBankStore = createQuestionBankStore(pool);
   reportAddressSalt(env);
   const addressSalt = resolveAddressSalt(env);
@@ -390,7 +392,11 @@ export function createPlayerApi(env = process.env) {
     version,
     checkDatabase: () => queryAdapter.query("SELECT 1"),
     stripeConfigured: lifetimeConfig !== null,
-    clerkConfigured
+    clerkConfigured,
+    countUnclassifiedPurchases:
+      storeMode === "live"
+        ? () => lifetimeStore.countUnclassifiedPurchases()
+        : null
   });
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request

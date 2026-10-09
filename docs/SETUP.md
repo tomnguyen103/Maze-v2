@@ -68,6 +68,8 @@ For Vercel, connect the Neon project and apply the migrations in order:
 27. `db/migrations/0027_echo_lens_learning_deck_revision.sql`
 28. `db/migrations/0028_classroom_expedition_debrief.sql`
 29. `db/migrations/0029_class_expedition_constellation.sql`
+30. `db/migrations/0030_domain_autojoin_and_leaderboard_index.sql`
+31. `db/migrations/0031_billing_mode.sql`
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.
@@ -188,6 +190,7 @@ CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
 CLERK_SECRET_KEY=your-clerk-secret-key
 CLERK_WEBHOOK_SIGNING_SECRET=your-clerk-webhook-signing-secret
 RUN_ACCESS_ENFORCEMENT_ENABLED=false
+ECHO_MAZE_BILLING_MODE=test
 STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
 STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
@@ -368,8 +371,10 @@ accepts an unsigned deletion request.
 
 The browser reads the server-owned rollback state before admission; there is no
 client flag that can bypass it. `RUN_ACCESS_ENFORCEMENT_ENABLED=true` becomes
-effective only when the complete Stripe **test-mode** configuration is valid,
-so a partial payment setup cannot strand signed-in players. Production remains
+effective only when the complete Stripe configuration for the Billing Mode is valid,
+so a partial payment setup cannot strand signed-in players. `ECHO_MAZE_BILLING_MODE`
+selects `test` (the default) or `live`. The live cutover steps are in
+`docs/lifetime-membership-operations.md`. Production remains
 `false` until the production release checklist is approved. Hosted database
 URLs are normalized to `sslmode=verify-full`.
 

@@ -8,8 +8,9 @@
  *     values?: unknown[]
  *   ) => Promise<{ rows: Record<string, unknown>[] }>
  * }} pool
+ * @param {{ mode?: "test" | "live" }} [options]
  */
-export function createAdminStore(pool) {
+export function createAdminStore(pool, { mode = "test" } = {}) {
   return {
     async listUsers() {
       const result = await pool.query(
@@ -23,14 +24,15 @@ export function createAdminStore(pool) {
          SELECT i.user_id,
                 p.username,
                 COALESCE(r.role, 'player') AS role,
-                COALESCE(a.membership_state, 'none') AS membership_state,
+                CASE WHEN a.membership_mode = $1 THEN a.membership_state ELSE 'none' END AS membership_state,
                 COALESCE(p.created_at, a.created_at, r.created_at) AS created_at
          FROM identities i
          LEFT JOIN players p ON p.clerk_user_id = i.user_id
          LEFT JOIN user_roles r ON r.user_id = i.user_id
          LEFT JOIN player_access a ON a.clerk_user_id = i.user_id
          ORDER BY COALESCE(p.username, i.user_id), i.user_id
-         LIMIT 501`
+         LIMIT 501`,
+        [mode]
       );
       return {
         users: result.rows.slice(0, 500).map((row) => ({
@@ -48,7 +50,7 @@ export function createAdminStore(pool) {
     async membershipFor(userId) {
       const result = await pool.query(
         `SELECT a.clerk_user_id AS user_id,
-                a.membership_state,
+                CASE WHEN a.membership_mode = $2 THEN a.membership_state ELSE 'none' END AS membership_state,
                 a.entitlement_updated_at,
                 purchase.id AS purchase_id,
                 purchase.status AS purchase_status,
@@ -59,11 +61,12 @@ export function createAdminStore(pool) {
            SELECT id, status, payment_intent_id, created_at
            FROM lifetime_purchases
            WHERE player_id = a.clerk_user_id
+             AND billing_mode = $2
            ORDER BY created_at DESC
            LIMIT 1
          ) purchase ON TRUE
          WHERE a.clerk_user_id = $1`,
-        [userId]
+        [userId, mode]
       );
       const row = result.rows[0];
       return row
@@ -133,13 +136,14 @@ export function createAdminStore(pool) {
           WHERE created_at >= date_trunc('day', now() - interval '1 day')
             AND created_at < date_trunc('day', now())) AS runs_started_yesterday,
          (SELECT COUNT(*) FROM lifetime_purchases
-          WHERE paid_at IS NOT NULL) AS lifetime_conversions,
+          WHERE paid_at IS NOT NULL AND billing_mode = 'live') AS lifetime_conversions,
          (SELECT COUNT(*) FROM player_access
-          WHERE membership_state = 'active') AS active_memberships,
+          WHERE membership_state = 'active' AND membership_mode = $1) AS active_memberships,
          (SELECT COUNT(*) FROM question_versions
           WHERE status = 'published') AS published_questions,
          (SELECT COUNT(*) FROM webhook_inbox
-          WHERE status = 'dead') AS dead_deliveries`
+          WHERE status = 'dead') AS dead_deliveries`,
+        [mode]
       );
       const row = result.rows[0] ?? {};
       return {

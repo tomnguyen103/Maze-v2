@@ -77,12 +77,7 @@ export function resolveBillingConfiguration(env) {
  * names its reason and carries no config. An incomplete configuration carries
  * no refusal, so the caller reports the gap instead of failing.
  *
- * TEMPORARY: live mode stays refused while the purchase store ignores the mode,
- * because a test purchase would then grant live Run Access. The records PR
- * (migration 0031) partitions the store and removes `storePartitioned`.
- *
  * @param {Record<string, string | undefined>} env
- * @param {{ storePartitioned?: boolean }} [options]
  * @returns {{
  *   mode: "test" | "live" | null,
  *   config: {
@@ -95,7 +90,7 @@ export function resolveBillingConfiguration(env) {
  *   refusal: string | null
  * }}
  */
-export function describeLifetimeConfig(env, { storePartitioned = false } = {}) {
+export function describeLifetimeConfig(env) {
   const mode = env.ECHO_MAZE_BILLING_MODE ?? "test";
   if (mode !== "test" && mode !== "live") {
     return { mode: null, config: null, refusal: "invalid_mode" };
@@ -112,9 +107,6 @@ export function describeLifetimeConfig(env, { storePartitioned = false } = {}) {
   const rawOrigin = env.ECHO_MAZE_APP_ORIGIN ?? "";
   if (mode === "live" && !isHttpsPublicOrigin(rawOrigin)) {
     return { mode, config: null, refusal: "live_requires_https_origin" };
-  }
-  if (mode === "live" && !storePartitioned) {
-    return { mode, config: null, refusal: "live_requires_partitioned_store" };
   }
   const priceId = env.STRIPE_PRICE_ID?.trim() ?? "";
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
@@ -144,10 +136,9 @@ export function describeLifetimeConfig(env, { storePartitioned = false } = {}) {
 
 /**
  * @param {Record<string, string | undefined>} env
- * @param {{ storePartitioned?: boolean }} [options]
  */
-export function loadLifetimeConfig(env, options) {
-  return describeLifetimeConfig(env, options).config;
+export function loadLifetimeConfig(env) {
+  return describeLifetimeConfig(env).config;
 }
 
 /**

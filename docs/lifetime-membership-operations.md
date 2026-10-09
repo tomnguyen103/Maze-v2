@@ -1,8 +1,9 @@
 # Lifetime Membership operations
 
 Lifetime Membership is `$5.99 USD` once in Stripe-hosted Checkout. It is not a
-subscription and never changes game power. This runbook covers test mode only;
-it does not authorize a live Product, live Price, or real charge.
+subscription and never changes game power. The Stripe test setup steps cover test
+mode. The Live cutover section lists owner steps for live mode. This runbook
+authorizes no live Product, live Price, or real charge.
 
 ## Stripe test setup
 
@@ -267,4 +268,68 @@ policy. Production remains blocked on all of the following external decisions:
 - an approved live `$5.99` purchase-and-refund smoke test.
 
 Until those approvals exist, keep enforcement false and use Stripe test mode.
-No step in this repository authorizes a live charge.
+No step in this repository authorizes a live charge. The owner runs the Live cutover steps
+only after every approval above exists.
+
+## Live cutover
+
+Owner actions run these steps in order. No agent runs them. Do not set live before migration 0031 is applied and classification is complete. Each step names a variable
+or a command. No step records a secret value.
+
+Apply migration 0031 before the release that reads `billing_mode` reaches any
+environment, test mode included. The release queries the new columns. Run the
+classification (steps 3 to 5) in the test environment too. Until then, a legacy
+member shows no membership, because an Unclassified Purchase grants nothing.
+
+1. **Create the live Stripe objects.** Owner action.
+   Create one live Product named `Echo Maze Lifetime Membership`. Add one live
+   one-time Price for exactly `$5.99 USD`. Subscribe the live webhook endpoint to the
+   events listed under Stripe test setup. Store the live values only in the
+   production environment.
+
+2. **Apply migration 0031.** Owner action.
+   Apply `db/migrations/0031_billing_mode.sql` to the production database. Do not
+   wrap the file in one transaction. If an index build fails, drop the invalid index
+   with `DROP INDEX CONCURRENTLY IF EXISTS`, then run the file again.
+
+3. **Dry-run the classification.** Owner action.
+   Set `STRIPE_SECRET_KEY` to the test secret key for this run. Purchases stored
+   before the cutover are test-mode objects, and a live key cannot read them. Run
+   `npm run classify:lifetime-purchases`. The dry-run writes nothing. Exit code 0
+   means every row verified. Exit code 1 means a row needs review. Exit code 2 means
+   the script could not run. The script checks the Checkout Session and the
+   PaymentIntent of each row, and the two must name each other. A row with no
+   Stripe object and no payment is skipped, and it does not block readiness.
+
+4. **Review the dry-run output.** Owner review.
+   Confirm that every row reports a mode. Resolve each reported row in Stripe or in
+   the database. Do not edit a row by hand. Repeat step 3 until no row reports a
+   problem. The row problem `open_purchase_conflict` means the player already holds
+   another open purchase of the same mode. Expire the already classified open
+   Checkout in Stripe, not the unclassified one. Then run step 3 again.
+
+5. **Apply the classification.** Owner action.
+   Run `npm run classify:lifetime-purchases -- --apply` with the same test key. The
+   script verifies every row first. It writes all verified rows in one transaction.
+   The same transaction sets the mode on the member's access record, so a classified
+   member keeps access in the Billing Mode of the purchase. A test purchase grants
+   no access after step 6 switches to live. Exit code 1 means a row stayed unchanged. Resolve that
+   row, then repeat step 3. A Stripe object of the other mode reports as missing.
+   Run the script again with the key of that mode.
+
+6. **Set Billing Mode to live.** Owner action.
+   Set `ECHO_MAZE_BILLING_MODE` to `live` in the production environment. Set the live
+   values for `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET`
+   there too. Keep `RUN_ACCESS_ENFORCEMENT_ENABLED` false until the approvals above
+   exist. Redeploy. Live needs a production deployment and an HTTPS origin.
+
+7. **Check readiness.** Owner review.
+   Request `/api/ready`. It returns 200 with status `ready` when every check passes.
+   A 503 names the failed dependency. In live mode, the stripe check fails while any
+   Unclassified Purchase remains.
+
+8. **Make and refund one purchase.** Owner action.
+   Make one live purchase with a card you own. This charges real money, so it needs
+   the approval listed under External production approvals. Refund the purchase in
+   Stripe. Confirm that the signed refund event blocks the next new Run, as the
+   refund section describes.
