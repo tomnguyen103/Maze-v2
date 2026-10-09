@@ -135,7 +135,7 @@ describe("Field Journal identity", () => {
       "16px",
       "768px"
     ]) {
-      expect(design).toContain(literal);
+      expect(design).toMatch(new RegExp(`(?<![d.])${literal}`));
     }
   });
 
@@ -184,6 +184,7 @@ describe("shared base styles", () => {
 
   it("draws no island, rope bridge, blob or grid ground (US-01.3)", () => {
     expect(daylight).not.toMatch(/--island\b/);
+    expect(readFileSync(root + "tokens.css", "utf8")).not.toMatch(/--island\b/);
     expect(daylight).not.toMatch(/rope/i);
     expect(daylight).not.toMatch(/closest-side/);
     expect(daylight).not.toMatch(/--color-paper-grid/);
@@ -216,6 +217,7 @@ describe("shared base styles", () => {
   });
 
   it("fills the primary button with amber, not the legacy sky-deep token (US-01.3)", () => {
+    expect(rules(".primary-button")).toMatch(/--fill:\s*var\(--color-signal\);/);
     expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
   });
 

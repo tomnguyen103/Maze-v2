@@ -142,9 +142,9 @@
 }
 
 .run-replay-events li[aria-current="step"] {
-  border-color: var(--color-signal);
+  border-color: var(--color-signal-deep);
   background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-signal);
+  box-shadow: 0 0 0 1px var(--color-signal-deep);
 }
 
 .run-replay-events li strong {

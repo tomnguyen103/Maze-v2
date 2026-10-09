@@ -420,7 +420,7 @@ describe("US-01 — Field Journal palette tokens", () => {
 
   it("mixes colours in oklab when one side is white or hueless (US-01.5)", () => {
     const oklchMixes = cssFiles().filter((relative) =>
-      /color-mix\(in oklch/.test(source(relative))
+      /color-mix\(in (?:oklch|lch|hsl|hwb)\b/.test(source(relative))
     );
     expect(oklchMixes).toEqual([]);
   });
@@ -436,17 +436,18 @@ describe("US-01 — Field Journal palette tokens", () => {
     }
   });
 
-  it("never pairs a signal-deep fill or edge with on-fill text", () => {
+  it("never pairs a signal-deep fill with any text colour but on-signal-deep", () => {
     const offenders = [];
     for (const relative of cssFiles()) {
       for (const rule of source(relative).replace(/\r\n/g, "\n").split("}")) {
         const open = rule.lastIndexOf("{");
         const body = rule.slice(open + 1);
         const signalDeepFill =
-          /(?:^|[\s;])(?:background|background-color|border|border-color)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
+          /(?:^|[\s;])(?:background|background-color)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
         if (
           signalDeepFill &&
-          /(?:^|[\s;])color\s*:\s*var\(--color-on-fill\)/.test(body)
+          /(?:^|[\s;])color\s*:/.test(body) &&
+          !/(?:^|[\s;])color\s*:\s*var\(--color-on-signal-deep\)/.test(body)
         ) {
           offenders.push(`${relative}: ${rule.slice(0, open).trim()}`);
         }

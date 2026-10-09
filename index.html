@@ -8,9 +8,9 @@
       content="Echo Maze is a kid-friendly text adventure where clever answers defeat Wardens and open the way home."
     />
     <!-- The browser chrome cannot read a custom property, so the colour is
-         written by hand. It is the exact sRGB of
-         `--color-paper: oklch(98.5% 0.008 230)` in tokens.css — re-derive it if
-         that token ever moves. `THEME_COLORS` in src/player/theme.js and
+         written by hand. It repeats the oklch value of
+         `--color-paper` in tokens.css, light and Night — update it if that
+         token ever moves. `THEME_COLORS` in src/player/theme.js and
          public/theme-boot.js repeat the pair; tests/theme.test.js fails if they
          drift. -->
     <meta name="theme-color" content="oklch(97.5% 0.012 85)" media="(prefers-color-scheme: light)" />

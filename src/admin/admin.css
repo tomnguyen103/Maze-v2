@@ -369,7 +369,7 @@
 }
 
 .admin-appearance-option:has(input:checked) {
-  border-color: var(--color-signal);
+  border-color: var(--color-signal-deep);
   background: var(--color-signal-soft);
   font-weight: 700;
 }

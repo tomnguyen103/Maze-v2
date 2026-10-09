@@ -233,10 +233,14 @@ describe("SHELL-07 — the theme is applied before first paint", () => {
       /** @type {RegExpMatchArray} */ (
         block.match(/--color-paper: (oklch\([^)]*\))/)
       )[1];
+    const media = tokens.indexOf("@media (prefers-color-scheme: dark)");
+    const forced = tokens.indexOf(':root[data-theme="dark"]');
     expect(THEME_COLORS).toEqual({
-      light: paper(tokens.slice(0, tokens.indexOf("@media (prefers-color-scheme: dark)"))),
-      dark: paper(tokens.slice(tokens.indexOf(':root[data-theme="dark"]')))
+      light: paper(tokens.slice(0, media)),
+      dark: paper(tokens.slice(forced))
     });
+    // The OS-dark bar colour in index.html reads the media block, so it must match too.
+    expect(paper(tokens.slice(media, forced))).toBe(THEME_COLORS.dark);
     // The colours live in three files that cannot share an import. This is
     // what stops them drifting.
     const html = source("index.html");
