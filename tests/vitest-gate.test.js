@@ -6,7 +6,12 @@ import {
   assertVitestGate,
   parseVitestSummary
 } from "../scripts/vitest-gate.mjs";
-import { runVitest, runVitestGate } from "../scripts/run-vitest-gate.mjs";
+import {
+  gatePassLine,
+  NATIVE_CRASH_EXIT_CODE,
+  runVitest,
+  runVitestGate
+} from "../scripts/run-vitest-gate.mjs";
 
 const EXPECTED = {
   testFiles: 147,
@@ -167,6 +172,121 @@ describe("Vitest gate validation", () => {
     );
 
     expect(packageJson.scripts.test).toBe("node scripts/run-vitest-gate.mjs");
+  });
+});
+
+describe("native-crash retry", () => {
+  const crash = {
+    code: NATIVE_CRASH_EXIT_CODE,
+    signal: null,
+    output: "",
+    stderr: ""
+  };
+  const pass = { code: 0, signal: null, output: reporterOutput() };
+
+  /** @param {Array<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>} results */
+  function sequencedRun(results) {
+    let calls = 0;
+    return {
+      run: async () => results[Math.min(calls++, results.length - 1)],
+      calls: () => calls
+    };
+  }
+
+  it("US-01.1: retries a native crash and passes when the next run passes", async () => {
+    const { run, calls } = sequencedRun([crash, pass]);
+    /** @type {string[]} */
+    const lines = [];
+
+    const gate = await runVitestGate({
+      expected: EXPECTED,
+      run,
+      logRetry: (message) => lines.push(message)
+    });
+
+    expect(gate).toMatchObject({ tests: 1324, retries: 1 });
+    expect(calls()).toBe(2);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(String(NATIVE_CRASH_EXIT_CODE));
+    expect(lines[0]).toContain("attempt 2 of 3");
+  });
+
+  it("US-01.2: fails with the code and attempt count when every run crashes", async () => {
+    const { run, calls } = sequencedRun([crash]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow(/3221226505.*3 attempts/);
+    expect(calls()).toBe(3);
+  });
+
+  it("US-01.3: does not retry a native crash code that carries a summary", async () => {
+    const { run, calls } = sequencedRun([
+      { ...crash, output: reporterOutput() }
+    ]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow("Vitest exited with code 3221226505.");
+    expect(calls()).toBe(1);
+  });
+
+  it("US-01.4: does not retry another exit code with no summary", async () => {
+    const { run, calls } = sequencedRun([{ ...crash, code: 1 }]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow("Vitest exited with code 1 before emitting a summary.");
+    expect(calls()).toBe(1);
+  });
+
+  it("US-01.5: does not retry a native crash that also lost a worker", async () => {
+    const { run, calls } = sequencedRun([
+      { ...crash, workerLossDetected: true },
+      pass
+    ]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow(
+      "Vitest exited with code 3221226505 before emitting a summary."
+    );
+    expect(calls()).toBe(1);
+  });
+
+  it("does not retry a signal kill with no summary (the retry predicate needs no signal)", async () => {
+    const { run, calls } = sequencedRun([
+      { ...crash, code: null, signal: "SIGKILL" },
+      pass
+    ]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow("signal SIGKILL");
+    expect(calls()).toBe(1);
+  });
+
+  it("US-01.6: passes after two native crashes and reports 2 retries", async () => {
+    const { run, calls } = sequencedRun([crash, crash, pass]);
+
+    const gate = await runVitestGate({ expected: EXPECTED, run, logRetry: () => {} });
+
+    expect(gate).toMatchObject({ tests: 1324, retries: 2 });
+    expect(calls()).toBe(3);
+  });
+
+  it("US-01.7: names the retry count on the pass line", () => {
+    const gate = { passed: 9, skipped: 1, testFiles: 2, tests: 10 };
+
+    expect(gatePassLine({ ...gate, retries: 0 })).toBe(
+      "Vitest gate passed: 9 passed, 1 skipped across 2 files (10 total)."
+    );
+    expect(gatePassLine({ ...gate, retries: 1 })).toContain(
+      "passed after 1 native-crash retry:"
+    );
+    expect(gatePassLine({ ...gate, retries: 2 })).toContain(
+      "passed after 2 native-crash retries:"
+    );
   });
 });
 

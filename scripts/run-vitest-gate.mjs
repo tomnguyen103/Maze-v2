@@ -14,6 +14,14 @@ const countPath = join(root, "scripts", "vitest-test-count.json");
 const vitestPath = join(root, "node_modules", "vitest", "vitest.mjs");
 const OUTPUT_TAIL_LIMIT = 1024 * 1024;
 const WORKER_LOSS_SCAN_TAIL = 128;
+/**
+ * Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409), the native Vitest crash.
+ * Workaround: the evidence points to Node 24.15.0's `fetch` on Windows, so the
+ * gate retries this code. The removal rule (2 conditions) is in
+ * docs/solutions/testing/gate-summary-parsed-from-merged-streams.md.
+ */
+export const NATIVE_CRASH_EXIT_CODE = 3221226505;
+const MAX_ATTEMPTS = 3;
 
 /**
  * @typedef {Object} ChildProcessLike
@@ -111,44 +119,70 @@ export function runVitest({
  * This exported seam keeps the package-level gate testable without spawning a
  * real Vitest process.
  *
- * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number, skipped?: number | null } | null }} options
+ * The gate retries a run that exits with the native crash code before it prints
+ * a summary, up to `MAX_ATTEMPTS` runs in total. Any other failure is final.
+ *
+ * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number, skipped?: number | null } | null, logRetry?: (message: string) => void }} options
  */
-export async function runVitestGate({ run = runVitest, expected = null } = {}) {
+export async function runVitestGate({
+  run = runVitest,
+  expected = null,
+  logRetry = (message) => console.error(message)
+} = {}) {
   const expectedManifest =
     expected ?? JSON.parse(await readFile(countPath, "utf8"));
-  const result = await run();
-  const exitDescription = result.signal
-    ? `signal ${result.signal}`
-    : `code ${result.code}`;
-  const exited = result.code !== 0 || result.signal;
 
-  /** @type {import("./vitest-gate.mjs").VitestSummary} */
-  let summary;
-  try {
-    summary = parseVitestSummary(result.output);
-  } catch (error) {
-    // A child that died before printing its summary used to be reported as
-    // "did not emit a complete test summary", which names the symptom and
-    // hides the cause.
-    throw exited
-      ? new Error(
-          `Vitest exited with ${exitDescription} before emitting a summary.`
-        )
-      : error;
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await run();
+    const exitDescription = result.signal
+      ? `signal ${result.signal}`
+      : `code ${result.code}`;
+    const exited = result.code !== 0 || result.signal;
+
+    /** @type {import("./vitest-gate.mjs").VitestSummary} */
+    let summary;
+    try {
+      summary = parseVitestSummary(result.output);
+    } catch (error) {
+      // A child that died before printing its summary used to be reported as
+      // "did not emit a complete test summary", which names the symptom and
+      // hides the cause.
+      if (!exited) throw error;
+      // Node reports a signal kill as code null, so this also rejects signals.
+      if (
+        result.code !== NATIVE_CRASH_EXIT_CODE ||
+        result.workerLossDetected
+      ) {
+        throw new Error(
+          `Vitest exited with ${exitDescription} before emitting a summary.`,
+          { cause: error }
+        );
+      }
+      if (attempt >= MAX_ATTEMPTS) {
+        throw new Error(
+          `Vitest exited with ${exitDescription} before emitting a summary on all ${MAX_ATTEMPTS} attempts.`,
+          { cause: error }
+        );
+      }
+      logRetry(
+        `Vitest crashed natively (${exitDescription}, 0x${NATIVE_CRASH_EXIT_CODE.toString(16).toUpperCase()}) before emitting a summary; retrying, attempt ${attempt + 1} of ${MAX_ATTEMPTS}.`
+      );
+      continue;
+    }
+    const gate = assertVitestGate({
+      summary,
+      output: result.output,
+      stderr: result.stderr,
+      expected: expectedManifest,
+      workerLossDetected: result.workerLossDetected
+    });
+
+    if (exited) {
+      throw new Error(`Vitest exited with ${exitDescription}.`);
+    }
+
+    return { ...gate, retries: attempt - 1 };
   }
-  const gate = assertVitestGate({
-    summary,
-    output: result.output,
-    stderr: result.stderr,
-    expected: expectedManifest,
-    workerLossDetected: result.workerLossDetected
-  });
-
-  if (exited) {
-    throw new Error(`Vitest exited with ${exitDescription}.`);
-  }
-
-  return gate;
 }
 
 /**
@@ -170,12 +204,21 @@ async function expectedForEnv() {
   return { ...manifest, maxSkipped: manifest.skipped, skipped: null };
 }
 
+/**
+ * @param {{ passed: number, skipped: number, testFiles: number, tests: number, retries: number }} gate
+ */
+export function gatePassLine(gate) {
+  const retried =
+    gate.retries > 0
+      ? ` after ${gate.retries} native-crash ${gate.retries === 1 ? "retry" : "retries"}`
+      : "";
+  return `Vitest gate passed${retried}: ${gate.passed} passed, ${gate.skipped} skipped across ${gate.testFiles} files (${gate.tests} total).`;
+}
+
 async function main() {
   assertCanonicalGateArgs(process.argv.slice(2));
   const gate = await runVitestGate({ expected: await expectedForEnv() });
-  console.log(
-    `Vitest gate passed: ${gate.passed} passed, ${gate.skipped} skipped across ${gate.testFiles} files (${gate.tests} total).`
-  );
+  console.log(gatePassLine(gate));
 }
 
 if (
