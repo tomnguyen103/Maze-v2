@@ -168,7 +168,7 @@ describe("question API composition", () => {
   it("runs on the bundled bank alone when no database is configured", async () => {
     const { createQuestionApi } = await import("../server/question-api.js");
     // Constructing without DATABASE_URL must not reach for a pool.
-    expect(typeof createQuestionApi({ QUESTION_PROVIDER: "bundled" })).toBe(
+    expect(typeof createQuestionApi({})).toBe(
       "function"
     );
   });

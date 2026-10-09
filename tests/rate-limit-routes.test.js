@@ -394,8 +394,7 @@ describe("rate limiting on Question fetch", () => {
     const handler = createQuestionApi(
       {
         CLERK_PUBLISHABLE_KEY: "pk_test_example",
-        CLERK_SECRET_KEY: "sk_test_example",
-        QUESTION_PROVIDER: "bundled"
+        CLERK_SECRET_KEY: "sk_test_example"
       },
       {
         authenticate: (_request, _response, next) => next(),

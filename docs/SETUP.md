@@ -7,17 +7,15 @@ preserved from the root README.
 
 Requires Node.js 22.x; `.node-version` pins the Windows-verified 22.23.1
 runtime. Node 24.15.0 intermittently aborts Vitest workers on Windows, so it is
-outside this repository's tested runtime contract. Local development defaults
-to Ollama with `mistral:latest`:
+outside this repository's tested runtime contract.
 
 ```bash
 npm install
-ollama pull mistral:latest
 npm run dev
 ```
 
-The Ollama CLI may also be installed separately; if Ollama or the model is not
-available, the game automatically uses its bundled question deck. Open
+The game serves Reviewed Questions from the bundled deck, or from the database
+when one is configured. It needs no model and works offline. Open
 `http://localhost:3000`.
 
 For `npm run dev`, copy `.env.example` to `.env.local` to configure Clerk and
@@ -27,10 +25,9 @@ server secrets and database credentials stay server-side.
 
 ## Deploy
 
-Production defaults to Gemini 3.8 Flash when `GEMINI_API_KEY` is set. The
-Express server owns the key, rate-limits and caches requests, and validates
-structured model output. Child-facing output must match a reviewed curriculum
-card exactly; changed or unsafe output falls back to the bundled deck.
+The Express server serves each Reviewed Question Revision directly and rate-limits
+requests. It sends no request to a model provider. A missing database Revision
+falls back to the bundled deck.
 
 ```bash
 npm run build
@@ -206,8 +203,6 @@ AUDIT_CHECKPOINT_ACCESS_KEY_ID=your-dedicated-checkpoint-key-id
 AUDIT_CHECKPOINT_SECRET_ACCESS_KEY=your-dedicated-checkpoint-secret
 AUDIT_CHECKPOINT_HMAC_KEY=your-random-32-byte-or-longer-signing-key
 AUDIT_CHECKPOINT_RETENTION_DAYS=your-approved-positive-retention-period
-GEMINI_API_KEY=your-secret-key
-GEMINI_MODEL=gemini-3.8-flash
 ```
 
 ### Operations scripts

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The model-provider part is superseded by ADR 0048. The Run still owns
+only the Warden Challenge and the accepted Warden Question.
 
 ## Context
 

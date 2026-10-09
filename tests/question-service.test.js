@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   QUEST_LEVELS,
   getQuestLevel
@@ -41,21 +41,51 @@ const REQUEST = {
   labyrinthNumber: 1,
   questionOrdinal: 0
 };
-const PROVIDER_QUESTION = getBundledQuestion(REQUEST);
 
 describe("Quest Questions", () => {
-  it("anchors Quest II to its reviewed static catalog before database fallback", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("US-13.1 and US-13.3 serve the bundled deck with no model request even when provider settings exist", async () => {
+    vi.stubEnv("QUESTION_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    vi.stubEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
+    const fetchSpy = vi.fn(async () => {
+      throw new Error("No outbound request may occur in normal play");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const service = createQuestionService();
+
+    const results = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      results.push(
+        await service.getQuestion({
+          ...REQUEST,
+          attempt,
+          questionOrdinal: attempt
+        })
+      );
+    }
+    results.push(
+      await service.getQuestion({ ...REQUEST, challengeKind: "gate-warden" })
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    for (const result of results) {
+      expect(result.source).toBe("bundled");
+    }
+    expect(results[0]?.question).toEqual(getBundledQuestion(REQUEST));
+  });
+
+  it("US-13.2 anchors Quest II to its reviewed static catalog before database fallback", async () => {
     const request = {
       ...REQUEST,
       questId: "quest_ii_service_test_123"
     };
     const publishedQuestion = vi.fn(async () => null);
-    const fetchImpl = vi.fn(() => {
-      throw new Error("Quest II provider access must not occur");
-    });
     const service = createQuestionService({
-      env: { QUESTION_PROVIDER: "gemini", GEMINI_API_KEY: "test-key" },
-      fetchImpl,
       questionBank: { publishedQuestion }
     });
 
@@ -67,7 +97,6 @@ describe("Quest Questions", () => {
       question: getBundledQuestion(request)
     });
     expect(publishedQuestion).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("maps each Quest Level to a Run configuration and Question guide", () => {
@@ -144,206 +173,8 @@ describe("Quest Questions", () => {
     ).toThrow(/kid-safe/i);
   });
 
-  it("uses local Ollama by default during development", async () => {
-    /** @type {{ url: string, options: RequestInit }[]} */
-    const calls = [];
-    const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      fetchImpl: async (url, options) => {
-        calls.push({ url, options });
-        return {
-          ok: true,
-          json: async () => ({
-            message: { content: JSON.stringify(PROVIDER_QUESTION) }
-          })
-        };
-      }
-    });
-
-    const result = await service.getQuestion(REQUEST);
-    const cached = await service.getQuestion(REQUEST);
-
-    expect(result.source).toBe("ollama");
-    expect(cached).toEqual(result);
-    expect(result.question).toMatchObject(PROVIDER_QUESTION);
-    const ollamaCall = calls[0];
-    expect(ollamaCall?.url).toBe("http://127.0.0.1:11434/api/chat");
-    expect(JSON.parse(String(ollamaCall?.options.body)).model).toBe(
-      "mistral:latest"
-    );
-    expect(calls).toHaveLength(1);
-  });
-
-  it("uses Gemini 3.8 Flash for production generation", async () => {
-    /** @type {{ url: string, options: RequestInit }[]} */
-    const calls = [];
-    const service = createQuestionService({
-      env: {
-        NODE_ENV: "production",
-        GEMINI_API_KEY: "test-key"
-      },
-      fetchImpl: async (url, options) => {
-        calls.push({ url, options });
-        return {
-          ok: true,
-          json: async () => ({
-            candidates: [
-              {
-                content: {
-                  parts: [{ text: JSON.stringify(PROVIDER_QUESTION) }]
-                }
-              }
-            ]
-          })
-        };
-      }
-    });
-
-    const result = await service.getQuestion(REQUEST);
-
-    expect(result.source).toBe("gemini");
-    const geminiCall = calls[0];
-    expect(geminiCall?.url).toContain(
-      "gemini-3.8-flash:generateContent"
-    );
-    expect(
-      new globalThis.Headers(geminiCall?.options.headers).get("x-goog-api-key")
-    ).toBe("test-key");
-    const geminiBody = JSON.parse(String(geminiCall?.options.body));
-    expect(geminiBody.generationConfig).not.toHaveProperty("temperature");
-  });
-
-  it("respects GEMINI_MODEL env override or defaults to gemini-3.8-flash when empty", async () => {
-    /** @type {{ url: string, options: RequestInit }[]} */
-    const calls = [];
-    /** @param {string} [modelEnv] */
-    const makeService = (modelEnv) =>
-      createQuestionService({
-        env: {
-          NODE_ENV: "production",
-          GEMINI_API_KEY: "test-key",
-          GEMINI_MODEL: modelEnv
-        },
-        fetchImpl: async (url, options) => {
-          calls.push({ url, options });
-          return {
-            ok: true,
-            json: async () => ({
-              candidates: [
-                {
-                  content: {
-                    parts: [{ text: JSON.stringify(PROVIDER_QUESTION) }]
-                  }
-                }
-              ]
-            })
-          };
-        }
-      });
-
-    const customService = makeService("custom-gemini-model");
-    await customService.getQuestion(REQUEST);
-    expect(calls[0]?.url).toContain("custom-gemini-model:generateContent");
-
-    const emptyModelService = makeService("");
-    await emptyModelService.getQuestion(REQUEST);
-    expect(calls[1]?.url).toContain("gemini-3.8-flash:generateContent");
-  });
-
-  it("falls back to the bundled deck when a provider is unavailable", async () => {
-    let attempts = 0;
-    let now = 1000;
-    const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      now: () => now,
-      providerCooldownMs: 30000,
-      fetchImpl: async () => {
-        attempts += 1;
-        throw new Error("Ollama is offline");
-      }
-    });
-
-    const result = await service.getQuestion(REQUEST);
-    const retry = await service.getQuestion({
-      ...REQUEST,
-      attempt: 1,
-      questionOrdinal: 1
-    });
-    now += 30001;
-    await service.getQuestion({
-      ...REQUEST,
-      attempt: 2,
-      questionOrdinal: 2
-    });
-
-    expect(result.source).toBe("bundled");
-    expect(result.question).toEqual(getBundledQuestion(REQUEST));
-    expect(retry.source).toBe("bundled");
-    expect(attempts).toBe(2);
-  });
-
-  it("falls back when a provider repeats the previous Question", async () => {
-    let attempts = 0;
-    const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      fetchImpl: async () => {
-        attempts += 1;
-        return {
-          ok: true,
-          json: async () => ({
-            message: { content: JSON.stringify(PROVIDER_QUESTION) }
-          })
-        };
-      }
-    });
-
-    const first = await service.getQuestion(REQUEST);
-    const retry = await service.getQuestion({
-      ...REQUEST,
-      attempt: 1,
-      questionOrdinal: 1
-    });
-
-    expect(first.source).toBe("ollama");
-    expect(retry.source).toBe("bundled");
-    expect(retry.question.prompt).not.toBe(first.question.prompt);
-    expect(attempts).toBe(2);
-  });
-
-  it("evicts old Warden history instead of growing without a bound", async () => {
-    /** @type {import("../server/question-service.js").QuestionRequest} */
-    let activeRequest = REQUEST;
-    /** @type {string[]} */
-    const prompts = [];
-    const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      fetchImpl: async (_url, options) => {
-        const body = JSON.parse(String(options.body));
-        prompts.push(body.messages[0].content);
-        return {
-          ok: true,
-          json: async () => ({
-            message: {
-              content: JSON.stringify(getBundledQuestion(activeRequest))
-            }
-          })
-        };
-      }
-    });
-
-    for (let index = 0; index < 201; index += 1) {
-      activeRequest = { ...REQUEST, seed: `CACHE-${index}` };
-      await service.getQuestion(activeRequest);
-    }
-    activeRequest = { ...REQUEST, seed: "CACHE-0", attempt: 1 };
-    await service.getQuestion(activeRequest);
-
-    expect(prompts.at(-1)).toContain("This is the first question");
-  });
-
   it("serves each Learning Deck its own reviewed Question at one coordinate", async () => {
     const service = createQuestionService({
-      env: { NODE_ENV: "production" },
       questionBank: null
     });
     const coordinate = {
@@ -386,7 +217,6 @@ describe("Quest Questions", () => {
 
   it("continues an exhausted focused Region on announced Mixed Trail content", async () => {
     const service = createQuestionService({
-      env: { NODE_ENV: "production" },
       questionBank: null
     });
     const numberTrail = getPublishedLearningDeckOption("number-trail");
@@ -582,11 +412,10 @@ describe("question bank in Postgres", () => {
     explanation: "Seven groups of three make twenty-one."
   };
 
-  it("serves the published database card when a bank is configured", async () => {
+  it("US-13.1 serves the published database card when a bank is configured", async () => {
     /** @type {Record<string, unknown>[]} */
     const lookups = [];
     const service = createQuestionService({
-      env: { QUESTION_PROVIDER: "bundled" },
       questionBank: {
         async publishedQuestion(lookup) {
           lookups.push(lookup);
@@ -608,18 +437,15 @@ describe("question bank in Postgres", () => {
     ]);
   });
 
-  it("serves the curated Gate Warden capstone without provider or database replacement", async () => {
+  it("US-13.2 serves the curated Gate Warden capstone without database replacement", async () => {
     const publishedQuestion = vi.fn(async () => DATABASE_QUESTION);
-    const fetchImpl = vi.fn();
     /** @type {import("../server/question-service.js").QuestionRequest} */
     const request = {
       ...REQUEST,
       challengeKind: "gate-warden"
     };
     const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      questionBank: { publishedQuestion },
-      fetchImpl
+      questionBank: { publishedQuestion }
     });
 
     const result = await service.getQuestion(request);
@@ -628,14 +454,12 @@ describe("question bank in Postgres", () => {
     expect(result.question).toEqual(getBundledQuestion(request));
     expect(result.question.id).toBe("capstone-trail-scout-foundation");
     expect(publishedQuestion).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("falls back to the bundled deck when the database is unreachable", async () => {
+  it("US-13.5 falls back to the bundled deck when the database is unreachable", async () => {
     /** @type {unknown[]} */
     const errors = [];
     const service = createQuestionService({
-      env: { QUESTION_PROVIDER: "bundled" },
       onQuestionBankError: (error) => errors.push(error),
       questionBank: {
         async publishedQuestion() {
@@ -651,9 +475,8 @@ describe("question bank in Postgres", () => {
     expect(errors).toHaveLength(1);
   });
 
-  it("falls back to the bundled deck when nothing is published yet", async () => {
+  it("US-13.5 falls back to the bundled deck when nothing is published yet", async () => {
     const service = createQuestionService({
-      env: { QUESTION_PROVIDER: "bundled" },
       questionBank: {
         async publishedQuestion() {
           return null;
@@ -667,37 +490,7 @@ describe("question bank in Postgres", () => {
     expect(result.question).toEqual(getBundledQuestion(REQUEST));
   });
 
-  it("anchors provider output to the published card, not the bundled one", async () => {
-    // The reviewed template a generated Question must reproduce comes from the
-    // bank when one is configured; otherwise a published edit would be ignored
-    // by every AI-served card.
-    /** @type {string[]} */
-    const prompts = [];
-    const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      questionBank: {
-        async publishedQuestion() {
-          return DATABASE_QUESTION;
-        }
-      },
-      fetchImpl: async (_url, options) => {
-        prompts.push(String(options.body));
-        return {
-          ok: true,
-          json: async () => ({
-            message: { content: JSON.stringify(DATABASE_QUESTION) }
-          })
-        };
-      }
-    });
-
-    const result = await service.getQuestion(REQUEST);
-
-    expect(result.source).toBe("ollama");
-    expect(prompts[0]).toContain("What is 7 × 3?");
-  });
-
-  it("keeps revision identity and Echo Lens outside provider authority", async () => {
+  it("US-13.1 and US-13.4 serve the stored Revision identity and Echo Lens as reviewed", async () => {
     const reviewedEchoLens = {
       version: /** @type {1} */ (1),
       kind: "array",
@@ -711,36 +504,15 @@ describe("question bank in Postgres", () => {
       reviewedRevisionId: "database:db-scout-1:v4",
       echoLens: reviewedEchoLens
     };
+    const publishedQuestion = vi.fn(async () => reviewedQuestion);
     const service = createQuestionService({
-      env: { NODE_ENV: "development" },
-      questionBank: {
-        async publishedQuestion() {
-          return reviewedQuestion;
-        }
-      },
-      fetchImpl: async () => ({
-        ok: true,
-        json: async () => ({
-          message: {
-            content: JSON.stringify({
-              ...DATABASE_QUESTION,
-              reviewedRevisionId: "provider:invented:v1",
-              echoLens: {
-                ...reviewedEchoLens,
-                title: "Provider replacement"
-              }
-            })
-          }
-        })
-      })
+      questionBank: { publishedQuestion }
     });
 
-    const result = await service.getQuestion(REQUEST);
+    const first = await service.getQuestion(REQUEST);
+    const replay = await service.getQuestion(REQUEST);
 
-    expect(result.source).toBe("ollama");
-    expect(result.question.reviewedRevisionId).toBe(
-      reviewedQuestion.reviewedRevisionId
-    );
-    expect(result.question.echoLens).toEqual(reviewedEchoLens);
-  });
-});
+    expect(first.source).toBe("database");
+    expect(first.question).toEqual(reviewedQuestion);
+    expect(replay).toEqual(first);
+  });});

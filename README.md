@@ -19,16 +19,16 @@
 Echo Maze is a browser maze game that turns learning questions into gameplay.
 Players explore a seeded, deterministic Labyrinth, recover Echoes, and are
 challenged by Wardens: answering a curriculum question correctly defeats the
-Warden, answering wrong costs Vitality. Questions come from an LLM (Ollama
-locally, Gemini in production) validated against reviewed curriculum cards,
-with a bundled deterministic deck as the always-available fallback.
+Warden, answering wrong costs Vitality. Questions are reviewed curriculum cards
+served straight from the database, with a bundled deterministic deck as the
+always-available fallback.
 
 ## Features
 
 - Three Quest Levels (Bright Start, Trail Scout, Maze Master) across 20 Labyrinths each, with scaling mazes, Echoes, and Wardens
 - Deterministic seeded generation — share links reproduce the exact maze
 - Readable Warden AI that Patrols objectives, Hunts nearby Explorers, and Intercepts predictable movement
-- Server-validated LLM questions with child-safety checks and a reviewed fallback deck
+- Reviewed, child-safe questions served directly, with a bundled fallback deck that works offline
 - Daily shared Labyrinth (one deterministic casual maze per UTC date), Echo Atlas progression map, and a practice Journal
 - Optional Clerk sign-in with boundary-only cloud Quest sync, conflict recovery, and a global Top-10 scoreboard
 - One-time Stripe Lifetime Membership gating Run access server-side (guest and free signed-in runs included)
