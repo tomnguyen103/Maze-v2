@@ -788,6 +788,27 @@ describe("Lifetime Membership store", () => {
     expect(updateValues(client, "player_access")).toBeUndefined();
   });
 
+  it("refunds access when a late Checkout event sees a fully refunded charge", async () => {
+    const { client, pool } = clockedPool("evt_late_checkout");
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.activatePurchase({
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      paymentState: "refunded",
+      priceId: "price_test",
+      purchaseId: "purchase_123",
+      refundedCents: 599,
+      sessionId: "cs_test_echo"
+    }, {
+      eventCreated: 250,
+      eventId: "evt_late_checkout",
+      eventType: "checkout.session.completed"
+    })).resolves.toEqual({ outcome: "processed", state: "lifetime_refunded" });
+    expect(updateValues(client, "lifetime_purchases")?.slice(2)).toEqual(["refunded", 300]);
+    expect(updateValues(client, "player_access")?.slice(0, 3)).toEqual(["refunded", "purchase_123", 300]);
+  });
+
   it("links an early dispute by purchase metadata and blocks future Runs", async () => {
     const { client, pool } = transactionalPool([
       [],

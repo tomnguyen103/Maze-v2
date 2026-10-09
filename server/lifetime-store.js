@@ -217,6 +217,35 @@ export function createLifetimeStore(pool, { mode }) {
           refundedCents: Number(checkout.refundedCents ?? 0)
         });
         if (event && checkout.paymentState !== "paid") {
+          // A full refund wins whatever the event order, so a purchase that
+          // already granted access becomes refunded. A purchase that never
+          // granted access stays without access.
+          if (
+            checkout.paymentState === "refunded" &&
+            Number(checkout.refundedCents ?? 0) >= LIFETIME_AMOUNT &&
+            (purchase.status === "paid" || purchase.status === "disputed")
+          ) {
+            const accessResult = await client.query(
+              `SELECT membership_state, membership_mode, lifetime_state_event_created
+               FROM player_access
+               WHERE clerk_user_id = $1
+               FOR UPDATE`,
+              [purchase.player_id]
+            );
+            const access = entitlementBasis(accessResult.rows[0] ?? {}, purchase, mode);
+            if (access.state !== "refunded") {
+              await writeEntitlement(client, {
+                eventCreated: Math.max(access.eventCreated, event.eventCreated),
+                mode,
+                paymentIntentId: checkout.paymentIntentId,
+                purchase,
+                state: "refunded"
+              });
+              await writeFact("refunded", event.eventCreated);
+              await finishWebhookEvent(client, event.eventId, "processed");
+              return { outcome: "processed", state: "lifetime_refunded" };
+            }
+          }
           // The charge was taken, so the fact records it without access.
           await writeFact(
             checkout.paymentState === "disputed" ? "disputed" : "refunded",
@@ -416,60 +445,13 @@ export function createLifetimeStore(pool, { mode }) {
                 source: "provider"
               });
         if (transition.outcome === "processed") {
-          await client.query(
-            `UPDATE lifetime_purchases
-             SET payment_intent_id = COALESCE(payment_intent_id, $2),
-                 status = $3,
-                 provider_event_created = GREATEST(
-                   provider_event_created,
-                   $4
-                 ),
-                 refunded_at = CASE
-                   WHEN $3 = 'refunded' THEN NOW()
-                   ELSE refunded_at
-                 END,
-                 disputed_at = CASE
-                   WHEN $3 = 'disputed' THEN NOW()
-                   ELSE disputed_at
-                 END,
-                 updated_at = NOW()
-             WHERE id = $1`,
-            [
-              purchase.id,
-              event.paymentIntentId,
-              purchaseStatus(transition.state),
-              transition.eventCreated
-            ]
-          );
-          await client.query(
-            `UPDATE player_access
-             SET membership_state = $1,
-                 membership_mode = $5,
-                 active_purchase_id = $2,
-                 lifetime_activated_at = CASE
-                   WHEN $1 = 'active' THEN COALESCE(
-                     lifetime_activated_at,
-                     NOW()
-                   )
-                   ELSE lifetime_activated_at
-                 END,
-                 lifetime_state_event_created = $3,
-                 entitlement_updated_at = NOW(),
-                 updated_at = NOW()
-             WHERE clerk_user_id = $4
-               AND (
-                 membership_mode IS NULL OR
-                 membership_mode = $5::text OR
-                 $5::text = 'live'
-               )`,
-            [
-              transition.state,
-              purchase.id,
-              transition.eventCreated,
-              purchase.player_id,
-              mode
-            ]
-          );
+          await writeEntitlement(client, {
+            eventCreated: transition.eventCreated,
+            mode,
+            paymentIntentId: event.paymentIntentId,
+            purchase,
+            state: transition.state
+          });
         }
         await applyFact(requestedState);
         await finishWebhookEvent(
@@ -652,6 +634,69 @@ function entitlementBasis(row, purchase, mode) {
     state: status === "paid" ? "active" : ["refunded", "disputed"].includes(status) ? status : "none",
     eventCreated: Number(purchase.provider_event_created ?? 0)
   };
+}
+
+/**
+ * Writes an entitlement state to the purchase and to player access.
+ *
+ * @param {{ query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }} client
+ * @param {{ eventCreated: number, mode: "test" | "live", paymentIntentId: unknown, purchase: Record<string, unknown>, state: string }} write
+ */
+async function writeEntitlement(client, { eventCreated, mode, paymentIntentId, purchase, state }) {
+  await client.query(
+    `UPDATE lifetime_purchases
+     SET payment_intent_id = COALESCE(payment_intent_id, $2),
+         status = $3,
+         provider_event_created = GREATEST(
+           provider_event_created,
+           $4
+         ),
+         refunded_at = CASE
+           WHEN $3 = 'refunded' THEN NOW()
+           ELSE refunded_at
+         END,
+         disputed_at = CASE
+           WHEN $3 = 'disputed' THEN NOW()
+           ELSE disputed_at
+         END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      purchase.id,
+      paymentIntentId,
+      purchaseStatus(state),
+      eventCreated
+    ]
+  );
+  await client.query(
+    `UPDATE player_access
+     SET membership_state = $1,
+         membership_mode = $5,
+         active_purchase_id = $2,
+         lifetime_activated_at = CASE
+           WHEN $1 = 'active' THEN COALESCE(
+             lifetime_activated_at,
+             NOW()
+           )
+           ELSE lifetime_activated_at
+         END,
+         lifetime_state_event_created = $3,
+         entitlement_updated_at = NOW(),
+         updated_at = NOW()
+     WHERE clerk_user_id = $4
+       AND (
+         membership_mode IS NULL OR
+         membership_mode = $5::text OR
+         $5::text = 'live'
+       )`,
+    [
+      state,
+      purchase.id,
+      eventCreated,
+      purchase.player_id,
+      mode
+    ]
+  );
 }
 
 /** @param {string} state */

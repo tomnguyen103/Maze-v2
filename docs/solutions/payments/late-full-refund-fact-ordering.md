@@ -42,4 +42,7 @@ The two could disagree.
   payment event stays stale for the fact (server/lifetime-store.js:215).
 - The entitlement transition applies the same rule. A full refund of the
   charge makes access and the purchase `refunded` whatever the event order.
-  The clock keeps the larger value (server/lifetime-store.js:400).
+  The clock keeps the larger value (server/lifetime-store.js:429).
+- A late Checkout event that sees a full refund applies the same rule when
+  the purchase already granted access. A purchase that never granted access
+  stays without access (server/lifetime-store.js:219).
