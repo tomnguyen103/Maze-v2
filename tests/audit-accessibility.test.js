@@ -1,6 +1,28 @@
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+
+/** Generated output is not authored. Mirrors `tests/design-tokens.test.js`. */
+const GENERATED = [
+  "node_modules",
+  "dist",
+  ".vercel",
+  ".git",
+  "graphify-out",
+  ".codegraph",
+  ".ua",
+  "playwright-report",
+  "test-results",
+  "coverage"
+];
+
+/** Every stylesheet the repo authors. */
+function cssFiles() {
+  return globSync("**/*.css", {
+    cwd: fileURLToPath(new URL("../", import.meta.url)),
+    exclude: (path) => GENERATED.some((dir) => path.split(/[\\/]/).includes(dir))
+  });
+}
 
 /** @param {string} relative */
 function source(relative) {
@@ -292,5 +314,145 @@ describe("TYPE — body copy has a real 16px floor", () => {
     expect(classroomRule.slice(0, classroomRule.indexOf("}"))).toContain(
       "var(--text-body)"
     );
+  });
+});
+
+/** @param {string} block @param {string} name */
+function declared(block, name) {
+  const line = block
+    .split(/\r?\n/)
+    .find((text) => text.trim().startsWith(name + ":"));
+  const value = line?.match(/oklch\([^)]*\)/)?.[0];
+  if (!value) throw new Error(`${name} has no oklch() value`);
+  return value;
+}
+
+/** @param {string} value */
+function rgbOf(value) {
+  const [lightness, chroma, hue] = (value.match(/[\d.]+/g) ?? []).map(Number);
+  return oklchToRgb(lightness / 100, chroma, hue);
+}
+
+/** Adopted values from the spec Palette table, light theme. */
+const FIELD_JOURNAL_LIGHT = {
+  "--color-paper": "oklch(97.5% 0.012 85)",
+  "--color-panel": "oklch(99% 0.006 85)",
+  "--color-ink": "oklch(24% 0.015 60)",
+  "--color-ink-muted": "oklch(42% 0.02 60)",
+  "--color-ink-faint": "oklch(50% 0.02 60)",
+  "--color-signal": "oklch(78% 0.15 75)",
+  "--color-signal-deep": "oklch(47% 0.11 65)",
+  "--color-accent-ink": "oklch(20% 0.03 60)"
+};
+
+/** Adopted values from the spec Palette table, Night theme. */
+const FIELD_JOURNAL_NIGHT = {
+  "--color-paper": "oklch(19% 0.012 65)",
+  "--color-panel": "oklch(23% 0.012 65)",
+  "--color-ink": "oklch(94% 0.012 85)",
+  "--color-ink-muted": "oklch(76% 0.015 80)",
+  "--color-ink-faint": "oklch(68% 0.015 80)",
+  "--color-signal": "oklch(78% 0.15 75)",
+  "--color-signal-deep": "oklch(82% 0.13 80)",
+  "--color-accent-ink": "oklch(20% 0.03 60)"
+};
+
+const TEXT_PAIRS = [
+  ["--color-ink", "--color-paper"],
+  ["--color-ink", "--color-panel"],
+  ["--color-ink-muted", "--color-paper"],
+  ["--color-ink-faint", "--color-paper"],
+  ["--color-accent-ink", "--color-signal"],
+  ["--color-signal-deep", "--color-paper"]
+];
+
+describe("US-01 — Field Journal palette tokens", () => {
+  const css = source("tokens.css");
+  const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
+  const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
+  const lightBlock = css.slice(0, systemNightStart);
+  const systemNight = css.slice(systemNightStart, forcedNightStart);
+  const forcedNight = css.slice(forcedNightStart);
+
+  it("sets the adopted Field Journal values in light (US-01.1)", () => {
+    for (const [name, value] of Object.entries(FIELD_JOURNAL_LIGHT)) {
+      expect(declared(lightBlock, name), name).toBe(value);
+    }
+  });
+
+  it("holds 4.5:1 for text and 3:1 for the focus ring in light and Night (US-01.2)", () => {
+    for (const block of [lightBlock, systemNight, forcedNight]) {
+      for (const [text, ground] of TEXT_PAIRS) {
+        expect(
+          contrast(rgbOf(declared(block, text)), rgbOf(declared(block, ground)))
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(
+        contrast(
+          rgbOf(declared(block, "--color-signal-deep")),
+          rgbOf(declared(block, "--color-paper"))
+        )
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("removes every --color-sky alias from tokens and the stylesheets (US-01.3)", () => {
+    expect(css).not.toMatch(/--color-sky/);
+    for (const relative of [
+      "src/admin/admin.css",
+      "src/classroom/classroom.css",
+      "src/daylight.css",
+      "src/game/game-dialogs.css",
+      "src/game/quest-atlas.css",
+      "src/game/run-replay.css",
+      "src/learning/lantern-trail.css"
+    ]) {
+      expect(source(relative), relative).not.toMatch(/var\(--color-sky/);
+    }
+  });
+
+  it("gives the system and forced Night blocks the same palette values (US-01.4)", () => {
+    for (const [name, value] of Object.entries(FIELD_JOURNAL_NIGHT)) {
+      expect(declared(systemNight, name), name).toBe(value);
+      expect(declared(forcedNight, name), name).toBe(value);
+    }
+  });
+
+  it("mixes colours in oklab when one side is white or hueless (US-01.5)", () => {
+    const oklchMixes = cssFiles().filter((relative) =>
+      /color-mix\(\s*in\s+(?:oklch|lch|hsl|hwb)\b/.test(source(relative))
+    );
+    expect(oklchMixes).toEqual([]);
+  });
+
+  it("holds 4.5:1 for the text on a signal-deep fill in light and Night", () => {
+    for (const block of [lightBlock, systemNight, forcedNight]) {
+      expect(
+        contrast(
+          rgbOf(declared(block, "--color-on-signal-deep")),
+          rgbOf(declared(block, "--color-signal-deep"))
+        )
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("never pairs a signal-deep fill with any text colour but on-signal-deep", () => {
+    const offenders = [];
+    for (const relative of cssFiles()) {
+      for (const rule of source(relative).replace(/\r\n/g, "\n").split("}")) {
+        const open = rule.lastIndexOf("{");
+        const body = rule.slice(open + 1);
+        const signalDeepFill =
+          /(?:^|[\s;])(?:background|background-color|--fill)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
+        if (
+          signalDeepFill &&
+          /(?:^|[\s;])color\s*:/.test(body) &&
+          !/(?:^|[\s;])color\s*:\s*var\(--color-on-signal-deep\)/.test(body)
+        ) {
+          offenders.push(`${relative}: ${rule.slice(0, open).trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

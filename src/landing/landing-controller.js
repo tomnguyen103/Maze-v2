@@ -27,13 +27,6 @@ export function renderLanding(root) {
           </div>
           <p class="landing-auth-status" id="landing-auth-status" role="status" hidden></p>
         </div>
-        <div class="landing-labyrinth-mark" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
       </section>
       <section class="landing-path" aria-labelledby="landing-path-title">
         <h2 id="landing-path-title">Find your way through each Labyrinth</h2>

@@ -67,7 +67,7 @@
   margin: 0;
   padding: var(--space-2) var(--space-3);
   color: var(--color-ink);
-  border: 1px solid color-mix(in oklab, var(--color-sky) 40%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-signal) 40%, transparent);
   border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   overflow-wrap: anywhere;
@@ -86,9 +86,9 @@
 }
 
 .run-replay-controls .control-button[aria-pressed="true"] {
-  color: var(--color-on-fill);
-  border-color: var(--color-sky-deep);
-  background: var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  border-color: var(--color-signal-deep);
+  background: var(--color-signal-deep);
 }
 
 .run-replay-controls label {
@@ -104,7 +104,7 @@
 .run-replay-controls input[type="range"] {
   width: 100%;
   min-height: 2.75rem;
-  accent-color: var(--color-sky-deep);
+  accent-color: var(--color-signal-deep);
   touch-action: pan-x;
 }
 
@@ -142,9 +142,9 @@
 }
 
 .run-replay-events li[aria-current="step"] {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal-deep);
   background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-sky);
+  box-shadow: 0 0 0 1px var(--color-signal-deep);
 }
 
 .run-replay-events li strong {

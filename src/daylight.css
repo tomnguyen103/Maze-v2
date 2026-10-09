@@ -15,11 +15,8 @@ body {
   margin: 0;
   color: var(--color-ink);
   background-color: var(--color-paper);
-  background-image:
-    linear-gradient(var(--color-paper-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-paper-grid) 1px, transparent 1px);
-  background-size: 24px 24px;
   font-family: var(--font-body);
+  font-size: 1rem;
   line-height: 1.45;
   overflow-x: clip;
 }
@@ -186,7 +183,6 @@ a:hover {
   gap: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-line-soft);
   background: var(--color-nav);
-  backdrop-filter: blur(12px);
 }
 
 @media (min-width: 85rem) {
@@ -289,28 +285,16 @@ a:hover {
 }
 
 .primary-button {
-  --fill: var(--color-sky-deep);
-  --ink: var(--color-on-fill);
+  --fill: var(--color-signal);
+  --ink: var(--color-accent-ink);
   color: var(--ink);
   background: var(--fill);
-  border-color: var(--fill);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .primary-button {
-    --fill: var(--color-sky);
-    --ink: var(--color-accent-ink);
-  }
-}
-
-:root[data-theme="dark"] .primary-button {
-  --fill: var(--color-sky);
-  --ink: var(--color-accent-ink);
+  border-color: var(--color-accent-ink);
 }
 
 .primary-button:active:not(:disabled),
 .primary-button:hover:not(:disabled) {
-  background: color-mix(in oklch, var(--fill), black 12%);
+  background: color-mix(in oklab, var(--fill), black 12%);
 }
 
 .danger-button {
@@ -379,7 +363,7 @@ a:hover {
 }
 
 .run-card {
-  --card-hue: var(--color-sky);
+  --card-hue: var(--color-signal);
 }
 
 .player-console {
@@ -508,7 +492,7 @@ a:hover {
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);
   color: var(--color-ink);
-  border: 1px solid color-mix(in oklab, var(--card-hue, var(--color-sky)) 44%, var(--color-line-soft));
+  border: 1px solid color-mix(in oklab, var(--card-hue, var(--color-signal)) 44%, var(--color-line-soft));
   border-radius: var(--radius-pill);
   background: var(--color-stone);
   font-size: var(--text-compact);
@@ -713,7 +697,7 @@ a:hover {
 }
 
 .seed-copy:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   background: var(--color-signal-soft);
 }
 
@@ -771,7 +755,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   color: var(--color-ink);
-  border: 0 solid color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border: 0 solid color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   font-size: var(--text-label);
@@ -863,15 +847,11 @@ html .trail-compass[hidden] {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-on-fill);
-  border: 1px solid var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  border: 1px solid var(--color-signal-deep);
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    120deg,
-    var(--color-sky-deep),
-    color-mix(in oklab, var(--color-sky-deep), black 16%)
-  );
-  box-shadow: 0 6px 16px -8px var(--color-sky-deep);
+  background: var(--color-signal-deep);
+  box-shadow: 0 6px 16px -8px var(--color-signal-deep);
   text-align: left;
   white-space: normal;
   cursor: pointer;
@@ -882,12 +862,12 @@ html .trail-compass[hidden] {
 
 .pulse-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -10px var(--color-sky-deep);
+  box-shadow: 0 10px 22px -10px var(--color-signal-deep);
 }
 
 .pulse-button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 2px 6px -4px var(--color-sky-deep);
+  box-shadow: 0 2px 6px -4px var(--color-signal-deep);
 }
 
 .pulse-button:disabled {
@@ -935,8 +915,8 @@ kbd {
 }
 
 .pulse-button kbd {
-  border-color: color-mix(in oklab, var(--color-on-fill) 45%, transparent);
-  background: color-mix(in oklab, var(--color-on-fill) 16%, transparent);
+  border-color: color-mix(in oklab, var(--color-on-signal-deep) 45%, transparent);
+  background: color-mix(in oklab, var(--color-on-signal-deep) 16%, transparent);
   color: inherit;
 }
 
@@ -945,9 +925,9 @@ kbd {
   width: 1.5rem;
   height: 1.5rem;
   place-items: center;
-  color: var(--color-sky-deep);
+  color: var(--color-signal-deep);
   border-radius: 50%;
-  background: var(--color-on-fill);
+  background: var(--color-on-signal-deep);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
@@ -956,7 +936,7 @@ kbd {
 /* The Signal Bell is the quiet partner of the Pulse button. */
 .bell-button {
   color: var(--color-ink);
-  border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   background: var(--color-signal-soft);
   box-shadow: none;
 }
@@ -1091,7 +1071,7 @@ kbd {
 }
 
 .echo-lens__highlight-list mark {
-  color: var(--color-ink);
+  color: var(--color-accent-ink);
   background: var(--color-signal);
 }
 
@@ -1113,6 +1093,7 @@ kbd {
 }
 
 .echo-lens__pattern strong {
+  color: var(--color-accent-ink);
   background: var(--color-signal);
 }
 
@@ -1226,7 +1207,7 @@ kbd {
 .field-note {
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px dashed color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+  border: 1px dashed color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   border-radius: var(--radius-lg);
   color: var(--color-ink);
   font-size: var(--text-body);
@@ -1423,9 +1404,9 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .level-card__badge {
   padding: var(--space-1) var(--space-3);
-  color: var(--color-on-fill);
+  color: var(--color-on-signal-deep);
   border-radius: var(--radius-pill);
-  background: var(--color-sky-deep);
+  background: var(--color-signal-deep);
   font-size: 0.72rem;
   font-weight: 650;
 }
@@ -1604,12 +1585,12 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .direction-button:hover:not(:disabled) {
     background: var(--color-signal-soft);
-    border-color: color-mix(in oklab, var(--color-sky) 44%, var(--color-line-soft));
+    border-color: color-mix(in oklab, var(--color-signal) 44%, var(--color-line-soft));
   }
 
   .direction-button:active:not(:disabled) {
-    background: var(--color-sky-deep);
-    color: var(--color-on-fill);
+    background: var(--color-signal-deep);
+    color: var(--color-on-signal-deep);
   }
 
   .direction-button--up {
@@ -1849,28 +1830,12 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero {
-  position: relative;
-  isolation: isolate;
   min-height: min(42rem, calc(100svh - 7rem));
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: clamp(var(--space-8), 7vw, var(--space-16));
   padding-block: var(--space-8) var(--space-12);
-}
-
-.landing-hero::before {
-  content: "";
-  position: absolute;
-  inset: -2rem;
-  z-index: -1;
-  /* closest-side fades each blob to nothing at its own layer edge. */
-  background:
-    radial-gradient(closest-side, var(--region-windcall), transparent) 0 0 / 50% 70% no-repeat,
-    radial-gradient(closest-side, var(--region-mosslight), transparent) 100% 0 / 45% 65% no-repeat,
-    radial-gradient(closest-side, var(--region-sunspan), transparent) 85% 100% / 45% 60% no-repeat,
-    radial-gradient(closest-side, var(--region-tideglass), transparent) 10% 100% / 40% 60% no-repeat;
-  opacity: 0.3;
 }
 
 .landing-hero__copy {
@@ -1918,67 +1883,6 @@ body[data-run-mode="first-light"] .play-workbench {
   justify-content: center;
   padding-inline: var(--space-5);
   text-decoration: none;
-}
-
-.landing-labyrinth-mark {
-  width: min(100%, 28rem);
-  aspect-ratio: 1;
-  justify-self: end;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-4);
-}
-
-.landing-labyrinth-mark span {
-  position: relative;
-  visibility: hidden;
-  border: 2px solid var(--island);
-  border-radius: var(--radius-lg);
-  background: color-mix(in oklab, var(--island) 14%, var(--color-stone));
-}
-
-.landing-labyrinth-mark span:is(:nth-child(1), :nth-child(2), :nth-child(3)) {
-  --island: var(--region-mosslight);
-  visibility: visible;
-}
-
-.landing-labyrinth-mark span:is(:nth-child(8), :nth-child(13)) {
-  --island: var(--region-windcall);
-  visibility: visible;
-}
-
-.landing-labyrinth-mark span:is(:nth-child(14), :nth-child(15)) {
-  --island: var(--region-sunspan);
-  visibility: visible;
-}
-
-.landing-labyrinth-mark span:nth-child(20) {
-  --island: var(--region-tideglass);
-  visibility: visible;
-}
-
-.landing-labyrinth-mark span:nth-child(25) {
-  --island: var(--region-bellroot);
-  visibility: visible;
-}
-
-/* Rope bridge to the next island: planks across one grid gap. */
-.landing-labyrinth-mark span:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: calc(50% - 4px);
-  left: 100%;
-  width: calc(var(--space-4) + 4px);
-  height: 8px;
-  background: repeating-linear-gradient(var(--plank, 90deg), var(--color-ink-muted) 0 2px, transparent 2px 5px);
-}
-
-.landing-labyrinth-mark span:is(:nth-child(3), :nth-child(8), :nth-child(15), :nth-child(20))::after {
-  --plank: 180deg;
-  top: 100%;
-  left: calc(50% - 4px);
-  width: 8px;
-  height: calc(var(--space-4) + 4px);
 }
 
 .landing-path,
@@ -2115,10 +2019,6 @@ body[data-run-mode="first-light"] .play-workbench {
     min-height: 0;
   }
 
-  .landing-labyrinth-mark {
-    justify-self: start;
-  }
-
   .landing-path ol,
   .landing-levels,
   .landing-account {
@@ -2133,11 +2033,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .landing-hero__actions {
     display: grid;
-  }
-
-  .landing-labyrinth-mark {
-    width: min(100%, 20rem);
-    justify-self: center;
   }
 
   .landing-hero__actions :is(.primary-button, .control-button) {

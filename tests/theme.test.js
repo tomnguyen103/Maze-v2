@@ -227,6 +227,20 @@ describe("SHELL-07 — the theme is applied before first paint", () => {
   });
 
   it("keeps the page, the boot script, and the module on one bar colour pair", () => {
+    // The bar colour is `--color-paper` in each theme, so read it from the tokens.
+    const tokens = source("tokens.css");
+    const paper = (/** @type {string} */ block) =>
+      /** @type {RegExpMatchArray} */ (
+        block.match(/--color-paper: (oklch\([^)]*\))/)
+      )[1];
+    const media = tokens.indexOf("@media (prefers-color-scheme: dark)");
+    const forced = tokens.indexOf(':root[data-theme="dark"]');
+    expect(THEME_COLORS).toEqual({
+      light: paper(tokens.slice(0, media)),
+      dark: paper(tokens.slice(forced))
+    });
+    // The OS-dark bar colour in index.html reads the media block, so it must match too.
+    expect(paper(tokens.slice(media, forced))).toBe(THEME_COLORS.dark);
     // The colours live in three files that cannot share an import. This is
     // what stops them drifting.
     const html = source("index.html");
@@ -273,8 +287,8 @@ describe("SHELL-07 — night is declared, and both ways", () => {
 
   it("says so in the design system it amends", () => {
     const design = source("design.md");
-    expect(design).toContain("**Night**");
-    expect(design).toContain("prefers-color-scheme");
+    expect(design).toContain("| Role | Light | Night |");
+    expect(design).toContain("`theme-color` meta");
   });
 });
 

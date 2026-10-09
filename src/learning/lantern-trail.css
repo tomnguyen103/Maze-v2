@@ -135,7 +135,7 @@
 .practice-tactics-card:active,
 .practice-tactics-twist:hover,
 .practice-tactics-twist:active {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
   background: var(--color-signal-soft);
 }
 
@@ -173,7 +173,7 @@
 }
 
 .practice-tactics__status {
-  border-color: color-mix(in oklab, var(--color-sky) 40%, transparent);
+  border-color: color-mix(in oklab, var(--color-signal) 40%, transparent);
   background: var(--color-signal-soft);
 }
 
@@ -223,7 +223,7 @@
 }
 
 .practice-tactics__choice:hover:not(:disabled) {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
   background: var(--color-signal-soft);
 }
 
@@ -261,7 +261,7 @@ html .practice-tactics__session[hidden] {
 .practice-support p {
   margin: 0;
   padding: var(--space-3);
-  border: 1px solid color-mix(in oklab, var(--color-sky) 40%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-signal) 40%, transparent);
   border-radius: var(--radius-md);
   background: var(--color-signal-soft);
 }

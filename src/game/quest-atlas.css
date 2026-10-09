@@ -70,9 +70,9 @@
 }
 
 .atlas-toolbar .control-button[aria-pressed="true"] {
-  color: var(--color-on-fill);
-  border-color: var(--color-sky-deep);
-  background: var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  border-color: var(--color-signal-deep);
+  background: var(--color-signal-deep);
 }
 
 .atlas-viewport {
@@ -189,7 +189,7 @@
 
 .atlas-detail__note {
   padding: var(--space-3);
-  border: 1px solid color-mix(in oklab, var(--color-sky) 40%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-signal) 40%, transparent);
   border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   font-weight: 600;
@@ -250,8 +250,8 @@
   display: inline-block;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
-  color: var(--color-on-fill);
-  background: var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  background: var(--color-signal-deep);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
@@ -390,8 +390,8 @@
 }
 
 .atlas-sigil[data-restored="true"] {
-  color: var(--color-on-fill);
-  background: var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  background: var(--color-signal-deep);
 }
 
 .atlas-nodes {
@@ -426,7 +426,7 @@
 }
 
 .atlas-landmark:hover:not(:disabled) {
-  border-color: var(--island, var(--color-sky));
+  border-color: var(--island, var(--color-signal));
 }
 
 .atlas-landmark:active {
@@ -439,8 +439,8 @@
 }
 
 .atlas-landmark[aria-pressed="true"] {
-  border-color: var(--color-sky-deep);
-  box-shadow: 0 0 0 1px var(--color-sky-deep);
+  border-color: var(--color-signal-deep);
+  box-shadow: 0 0 0 1px var(--color-signal-deep);
 }
 
 .atlas-landmark:disabled {
@@ -482,8 +482,8 @@
   width: fit-content;
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
-  color: var(--color-on-fill);
-  background: var(--color-sky-deep);
+  color: var(--color-on-signal-deep);
+  background: var(--color-signal-deep);
   font-family: var(--font-utility);
   font-size: 0.62rem;
   font-weight: 700;
@@ -522,7 +522,7 @@
 }
 
 .atlas-landmark[data-state="current"] {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal-deep);
 }
 
 .atlas-landmark[data-state="milestone"],
@@ -543,10 +543,10 @@
 }
 
 .atlas-landmark[aria-current="step"] {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal-deep);
   color: var(--color-ink);
   background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-sky);
+  box-shadow: 0 0 0 1px var(--color-signal-deep);
 }
 
 @media (max-width: 58rem) {

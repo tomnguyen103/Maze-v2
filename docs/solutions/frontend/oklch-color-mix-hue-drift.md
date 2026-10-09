@@ -1,15 +1,15 @@
 ---
 title: color-mix in oklch drifts toward pink when one side is white
 category: frontend
-trigger: "every landing island tile renders pink"
+trigger: "every tinted tile renders pink"
 ---
 
 # color-mix in oklch drifts toward pink when one side is white
 
 ## Problem
 
-Each landing island tile mixes its region hue with the white panel colour. All
-five tiles came out pink.
+A tile mixed its region hue with the white panel colour. All five tiles came
+out pink.
 
 ## What did not work
 
@@ -23,5 +23,5 @@ toward 0, which is pink, for every input hue.
 
 ## Fix
 
-Mix in `oklab`, which has no hue angle: `src/daylight.css:3435`. Use `oklch`
-only when both sides carry a real hue.
+Mix in `oklab`, which has no hue angle. Every `color-mix` in `src/daylight.css`
+uses it. Use `oklch` only when both sides carry a real hue.

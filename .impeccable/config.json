@@ -10,14 +10,6 @@
           "index.html"
         ],
         "createdAt": "2026-10-08T18:35:13.183Z"
-      },
-      {
-        "rule": "codex-grid-background",
-        "value": "*",
-        "files": [
-          "src/daylight.css"
-        ],
-        "createdAt": "2026-10-08T18:35:24.633Z"
       }
     ]
   }

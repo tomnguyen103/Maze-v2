@@ -77,3 +77,151 @@ describe("custom properties", () => {
     expect(unguarded).toEqual([]);
   });
 });
+
+describe("Field Journal identity", () => {
+  // Checked-out files may use CRLF on Windows; compare LF text only.
+  const read = (/** @type {string} */ relative) =>
+    readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
+
+  /** Adopted palette values from the spec Palette table, light then Night. */
+  const PALETTE_VALUES = [
+    "oklch(97.5% 0.012 85)",
+    "oklch(99% 0.006 85)",
+    "oklch(24% 0.015 60)",
+    "oklch(42% 0.02 60)",
+    "oklch(78% 0.15 75)",
+    "oklch(20% 0.03 60)",
+    "oklch(47% 0.11 65)",
+    "oklch(19% 0.012 65)",
+    "oklch(23% 0.012 65)",
+    "oklch(94% 0.012 85)",
+    "oklch(76% 0.015 80)",
+    "oklch(82% 0.13 80)"
+  ];
+
+  it("names Field Journal as the design identity in design.md", () => {
+    const design = read("design.md");
+    expect(design).toContain("Field Journal");
+    expect(design).not.toMatch(/Journey system/);
+  });
+
+  it("keeps the Stitch project id in the design.md frontmatter", () => {
+    const design = read("design.md");
+    expect(design.startsWith("---\nstitch-project: 3244739478942983822\n---")).toBe(
+      true
+    );
+  });
+
+  it("lists every adopted palette value in design.md", () => {
+    const design = read("design.md");
+    const missing = PALETTE_VALUES.filter((value) => !design.includes(value));
+    expect(missing).toEqual([]);
+  });
+
+  it("lists invariants I1 to I7 in design.md", () => {
+    const design = read("design.md");
+    const missing = ["I1", "I2", "I3", "I4", "I5", "I6", "I7"].filter(
+      (id) => !new RegExp(`\\|\\s*${id}\\s*\\|`).test(design)
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("names the adopted type families and shape limits in design.md", () => {
+    const design = read("design.md");
+    for (const literal of [
+      "Bricolage Grotesque",
+      "Geist Mono",
+      "40px",
+      "16px",
+      "768px"
+    ]) {
+      expect(design).toMatch(new RegExp(String.raw`(?<![\d.])${literal}`));
+    }
+  });
+
+  it("defines Field Journal and no longer defines Journey in GLOSSARY.md", () => {
+    const glossary = read("GLOSSARY.md");
+    expect(glossary).toMatch(/\*\*Field Journal\*\*:/);
+    expect(glossary).not.toMatch(/\*\*Journey\*\*:/);
+  });
+
+  it("keeps the game-rule terms in GLOSSARY.md", () => {
+    const glossary = read("GLOSSARY.md");
+    for (const term of ["Labyrinth", "Warden Challenge", "Gate", "Region Hue"]) {
+      expect(glossary).toMatch(new RegExp(`\\*\\*${term}\\*\\*:`));
+    }
+  });
+
+  it("records the decision in ADR 0046", () => {
+    const adr = read("docs/adr/0046-field-journal-replaces-island-journey.md");
+    expect(adr).toContain(
+      "# 0046: Replace the island Journey with the Field Journal identity"
+    );
+    expect(adr).toContain("- Status: Accepted");
+    expect(adr).toContain("- Date: 2026-10-08");
+    for (const heading of ["## Context", "## Decision", "## Consequences"]) {
+      expect(adr).toContain(heading);
+    }
+  });
+});
+
+describe("shared base styles", () => {
+  // The shared sheet draws the Field Journal look only. No island or rope rule remains.
+  const daylight = readFileSync(root + "src/daylight.css", "utf8").replace(
+    /\r\n/g,
+    "\n"
+  );
+
+  /** Returns the declarations of every top-level rule for one exact selector. */
+  const rules = (/** @type {string} */ selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return [
+      ...daylight.matchAll(new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`, "g"))
+    ]
+      .map((match) => match[1])
+      .join("\n");
+  };
+
+  it("draws no island, rope bridge, blob or grid ground (US-01.3)", () => {
+    expect(daylight).not.toMatch(/--island\b/);
+    expect(readFileSync(root + "tokens.css", "utf8")).not.toMatch(/--island\b/);
+    expect(daylight).not.toMatch(/rope/i);
+    expect(daylight).not.toMatch(/closest-side/);
+    expect(daylight).not.toMatch(/--color-paper-grid/);
+  });
+
+  it("defines and reads no --color-paper-grid token in any stylesheet (US-01.3)", () => {
+    const users = SHEETS.filter((relative) =>
+      readFileSync(root + relative, "utf8").includes("--color-paper-grid")
+    );
+    expect(users).toEqual([]);
+  });
+
+  it("keeps every header opaque with no backdrop blur (US-05.3)", () => {
+    // Only a dialog's ::backdrop may blur the page behind it. Chrome stays opaque.
+    const blurred = [];
+    for (const relative of SHEETS.filter((path) => path.endsWith(".css"))) {
+      const css = readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
+      for (const rule of css.split("}")) {
+        const open = rule.lastIndexOf("{");
+        const selector = rule.slice(0, open);
+        if (
+          /backdrop-filter:\s*(?!none)\S/.test(rule.slice(open + 1)) &&
+          !selector.includes("::backdrop")
+        ) {
+          blurred.push(`${relative}: ${selector.trim()}`);
+        }
+      }
+    }
+    expect(blurred).toEqual([]);
+  });
+
+  it("fills the primary button with amber, not the legacy sky-deep token (US-01.3)", () => {
+    expect(rules(".primary-button")).toMatch(/--fill:\s*var\(--color-signal\);/);
+    expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
+  });
+
+  it("sets body text to 16px (I6)", () => {
+    expect(rules("body")).toMatch(/font-size:\s*1rem/);
+  });
+});

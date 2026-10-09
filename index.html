@@ -8,13 +8,13 @@
       content="Echo Maze is a kid-friendly text adventure where clever answers defeat Wardens and open the way home."
     />
     <!-- The browser chrome cannot read a custom property, so the colour is
-         written by hand. It is the exact sRGB of
-         `--color-paper: oklch(98.5% 0.008 230)` in tokens.css — re-derive it if
-         that token ever moves. `THEME_COLORS` in src/player/theme.js and
+         written by hand. It repeats the oklch value of
+         `--color-paper` in tokens.css, light and Night — update it if that
+         token ever moves. `THEME_COLORS` in src/player/theme.js and
          public/theme-boot.js repeat the pair; tests/theme.test.js fails if they
          drift. -->
-    <meta name="theme-color" content="#f5fbff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="oklch(97.5% 0.012 85)" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="oklch(19% 0.012 65)" media="(prefers-color-scheme: dark)" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d9e500'/%3E%3Cpath d='M16 14h32v8H24v8h16v20H16v-8h16v-4H16z' fill='%230d1b2a'/%3E%3C/svg%3E"
@@ -61,13 +61,6 @@
               <button class="control-button" id="landing-sign-in-hero" type="button">Sign in</button>
             </div>
             <p class="landing-auth-status" id="landing-auth-status" role="status" hidden></p>
-          </div>
-          <div class="landing-labyrinth-mark" aria-hidden="true">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
           </div>
         </section>
         <section class="landing-path" aria-labelledby="landing-path-title">

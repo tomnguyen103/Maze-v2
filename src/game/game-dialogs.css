@@ -1180,9 +1180,9 @@
 }
 
 .learning-deck-option:has(input:checked) {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal-deep);
   background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-sky);
+  box-shadow: 0 0 0 1px var(--color-signal-deep);
 }
 
 .learning-deck-option:hover:not(:has(input:checked)) {
@@ -1202,7 +1202,7 @@
   width: 1.1rem;
   height: 1.1rem;
   margin: var(--space-1) 0 0;
-  accent-color: var(--color-sky-deep);
+  accent-color: var(--color-signal-deep);
 }
 
 .learning-deck-option strong {
@@ -1247,13 +1247,13 @@
 }
 
 .level-card:hover:not(:disabled) {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
   background: var(--color-panel);
   box-shadow: var(--shadow-panel);
 }
 
 .level-card--featured {
-  border-color: color-mix(in oklab, var(--color-sky) 44%, transparent);
+  border-color: color-mix(in oklab, var(--color-signal) 44%, transparent);
   background: var(--color-signal-soft);
 }
 
@@ -1400,7 +1400,7 @@
 }
 
 .challenge-choice:hover:not(:disabled) {
-  border-color: var(--color-sky);
+  border-color: var(--color-signal);
   background: var(--color-signal-soft);
 }
 
