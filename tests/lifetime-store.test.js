@@ -686,11 +686,12 @@ describe("Lifetime Membership store", () => {
   });
 
   /**
-   * BEGIN, webhook claim, a disputed purchase, then a disputed projection at
+   * BEGIN, webhook claim, a purchase, then a projection in the same state at
    * 300; later queries default to no rows.
    * @param {string} eventId
+   * @param {"disputed" | "refunded"} state
    */
-  function disputedPool(eventId) {
+  function clockedPool(eventId, state = "disputed") {
     return paidPool([
       [],
       [{ event_id: eventId }],
@@ -698,12 +699,12 @@ describe("Lifetime Membership store", () => {
         id: "purchase_123",
         player_id: "user_explorer",
         provider_event_created: 300,
-        status: "disputed"
+        status: state
       }],
       [{
         lifetime_state_event_created: 300,
         membership_mode: "test",
-        membership_state: "disputed"
+        membership_state: state
       }]
     ]);
   }
@@ -717,7 +718,7 @@ describe("Lifetime Membership store", () => {
   }
 
   it("US-01.1 refunds access for a full refund that arrives after a newer dispute", async () => {
-    const { client, pool } = disputedPool("evt_late_refund");
+    const { client, pool } = clockedPool("evt_late_refund");
     const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(store.transitionEntitlement({
@@ -735,7 +736,7 @@ describe("Lifetime Membership store", () => {
   });
 
   it("US-01.2 keeps a fully refunded charge refunded when a dispute is won", async () => {
-    const { client, pool } = disputedPool("evt_dispute_won");
+    const { client, pool } = clockedPool("evt_dispute_won");
     const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(store.transitionEntitlement({
@@ -750,6 +751,41 @@ describe("Lifetime Membership store", () => {
     })).resolves.toEqual({ outcome: "processed", state: "lifetime_refunded" });
     expect(updateValues(client, "lifetime_purchases")?.slice(2)).toEqual(["refunded", 400]);
     expect(updateValues(client, "player_access")?.slice(0, 3)).toEqual(["refunded", "purchase_123", 400]);
+  });
+
+  it("US-01.1 keeps the clock order for a refund one cent short of the Lifetime amount", async () => {
+    const { client, pool } = clockedPool("evt_short_refund");
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 250,
+      eventId: "evt_short_refund",
+      eventType: "charge.refunded",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123",
+      refundedCents: 598,
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "stale", state: "lifetime_disputed" });
+    expect(updateValues(client, "player_access")).toBeUndefined();
+  });
+
+  it("US-01.4 leaves refunded access unchanged when a dispute on the refunded charge is won", async () => {
+    const { client, pool } = clockedPool("evt_dispute_won", "refunded");
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 400,
+      eventId: "evt_dispute_won",
+      eventType: "charge.dispute.closed",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123",
+      refundedCents: 599,
+      state: "active"
+    })).resolves.toEqual({ outcome: "ignored", state: "lifetime_refunded" });
+    expect(updateValues(client, "lifetime_purchases")).toBeUndefined();
+    expect(updateValues(client, "player_access")).toBeUndefined();
   });
 
   it("links an early dispute by purchase metadata and blocks future Runs", async () => {
