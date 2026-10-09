@@ -181,6 +181,10 @@ export function createClassExpeditionBilling({
         verified && typeof verified === "object"
           ? String(Reflect.get(verified, "type") ?? "")
           : "";
+      // A live event is never ours; the PaymentIntent lookup would fail with a test key.
+      if (Reflect.get(verified ?? {}, "livemode") === true) {
+        return false;
+      }
       if (eventType.startsWith("checkout.session.")) {
         return (
           objectMetadata(object)?.purchase_kind === EXPEDITION_PURCHASE_KIND

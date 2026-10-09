@@ -135,7 +135,9 @@ describe("US-02 live mode only in production", () => {
     "https://localhost:3000",
     "https://127.0.0.1:8443",
     "https://[::1]:8443",
-    "http://localhost:3000"
+    "http://localhost:3000",
+    "https://app.localhost",
+    "https://localhost./"
   ])("US-02.3 refuses live on the localhost origin %s", (origin) => {
     const result = describeLifetimeConfig({
       ...liveEnv,
@@ -143,6 +145,19 @@ describe("US-02 live mode only in production", () => {
     });
     expect(result.config).toBeNull();
     expect(result.refusal).toBe("live_requires_https_origin");
+  });
+
+  it("US-12.1 live mode loads no Class Expedition prices", () => {
+    const expeditionPrices = {
+      STRIPE_EXPEDITION_PRICE_ID: "price_expedition_base",
+      STRIPE_EXPEDITION_EXTENSION_PRICE_ID: "price_expedition_extension"
+    };
+    expect(
+      loadLifetimeConfig({ ...testEnv, ...expeditionPrices })?.expedition
+    ).not.toBeNull();
+    expect(
+      loadLifetimeConfig({ ...liveEnv, ...expeditionPrices })?.expedition
+    ).toBeNull();
   });
 
   it("US-02.4 a refused live config makes the boot throw with the reason", () => {

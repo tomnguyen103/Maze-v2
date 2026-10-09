@@ -205,6 +205,23 @@ describe("Class Expedition billing", () => {
     );
   });
 
+  it("US-04.2 leaves a live-mode refund event to the Lifetime service without a Stripe lookup", async () => {
+    const stripe = fakeStripe();
+    const owner = billing(stripe, fakeStore());
+    await expect(
+      owner.ownsEvent({
+        id: "evt_live_1",
+        type: "refund.created",
+        livemode: true,
+        created: 100,
+        data: {
+          object: { payment_intent: "pi_expedition_1", status: "succeeded" }
+        }
+      })
+    ).resolves.toBe(false);
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+  });
+
   it("activates the License from a paid test-mode checkout event", async () => {
     const stripe = fakeStripe({ status: "complete" });
     const store = fakeStore();

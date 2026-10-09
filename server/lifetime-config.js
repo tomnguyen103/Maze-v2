@@ -127,7 +127,8 @@ export function describeLifetimeConfig(env) {
       priceId,
       secretKey,
       webhookSecret,
-      expedition: loadExpeditionPrices(env)
+      // Class Expedition billing stays test-only: live mode never opens a Session for it.
+      expedition: mode === "live" ? null : loadExpeditionPrices(env)
     },
     refusal: null
   };
@@ -143,7 +144,7 @@ export function loadLifetimeConfig(env) {
 /**
  * Class Expedition License prices are optional: without both test prices the
  * sponsor purchase surface reports itself unconfigured instead of guessing.
- * The same sk_test_-only gate above still applies to every checkout.
+ * The caller drops them in live mode.
  *
  * @param {Record<string, string | undefined>} env
  */
@@ -164,7 +165,12 @@ function loadExpeditionPrices(env) {
 function isHttpsPublicOrigin(value) {
   try {
     const url = new URL(value.trim());
-    return url.protocol === "https:" && !LOCAL_HOSTS.has(url.hostname);
+    const host = url.hostname.replace(/\.$/, "");
+    return (
+      url.protocol === "https:" &&
+      !LOCAL_HOSTS.has(host) &&
+      !host.endsWith(".localhost")
+    );
   } catch {
     return false;
   }

@@ -73,7 +73,6 @@ import {
 import { createGuestDemoStore } from "./guest-demo-store.js";
 import {
   describeLifetimeConfig,
-  loadLifetimeConfig,
   resolveEnforcement
 } from "./lifetime-config.js";
 import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
@@ -232,7 +231,7 @@ export function createPlayerApi(env = process.env) {
     const healthHandler = createHealthHandler({
       version,
       checkDatabase: null,
-      stripeConfigured: loadLifetimeConfig(env) !== null,
+      stripeConfigured: billing.config !== null,
       clerkConfigured
     });
     /**
@@ -367,7 +366,7 @@ export function createPlayerApi(env = process.env) {
   });
   const roleStore = createRoleStore(queryAdapter);
   const roleResolver = createRoleResolver({ store: roleStore });
-  const lifetimeConfig = loadLifetimeConfig(env);
+  const lifetimeConfig = billing.config;
   // Asking for enforcement without a usable checkout is a misconfiguration,
   // and it used to resolve silently to "off" — a state operators read as an
   // intentional billing-disable. It is loud now, but not fatal: this factory
@@ -659,7 +658,8 @@ export function createPlayerApi(env = process.env) {
           undefined,
           {
             eventType: event.eventType,
-            outcome: result?.outcome ?? null
+            outcome: result?.outcome ?? null,
+            reason: result?.reason ?? null
           }
         );
         return;
