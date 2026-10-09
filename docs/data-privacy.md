@@ -10,7 +10,7 @@ give the account holder both halves of their data rights.
 |---|---|---|
 | Player Profile | `players` | username + cosmetic palettes only |
 | Score Entries | `score_entries` | bounded Run facts, server-recalculated; nullable Classroom scope |
-| Run Access | `player_access`, `run_access_grants` | free-run counter, membership state, Run Grants |
+| Run Access | `player_access`, `run_access_grants` | free-run counter, membership state, first Run Grant time, Run Grants |
 | Lifetime Membership | `lifetime_purchases` | Stripe identifiers only — no card data ever |
 | Quest Continuity | `cloud_quest_progress` | boundary-synced Quest Progress |
 | Lantern Journal | `learning_journals` | privacy-minimized outcomes (no prompts, no answers) |
@@ -25,6 +25,30 @@ give the account holder both halves of their data rights.
 Guests keep Explorer Access Settings only on their device. Signed-in Explorers
 sync the same four presentation-only choices to their profile. They never enter
 Run, Quest, score, Question, or shared-link state.
+
+## Account-free business records
+
+Two tables hold no Explorer reference. Account deletion leaves them in place.
+
+| Record | Table | Fields |
+|---|---|---|
+| Financial Fact | `financial_facts` | Stripe PaymentIntent id, Billing Mode, amount, currency, status, refunded cents, paid, refunded and disputed times, provider event clock |
+| Funnel Count | `funnel_counts` | UTC day, metric, allowlisted Campaign Code, Billing Mode, count |
+
+- Neither table stores an account id, username, email, name, address, cookie,
+  user agent, URL, referrer, query string, Checkout Session id or free-text
+  campaign. The visit endpoint drops a campaign that is not on the allowlist.
+- Stripe keeps its own payer record under the PaymentIntent id. That record is
+  an accounting record outside this database. The owner reconciles there.
+- `GET /api/me/export` includes neither table, because no row names the
+  Explorer.
+- `GET /api/admin/funnel` returns aggregates only. It requires `refunds:issue`
+  and writes one `funnel.read` audit row per read.
+- No analytics vendor receives a Financial Fact or a Funnel Count. The PostHog
+  forwarder in `docs/observability.md` sends only schema-filtered server events
+  under one fixed distinct id. It is off unless `POSTHOG_API_KEY` is set.
+- Whether the live deployment sets `POSTHOG_API_KEY` is an owner check. This
+  repository cannot see the live configuration.
 
 ## Export (`GET /api/me/export`)
 
@@ -79,6 +103,9 @@ Profile and are included in the deletion verification.
 Offline Run receipts and pending-submission ledger rows are also deleted and
 verified before account deletion completes; pending rows cascade from their
 receipt. Guest rows have no account owner and are not part of account deletion.
+Financial Facts and Funnel Counts hold no account reference, so deletion leaves
+them. A later refund or dispute still updates the Financial Fact and never
+restores the profile.
 Removing one Classroom Membership also removes that Explorer's Quest Progress
 and Lantern Journal for that Classroom. Its derived progress counts cascade
 with the Membership. Personal Play remains.
@@ -106,6 +133,9 @@ with the Membership. Personal Play remains.
   schema/version metadata, time, maximum audit id, row hash, and signature; its
   compliance retention period is deployment-configured.
 - The Lantern Journal is clearable by the Explorer in-game at any time.
+- Code deletes no Financial Fact. The owner's financial retention policy governs
+  facts, and the F4 runbook names that policy. Funnel Counts hold aggregates
+  and stay until the owner decides otherwise.
 
 ## Tracing
 

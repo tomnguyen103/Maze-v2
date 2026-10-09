@@ -74,10 +74,12 @@ pure-ESM dependency needs spans, register the loader hook explicitly
 ## Product events to PostHog
 
 `server/product-events.js` forwards **server-trusted** events only —
-`lifetime_confirmation` and `run_access_decision` — to PostHog when
-`POSTHOG_API_KEY` is set (`POSTHOG_HOST` overrides the US default). The
-forwarder sees events after schema filtering, so identities can never travel;
-delivery is fire-and-forget with a 3s bound and can never fail a request.
+`lifetime_confirmation`, `guest_demo_access_decision` and `run_access_decision`
+— to PostHog when `POSTHOG_API_KEY` is set (`POSTHOG_HOST` overrides the US
+default). The forwarder sees events after schema filtering, so identities can
+never travel; every event uses the one distinct id `echo-maze-server`.
+Delivery is fire-and-forget with a 3s bound and can never fail a request.
+Funnel Counts and Financial Facts stay in the database and never reach PostHog.
 
 ## Environment variables
 

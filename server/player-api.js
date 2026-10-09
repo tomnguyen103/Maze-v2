@@ -609,7 +609,11 @@ export function createPlayerApi(env = process.env) {
       })
       : unavailableLifetimeService();
   const adminHandler = createAdminHandler({
-    store: { ...adminStore, setRole: roleStore.setRole },
+    store: {
+      ...adminStore,
+      setRole: roleStore.setRole,
+      funnelReport: (range) => funnelStore.report(range)
+    },
     questionStore: questionBankStore,
     requirePermission,
     // The same builder the self-export serves, so both produce one schema.
