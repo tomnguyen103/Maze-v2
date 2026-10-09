@@ -1,6 +1,6 @@
 {
   "testFiles": 188,
-  "tests": 1720,
+  "tests": 1724,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-10-08 after the Field Journal canvas ticket 08 added the paper board, Warden silhouette and palette fallback tests. Earlier: the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-10-08 after the Field Journal dashboard ticket 09 added the Admin tab strip and flat panel tests. Earlier: the canvas ticket 08 paper board, Warden silhouette and palette fallback tests, and the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

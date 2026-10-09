@@ -104,7 +104,6 @@
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-lg);
   background: var(--color-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .classroom-panel--teacher {
@@ -157,29 +156,29 @@
 /* Each class and Expedition card takes a region hue: 9% fill, 44% border. */
 .classroom-card,
 .classroom-expedition-card {
-  --island: var(--region-windcall);
-  border-color: color-mix(in oklab, var(--island) 44%, transparent);
-  background: color-mix(in oklab, var(--island) 9%, var(--color-panel));
+  --territory: var(--region-windcall);
+  border-color: color-mix(in oklab, var(--territory) 44%, transparent);
+  background: color-mix(in oklab, var(--territory) 9%, var(--color-panel));
 }
 
 .classroom-card:nth-child(5n + 2),
 .classroom-expedition-card:nth-child(5n + 2) {
-  --island: var(--region-mosslight);
+  --territory: var(--region-mosslight);
 }
 
 .classroom-card:nth-child(5n + 3),
 .classroom-expedition-card:nth-child(5n + 3) {
-  --island: var(--region-sunspan);
+  --territory: var(--region-sunspan);
 }
 
 .classroom-card:nth-child(5n + 4),
 .classroom-expedition-card:nth-child(5n + 4) {
-  --island: var(--region-tideglass);
+  --territory: var(--region-tideglass);
 }
 
 .classroom-card:nth-child(5n),
 .classroom-expedition-card:nth-child(5n) {
-  --island: var(--region-bellroot);
+  --territory: var(--region-bellroot);
 }
 
 .classroom-empty {
@@ -571,16 +570,12 @@
 @media (hover: hover) and (pointer: fine) {
   .classroom-card:hover,
   .classroom-expedition-card:hover {
-    border-color: color-mix(in oklab, var(--island) 70%, transparent);
+    border-color: color-mix(in oklab, var(--territory) 70%, transparent);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .classroom-loading span {
     animation: none;
-  }
-
-  .classroom-nav {
-    backdrop-filter: none;
   }
 }
