@@ -770,6 +770,9 @@ test("US-03.1 resumes the saved Run once when Unlock finds access already active
   const runStarts = () =>
     page.evaluate(() => Reflect.get(window, "__echoMazeRunStarts"));
   await expect.poll(runStarts).toBe(1);
+  await expect(page.locator("#live-region")).toContainText(
+    "Lifetime access unlocked"
+  );
   // A second start follows the dialog close event within a few frames.
   await page.waitForTimeout(500);
   expect(await runStarts()).toBe(1);

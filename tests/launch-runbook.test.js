@@ -142,6 +142,19 @@ describe("Launch runbook", () => {
     }
   });
 
+  it("US-04.6 names every event the server forwards to PostHog", () => {
+    const check = section(section(runbook, "## Launch records"), "### PostHog live check");
+    const trusted = /SERVER_TRUSTED_EVENTS = new Set\(\[([^\]]*)\]/.exec(
+      read("server/product-events.js")
+    )?.[1] ?? "";
+    const names = [...trusted.matchAll(/"(\w+)"/g)].map((match) => match[1]);
+
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      expect(check).toContain(`\`${name}\``);
+    }
+  });
+
   it("US-04.5 holds the children's privacy review with the FTC guidance", () => {
     const review = section(runbook, "## Children's privacy review");
 

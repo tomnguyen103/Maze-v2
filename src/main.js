@@ -604,6 +604,9 @@ let pendingRunReplay = null;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
+// Set before Unlock closes the dialog to resume the saved Run, so the owner
+// link close listener starts nothing more. Only a page load clears it.
+let lifetimeUnlockResumed = false;
 let pendingLifetimeSessionId = "";
 let mustChooseLevel =
   dailyRequest.status === "none" &&
@@ -3192,6 +3195,7 @@ async function openLifetimeCheckout() {
     await confirmLifetimeSession(pendingLifetimeSessionId);
     pendingLifetimeSessionId = "";
     removeCheckoutParameters(new URL(window.location.href));
+    lifetimeUnlockResumed = true;
     lifetimeView.close();
     await resumePendingRun();
     return;
@@ -3202,6 +3206,7 @@ async function openLifetimeCheckout() {
       "Lifetime access is already active. Resuming your saved Run.",
       "success"
     );
+    lifetimeUnlockResumed = true;
     lifetimeView.close();
     await resumePendingRun();
     return;
@@ -3239,7 +3244,7 @@ async function resolveLifetimeReturn() {
     elements.lifetimeDialog.addEventListener(
       "close",
       () => {
-        if (lifetimeReturnConfirmed) {
+        if (lifetimeUnlockResumed) {
           return;
         }
         firstLightEntryPending = offerFirstLight;
@@ -3325,9 +3330,8 @@ async function resumePendingRun() {
     activeRunLocator.runId,
     rulesetIdentityFromLocator(activeRunLocator)
   );
-  if (!started) {
-    lifetimeReturnConfirmed = false;
-  }
+  // A Campfire resume returns before startRun reads the flag.
+  lifetimeReturnConfirmed = false;
   return started;
 }
 

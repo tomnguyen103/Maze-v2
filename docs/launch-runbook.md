@@ -170,8 +170,9 @@ only for a host other than the default in `.env.example`. With no key,
 signed-in Explorer, because only a Run start (`POST /api/access/runs`) sends a
 `run_access_decision` event. Confirm in the PostHog project that the event
 arrives with `source` `server` and no Explorer id or email. With no key, record
-that no event arrives: that outcome is valid. No Financial Fact or Funnel Count
-goes to PostHog.
+that no event arrives: that outcome is valid. The server forwards two more
+events: `guest_demo_access_decision` for a Guest Run and `lifetime_confirmation`
+for a confirmed Checkout. No Financial Fact or Funnel Count goes to PostHog.
 
 **Evidence:** _empty_
 
