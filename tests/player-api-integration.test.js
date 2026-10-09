@@ -136,6 +136,17 @@ describe("composed player API", () => {
     });
   });
 
+  it("US-09.5 drops a visit without an error when the database is absent", async () => {
+    const handler = createPlayerApi({});
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/access/visit`, {
+        method: "POST",
+        body: JSON.stringify({ campaign: "search" })
+      });
+      expect(response.status).toBe(204);
+    });
+  });
+
   it("fails lifetime purchase requests closed when services are absent", async () => {
     const handler = createPlayerApi({});
 

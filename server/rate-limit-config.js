@@ -11,6 +11,9 @@
  * `export.self` is consumed by the phase 6 data-export endpoint.
  */
 export const RATE_LIMIT_BUDGETS = {
+  // Address-bound. A Classroom behind one address opens the landing page at
+  // once, so the allowance sits well above one Explorer's tab sessions.
+  "access.visit": { limit: 60, windowMs: 60_000 },
   "guest-run.start": { limit: 20, windowMs: 60_000 },
   "question.fetch": { limit: 30, windowMs: 60_000 },
   "offline.submit": { limit: 5, windowMs: 60_000 },

@@ -38,6 +38,10 @@ describe("Vercel function budget", () => {
           destination: "/api/access?_accessRoute=guest-runs"
         },
         {
+          source: "/api/access/visit",
+          destination: "/api/access?_accessRoute=visit"
+        },
+        {
           source: "/api/offline/receipt",
           destination: "/api/profile?_offlineRoute=receipt"
         },
@@ -469,6 +473,29 @@ describe("Vercel function budget", () => {
     await access(request, response);
 
     expect(request.url).toBe("/api/access/guest-runs");
+  });
+
+  it("US-09.1 restores the public visit path before server routing", async () => {
+    const request = /** @type {import("node:http").IncomingMessage} */ (
+      /** @type {unknown} */ ({
+        method: "POST",
+        url: "/api/access?_accessRoute=visit",
+        headers: {},
+        socket: {}
+      })
+    );
+    const response = /** @type {import("node:http").ServerResponse} */ (
+      /** @type {unknown} */ ({
+        end() {},
+        setHeader() {},
+        on() {},
+        statusCode: 0
+      })
+    );
+
+    await access(request, response);
+
+    expect(request.url).toBe("/api/access/visit");
   });
 });
 

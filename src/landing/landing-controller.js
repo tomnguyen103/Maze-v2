@@ -1,6 +1,7 @@
 import { createPlayerApiClient } from "../player/player-client.js";
 import { createClerkBrowser } from "../player/clerk-browser.js";
 import { LIFETIME_PRICE_LABEL } from "../../shared/lifetime-product.js";
+import { sendVisitBeacon } from "./visit-beacon.js";
 
 /** @param {HTMLElement} root */
 export function renderLanding(root) {
@@ -121,6 +122,8 @@ export function renderLanding(root) {
       }
     })
     .catch(() => {});
+
+  sendVisitBeacon();
 
   /**
    * Whether Clerk believes this browser has a session. The cookie is set by

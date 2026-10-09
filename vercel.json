@@ -77,6 +77,10 @@
       "destination": "/api/access?_accessRoute=guest-runs"
     },
     {
+      "source": "/api/access/visit",
+      "destination": "/api/access?_accessRoute=visit"
+    },
+    {
       "source": "/play",
       "destination": "/index.html"
     },
