@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { LIFETIME_PRICE_LABEL } from "../shared/lifetime-product.js";
 
 /** @param {string} relative */
 function source(relative) {
@@ -100,9 +101,11 @@ describe("WP-02 — the landing LCP text paints before any JS runs", () => {
     );
     const controllerEnd =
       controller.indexOf("</main>", controllerStart) + "</main>".length;
+    // The template prints the price from LIFETIME_PRICE_LABEL; the static copy
+    // carries its value, so the placeholder resolves before the comparison.
     const renderedCopy = normalize(
       controller.slice(controllerStart, controllerEnd)
-    );
+    ).replaceAll("${LIFETIME_PRICE_LABEL}", () => LIFETIME_PRICE_LABEL);
 
     expect(staticCopy).toBe(renderedCopy);
   });
@@ -166,5 +169,81 @@ describe("replay timing on the platform", () => {
     // measured 4,594 ms replay.
     expect(vercel.functions["api/scores.js"].maxDuration).toBeGreaterThanOrEqual(60);
     expect(vercel.functions["api/profile.js"].maxDuration).toBeGreaterThanOrEqual(60);
+  });
+});
+
+describe("US-03 and US-04 — the landing hero shows the demo, the price and one trail", () => {
+  /** @param {string} text */
+  const landingMarkup = (text) => {
+    const start = text.indexOf('<a class="skip-link" href="#landing-main">');
+    return text.slice(start, text.indexOf("</main>", start) + "</main>".length);
+  };
+  const markups = () => [
+    landingMarkup(source("index.html")),
+    landingMarkup(source("src/landing/landing-controller.js"))
+  ];
+
+  it("US-03.1 shows a gameplay crop with alt text and 4:3 size in both markups", () => {
+    for (const markup of markups()) {
+      expect(markup).toMatch(
+        /<img src="\/landing-gameplay\.webp" width="640" height="480" alt="[^"]{20,}" decoding="async">/
+      );
+    }
+  });
+
+  it("US-03.1 ships the gameplay crop at 40 KB or less", () => {
+    const crop = fileURLToPath(new URL("../public/landing-gameplay.webp", import.meta.url));
+    expect(statSync(crop).size).toBeLessThanOrEqual(40960);
+  });
+
+  it("US-03.1 builds the price line from LIFETIME_PRICE_LABEL", () => {
+    expect(LIFETIME_PRICE_LABEL).toBe("$5.99");
+    const [staticMarkup, renderedMarkup] = markups();
+    expect(staticMarkup).toContain(
+      '<p class="landing-hero__price">$5.99 once, bought by an adult</p>'
+    );
+    expect(renderedMarkup).toContain(
+      '<p class="landing-hero__price">${LIFETIME_PRICE_LABEL} once, bought by an adult</p>'
+    );
+  });
+
+  it("US-03.3 keeps video, testimonials and extra copy out of the landing", () => {
+    for (const markup of markups()) {
+      expect(markup).not.toContain("<video");
+      expect(markup.toLowerCase()).not.toContain("testimonial");
+    }
+  });
+
+  it("US-03.5 reserves the 4:3 crop frame so a failed image shifts nothing", () => {
+    expect(source("src/daylight.css")).toMatch(
+      /\.landing-hero__frame \{[^}]*aspect-ratio: 4 \/ 3;/
+    );
+  });
+
+  it("US-04.1 keeps the trail decorative with one path", () => {
+    for (const markup of markups()) {
+      const trail = markup.match(/<svg class="landing-hero__trail"[\s\S]*?<\/svg>/)?.[0] ?? "";
+      expect(trail).toContain('aria-hidden="true" focusable="false"');
+      expect(trail.match(/<path\b/g)).toHaveLength(1);
+    }
+  });
+
+  it("US-04.1 animates stroke-dashoffset from undrawn to drawn", () => {
+    const css = source("src/daylight.css");
+    const keyframes = css.indexOf("@keyframes landing-trail-draw {");
+    expect(keyframes).toBeGreaterThan(-1);
+    expect(css.slice(keyframes, keyframes + 200)).toContain("stroke-dashoffset");
+  });
+
+  it("US-04.2 runs the trail animation once, only under no-preference", () => {
+    // The stylesheet can use CRLF line endings, so line breaks are normalized.
+    const css = source("src/daylight.css").replace(/\r\n/g, "\n");
+    const start = css.indexOf("@media (prefers-reduced-motion: no-preference) {");
+    expect(start).toBeGreaterThan(-1);
+    const block = css.slice(start, css.indexOf("\n}\n", start));
+    expect(block).toContain("animation-name: landing-trail-draw");
+    expect(block).toContain("animation-iteration-count: 1");
+    expect(block).toContain("animation-fill-mode: both");
+    expect(css.slice(0, start)).not.toContain("animation-name: landing-trail-draw");
   });
 });

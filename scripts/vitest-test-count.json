@@ -1,6 +1,6 @@
 {
   "testFiles": 188,
-  "tests": 1695,
+  "tests": 1703,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-10-08 after the Theme Choice sync and malformed-payload retry tests and their review regressions were added. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-10-08 after the landing hero US-03 and US-04 tests were added (8 tests in tests/audit-performance.test.js). Earlier: the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

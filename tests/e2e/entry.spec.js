@@ -88,13 +88,43 @@ test("explains free and optional lifetime access below the game-first hero", asy
   const hero = page.locator(".landing-hero");
   const accountSection = page.getByRole("region", { name: "Play your way" });
 
-  await expect(hero).not.toContainText("$5.99");
+  await expect(hero.locator(".landing-hero__price")).toContainText(
+    "$5.99 once, bought by an adult"
+  );
   await expect(accountSection).toContainText("one Guest Run");
   await expect(accountSection).toContainText("three more Runs");
   await expect(accountSection).toContainText("$5.99 USD once");
   await expect(accountSection).toContainText("No subscription or renewal");
   await expect(accountSection).toContainText("Same fair Warden rules");
   await expect(accountSection).toContainText("Ask a parent or grown-up");
+});
+
+test("US-03.1 and US-03.2 show the crop, price and action at desktop and 390 by 844", async ({
+  page
+}) => {
+  for (const size of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 }
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto("/");
+
+    const hero = page.locator(".landing-hero");
+    const crop = hero.locator(".landing-hero__frame img");
+    await expect(crop).toHaveAttribute("alt", /.{20,}/);
+    await expect
+      .poll(() => crop.evaluate((image) => /** @type {HTMLImageElement} */ (image).naturalWidth))
+      .toBe(640);
+    await expect(hero.locator(".landing-hero__price")).toContainText("$5.99");
+
+    const action = await page.locator("#landing-primary-action").boundingBox();
+    expect(action?.height ?? 0).toBeGreaterThanOrEqual(40);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  }
 });
 
 test("opens the maintained Clerk SignIn dialog when configured", async ({

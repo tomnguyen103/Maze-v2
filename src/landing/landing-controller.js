@@ -1,5 +1,6 @@
 import { createPlayerApiClient } from "../player/player-client.js";
 import { createClerkBrowser } from "../player/clerk-browser.js";
+import { LIFETIME_PRICE_LABEL } from "../../shared/lifetime-product.js";
 
 /** @param {HTMLElement} root */
 export function renderLanding(root) {
@@ -25,8 +26,15 @@ export function renderLanding(root) {
             <a class="primary-button" href="/play" id="landing-primary-action">Enter the Maze</a>
             <button class="control-button" id="landing-sign-in-hero" type="button">Sign in</button>
           </div>
+          <p class="landing-hero__price">${LIFETIME_PRICE_LABEL} once, bought by an adult</p>
           <p class="landing-auth-status" id="landing-auth-status" role="status" hidden></p>
         </div>
+        <figure class="landing-hero__figure">
+          <div class="landing-hero__frame">
+            <img src="/landing-gameplay.webp" width="640" height="480" alt="Echo Maze board from above: explored tiles surround the Explorer marker, a blue ring with a flag at the center." decoding="async">
+          </div>
+          <svg class="landing-hero__trail" aria-hidden="true" focusable="false" viewBox="0 0 640 48"><path pathLength="1" d="M4 40C120 4 200 44 320 24S520 4 636 30"/></svg>
+        </figure>
       </section>
       <section class="landing-path" aria-labelledby="landing-path-title">
         <h2 id="landing-path-title">Find your way through each Labyrinth</h2>

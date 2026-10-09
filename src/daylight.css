@@ -1857,7 +1857,7 @@ body[data-run-mode="first-light"] .play-workbench {
   line-height: 0.88;
 }
 
-.landing-hero__copy > p:not(.section-label):not(.landing-auth-status),
+.landing-hero__copy > p:not(.section-label):not(.landing-auth-status):not(.landing-hero__price),
 .landing-levels > div > p,
 .landing-account p {
   max-width: 34rem;
@@ -2008,9 +2008,58 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink-muted);
 }
 
+.landing-hero__price {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 760;
+}
+
+.landing-hero__figure {
+  position: relative;
+  margin: 0 0 var(--space-8);
+}
+
+/* Fixed 4:3 frame: a failed image still reserves its space, so nothing shifts. */
+.landing-hero__frame {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-stone);
+}
+
+.landing-hero__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-hero__trail {
+  position: absolute;
+  left: 0;
+  bottom: calc(-1 * var(--space-6));
+  width: 100%;
+  height: 3rem;
+  overflow: visible;
+  fill: none;
+  stroke: var(--color-focus);
+  stroke-width: 3;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .landing-page :is(a, button):focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
+}
+
+@media (min-width: 58.0625rem) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
 }
 
 @media (max-width: 58rem) {
@@ -2041,5 +2090,27 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .landing-levels li {
     display: grid;
+  }
+}
+
+@keyframes landing-trail-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* One draw of the trail, shown only when motion is not reduced. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero__trail {
+    stroke-dasharray: 1;
+    animation-name: landing-trail-draw;
+    animation-duration: 1.6s;
+    animation-timing-function: ease-out;
+    animation-iteration-count: 1;
+    animation-fill-mode: both;
   }
 }
