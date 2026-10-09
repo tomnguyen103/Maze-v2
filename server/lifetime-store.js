@@ -308,8 +308,9 @@ export function createLifetimeStore(pool, { mode }) {
           );
         }
         // Stripe reports the charge paid, so the fact exists even when an
-        // older access clock makes the entitlement transition stale.
-        await writeFact("paid", transition.eventCreated);
+        // older access clock makes the entitlement transition stale. The
+        // access clock is player-wide, so the fact takes this purchase's clock.
+        await writeFact("paid", event ? event.eventCreated : 0);
         if (event) {
           await finishWebhookEvent(
             client,

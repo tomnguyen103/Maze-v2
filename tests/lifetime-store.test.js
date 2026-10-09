@@ -177,7 +177,7 @@ describe("Lifetime Financial Facts", () => {
       [],
       [{ event_id: "evt_paid" }],
       [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 400, status: "paid" }],
-      [{ lifetime_state_event_created: 400, membership_mode: "live", membership_state: "active" }]
+      [{ lifetime_state_event_created: 650, membership_mode: "live", membership_state: "active" }]
     ]);
     const store = createLifetimeStore(pool, { mode: "live" });
 
