@@ -1097,6 +1097,7 @@ kbd {
 }
 
 .echo-lens__pattern strong {
+  color: var(--color-accent-ink);
   background: var(--color-signal);
 }
 
@@ -1833,11 +1834,9 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero {
-  position: relative;
-  isolation: isolate;
   min-height: min(42rem, calc(100svh - 7rem));
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: clamp(var(--space-8), 7vw, var(--space-16));
   padding-block: var(--space-8) var(--space-12);

@@ -82,9 +82,9 @@ _Avoid_: Gameplay modifier, paid skin, hidden difficulty
 
 **Region Hue**:
 The one colour each Atlas Region owns: Mosslight mint, Windcall sky, Sunspan
-amber, Tideglass indigo, Bellroot pink. Atlas islands, Labyrinth tiles, and
+amber, Tideglass indigo, Bellroot pink. Atlas territories, Labyrinth tiles, and
 tinted cards on the admin and Classroom surfaces reuse it as decoration only.
-_Avoid_: Island colour, status colour, difficulty colour
+_Avoid_: Territory colour, status colour, difficulty colour
 
 **Field Journal**:
 The visual identity of every Echo Maze surface: ivory paper, charcoal ink,
