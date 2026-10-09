@@ -208,13 +208,18 @@ export function createCanvasRenderer(canvas) {
   function drawKnownTile(isPassage, row, col, tile) {
     const x = col * tile;
     const y = row * tile;
-    const radius = tile * 0.24;
+    const inset = tile * 0.02;
+    const side = tile - inset * 2;
     if (isPassage) {
-      // A passage is a soft island tile in the Region hue.
-      const inset = tile * 0.035;
-      traceRoundedRect(x + inset, y + inset, tile - inset * 2, tile - inset * 2, radius);
+      // A passage is an ivory paper tile with an ink hairline.
+      traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
       context.fillStyle = palette.passage;
       context.fill();
+      context.strokeStyle = palette.ink;
+      context.lineWidth = Math.max(1, tile * 0.015);
+      context.globalAlpha = 0.5;
+      context.stroke();
+      context.globalAlpha = 1;
       if ((row + col) % 2 === 0) {
         context.fillStyle = palette.grid;
         const markerSize = 1.5 * deviceRatio;
@@ -228,42 +233,51 @@ export function createCanvasRenderer(canvas) {
       }
       return;
     }
-    // A wall is a raised block: a base shadow, the body, then a lit top edge.
-    const inset = tile * 0.06;
-    const width = tile - inset * 2;
-    const lift = tile * 0.07;
-    traceRoundedRect(x + inset, y + inset + lift, width, width - lift, radius);
-    context.fillStyle = palette.wallGrid;
-    context.fill();
-    traceRoundedRect(x + inset, y + inset, width, width - lift, radius);
+    // A wall is a charcoal block hatched with diagonal ink strokes.
+    traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
     context.fillStyle = palette.wall;
     context.fill();
-    traceRoundedRect(
-      x + inset + tile * 0.12,
-      y + inset + tile * 0.08,
-      width - tile * 0.24,
-      tile * 0.12,
-      tile * 0.06
-    );
-    context.fillStyle = palette.wallMark;
-    context.fill();
+    context.strokeStyle = palette.wallGrid;
+    context.lineWidth = Math.max(1, tile * 0.02);
+    context.stroke();
+    context.beginPath();
+    for (const step of [0.35, 0.7, 1.05, 1.4]) {
+      // Each stroke runs along x + y = step * side inside the block.
+      const reach = step * side;
+      const start = Math.min(reach, side);
+      const end = Math.max(reach - side, 0);
+      context.moveTo(x + inset + start, y + inset + reach - start);
+      context.lineTo(x + inset + end, y + inset + reach - end);
+    }
+    context.strokeStyle = palette.wallMark;
+    context.lineWidth = Math.max(1, tile * 0.03);
+    context.lineCap = "butt";
+    context.stroke();
   }
 
   /** @param {number} size @param {number} tile @param {Set<string>} revealed */
   function drawFogGrid(size, tile, revealed) {
-    // Unseen ground is plain paper with a faint grid. One stroke blends each
-    // shared edge once, so the translucent grid rasterizes the same every time.
+    // Unseen ground is plain paper with one ink dot per cell. A hash of the
+    // cell places each dot, so the stipple looks hand-set and draws the same
+    // every time. One fill keeps the translucent dots rasterizing once.
+    const dot = Math.max(1.25, tile * 0.05);
+    const reach = tile - dot;
     context.beginPath();
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         if (!revealed.has(`${row},${col}`)) {
-          context.rect(col * tile, row * tile, tile, tile);
+          const hash = Math.imul((row * 73856093) ^ (col * 19349663), 2654435761) >>> 0;
+          context.rect(
+            col * tile + ((hash % 1000) / 1000) * reach,
+            row * tile + (((hash >>> 10) % 1000) / 1000) * reach,
+            dot,
+            dot
+          );
         }
       }
     }
-    context.strokeStyle = palette.fogGrid;
-    context.lineWidth = Math.max(0.75, tile * 0.012);
-    context.stroke();
+    context.fillStyle = palette.fogGrid;
+    context.fill();
   }
 
   /** @param {Explorer} explorer @param {number} tile */
@@ -443,37 +457,20 @@ export function createCanvasRenderer(canvas) {
     };
     const scale = palette.markScale;
     const color = bridge.open ? palette.signal : palette.gate;
-    const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
-    const sideX = (-(to.y - from.y) / length) * tile * 0.09 * scale;
-    const sideY = ((to.x - from.x) / length) * tile * 0.09 * scale;
 
     context.save();
     context.strokeStyle = color;
     context.lineCap = "round";
-    // A rope bridge: two rails, with planks once the bridge is open.
-    context.lineWidth = Math.max(1.5, tile * 0.035 * scale);
+    // The trail is one plain line: dashed while closed, solid once open.
+    context.lineWidth = Math.max(2, tile * 0.05 * scale);
     context.setLineDash(
       bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale]
     );
     context.beginPath();
-    for (const side of [-1, 1]) {
-      context.moveTo(from.x + sideX * side, from.y + sideY * side);
-      context.lineTo(to.x + sideX * side, to.y + sideY * side);
-    }
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
     context.stroke();
     context.setLineDash([]);
-    if (bridge.open) {
-      const planks = Math.max(2, Math.round(length / (tile * 0.3)));
-      context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
-      context.beginPath();
-      for (let index = 1; index < planks; index += 1) {
-        const px = from.x + ((to.x - from.x) * index) / planks;
-        const py = from.y + ((to.y - from.y) * index) / planks;
-        context.moveTo(px - sideX, py - sideY);
-        context.lineTo(px + sideX, py + sideY);
-      }
-      context.stroke();
-    }
     context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
     for (const endpoint of [from, to]) {
       context.beginPath();
@@ -581,17 +578,22 @@ export function createCanvasRenderer(canvas) {
     const { x, y } = centerOf(warden, tile);
     const scale = palette.markScale;
     const radius = tile * 0.27 * scale;
-    const top = y - tile * 0.02 * scale;
-    const bottom = y + tile * 0.27 * scale;
-    // A Warden is a rounded creature with a scalloped hem.
+    // Each mode has its own silhouette: Patrol round, Hunt pointed,
+    // Intercept chevron, Lured ringed.
     context.beginPath();
-    context.arc(x, top, radius, Math.PI, 0);
-    context.lineTo(x + radius, bottom);
-    const scallop = (radius * 2) / 3;
-    for (let index = 0; index < 3; index += 1) {
-      const right = x + radius - scallop * index;
-      context.lineTo(right - scallop / 2, bottom - tile * 0.07 * scale);
-      context.lineTo(right - scallop, bottom);
+    if (warden.mode === "hunt") {
+      context.moveTo(x, y - radius * 1.3);
+      context.lineTo(x + radius, y);
+      context.arc(x, y, radius, 0, Math.PI);
+    } else if (warden.mode === "intercept") {
+      context.moveTo(x, y - radius);
+      context.lineTo(x + radius, y + radius * 0.2);
+      context.lineTo(x + radius, y + radius);
+      context.lineTo(x, y + radius * 0.45);
+      context.lineTo(x - radius, y + radius);
+      context.lineTo(x - radius, y + radius * 0.2);
+    } else {
+      context.arc(x, y, warden.mode === "lured" ? radius * 0.8 : radius, 0, Math.PI * 2);
     }
     context.closePath();
     context.fillStyle = palette.warden;
@@ -600,8 +602,15 @@ export function createCanvasRenderer(canvas) {
     context.lineWidth = Math.max(1, tile * 0.025 * scale);
     context.lineJoin = "round";
     context.stroke();
+    if (warden.mode === "lured") {
+      context.beginPath();
+      context.arc(x, y, radius * 1.2, 0, Math.PI * 2);
+      context.strokeStyle = palette.warden;
+      context.lineWidth = Math.max(1.5, tile * 0.04 * scale);
+      context.stroke();
+    }
 
-    // Each mode has its own face, so the mode never rests on hue alone.
+    // Each mode keeps its own face too, so the mode never rests on shape alone.
     context.fillStyle = palette.night;
     context.strokeStyle = palette.night;
     context.lineCap = "round";
@@ -694,27 +703,53 @@ function readPalette() {
   // Read from body so the Region tile hue on body reaches the canvas.
   const styles = getComputedStyle(document.body ?? document.documentElement);
   /** @param {string} name */
-  const color = (name) => styles.getPropertyValue(name).trim();
+  /**
+   * @param {string} name
+   * @param {string} fallback
+   */
+  const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    echo: color("--color-echo"),
-    fontBody: color("--font-body"),
-    fog: color("--color-fog"),
-    fogGrid: color("--color-fog-grid"),
-    gate: color("--color-gate"),
-    grid: color("--color-grid"),
-    ink: color("--color-ink"),
-    markScale: Number.parseFloat(color("--maze-mark-scale")) || 1,
-    night: color("--color-night-deep"),
-    onFill: color("--color-on-fill"),
-    overlay: color("--color-overlay"),
-    passage: color("--color-passage"),
-    pulse: color("--color-pulse"),
-    signal: color("--color-explorer"),
-    signalGlow: color("--color-explorer-glow"),
+    echo: color("--color-echo", FALLBACK_PALETTE.echo),
+    fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
+    fog: color("--color-fog", FALLBACK_PALETTE.fog),
+    fogGrid: color("--color-fog-grid", FALLBACK_PALETTE.fogGrid),
+    gate: color("--color-gate", FALLBACK_PALETTE.gate),
+    grid: color("--color-grid", FALLBACK_PALETTE.grid),
+    ink: color("--color-ink", FALLBACK_PALETTE.ink),
+    markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
+    night: color("--color-night-deep", FALLBACK_PALETTE.night),
+    onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
+    overlay: color("--color-overlay", FALLBACK_PALETTE.overlay),
+    passage: color("--color-passage", FALLBACK_PALETTE.passage),
+    pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
+    signal: color("--color-explorer", FALLBACK_PALETTE.signal),
+    signalGlow: color("--color-explorer-glow", FALLBACK_PALETTE.signalGlow),
     transparent: "transparent",
-    wall: color("--color-wall"),
-    wallGrid: color("--color-wall-grid"),
-    wallMark: color("--color-wall-mark"),
-    warden: color("--color-warden")
+    wall: color("--color-wall", FALLBACK_PALETTE.wall),
+    wallGrid: color("--color-wall-grid", FALLBACK_PALETTE.wallGrid),
+    wallMark: color("--color-wall-mark", FALLBACK_PALETTE.wallMark),
+    warden: color("--color-warden", FALLBACK_PALETTE.warden)
   };
 }
+
+// Used when a CSS variable is missing, so the board never paints with an empty style.
+const FALLBACK_PALETTE = {
+  echo: "oklch(62% 0.17 237)",
+  fontBody: "Arial, sans-serif",
+  fog: "oklch(92% 0.018 85)",
+  fogGrid: "oklch(40% 0.02 60 / 45%)",
+  gate: "oklch(54% 0.14 155)",
+  grid: "oklch(40% 0.02 60 / 45%)",
+  ink: "oklch(24% 0.015 60)",
+  night: "oklch(16% 0.012 65)",
+  onFill: "oklch(100% 0 0)",
+  overlay: "oklch(20% 0.015 60 / 60%)",
+  passage: "oklch(98.5% 0.014 88)",
+  pulse: "oklch(68.5% 0.169 237 / 30%)",
+  signal: "oklch(55% 0.16 240)",
+  signalGlow: "oklch(55% 0.16 240 / 30%)",
+  wall: "oklch(30% 0.012 60)",
+  wallGrid: "oklch(20% 0.012 60 / 85%)",
+  wallMark: "oklch(48% 0.014 60 / 75%)",
+  warden: "oklch(58% 0.2 24)"
+};
