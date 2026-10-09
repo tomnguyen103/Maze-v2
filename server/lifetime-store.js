@@ -470,6 +470,14 @@ export function createLifetimeStore(pool, { mode }) {
         await finishWebhookEvent(client, String(event.eventId), outcome);
         return { outcome };
       });
+    },
+
+    /** Purchases with no Billing Mode. Live readiness waits for zero. */
+    async countUnclassifiedPurchases() {
+      const result = await pool.query(
+        "SELECT COUNT(*) AS count FROM lifetime_purchases WHERE billing_mode IS NULL"
+      );
+      return Number(result.rows[0]?.count ?? 0);
     }
   };
 }

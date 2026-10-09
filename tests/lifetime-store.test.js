@@ -585,4 +585,16 @@ describe("Lifetime Membership store", () => {
       "CASE WHEN membership_mode = 'live'"
     );
   });
+
+  it("US-09.2 counts purchases with no Billing Mode in one query", async () => {
+    const pool = {
+      connect: vi.fn(),
+      query: vi.fn().mockResolvedValue({ rows: [{ count: "3" }] })
+    };
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.countUnclassifiedPurchases()).resolves.toBe(3);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][0]).toContain("WHERE billing_mode IS NULL");
+  });
 });

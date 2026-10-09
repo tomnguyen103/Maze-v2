@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createHealthHandler,
   HEALTH_PATH,
@@ -77,6 +77,55 @@ describe("US-09 readiness follows the configuration of the selected mode", () =>
       const text = JSON.stringify((await ready(env)).json());
       expect(text).not.toMatch(/live|"mode"/i);
     }
+  });
+});
+
+describe("US-09 live readiness waits for every purchase to carry a Billing Mode", () => {
+  it("US-09.2 answers 503 while any purchase has no Billing Mode", async () => {
+    const handler = createHealthHandler({
+      ...healthy(),
+      countUnclassifiedPurchases: async () => 2
+    });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.stripe).not.toBe("ok");
+  });
+
+  it("US-09.1 answers ready once every purchase carries a Billing Mode", async () => {
+    const handler = createHealthHandler({
+      ...healthy(),
+      countUnclassifiedPurchases: async () => 0
+    });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().checks.stripe).toBe("ok");
+  });
+
+  it("US-09.4 runs one count query per readiness call", async () => {
+    const countUnclassifiedPurchases = vi.fn(async () => 0);
+    const handler = createHealthHandler({
+      ...healthy(),
+      countUnclassifiedPurchases
+    });
+    await handler(fakeRequest({ url: READY_PATH }), fakeResponse());
+    await handler(fakeRequest({ url: READY_PATH }), fakeResponse());
+    expect(countUnclassifiedPurchases).toHaveBeenCalledTimes(2);
+  });
+
+  it("US-09.5 fails stripe when the count query fails, naming neither the mode nor the count", async () => {
+    const handler = createHealthHandler({
+      ...healthy(),
+      countUnclassifiedPurchases: async () => {
+        throw new Error("relation lifetime_purchases does not exist");
+      }
+    });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.stripe).not.toBe("ok");
+    expect(JSON.stringify(response.json())).not.toMatch(/live|mode|count|lifetime/i);
   });
 });
 

@@ -151,4 +151,13 @@ describe("admin store", () => {
     expect(pool.queries[0].sql).toContain("daily_active_explorers_yesterday");
     expect(pool.queries[0].sql).toContain("runs_started_yesterday");
   });
+
+  it("US-08.1 counts only live purchases as lifetime conversions, so US-08.2 Unclassified Purchases count nowhere", async () => {
+    const pool = poolWith([]);
+    const store = createAdminStore(pool);
+    await store.dashboardMetrics();
+    expect(pool.queries[0].sql).toMatch(
+      /billing_mode = 'live'\)\s+AS lifetime_conversions/
+    );
+  });
 });

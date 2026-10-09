@@ -23,6 +23,30 @@ function sendJson(response, status, body) {
 }
 
 /**
+ * Bounded: a dependency that accepts the call but stalls must surface as a
+ * failure, not hold the endpoint open until the platform timeout.
+ *
+ * @template T
+ * @param {() => Promise<T>} task
+ * @param {number} timeoutMs
+ * @returns {Promise<T>}
+ */
+function withTimeout(task, timeoutMs) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  return Promise.race([
+    task(),
+    new Promise((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("readiness check timed out")),
+        timeoutMs
+      );
+      timer.unref?.();
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
  * Liveness and readiness. Liveness touches nothing — it answers "the process
  * runs". Readiness names each dependency separately so an operator can read
  * WHICH one is down from the response instead of guessing.
@@ -32,6 +56,7 @@ function sendJson(response, status, body) {
  *   checkDatabase: (() => Promise<unknown>) | null,
  *   stripeConfigured: boolean,
  *   clerkConfigured: boolean,
+ *   countUnclassifiedPurchases?: (() => Promise<number>) | null,
  *   checkTimeoutMs?: number
  * }} dependencies
  */
@@ -40,6 +65,7 @@ export function createHealthHandler({
   checkDatabase,
   stripeConfigured,
   clerkConfigured,
+  countUnclassifiedPurchases = null,
   checkTimeoutMs = 3000
 }) {
   /**
@@ -66,21 +92,7 @@ export function createHealthHandler({
     let database = "unconfigured";
     if (checkDatabase) {
       try {
-        // Bounded: a database that accepts the connection but stalls must
-        // surface as a 503 with detail, not hold this endpoint open until
-        // the platform timeout.
-        /** @type {ReturnType<typeof setTimeout> | undefined} */
-        let timer;
-        await Promise.race([
-          checkDatabase(),
-          new Promise((_resolve, reject) => {
-            timer = setTimeout(
-              () => reject(new Error("readiness check timed out")),
-              checkTimeoutMs
-            );
-            timer.unref?.();
-          })
-        ]).finally(() => clearTimeout(timer));
+        await withTimeout(checkDatabase, checkTimeoutMs);
         database = "ok";
       } catch {
         // The failure reason may quote connection details; the per-check
@@ -88,9 +100,26 @@ export function createHealthHandler({
         database = "failed";
       }
     }
+    /** @type {"ok" | "failed" | "unconfigured"} */
+    let stripe = stripeConfigured ? "ok" : "unconfigured";
+    if (stripe === "ok" && countUnclassifiedPurchases) {
+      try {
+        // Live readiness waits until every purchase carries a Billing Mode.
+        // The body names neither the count nor the mode.
+        const unclassified = await withTimeout(
+          countUnclassifiedPurchases,
+          checkTimeoutMs
+        );
+        if (unclassified > 0) {
+          stripe = "failed";
+        }
+      } catch {
+        stripe = "failed";
+      }
+    }
     const checks = {
       database,
-      stripe: stripeConfigured ? "ok" : "unconfigured",
+      stripe,
       clerk: clerkConfigured ? "ok" : "unconfigured"
     };
     const ready = Object.values(checks).every((check) => check === "ok");

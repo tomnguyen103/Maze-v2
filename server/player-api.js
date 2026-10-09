@@ -392,7 +392,11 @@ export function createPlayerApi(env = process.env) {
     version,
     checkDatabase: () => queryAdapter.query("SELECT 1"),
     stripeConfigured: lifetimeConfig !== null,
-    clerkConfigured
+    clerkConfigured,
+    countUnclassifiedPurchases:
+      storeMode === "live"
+        ? () => lifetimeStore.countUnclassifiedPurchases()
+        : null
   });
   const getUserId = (
     /** @type {import("node:http").IncomingMessage} */ request

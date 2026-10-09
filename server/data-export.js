@@ -87,8 +87,8 @@ const SECTION_QUERIES = {
       created_at
     FROM run_access_grants WHERE player_id = $1 ORDER BY created_at, id`,
   lifetime_purchases: `SELECT id, checkout_session_id, payment_intent_id,
-      stripe_price_id, amount, currency, status, paid_at, refunded_at,
-      disputed_at, created_at, updated_at
+      stripe_price_id, billing_mode, amount, currency, status, paid_at,
+      refunded_at, disputed_at, created_at, updated_at
     FROM lifetime_purchases WHERE player_id = $1 ORDER BY created_at`,
   classroom_memberships: `SELECT classroom_id, clerk_membership_id, role,
       created_at, updated_at

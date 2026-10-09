@@ -133,7 +133,7 @@ export function createAdminStore(pool) {
           WHERE created_at >= date_trunc('day', now() - interval '1 day')
             AND created_at < date_trunc('day', now())) AS runs_started_yesterday,
          (SELECT COUNT(*) FROM lifetime_purchases
-          WHERE paid_at IS NOT NULL) AS lifetime_conversions,
+          WHERE paid_at IS NOT NULL AND billing_mode = 'live') AS lifetime_conversions,
          (SELECT COUNT(*) FROM player_access
           WHERE membership_state = 'active') AS active_memberships,
          (SELECT COUNT(*) FROM question_versions
