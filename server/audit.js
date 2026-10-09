@@ -30,7 +30,7 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,200}$/;
 /**
  * Thin wrapper over the audit store. It must never throw into a request path:
  * a failed audit write is logged and counted, and the request continues, which
- * matches the safe-error-log philosophy already used for provider fallbacks.
+ * matches the safe-error-log philosophy already used for server error logs.
  *
  * @param {{
  *   store: {

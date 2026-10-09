@@ -53,7 +53,7 @@ forwarding. Three constraints shaped the implementation:
 - Observability failures can never fail a request: init errors are swallowed
   with a redacted warning, PostHog delivery is fire-and-forget and bounded.
 - Ad-hoc `console` paths whose exact behaviour existing tests pin
-  (`logProviderFallback`, pool error listeners) stay on `console`; they
+  (the pool error listeners) stay on `console`; they
   already log only redacted names. New code logs through pino.
 - Sentry source-map upload requires `@sentry/cli` or the Vercel integration,
   deliberately not a project dependency.

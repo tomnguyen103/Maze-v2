@@ -4235,8 +4235,6 @@ async function loadChallengeQuestion() {
   );
 
   elements.challengeSource.textContent = {
-    ollama: "A fresh local question is ready.",
-    gemini: "A fresh quest question is ready.",
     bundled: "A trusty question card is ready."
   }[acceptedSource] ?? "Your question is ready.";
   renderMixedTrailNotice(

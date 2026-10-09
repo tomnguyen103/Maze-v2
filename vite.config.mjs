@@ -94,14 +94,12 @@ export default defineConfig(({ mode }) => {
         { createQuestionService },
         { createPlayerApi },
         { createRequestRateLimiter },
-        { logProviderFallback },
         { createSecurityHeadersMiddleware }
       ] = await Promise.all([
         import("./server/question-route.js"),
         import("./server/question-service.js"),
         import("./server/player-api.js"),
         import("./server/rate-limit-request.js"),
-        import("./server/safe-error-log.js"),
         import("./server/security-headers.js")
       ]);
       const env = {
@@ -111,10 +109,7 @@ export default defineConfig(({ mode }) => {
       return {
         securityHeaders: createSecurityHeadersMiddleware(env),
         questionHandler: createQuestionHandler(
-          createQuestionService({
-            env,
-            onProviderError: logProviderFallback
-          }),
+          createQuestionService(),
           { rateLimit: createRequestRateLimiter(env) }
         ),
         playerApi: createPlayerApi(env)

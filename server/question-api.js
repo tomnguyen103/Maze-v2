@@ -4,10 +4,7 @@ import { createQuestionBankStore } from "./question-bank-store.js";
 import { createQuestionHandler } from "./question-route.js";
 import { createQuestionService } from "./question-service.js";
 import { createRequestRateLimiter } from "./rate-limit-request.js";
-import {
-  logProviderFallback,
-  safeErrorName
-} from "./safe-error-log.js";
+import { safeErrorName } from "./safe-error-log.js";
 import { dispatch } from "./dispatch.js";
 
 /**
@@ -54,9 +51,7 @@ export function createQuestionApi(env = process.env, dependencies = {}) {
     (authenticate ? optionalUserId : () => null);
   const handler = createQuestionHandler(
     createQuestionService({
-      env: /** @type {NodeJS.ProcessEnv} */ (env),
       questionBank,
-      onProviderError: logProviderFallback,
       onQuestionBankError: (error) =>
         console.error("[question] published bank read failed", {
           name: safeErrorName(error)

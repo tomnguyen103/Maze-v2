@@ -250,7 +250,7 @@ export function createQuestionRateLimiter(options = {}) {
  */
 export function createQuestionHandler(questionService, options = {}) {
   // Two independent limits. The instance throttle caps what a single warm
-  // container pushes at the question provider; the per-caller budget is durable
+  // container pushes at the question service; the per-caller budget is durable
   // across serverless invocations and stops one Explorer spending the rest.
   const instanceThrottle = createQuestionRateLimiter(options);
   const getUserId = options.getUserId ?? (() => null);
