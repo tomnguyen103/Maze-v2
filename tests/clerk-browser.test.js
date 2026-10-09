@@ -67,6 +67,7 @@ describe("Clerk browser initializer", () => {
         appearance: {
           variables: {
             colorPrimary: "token:--color-signal",
+            colorTextOnPrimaryBackground: "token:--color-accent-ink",
             colorForeground: "token:--color-ink",
             colorBorder: "token:--color-ink",
             colorRing: "token:--color-signal-deep",

@@ -86,7 +86,7 @@
 }
 
 .run-replay-controls .control-button[aria-pressed="true"] {
-  color: var(--color-on-fill);
+  color: var(--color-on-signal-deep);
   border-color: var(--color-signal-deep);
   background: var(--color-signal-deep);
 }

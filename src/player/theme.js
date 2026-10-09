@@ -13,7 +13,7 @@
 export const THEME_STORAGE_KEY = "echo-maze:theme";
 
 /**
- * The browser bar colour of each theme: the sRGB of `--color-paper`.
+ * The browser bar colour of each theme: the oklch value of `--color-paper`.
  * `index.html` and `public/theme-boot.js` repeat this pair.
  */
 export const THEME_COLORS = Object.freeze({ light: "oklch(97.5% 0.012 85)", dark: "oklch(19% 0.012 65)" });

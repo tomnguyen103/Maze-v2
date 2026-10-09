@@ -189,8 +189,30 @@ describe("shared base styles", () => {
     expect(daylight).not.toMatch(/--color-paper-grid/);
   });
 
+  it("defines and reads no --color-paper-grid token in any stylesheet (US-01.3)", () => {
+    const users = SHEETS.filter((relative) =>
+      readFileSync(root + relative, "utf8").includes("--color-paper-grid")
+    );
+    expect(users).toEqual([]);
+  });
+
   it("keeps every header opaque with no backdrop blur (US-05.3)", () => {
-    expect(daylight).not.toMatch(/backdrop-filter/);
+    // Only a dialog's ::backdrop may blur the page behind it. Chrome stays opaque.
+    const blurred = [];
+    for (const relative of SHEETS.filter((path) => path.endsWith(".css"))) {
+      const css = readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
+      for (const rule of css.split("}")) {
+        const open = rule.lastIndexOf("{");
+        const selector = rule.slice(0, open);
+        if (
+          /backdrop-filter:\s*(?!none)\S/.test(rule.slice(open + 1)) &&
+          !selector.includes("::backdrop")
+        ) {
+          blurred.push(`${relative}: ${selector.trim()}`);
+        }
+      }
+    }
+    expect(blurred).toEqual([]);
   });
 
   it("fills the primary button with amber, not the legacy sky-deep token (US-01.3)", () => {

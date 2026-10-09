@@ -12,7 +12,7 @@
   --color-ink-faint: oklch(50% 0.02 60);
   --color-paper: oklch(97.5% 0.012 85);
   --color-paper-deep: oklch(94% 0.016 85);
-  --color-stone: oklch(100% 0 0);
+  --color-stone: oklch(99% 0.006 85);
   --color-stone-raised: oklch(97% 0.01 85);
   --color-line: oklch(40% 0.02 60);
   --color-line-soft: oklch(88% 0.014 85);
@@ -25,6 +25,7 @@
   --color-band-3: oklch(85% 0.1 75);
   --color-signal-bright: oklch(88% 0.1 80);
   --color-signal-deep: oklch(47% 0.11 65);
+  --color-on-signal-deep: oklch(100% 0 0);
   --color-signal-glow: oklch(78% 0.15 75 / 30%);
   --color-explorer: oklch(55% 0.16 240);
   --color-explorer-bright: oklch(90% 0.07 237);
@@ -73,7 +74,6 @@
   --access-wall-mark: oklch(99% 0.01 250 / 92%);
   --access-grid: oklch(30% 0.04 245 / 78%);
   --maze-mark-scale: 1;
-  --color-paper-grid: oklch(88% 0.02 235 / 55%);
   --region-mosslight: oklch(78% 0.13 165);
   --region-windcall: oklch(68.5% 0.169 237);
   --region-sunspan: oklch(80% 0.15 80);
@@ -168,6 +168,7 @@
     --color-signal: oklch(78% 0.15 75);
     --color-signal-soft: oklch(30% 0.06 70);
     --color-signal-deep: oklch(82% 0.13 80);
+    --color-on-signal-deep: oklch(20% 0.03 60);
     --color-accent-ink: oklch(20% 0.03 60);
     --color-echo-soft: oklch(30% 0.06 237);
     --color-warden: oklch(70% 0.19 24);
@@ -181,7 +182,6 @@
     --color-band-2: oklch(40% 0.09 75);
     --color-band-3: oklch(55% 0.13 75);
 
-    --color-paper-grid: oklch(28% 0.03 262 / 60%);
     --color-tile-mosslight: oklch(38% 0.08 165);
     --color-tile-windcall: oklch(38% 0.08 237);
     --color-tile-sunspan: oklch(40% 0.07 80);
@@ -219,6 +219,7 @@
   --color-signal: oklch(78% 0.15 75);
   --color-signal-soft: oklch(30% 0.06 70);
   --color-signal-deep: oklch(82% 0.13 80);
+  --color-on-signal-deep: oklch(20% 0.03 60);
   --color-accent-ink: oklch(20% 0.03 60);
   --color-echo-soft: oklch(30% 0.06 237);
   --color-warden: oklch(70% 0.19 24);
@@ -232,7 +233,6 @@
   --color-band-2: oklch(40% 0.09 75);
   --color-band-3: oklch(55% 0.13 75);
 
-  --color-paper-grid: oklch(28% 0.03 262 / 60%);
   --color-tile-mosslight: oklch(38% 0.08 165);
   --color-tile-windcall: oklch(38% 0.08 237);
   --color-tile-sunspan: oklch(40% 0.07 80);

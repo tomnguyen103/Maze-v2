@@ -1,6 +1,28 @@
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+
+/** Generated output is not authored. Mirrors `tests/design-tokens.test.js`. */
+const GENERATED = [
+  "node_modules",
+  "dist",
+  ".vercel",
+  ".git",
+  "graphify-out",
+  ".codegraph",
+  ".ua",
+  "playwright-report",
+  "test-results",
+  "coverage"
+];
+
+/** Every stylesheet the repo authors. */
+function cssFiles() {
+  return globSync("**/*.css", {
+    cwd: fileURLToPath(new URL("../", import.meta.url)),
+    exclude: (path) => GENERATED.some((dir) => path.split(/[\\/]/).includes(dir))
+  });
+}
 
 /** @param {string} relative */
 function source(relative) {
@@ -397,6 +419,39 @@ describe("US-01 — Field Journal palette tokens", () => {
   });
 
   it("mixes colours in oklab when one side is white or hueless (US-01.5)", () => {
-    expect(css).not.toMatch(/color-mix\(in oklch/);
+    const oklchMixes = cssFiles().filter((relative) =>
+      /color-mix\(in oklch/.test(source(relative))
+    );
+    expect(oklchMixes).toEqual([]);
+  });
+
+  it("holds 4.5:1 for the text on a signal-deep fill in light and Night", () => {
+    for (const block of [lightBlock, systemNight, forcedNight]) {
+      expect(
+        contrast(
+          rgbOf(declared(block, "--color-on-signal-deep")),
+          rgbOf(declared(block, "--color-signal-deep"))
+        )
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("never pairs a signal-deep fill or edge with on-fill text", () => {
+    const offenders = [];
+    for (const relative of cssFiles()) {
+      for (const rule of source(relative).replace(/\r\n/g, "\n").split("}")) {
+        const open = rule.lastIndexOf("{");
+        const body = rule.slice(open + 1);
+        const signalDeepFill =
+          /(?:^|[\s;])(?:background|background-color|border|border-color)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
+        if (
+          signalDeepFill &&
+          /(?:^|[\s;])color\s*:\s*var\(--color-on-fill\)/.test(body)
+        ) {
+          offenders.push(`${relative}: ${rule.slice(0, open).trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
