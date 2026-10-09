@@ -1,6 +1,6 @@
 {
   "testFiles": 188,
-  "tests": 1709,
+  "tests": 1714,
   "skipped": 18,
   "source": "Full Vitest run on 2026-10-08 after the Field Journal surface tickets 04 to 06 added the amber label contrast, pressed-control and left-edge tests. Earlier: the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

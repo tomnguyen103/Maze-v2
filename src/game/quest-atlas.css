@@ -1,4 +1,4 @@
-/* Hallmark · macrostructure: Workbench · genre: playful · design-system: design.md · theme: Journey · anchor: sky islands · slop: pass (1–58) · contrast: pass (40–41) · tokens: pass (48) · mobile: pass (34, 49, 50–57) */
+/* Field Journal Atlas: five drawn territories, one landmark stamp and one Gate flag each. Colors come from tokens.css. */
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
 .atlas-dialog {
   position: fixed;
@@ -113,29 +113,22 @@
   stroke-width: 4;
 }
 
-.atlas-illustration__region {
-  fill: color-mix(in oklab, var(--island, var(--region-windcall)) 16%, transparent);
-  stroke: none;
+/* Territory fill comes from an inline style set by renderAtlasIllustrationMarkup. */
+.atlas-illustration__territory {
+  stroke: var(--color-line);
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
 
-.atlas-illustration__region:nth-child(1 of .atlas-illustration__region) {
-  --island: var(--region-mosslight);
+.atlas-illustration__stamp {
+  fill: var(--color-ink);
 }
 
-.atlas-illustration__region:nth-child(2 of .atlas-illustration__region) {
-  --island: var(--region-windcall);
-}
-
-.atlas-illustration__region:nth-child(3 of .atlas-illustration__region) {
-  --island: var(--region-sunspan);
-}
-
-.atlas-illustration__region:nth-child(4 of .atlas-illustration__region) {
-  --island: var(--region-tideglass);
-}
-
-.atlas-illustration__region:nth-child(5 of .atlas-illustration__region) {
-  --island: var(--region-bellroot);
+.atlas-illustration__gate {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
 
 .atlas-regions {
@@ -271,34 +264,34 @@
 }
 
 .atlas-region:nth-child(1) {
-  --island: var(--region-mosslight);
+  --territory: var(--region-mosslight);
   grid-column: 1;
   grid-row: 1;
 }
 
 .atlas-region:nth-child(2) {
-  --island: var(--region-windcall);
+  --territory: var(--region-windcall);
   grid-column: 2;
   grid-row: 1;
   margin-top: var(--space-8);
 }
 
 .atlas-region:nth-child(3) {
-  --island: var(--region-sunspan);
+  --territory: var(--region-sunspan);
   grid-column: 3;
   grid-row: 1;
   margin-top: var(--space-2);
 }
 
 .atlas-region:nth-child(4) {
-  --island: var(--region-tideglass);
+  --territory: var(--region-tideglass);
   grid-column: 2;
   grid-row: 2;
   margin-top: var(--space-2);
 }
 
 .atlas-region:nth-child(5) {
-  --island: var(--region-bellroot);
+  --territory: var(--region-bellroot);
   grid-column: 1;
   grid-row: 2;
 }
@@ -321,10 +314,10 @@
   min-width: 0;
   padding: var(--space-4);
   gap: var(--space-3);
-  border: 1px solid color-mix(in oklab, var(--island, var(--region-windcall)) 44%, transparent);
+  border: 1px solid color-mix(in oklab, var(--territory, var(--region-windcall)) 44%, transparent);
   border-radius: var(--radius-lg);
-  background: color-mix(in oklab, var(--island, var(--region-windcall)) 9%, var(--color-panel));
-  box-shadow: 0 12px 28px -18px color-mix(in oklab, var(--island, var(--region-windcall)) 80%, transparent);
+  background: color-mix(in oklab, var(--territory, var(--region-windcall)) 9%, var(--color-panel));
+  box-shadow: 0 12px 28px -18px color-mix(in oklab, var(--territory, var(--region-windcall)) 80%, transparent);
 }
 
 .atlas-regions[data-view="map"] .atlas-region:not(:last-child)::after {
@@ -369,7 +362,7 @@
   height: 0.75rem;
   flex: none;
   border-radius: var(--radius-pill);
-  background: var(--island, var(--region-windcall));
+  background: var(--territory, var(--region-windcall));
   content: "";
 }
 
@@ -426,7 +419,7 @@
 }
 
 .atlas-landmark:hover:not(:disabled) {
-  border-color: var(--island, var(--color-signal));
+  border-color: var(--territory, var(--color-signal));
 }
 
 .atlas-landmark:active {
