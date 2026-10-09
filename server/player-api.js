@@ -72,6 +72,7 @@ import {
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
 import {
+  describeLifetimeConfig,
   loadLifetimeConfig,
   resolveEnforcement
 } from "./lifetime-config.js";
@@ -214,6 +215,10 @@ function sendError(response, status, error) {
 
 /** @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env */
 export function createPlayerApi(env = process.env) {
+  const billing = describeLifetimeConfig(env);
+  if (billing.refusal) {
+    console.error("[billing] live mode refused", { reason: billing.refusal });
+  }
   const connectionString = env.DATABASE_URL;
   const logRequest = createRequestLogger({ logger: createLogger(env) });
   const version =

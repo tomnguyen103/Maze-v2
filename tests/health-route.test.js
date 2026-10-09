@@ -5,6 +5,26 @@ import {
   isHealthPath,
   READY_PATH
 } from "../server/health-route.js";
+import { loadLifetimeConfig } from "../server/lifetime-config.js";
+
+describe("US-02.5 readiness with a refused live configuration", () => {
+  it("US-02.5 answers 503 with stripe unconfigured", async () => {
+    const stripeConfigured =
+      loadLifetimeConfig({
+        ECHO_MAZE_BILLING_MODE: "live",
+        ECHO_MAZE_APP_ORIGIN: "https://maze.example",
+        STRIPE_PRICE_ID: "price_echo_live",
+        STRIPE_SECRET_KEY: "sk_live_safe-placeholder",
+        STRIPE_WEBHOOK_SECRET: "whsec_safe-placeholder",
+        VERCEL_ENV: "preview"
+      }) !== null;
+    const handler = createHealthHandler({ ...healthy(), stripeConfigured });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.stripe).toBe("unconfigured");
+  });
+});
 
 /** @param {{ url?: string, method?: string }} [options] */
 function fakeRequest({ url = HEALTH_PATH, method = "GET" } = {}) {
