@@ -205,11 +205,13 @@ export function createLifetimeStore(pool, { mode }) {
           }
           return { outcome: "unlinked" };
         }
+        // A first fact starts at the purchase clock, so an event older than a
+        // known payment event stays stale for the fact as for the entitlement.
         /** @param {"paid" | "refunded" | "disputed"} status @param {number} eventCreated */
         const writeFact = (status, eventCreated) => recordFact(client, {
           paymentIntentId: String(checkout.paymentIntentId),
           billingMode: mode,
-          eventCreated,
+          eventCreated: Math.max(eventCreated, Number(purchase.provider_event_created ?? 0)),
           status,
           refundedCents: Number(checkout.refundedCents ?? 0)
         });
@@ -307,7 +309,7 @@ export function createLifetimeStore(pool, { mode }) {
         }
         // Stripe reports the charge paid, so the fact exists even when an
         // older access clock makes the entitlement transition stale.
-        await writeFact("paid", event ? event.eventCreated : transition.eventCreated);
+        await writeFact("paid", transition.eventCreated);
         if (event) {
           await finishWebhookEvent(
             client,

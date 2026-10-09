@@ -187,7 +187,20 @@ describe("Lifetime Financial Facts", () => {
 
     const statements = client.query.mock.calls.map(([sql]) => String(sql));
     expect(statements.some((sql) => sql.includes("UPDATE player_access"))).toBe(false);
-    expect(factWrites(client)[0][1]).toEqual(["pi_live_echo", "live", 599, "usd", "paid", 0, 100]);
+    expect(factWrites(client)[0][1]).toEqual(["pi_live_echo", "live", 599, "usd", "paid", 0, 400]);
+  });
+
+  it("US-02.5 starts a late first fact at the purchase clock", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_paid" }],
+      [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 300, status: "disputed" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.activatePurchase({ ...paidCheckout("pi_live_echo"), paymentState: "disputed" }, PAID_EVENT);
+
+    expect(factWrites(client)[0][1]).toEqual(["pi_live_echo", "live", 599, "usd", "disputed", 0, 300]);
   });
 
   it("US-02.5 records a disputed fact for a paid event that arrives after a dispute", async () => {
@@ -610,7 +623,7 @@ describe("Lifetime Membership store", () => {
     expect(client.query).toHaveBeenCalledTimes(3);
   });
 
-  it("records the fact but does not activate a Checkout whose payment is now refunded", async () => {
+  it("US-01.3 records the fact but does not activate a Checkout whose payment is now refunded", async () => {
     const { client, pool } = transactionalPool([
       [],
       [{ event_id: "evt_paid_after_refund" }],

@@ -9,7 +9,8 @@ import { transitionLifetimeState } from "./lifetime-state.js";
  * Writes the Financial Fact for one verified, linked PaymentIntent. The
  * status is the charge state when the payment is processed, so a payment
  * refunded before its paid event still leaves a fact. A repeat write keeps
- * one row and only advances its event clock.
+ * one row. It merges the larger refunded cents, makes a full refund
+ * `refunded`, and advances the event clock.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -31,10 +32,21 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
        $7
      )
      ON CONFLICT (payment_intent_id) DO UPDATE
-     SET provider_event_created = GREATEST(
+     SET status = CASE
+           WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents THEN 'refunded'
+           ELSE financial_facts.status
+         END,
+         refunded_at = CASE
+           WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents
+             THEN COALESCE(financial_facts.refunded_at, NOW())
+           ELSE financial_facts.refunded_at
+         END,
+         refunded_cents = GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents),
+         provider_event_created = GREATEST(
            financial_facts.provider_event_created,
            EXCLUDED.provider_event_created
-         )`,
+         ),
+         updated_at = NOW()`,
     [paymentIntentId, billingMode, LIFETIME_AMOUNT, LIFETIME_CURRENCY, status, refundedCents, eventCreated]
   );
 }

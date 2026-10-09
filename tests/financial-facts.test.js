@@ -45,7 +45,7 @@ describe("Financial Facts", () => {
     ]);
   });
 
-  it("US-01.4 keeps one row per payment intent and only advances its event clock", async () => {
+  it("US-01.4 keeps one row per payment intent and merges a later charge snapshot", async () => {
     const client = clientStub();
 
     await recordFact(client, {
@@ -59,6 +59,11 @@ describe("Financial Facts", () => {
     const sql = String(client.query.mock.calls[0][0]).replace(/\s+/g, " ");
     expect(sql).toContain("ON CONFLICT (payment_intent_id) DO UPDATE");
     expect(sql).toContain("GREATEST( financial_facts.provider_event_created, EXCLUDED.provider_event_created )");
+    expect(sql).toContain("refunded_cents = GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents)");
+    expect(sql).toContain(
+      "SET status = CASE WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents THEN 'refunded' ELSE financial_facts.status END"
+    );
+    expect(sql).toContain("THEN COALESCE(financial_facts.refunded_at, NOW())");
   });
 });
 

@@ -32,10 +32,14 @@ The two could disagree.
 ## Fix
 
 - A full refund of the charge makes the fact `refunded` whatever the event
-  order (server/financial-facts.js:82).
+  order (server/financial-facts.js:94).
 - A linked paid Checkout event always writes the fact. A charge that is now
   refunded or disputed writes that state and grants no access
-  (server/lifetime-store.js:209).
+  (server/lifetime-store.js:211).
+- A repeat insert merges the larger refunded cents into the row, so a late
+  Checkout cannot drop a refund snapshot (server/financial-facts.js:34).
+- A first fact starts at the purchase clock. An event older than a known
+  payment event stays stale for the fact (server/lifetime-store.js:214).
 - Open follow-up: the entitlement transition in `transitionEntitlement` still
   uses the clock alone, so access can return to `active` after a stale full
   refund and a won dispute.

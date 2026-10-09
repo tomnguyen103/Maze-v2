@@ -57,8 +57,8 @@ account deletion.
 _Avoid_: Order record, receipt, ledger row
 
 **Net Purchase**:
-A paid Lifetime purchase that no refund or dispute has reversed. Gross revenue
-minus refunded amounts counts only Net Purchases.
+A paid Lifetime purchase that no full refund or open dispute has reversed. A
+partial refund keeps the Net Purchase, and its refunded cents still reduce revenue.
 _Avoid_: Sale, conversion, successful payment
 
 **Campaign Code**:
@@ -67,8 +67,8 @@ that caused it. It identifies a channel, never a person.
 _Avoid_: Referral code, tracking ID, UTM
 
 **Qualified Adult Visit**:
-One request to the adult offer that carries a valid Campaign Code. It counts
-requests, not unique people.
+One non-bot request to the adult offer, counted under its Campaign Code or under
+the empty campaign. It counts requests, not unique people.
 _Avoid_: Unique visitor, session, lead
 
 **Funnel Count**:

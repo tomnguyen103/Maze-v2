@@ -70,7 +70,8 @@ For Vercel, connect the Neon project and apply the migrations in order:
 32. `db/migrations/0032_financial_facts.sql`
 
 Apply migration 0032 before the release that writes Financial Facts. Without
-the table, a paid Lifetime webhook rolls back and Stripe retries it.
+the table, every Lifetime paid, refund and dispute webhook and every Checkout
+confirmation rolls back, and Stripe retries the webhooks.
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.
