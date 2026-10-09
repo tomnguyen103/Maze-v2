@@ -3233,10 +3233,18 @@ async function resolveLifetimeReturn() {
     url.searchParams.delete("membership");
     removeCheckoutParameters(url);
     lifetimeView.showMembership();
-    // "Not now" falls through to the normal Run entry.
+    // "Not now" falls through to the normal Run entry. A close that already
+    // resumed the saved Run (Unlock with access active) starts nothing more.
+    const offerFirstLight = firstLightEntryPending;
     elements.lifetimeDialog.addEventListener(
       "close",
-      () => void initializeRunEntry(),
+      () => {
+        if (lifetimeReturnConfirmed) {
+          return;
+        }
+        firstLightEntryPending = offerFirstLight;
+        void initializeRunEntry();
+      },
       { once: true }
     );
     return false;

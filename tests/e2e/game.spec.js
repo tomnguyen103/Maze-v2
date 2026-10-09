@@ -734,6 +734,47 @@ test("US-03.1 opens membership from the owner link, then Not now enters the Run"
   ).toBeVisible();
 });
 
+test("US-03.1 resumes the saved Run once when Unlock finds access already active", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 1,
+        seed: "STONE-VAULT-07",
+        levelId: "maze-master",
+        labyrinthNumber: 6
+      })
+    );
+    const { client } = Reflect.get(window, "__echoMazePlayerDependencies");
+    const authorizeRun = client.authorizeRun;
+    Reflect.set(window, "__echoMazeRunStarts", 0);
+    client.getRunAccessConfig = async () => ({ enforcementEnabled: true });
+    client.createLifetimeCheckout = async () => ({ state: "lifetime_active" });
+    client.authorizeRun = async (/** @type {unknown} */ locator) => {
+      Reflect.set(
+        window,
+        "__echoMazeRunStarts",
+        Number(Reflect.get(window, "__echoMazeRunStarts")) + 1
+      );
+      return authorizeRun(locator);
+    };
+  });
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: /Unlock lifetime access/ }).click();
+  await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+  const runStarts = () =>
+    page.evaluate(() => Reflect.get(window, "__echoMazeRunStarts"));
+  await expect.poll(runStarts).toBe(1);
+  // A second start follows the dialog close event within a few frames.
+  await page.waitForTimeout(500);
+  expect(await runStarts()).toBe(1);
+});
+
 test("keeps Practice Intention explicit, transient, and rejected before storage", async ({
   page
 }, testInfo) => {

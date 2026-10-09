@@ -111,7 +111,7 @@ describe("Launch runbook", () => {
     const operations = section(read(OPERATIONS), "## Live cutover");
 
     for (const text of [step(9), operations]) {
-      expect(text).toContain("/api/access");
+      expect(text).toMatch(/`\/api\/access`/);
       expect(text).toContain("membership-blocked");
       expect(text).not.toContain("blocks the next new Run");
     }

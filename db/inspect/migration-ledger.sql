@@ -21,22 +21,32 @@ SELECT migration, present
 FROM (
   VALUES
   -- Outside a transaction: the last step grants the runtime role access to
-  -- the entries table after a REVOKE ALL.
+  -- the entries table after a REVOKE ALL. A database without the role reads
+  -- false, because has_table_privilege raises an error for a missing role.
   ('0018_verified_daily_entries.sql',
     to_regclass('public.verified_daily_submissions') IS NOT NULL
-      AND COALESCE(has_table_privilege('echo_maze_runtime',
-        to_regclass('public.verified_daily_entries'), 'SELECT'), false)),
+      AND CASE
+        WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles
+          WHERE rolname = 'echo_maze_runtime')
+        THEN COALESCE(has_table_privilege('echo_maze_runtime',
+          to_regclass('public.verified_daily_entries'), 'SELECT'), false)
+        ELSE false
+      END),
   -- Outside a transaction: the last step builds the concurrent index.
   ('0019_score_entry_ruleset_partitions.sql',
     EXISTS (SELECT 1 FROM pg_catalog.pg_index
       WHERE indexrelid = to_regclass('public.score_entries_partition_ranking_idx')
         AND indisvalid)),
-  -- Outside a transaction: the last step sets the column NOT NULL.
+  -- Outside a transaction: the column is NOT NULL, and the last step drops
+  -- the temporary check that proved it.
   ('0020_learning_deck_quest_identity.sql',
     EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
       WHERE attrelid = to_regclass('public.cloud_quest_progress')
         AND attname = 'learning_deck_revision'
-        AND attnotnull AND NOT attisdropped)),
+        AND attnotnull AND NOT attisdropped)
+      AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+        WHERE conrelid = to_regclass('public.cloud_quest_progress')
+          AND conname = 'cloud_quest_progress_deck_not_null')),
   ('0021_class_expeditions.sql',
     to_regclass('public.class_expeditions') IS NOT NULL),
   -- Outside a transaction: the last step validates the pace check.

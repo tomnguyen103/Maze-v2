@@ -166,10 +166,12 @@ decisions to this runbook. Record each outcome in its evidence slot.
 **Action:** Decide whether production sends product events to PostHog. To send
 them, set `POSTHOG_API_KEY` in the production environment. Set `POSTHOG_HOST`
 only for a host other than the default in `.env.example`. With no key,
-`server/product-events.js` forwards nothing. After step 12, confirm in the
-PostHog project that a `run_access_decision` event arrives with `source`
-`server` and no Explorer id or email. No Financial Fact or Funnel Count goes to
-PostHog.
+`server/product-events.js` forwards nothing. After step 12, start one Run as a
+signed-in Explorer, because only a Run start (`POST /api/access/runs`) sends a
+`run_access_decision` event. Confirm in the PostHog project that the event
+arrives with `source` `server` and no Explorer id or email. With no key, record
+that no event arrives: that outcome is valid. No Financial Fact or Funnel Count
+goes to PostHog.
 
 **Evidence:** _empty_
 
@@ -191,7 +193,8 @@ reasons. `docs/data-privacy.md` names this decision.
 **Action:** Review the Campaign Codes in `shared/campaign-codes.js` against the
 channels in `docs/acquisition/README.md`. A code holds only lowercase letters,
 digits and hyphens, at most 32 characters (`db/migrations/0033_funnel_counts.sql`).
-A link with a code outside the list counts under the empty campaign. Add or
+The match ignores letter case and outer spaces, so `?c=YouTube` counts as
+`youtube`. A link with a code outside the list counts under the empty campaign. Add or
 remove a code through a reviewed code change before Phase 5 starts.
 
 **Evidence:** _empty_

@@ -93,7 +93,53 @@ describe("Migration ledger check", () => {
       .filter((row) => /CONCURRENTLY/.test(read(`db/migrations/${row.file}`)))
       .map((row) => [row.file, row.check])
   )("US-05.2 counts the concurrent index of %s only when it is valid", (_file, check) => {
-    expect(check).toContain("indisvalid");
+    expect(check).toMatch(/\bAND indisvalid\)/);
+  });
+
+  // The final statement of each file that runs outside one transaction.
+  /** @type {[string, RegExp[]][]} */
+  const lastSteps = [
+    [
+      "0018_verified_daily_entries.sql",
+      [
+        /WHERE rolname = 'echo_maze_runtime'\)\s+THEN COALESCE\(has_table_privilege\('echo_maze_runtime',\s+to_regclass\('public\.verified_daily_entries'\)/
+      ]
+    ],
+    [
+      "0019_score_entry_ruleset_partitions.sql",
+      [/to_regclass\('public\.score_entries_partition_ranking_idx'\)\s+AND indisvalid\)/]
+    ],
+    [
+      "0020_learning_deck_quest_identity.sql",
+      [
+        /attname = 'learning_deck_revision'\s+AND attnotnull/,
+        /NOT EXISTS \(SELECT 1 FROM pg_catalog\.pg_constraint[\s\S]*?conname = 'cloud_quest_progress_deck_not_null'\)/
+      ]
+    ],
+    [
+      "0022_access_settings_v2.sql",
+      [/conname = 'explorer_access_settings_narration_pace_check'\s+AND convalidated/]
+    ],
+    [
+      "0027_echo_lens_learning_deck_revision.sql",
+      [/AND convalidated[\s\S]*\) = 2\)/]
+    ],
+    [
+      "0031_billing_mode.sql",
+      [
+        /to_regclass\('public\.lifetime_purchases_one_open_per_player_mode_idx'\)\s+AND indisvalid\)/,
+        /to_regclass\('public\.lifetime_purchases_one_open_per_player_idx'\) IS NULL/
+      ]
+    ]
+  ];
+
+  it.each(lastSteps)("US-05.2 checks the last step of %s", (file, patterns) => {
+    const row = rows.find((candidate) => candidate.file === file);
+
+    expect(row).toBeDefined();
+    for (const pattern of patterns) {
+      expect(row?.check).toMatch(pattern);
+    }
   });
 
   it("US-05.2 reads no privilege-filtered information_schema view", () => {
