@@ -86,6 +86,21 @@ describe("Billing Mode records", () => {
     expect(text).toMatch(/^## Consequences$/m);
   });
 
+  it("US-14.2 records ADR 0048 and marks the provider part of ADR 0003 superseded", () => {
+    expect(read("docs/adr/0048-direct-reviewed-question-serving.md")).toMatch(
+      /^- Status: Accepted$/m
+    );
+    expect(read("docs/adr/0003-generated-questions-outside-deterministic-run.md")).toContain(
+      "superseded by ADR 0048"
+    );
+  });
+
+  it("US-14.3 holds no model provider variable in the env example, setup guide or Vite config", () => {
+    for (const file of [ENV_EXAMPLE, SETUP, "vite.config.mjs"]) {
+      expect(read(file), file).not.toMatch(/QUESTION_PROVIDER|GEMINI_|OLLAMA_/);
+    }
+  });
+
   it("US-14.4 lists the cutover steps in ascending order", () => {
     const text = read(RUNBOOK);
     const steps = [

@@ -16,7 +16,8 @@ the stored Reviewed Question Revision.
 
 1. The question service returns the stored Reviewed Question Revision. It reads
    the published database Revision when a bank is configured and reachable. It
-   otherwise reads the bundled deck.
+   otherwise reads the bundled deck. Quest II, Gate Warden, focused Deck and
+   Capstone Questions always read the bundled deck, as before.
 2. The service sends no request to a model provider. The Ollama and Gemini
    paths, the provider selector, the failure cooldown, and the template assertion
    are deleted.

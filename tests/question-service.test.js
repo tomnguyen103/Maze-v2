@@ -142,7 +142,7 @@ describe("Quest Questions", () => {
     expect(new Set(brightRetries.map((question) => question.id)).size).toBe(4);
   });
 
-  it("rejects malformed generated Questions", () => {
+  it("rejects malformed Questions", () => {
     expect(() =>
       normalizeQuestion({
         ...GENERATED_QUESTION,
@@ -515,4 +515,5 @@ describe("question bank in Postgres", () => {
     expect(first.source).toBe("database");
     expect(first.question).toEqual(reviewedQuestion);
     expect(replay).toEqual(first);
-  });});
+  });
+});

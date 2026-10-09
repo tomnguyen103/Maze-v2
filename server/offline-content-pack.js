@@ -29,7 +29,7 @@ const BANDS = Object.freeze({
 
 /**
  * Resolves the immutable reviewed pack shipped with the application. The
- * receipt binds the pack hash; the server chooses the question generator and
+ * receipt binds the pack hash; the server chooses the question source and
  * never trusts question text or answer data supplied by the browser.
  *
  * @param {string} hash

@@ -217,8 +217,8 @@ existing leaderboard function, preserving the enforced Vercel function ceiling.
 - Evidence checked: `src/questions/question-bank.js` contains 15 reviewed
   capstones across all five bands and three levels; the first Gate Warden
   attempt requests the capstone kind, while retries fall back to the ordinary
-  reviewed deck. Service tests prove capstones bypass unreviewed overlays and
-  providers, and every card passes the same normalizer as the reviewed bank.
+  reviewed deck. Service tests prove capstones bypass unreviewed overlays,
+  and every card passes the same normalizer as the reviewed bank.
 - Touches: src/questions/question-bank.js, server/question-service.js,
   src/main.js, tests
 - Depends on: none
