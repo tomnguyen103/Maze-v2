@@ -311,8 +311,9 @@ member shows no membership, because an Unclassified Purchase grants nothing.
 5. **Apply the classification.** Owner action.
    Run `npm run classify:lifetime-purchases -- --apply` with the same test key. The
    script verifies every row first. It writes all verified rows in one transaction.
-   The same transaction sets the mode on the member's access record, so a legacy
-   member keeps live access. Exit code 1 means a row stayed unchanged. Resolve that
+   The same transaction sets the mode on the member's access record, so a classified
+   member keeps access in the Billing Mode of the purchase. A test purchase grants
+   no access after step 6 switches to live. Exit code 1 means a row stayed unchanged. Resolve that
    row, then repeat step 3. A Stripe object of the other mode reports as missing.
    Run the script again with the key of that mode.
 
