@@ -428,17 +428,7 @@ function renderAtlas(
   applyTransform();
 }
 
-const ATLAS_NEUTRAL_WASH =
-  "color-mix(in oklab, var(--color-ink-muted) 30%, var(--color-paper))";
 const ATLAS_REGION_IDS = ["foundation", "developing", "capable", "advanced", "mastery"];
-/** @type {Readonly<Record<string, string>>} */
-const REGION_HUE_TOKENS = Object.freeze({
-  foundation: "--region-mosslight",
-  developing: "--region-windcall",
-  capable: "--region-sunspan",
-  advanced: "--region-tideglass",
-  mastery: "--region-bellroot"
-});
 // Hand-cut outlines, each with its landmark stamp and Gate flag, in Region order.
 const ATLAS_TERRITORIES = Object.freeze([
   { d: "M42 96 L120 40 L212 58 L248 128 L212 204 L120 222 L52 170 Z", stamp: [140, 128], gate: [236, 122] },
@@ -450,20 +440,18 @@ const ATLAS_TERRITORIES = Object.freeze([
 
 /**
  * Returns the Atlas illustration as SVG markup. Equal Region ids give equal markup.
- * An unknown Region id draws the neutral wash.
+ * An unknown Region id draws the neutral wash. The CSS owns every fill, so the markup carries no inline style.
  * @param {readonly string[]} regionIds one Region id per territory, in Region order
  * @returns {string}
  */
 export function renderAtlasIllustrationMarkup(regionIds) {
   const territories = ATLAS_TERRITORIES.map(({ d, stamp, gate }, index) => {
     const regionId = regionIds[index];
-    const wash = Object.hasOwn(REGION_HUE_TOKENS, regionId)
-      ? `color-mix(in oklab, var(${REGION_HUE_TOKENS[regionId]}) 55%, var(--color-ink))`
-      : ATLAS_NEUTRAL_WASH;
+    const region = ATLAS_REGION_IDS.includes(regionId) ? ` data-region="${regionId}"` : "";
     const [sx, sy] = stamp;
     const [gx, gy] = gate;
     return [
-      `<path class="atlas-illustration__territory" data-atlas-region-art d="${d}" style="fill: ${wash}"/>`,
+      `<path class="atlas-illustration__territory" data-atlas-region-art${region} d="${d}"/>`,
       `<path class="atlas-illustration__stamp" d="M${sx} ${sy - 12} L${sx + 9} ${sy} L${sx} ${sy + 12} L${sx - 9} ${sy} Z"/>`,
       `<path class="atlas-illustration__gate" d="M${gx} ${gy + 30} V${gy} L${gx + 16} ${gy + 6} L${gx} ${gy + 12}"/>`
     ].join("");

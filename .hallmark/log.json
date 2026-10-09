@@ -13,7 +13,7 @@
       "fixes": [
         "illustration sits on grid paper, not a grey box"
       ],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-10-08",
@@ -31,7 +31,7 @@
         "drop fake telemetry chrome: coordinates, resonance, scale, MK-IV, orientation",
         "mobile Pulse is an 8px-radius button, not a disc"
       ],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-10-08",
@@ -47,7 +47,7 @@
         "drop chapter and world-map chrome",
         "level chips use the panel system, no eyebrow region tag"
       ],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-10-08",
@@ -60,7 +60,7 @@
       "footer": "None",
       "stitch_screen": "6a2dcb01617d4e858a12328b9a7c38b7",
       "fixes": [],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-10-08",
@@ -75,7 +75,7 @@
       "fixes": [
         "drop live-telemetry badge, sync latency and footer"
       ],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-10-08",
@@ -88,7 +88,7 @@
       "footer": "None",
       "stitch_screen": "51a354674165449abc6ed352332ea0dd",
       "fixes": [],
-      "stitch_note": "Layout reference screen from the Journey generation. Field Journal repaint generations timed out; design.md is the locked reference. Shared base specimen screen: 6fbde44e44be4c1b87e52f140a8d70e0."
+      "stitch_note": "Layout reference screen from the Journey generation. Complex Field Journal repaint generations time out in Stitch; design.md is the locked reference. Field Journal specimen screen generated 2026-10-09: 98ee466d3a9f4313b0102b4b0d679e2b."
     },
     {
       "date": "2026-07-29",

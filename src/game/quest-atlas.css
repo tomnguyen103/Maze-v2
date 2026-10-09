@@ -113,11 +113,32 @@
   stroke-width: 4;
 }
 
-/* Territory fill comes from an inline style set by renderAtlasIllustrationMarkup. */
+/* Each fill is a Region Hue wash; an unknown Region keeps the neutral wash. */
 .atlas-illustration__territory {
+  fill: color-mix(in oklab, var(--color-ink-muted) 30%, var(--color-paper));
   stroke: var(--color-line);
   stroke-width: 2;
   stroke-linejoin: round;
+}
+
+.atlas-illustration__territory[data-region="foundation"] {
+  fill: color-mix(in oklab, var(--region-mosslight) 55%, var(--color-ink));
+}
+
+.atlas-illustration__territory[data-region="developing"] {
+  fill: color-mix(in oklab, var(--region-windcall) 55%, var(--color-ink));
+}
+
+.atlas-illustration__territory[data-region="capable"] {
+  fill: color-mix(in oklab, var(--region-sunspan) 55%, var(--color-ink));
+}
+
+.atlas-illustration__territory[data-region="advanced"] {
+  fill: color-mix(in oklab, var(--region-tideglass) 55%, var(--color-ink));
+}
+
+.atlas-illustration__territory[data-region="mastery"] {
+  fill: color-mix(in oklab, var(--region-bellroot) 55%, var(--color-ink));
 }
 
 .atlas-illustration__stamp {

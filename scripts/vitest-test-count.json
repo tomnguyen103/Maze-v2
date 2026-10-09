@@ -1,6 +1,6 @@
 {
   "testFiles": 188,
-  "tests": 1725,
+  "tests": 1726,
   "skipped": 18,
-  "source": "Full Vitest run on 2026-10-08 after the Field Journal evidence ticket 10 added the ivory passage regression test. Earlier: the dashboard ticket 09 Admin tab strip and flat panel tests. Earlier: the canvas ticket 08 paper board, Warden silhouette and palette fallback tests, and the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
+  "source": "Full Vitest run on 2026-10-09 after the Field Journal audit moved the Atlas territory fills out of inline style, after the evidence ticket 10 added the ivory passage regression test. Earlier: the dashboard ticket 09 Admin tab strip and flat panel tests. Earlier: the canvas ticket 08 paper board, Warden silhouette and palette fallback tests, and the Theme Choice sync and malformed-payload retry tests and their review regressions. `skipped` is pinned on purpose (T-01): the 18 skips are the database and object-store lanes, which need a live DATABASE_URL - see docs/testing-database-lane.md and `npm run test:db`. Update all four fields deliberately when tests change."
 }

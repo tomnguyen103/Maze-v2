@@ -635,8 +635,12 @@ describe("US-09 — Admin and Class dashboards in Field Journal", () => {
   const classroomCss = readFileSync("src/classroom/classroom.css", "utf8");
 
   /** @param {string} css @param {string} selector */
-  const ruleBody = (css, selector) =>
-    css.match(new RegExp(`^${selector.replace(/[[\]().*+?]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+  const ruleBody = (css, selector) => {
+    const escaped = selector.replace(/[[\]().*+?]/g, "\\$&");
+    const body = css.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1];
+    if (body === undefined) throw new Error(`missing CSS rule ${selector}`);
+    return body;
+  };
 
   it("US-09.1 draws the tool rail as an underline tab strip, not pills", () => {
     const rail = ruleBody(adminCss, ".admin-rail");

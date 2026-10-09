@@ -82,9 +82,20 @@ function atlasMarkup(ids = ATLAS_REGION_IDS) {
   return renderAtlasIllustrationMarkup(ids);
 }
 
+/** @param {string} selector */
+function atlasFill(selector) {
+  const rule = atlasCss.indexOf(`${selector} {`);
+  if (rule < 0) throw new Error(`missing Atlas rule ${selector}`);
+  const body = atlasCss.slice(rule, atlasCss.indexOf("}", rule));
+  return body.match(/fill:\s*([^;]+);/)?.[1].trim() ?? "";
+}
+
 /** @param {string} markup */
 function territoryFills(markup) {
-  return [...markup.matchAll(/atlas-illustration__territory"[^>]*style="fill: ([^"]+)"/g)].map((hit) => hit[1]);
+  return [...markup.matchAll(/<path class="atlas-illustration__territory"([^>]*)>/g)].map((hit) => {
+    const region = hit[1].match(/data-region="([\w-]+)"/)?.[1];
+    return atlasFill(region ? `.atlas-illustration__territory[data-region="${region}"]` : ".atlas-illustration__territory");
+  });
 }
 
 describe("US-07 — Atlas territories", () => {
@@ -102,7 +113,7 @@ describe("US-07 — Atlas territories", () => {
 
     expect(new Set(fills).size).toBe(5);
     for (const scope of [LIGHT, NIGHT]) {
-      const ground = oklabOf(tokenValue(scope, "--color-panel"));
+      const ground = oklabOf(tokenValue(scope, "--color-paper"));
       for (const fill of fills) {
         expect(contrastRatio(mixedOklab(fill, scope), ground)).toBeGreaterThanOrEqual(3);
       }
@@ -112,6 +123,10 @@ describe("US-07 — Atlas territories", () => {
   it("US-07.3 keeps island, bridge, rope and blob words out of the Atlas markup and CSS", () => {
     expect(atlasMarkup()).not.toMatch(/\b(island|bridge|rope|blob)s?\b/i);
     expect(atlasCss).not.toMatch(/\b(island|bridge|rope|blob)s?\b/i);
+  });
+
+  it("US-07.2 keeps the Atlas markup free of inline style, which the strict style-src blocks", () => {
+    expect(atlasMarkup()).not.toMatch(/\sstyle=/);
   });
 
   it("US-07.4 returns identical SVG on a rerender with the same progress", () => {
