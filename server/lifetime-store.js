@@ -2,6 +2,7 @@ import {
   transitionLifetimeState
 } from "./lifetime-state.js";
 import { recordFact, transitionFact } from "./financial-facts.js";
+import { LIFETIME_AMOUNT } from "../shared/lifetime-product.js";
 import {
   activeUserGuardCtes,
   DeletedUserError,
@@ -391,13 +392,27 @@ export function createLifetimeStore(pool, { mode }) {
           purchase,
           mode
         );
-        const transition = transitionLifetimeState({
-          currentEventCreated: access.eventCreated,
-          currentState: access.state,
-          eventCreated: Number(event.eventCreated),
-          requestedState,
-          source: "provider"
-        });
+        // The refunded cents come from the charge as it is now, not as of the
+        // event, so a full refund wins whatever the event order. The clock
+        // never moves back, and `refunded` stays absorbing (ADR 0007).
+        const transition =
+          Number(event.refundedCents ?? 0) >= LIFETIME_AMOUNT &&
+          access.state !== "refunded"
+            ? {
+                eventCreated: Math.max(
+                  access.eventCreated,
+                  Number(event.eventCreated)
+                ),
+                outcome: "processed",
+                state: "refunded"
+              }
+            : transitionLifetimeState({
+                currentEventCreated: access.eventCreated,
+                currentState: access.state,
+                eventCreated: Number(event.eventCreated),
+                requestedState,
+                source: "provider"
+              });
         if (transition.outcome === "processed") {
           await client.query(
             `UPDATE lifetime_purchases

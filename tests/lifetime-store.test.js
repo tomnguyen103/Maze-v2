@@ -685,6 +685,73 @@ describe("Lifetime Membership store", () => {
     ).toBe(false);
   });
 
+  /**
+   * BEGIN, webhook claim, a disputed purchase, then a disputed projection at
+   * 300; later queries default to no rows.
+   * @param {string} eventId
+   */
+  function disputedPool(eventId) {
+    return paidPool([
+      [],
+      [{ event_id: eventId }],
+      [{
+        id: "purchase_123",
+        player_id: "user_explorer",
+        provider_event_created: 300,
+        status: "disputed"
+      }],
+      [{
+        lifetime_state_event_created: 300,
+        membership_mode: "test",
+        membership_state: "disputed"
+      }]
+    ]);
+  }
+
+  /** @param {{ query: { mock: { calls: unknown[][] } } }} client @param {string} table */
+  function updateValues(client, table) {
+    const call = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes(`UPDATE ${table}`)
+    );
+    return /** @type {unknown[] | undefined} */ (call?.[1]);
+  }
+
+  it("US-01.1 refunds access for a full refund that arrives after a newer dispute", async () => {
+    const { client, pool } = disputedPool("evt_late_refund");
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 250,
+      eventId: "evt_late_refund",
+      eventType: "charge.refunded",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123",
+      refundedCents: 599,
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "processed", state: "lifetime_refunded" });
+    expect(updateValues(client, "lifetime_purchases")?.slice(2)).toEqual(["refunded", 300]);
+    expect(updateValues(client, "player_access")?.slice(0, 3)).toEqual(["refunded", "purchase_123", 300]);
+  });
+
+  it("US-01.2 keeps a fully refunded charge refunded when a dispute is won", async () => {
+    const { client, pool } = disputedPool("evt_dispute_won");
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 400,
+      eventId: "evt_dispute_won",
+      eventType: "charge.dispute.closed",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123",
+      refundedCents: 599,
+      state: "active"
+    })).resolves.toEqual({ outcome: "processed", state: "lifetime_refunded" });
+    expect(updateValues(client, "lifetime_purchases")?.slice(2)).toEqual(["refunded", 400]);
+    expect(updateValues(client, "player_access")?.slice(0, 3)).toEqual(["refunded", "purchase_123", 400]);
+  });
+
   it("links an early dispute by purchase metadata and blocks future Runs", async () => {
     const { client, pool } = transactionalPool([
       [],
