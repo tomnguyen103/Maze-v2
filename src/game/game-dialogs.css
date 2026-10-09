@@ -63,7 +63,6 @@
 .quest-conflict-dialog::backdrop,
 .result-dialog::backdrop {
   background: var(--color-overlay);
-  backdrop-filter: blur(0.18rem);
 }
 
 .dialog-intro,
@@ -584,7 +583,7 @@
   place-items: center;
   border-radius: var(--radius-sm);
   background: var(--color-stone-raised);
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
 }
 
 .access-answer-preview strong {
@@ -1411,7 +1410,7 @@
   place-items: center;
   border-radius: var(--radius-sm);
   background: var(--color-stone-raised);
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
 }
 
 .challenge-choice strong {

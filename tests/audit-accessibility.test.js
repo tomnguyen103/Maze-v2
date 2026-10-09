@@ -456,3 +456,82 @@ describe("US-01 — Field Journal palette tokens", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/** Dialog and learning stylesheets that ticket 06 restyles. */
+const SURFACE_SHEETS = [
+  "src/game/game-dialogs.css",
+  "src/game/run-replay.css",
+  "src/game/first-light.css",
+  "src/game/daily-constellation.css",
+  "src/learning/lantern-trail.css"
+];
+
+describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () => {
+  const css = source("tokens.css");
+  const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
+  const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
+  const blocks = [
+    css.slice(0, systemNightStart),
+    css.slice(systemNightStart, forcedNightStart),
+    css.slice(forcedNightStart)
+  ];
+
+  it("fills no pressed or selected control with signal-deep (US-06.1)", () => {
+    const offenders = [];
+    for (const relative of SURFACE_SHEETS) {
+      for (const rule of source(relative).replace(/\r\n/g, "\n").split("}")) {
+        const open = rule.lastIndexOf("{");
+        if (
+          /(?:^|[\s;])(?:background|background-color|--fill)\s*:[^;]*var\(--color-signal-deep\)/.test(
+            rule.slice(open + 1)
+          )
+        ) {
+          offenders.push(`${relative}: ${rule.slice(0, open).trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("holds 3:1 for the focus ring on the dialog panel in light and Night (US-06.2)", () => {
+    for (const block of blocks) {
+      expect(
+        contrast(
+          rgbOf(declared(block, "--color-focus")),
+          rgbOf(declared(block, "--color-panel"))
+        )
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("draws every dialog focus outline in the focus token (US-06.2)", () => {
+    const offenders = [];
+    for (const relative of SURFACE_SHEETS) {
+      for (const match of source(relative).matchAll(/outline:\s*([^;]+);/g)) {
+        const value = match[1];
+        if (!/transparent|none|0\b/.test(value) && !value.includes("var(--color-focus)")) {
+          offenders.push(`${relative}: ${value}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps lifetime state text at 4.5:1 on the dialog and the offer card (US-06.3)", () => {
+    for (const block of blocks) {
+      for (const text of [
+        "--color-ink",
+        "--color-ink-muted",
+        "--color-warden-text",
+        "--color-gate-text"
+      ]) {
+        for (const ground of ["--color-panel", "--color-stone-raised"]) {
+          expect(
+            contrast(rgbOf(declared(block, text)), rgbOf(declared(block, ground))),
+            `${text} on ${ground}`
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+});

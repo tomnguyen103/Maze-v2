@@ -27,7 +27,8 @@
 .daily-constellation__status[data-state="error"] {
   padding: var(--space-2) var(--space-3);
   color: var(--color-ink);
-  border-left: 0.25rem solid var(--color-warden);
+  border: 1px solid color-mix(in oklab, var(--color-warden) 40%, transparent);
+  border-radius: var(--radius-md);
   background: var(--color-warden-soft);
   font-weight: 700;
 }
@@ -54,7 +55,7 @@
   grid-template-rows: repeat(var(--constellation-size, 13), 1fr);
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-sm);
-  background: var(--color-night-deep);
+  background: var(--color-paper-deep);
 }
 
 /* `display: grid` above would otherwise defeat the hidden attribute. */
