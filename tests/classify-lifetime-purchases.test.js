@@ -8,6 +8,7 @@ import {
 function purchase(overrides) {
   return {
     id: "lp_1",
+    playerId: "user_1",
     status: "paid",
     checkoutSessionId: "cs_1",
     paymentIntentId: "pi_1",
@@ -24,11 +25,20 @@ function memoryStore(rows) {
     listUnclassified: vi.fn(async () =>
       state
         .filter((row) => row.billingMode === null)
-        .map(({ id, status, checkoutSessionId, paymentIntentId }) => ({
+        .map(({ id, playerId, status, checkoutSessionId, paymentIntentId }) => ({
           id,
+          playerId,
           status,
           checkoutSessionId,
           paymentIntentId
+        }))
+    ),
+    listClassifiedOpen: vi.fn(async () =>
+      state
+        .filter((row) => row.billingMode !== null && ["pending", "open"].includes(row.status))
+        .map(({ playerId, billingMode }) => ({
+          playerId,
+          mode: /** @type {"test" | "live"} */ (/** @type {unknown} */ (billingMode))
         }))
     ),
     writeBillingModes: vi.fn(async (updates) => {
@@ -243,6 +253,40 @@ describe("classify lifetime purchases script", () => {
     expect(store.writeBillingModes).toHaveBeenCalledWith([{ id: "lp_ok", mode: "test" }]);
   });
 
+  it("US-10.3 reports an open row whose player already holds a classified open row of the same mode", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_old", status: "open", checkoutSessionId: "cs_old", paymentIntentId: null }),
+      purchase({ id: "lp_new", status: "open", billingMode: "test", checkoutSessionId: "cs_new", paymentIntentId: null })
+    ]);
+    const stripe = stripeStub({ sessions: { cs_old: { livemode: false, payment_status: "unpaid" } } });
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(result.exitCode).toBe(1);
+    expect(problemsOf(result)).toEqual({ lp_old: "open_purchase_conflict" });
+    expect(store.writeBillingModes).not.toHaveBeenCalled();
+  });
+
+  it("US-10.3 reports two open rows of one player that verify to the same mode and writes neither", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_a", status: "open", checkoutSessionId: "cs_a", paymentIntentId: null }),
+      purchase({ id: "lp_b", status: "pending", checkoutSessionId: "cs_b", paymentIntentId: null }),
+      purchase({ id: "lp_c", playerId: "user_2", status: "open", checkoutSessionId: "cs_c", paymentIntentId: null })
+    ]);
+    const stripe = stripeStub({
+      sessions: {
+        cs_a: { livemode: false, payment_status: "unpaid" },
+        cs_b: { livemode: false, payment_status: "unpaid" },
+        cs_c: { livemode: false, payment_status: "unpaid" }
+      }
+    });
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(problemsOf(result)).toEqual({ lp_a: "open_purchase_conflict", lp_b: "open_purchase_conflict" });
+    expect(store.writeBillingModes).toHaveBeenCalledWith([{ id: "lp_c", mode: "test" }]);
+  });
+
   it("US-10.4 a second --apply run reads no classified row, calls no Stripe object and changes nothing", async () => {
     const store = memoryStore(AGREEING_ROWS);
     const stripe = stripeStub(AGREEING_OBJECTS);
@@ -357,6 +401,7 @@ describe("classify lifetime purchases script", () => {
         rows: [
           {
             id: "lp_1",
+            player_id: "user_1",
             status: "open",
             checkout_session_id: "cs_1",
             payment_intent_id: null
@@ -369,7 +414,7 @@ describe("classify lifetime purchases script", () => {
     const rows = await createPurchaseClassificationStore(pool).listUnclassified();
 
     expect(rows).toEqual([
-      { id: "lp_1", status: "open", checkoutSessionId: "cs_1", paymentIntentId: null }
+      { id: "lp_1", playerId: "user_1", status: "open", checkoutSessionId: "cs_1", paymentIntentId: null }
     ]);
     const queryCalls = /** @type {unknown[][]} */ (pool.query.mock.calls);
     expect(String(queryCalls[0]?.[0])).toMatch(

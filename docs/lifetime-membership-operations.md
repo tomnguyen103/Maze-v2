@@ -276,6 +276,11 @@ only after every approval above exists.
 Owner actions run these steps in order. No agent runs them. Do not set live before migration 0031 is applied and classification is complete. Each step names a variable
 or a command. No step records a secret value.
 
+Apply migration 0031 before the release that reads `billing_mode` reaches any
+environment, test mode included. The release queries the new columns. Run the
+classification (steps 3 to 5) in the test environment too. Until then, a legacy
+member shows no membership, because an Unclassified Purchase grants nothing.
+
 1. **Create the live Stripe objects.** Owner action.
    Create one live Product named `Echo Maze Lifetime Membership`. Add one live
    one-time Price for exactly `$5.99 USD`. Subscribe the live webhook endpoint to the
@@ -299,7 +304,9 @@ or a command. No step records a secret value.
 4. **Review the dry-run output.** Owner review.
    Confirm that every row reports a mode. Resolve each reported row in Stripe or in
    the database. Do not edit a row by hand. Repeat step 3 until no row reports a
-   problem.
+   problem. The row problem `open_purchase_conflict` means the player already holds
+   another open purchase of the same mode. Expire one of the two in Stripe, then
+   run step 3 again.
 
 5. **Apply the classification.** Owner action.
    Run `npm run classify:lifetime-purchases -- --apply` with the same test key. The

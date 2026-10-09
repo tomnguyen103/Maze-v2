@@ -658,6 +658,38 @@ describe("Lifetime Membership store", () => {
     expect(projectionValues).toEqual(["refunded", "purchase_123", 200, "user_explorer", "live"]);
   });
 
+  it("US-06.3 orders a late test event by the purchase, not by a live projection", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_late" }],
+      [{ id: "purchase_123", player_id: "user_explorer", status: "refunded", provider_event_created: 200 }],
+      [{
+        lifetime_state_event_created: 900,
+        membership_mode: "live",
+        membership_state: "active"
+      }],
+      [],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    const result = await store.transitionEntitlement({
+      eventCreated: 100,
+      eventId: "evt_late",
+      eventType: "checkout.session.completed",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_test",
+      purchaseId: "purchase_123",
+      state: "active"
+    });
+
+    expect(result.outcome).not.toBe("processed");
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes("UPDATE lifetime_purchases"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("UPDATE player_access"))).toBe(false);
+  });
+
   it("US-07.3 ignores a refund of the other mode without touching the purchase", async () => {
     const { client, pool } = transactionalPool([
       [],

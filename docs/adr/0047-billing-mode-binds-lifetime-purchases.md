@@ -25,7 +25,9 @@ therefore grant access from a test payment.
    form their own key.
 7. The owner classifies Unclassified Purchases with `scripts/classify-lifetime-purchases.mjs`.
    The script reads Stripe for each row. It writes a mode only when the Session and
-   the PaymentIntent agree. Dry-run is the default. `--apply` writes the verified rows.
+   the PaymentIntent agree. An abandoned Checkout has no PaymentIntent, so its
+   Session alone decides. The script reports a row that would share an open-purchase
+   slot with another row. Dry-run is the default. `--apply` writes the verified rows.
 8. Live readiness fails while any Unclassified Purchase exists.
 9. Class Expedition billing stays test-only. Live mode opens no Expedition Session.
 
@@ -34,7 +36,10 @@ therefore grant access from a test payment.
 - A live deployment cannot grant access from a test payment. The `livemode` check
   and the mode-scoped stores enforce this.
 - Purchases stored before migration 0031 stay unclassified until the owner classifies
-  them. They grant nothing until then.
+  them. They grant nothing until then. A legacy member shows no membership in any
+  mode until classification runs, so the owner classifies in the test environment too.
+- A projection of one mode never orders or blocks an event of the other mode. A
+  live event overwrites a test projection, and a test event never overwrites a live one.
 - Live readiness waits on classification. The cutover runbook sets `live` last.
 - A deployment with no variable set keeps test behaviour.
 - Migration 0031 adds columns and an index without a backfill. It is additive.

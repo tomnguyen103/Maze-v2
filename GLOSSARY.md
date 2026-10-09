@@ -46,7 +46,8 @@ _Avoid_: Environment, payment mode, Stripe mode
 
 **Unclassified Purchase**:
 A stored Lifetime purchase that has no Billing Mode. It grants nothing and blocks
-live readiness until Stripe verifies its mode.
+live readiness until Stripe verifies its mode. A Checkout that the player abandoned
+before payment is classified from its Checkout Session alone.
 _Avoid_: Legacy purchase, empty-mode purchase, orphan purchase
 
 **Quest Level**:

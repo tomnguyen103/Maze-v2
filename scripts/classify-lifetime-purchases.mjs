@@ -7,6 +7,8 @@
 // nothing. --apply writes a mode only when both objects agree, in one transaction.
 // An abandoned Checkout has no PaymentIntent, so its Session alone decides.
 // The write also sets the mode on the player_access row that points at the purchase.
+// A row that would share an open-purchase slot (player and mode) with a classified
+// row, or with another row in the run, is reported as open_purchase_conflict.
 //
 // One key sees one mode only. A row whose objects the key cannot see is reported
 // as missing and stays unchanged. Run again with the key of the other mode.
@@ -23,11 +25,12 @@ import Stripe from "stripe";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 
 /**
- * @typedef {{ id: string, status: string, checkoutSessionId: string | null, paymentIntentId: string | null }} Purchase
+ * @typedef {{ id: string, playerId: string, status: string, checkoutSessionId: string | null, paymentIntentId: string | null }} Purchase
  * @typedef {{ id: string, mode: "test" | "live" | null, problem: string | null }} Verification
  */
 
 const PAID_STATUSES = new Set(["paid", "refunded", "disputed"]);
+const OPEN_STATUSES = new Set(["pending", "open"]);
 
 /**
  * Stripe answers resource_missing for an object of the other mode, so one run
@@ -94,6 +97,36 @@ async function verifyPurchase(purchase, stripe) {
 }
 
 /**
+ * The database allows one open purchase per player and mode. A row that would
+ * share a slot with a classified row, or with another row in this run, is
+ * reported so the batch write cannot hit the unique index and roll back.
+ *
+ * @param {Purchase[]} purchases
+ * @param {Verification[]} verifications
+ * @param {{ playerId: string, mode: "test" | "live" }[]} classifiedOpen
+ * @returns {Verification[]}
+ */
+function flagOpenConflicts(purchases, verifications, classifiedOpen) {
+  const slotOf = (/** @type {Purchase} */ purchase, /** @type {Verification} */ row) =>
+    OPEN_STATUSES.has(purchase.status) && row.problem === null && row.mode !== null
+      ? `${purchase.playerId}:${row.mode}`
+      : null;
+  const taken = new Set(classifiedOpen.map((open) => `${open.playerId}:${open.mode}`));
+  /** @type {Map<string, number>} */
+  const claims = new Map();
+  purchases.forEach((purchase, index) => {
+    const slot = slotOf(purchase, verifications[index]);
+    if (slot !== null) claims.set(slot, (claims.get(slot) ?? 0) + 1);
+  });
+  return verifications.map((row, index) => {
+    const slot = slotOf(purchases[index], row);
+    return slot !== null && (taken.has(slot) || (claims.get(slot) ?? 0) > 1)
+      ? { id: row.id, mode: null, problem: "open_purchase_conflict" }
+      : row;
+  });
+}
+
+/**
  * Verifies every row before the first write. A Stripe error throws here, so
  * the run stops with nothing written.
  *
@@ -106,10 +139,12 @@ async function verifyPurchase(purchase, stripe) {
  */
 export async function classifyPurchases({ store, stripe, apply = false, log = console.log }) {
   const purchases = await store.listUnclassified();
-  const verifications = [];
+  const classifiedOpen = await store.listClassifiedOpen();
+  const verified = [];
   for (const purchase of purchases) {
-    verifications.push(await verifyPurchase(purchase, stripe));
+    verified.push(await verifyPurchase(purchase, stripe));
   }
+  const verifications = flagOpenConflicts(purchases, verified, classifiedOpen);
 
   const writes = verifications.flatMap((row) =>
     row.problem === null && row.mode !== null ? [{ id: row.id, mode: row.mode }] : []
@@ -149,7 +184,7 @@ export function createPurchaseClassificationStore(pool) {
     /** @returns {Promise<Purchase[]>} */
     async listUnclassified() {
       const result = await pool.query(
-        `SELECT id, status, checkout_session_id, payment_intent_id
+        `SELECT id, player_id, status, checkout_session_id, payment_intent_id
          FROM lifetime_purchases
          WHERE billing_mode IS NULL
            AND (
@@ -161,9 +196,24 @@ export function createPurchaseClassificationStore(pool) {
       );
       return result.rows.map((row) => ({
         id: String(row.id),
+        playerId: String(row.player_id),
         status: String(row.status),
         checkoutSessionId: row.checkout_session_id ? String(row.checkout_session_id) : null,
         paymentIntentId: row.payment_intent_id ? String(row.payment_intent_id) : null
+      }));
+    },
+
+    /** @returns {Promise<{ playerId: string, mode: "test" | "live" }[]>} */
+    async listClassifiedOpen() {
+      const result = await pool.query(
+        `SELECT player_id, billing_mode
+         FROM lifetime_purchases
+         WHERE billing_mode IS NOT NULL
+           AND status IN ('pending', 'open')`
+      );
+      return result.rows.map((row) => ({
+        playerId: String(row.player_id),
+        mode: row.billing_mode === "live" ? "live" : "test"
       }));
     },
 

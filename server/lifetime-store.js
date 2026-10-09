@@ -351,7 +351,11 @@ export function createLifetimeStore(pool, { mode }) {
            FOR UPDATE`,
           [purchase.player_id]
         );
-        const access = projectedAccess(accessResult.rows[0] ?? {}, mode);
+        const access = entitlementBasis(
+          accessResult.rows[0] ?? {},
+          purchase,
+          mode
+        );
         const transition = transitionLifetimeState({
           currentEventCreated: access.eventCreated,
           currentState: access.state,
@@ -577,6 +581,24 @@ function projectedAccess(row, mode) {
   return {
     state: String(row.membership_state ?? "none"),
     eventCreated: Number(row.lifetime_state_event_created ?? 0)
+  };
+}
+
+/**
+ * A projection that belongs to another mode cannot order this mode's events,
+ * so the purchase row supplies its own state and event clock.
+ * @param {Record<string, unknown>} row
+ * @param {Record<string, unknown>} purchase
+ * @param {"test" | "live"} mode
+ */
+function entitlementBasis(row, purchase, mode) {
+  if (row.membership_mode === mode) {
+    return projectedAccess(row, mode);
+  }
+  const status = String(purchase.status);
+  return {
+    state: status === "paid" ? "active" : ["refunded", "disputed"].includes(status) ? status : "none",
+    eventCreated: Number(purchase.provider_event_created ?? 0)
   };
 }
 

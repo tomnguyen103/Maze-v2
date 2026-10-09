@@ -79,8 +79,30 @@ describe("admin store", () => {
       purchaseStatus: "refunded",
       paymentIntentId: "pi_1"
     });
-    expect(pool.queries[0].values).toEqual(["user_1"]);
+    expect(pool.queries[0].values).toEqual(["user_1", "test"]);
     expect(pool.queries[0].sql).toContain("ORDER BY created_at DESC");
+  });
+
+  it("US-05.3 reads membership and the latest purchase of the running Billing Mode only", async () => {
+    const pool = poolWith([]);
+    await createAdminStore(pool, { mode: "live" }).membershipFor("user_1");
+    expect(pool.queries[0].values).toEqual(["user_1", "live"]);
+    expect(pool.queries[0].sql).toMatch(/billing_mode = \$2/);
+    expect(pool.queries[0].sql).toMatch(/membership_mode = \$2 THEN a\.membership_state/);
+  });
+
+  it("US-05.4 lists a membership of another mode as none", async () => {
+    const pool = poolWith([]);
+    await createAdminStore(pool, { mode: "live" }).listUsers();
+    expect(pool.queries[0].values).toEqual(["live"]);
+    expect(pool.queries[0].sql).toMatch(/membership_mode = \$1 THEN a\.membership_state ELSE 'none'/);
+  });
+
+  it("US-05.5 counts active memberships of the running Billing Mode only", async () => {
+    const pool = poolWith([]);
+    await createAdminStore(pool, { mode: "live" }).dashboardMetrics();
+    expect(pool.queries[0].values).toEqual(["live"]);
+    expect(pool.queries[0].sql).toMatch(/membership_state = 'active' AND membership_mode = \$1/);
   });
 
   it("reads audit pages newest-first without exposing chain hashes", async () => {

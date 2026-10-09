@@ -352,7 +352,7 @@ export function createPlayerApi(env = process.env) {
   const accessSettingsStore = createAccessSettingsStore(queryAdapter);
   const questProgressStore = createQuestProgressStore(pool);
   const userDeletionStore = createUserDeletionStore(pool);
-  const adminStore = createAdminStore(pool);
+  const adminStore = createAdminStore(pool, { mode: storeMode });
   const questionBankStore = createQuestionBankStore(pool);
   reportAddressSalt(env);
   const addressSalt = resolveAddressSalt(env);
