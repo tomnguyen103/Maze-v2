@@ -1601,6 +1601,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .direction-button:active:not(:disabled) {
+    border-color: var(--color-accent-ink);
     background: var(--color-signal);
     color: var(--color-accent-ink);
   }
@@ -2043,7 +2044,7 @@ body[data-run-mode="first-light"] .play-workbench {
   margin: var(--space-4) 0 0;
   color: var(--color-ink);
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .landing-hero__figure {

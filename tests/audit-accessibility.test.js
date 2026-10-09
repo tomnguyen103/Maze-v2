@@ -536,7 +536,7 @@ describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () 
     }
   });
 
-  it("keeps the Constellation tiles at 3:1 on the map ground (US-06.1)", () => {
+  it("keeps the bright and glowing Constellation tiles at 3:1 on the map ground (US-06.1)", () => {
     const ground = token("--color-night-deep");
     const signal = token("--color-signal");
     const css = source("src/game/daily-constellation.css");
