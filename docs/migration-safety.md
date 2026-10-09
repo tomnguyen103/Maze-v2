@@ -2,9 +2,17 @@
 
 ## The applied boundary
 
-Migrations `0001` through `0017` are applied to the live database. `0018`
-through `0029` are authored and tested but not applied
-(`docs/roadmaps/echo-maze-current-status.md`).
+Migrations `0001` through `0017` are applied to the live database. The live
+state of `0018` and later is unverified. Run the read-only ledger check before
+an apply plan names a range:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/inspect/migration-ledger.sql
+```
+
+It returns one row per migration from `0018` with `present` true or false. It
+reads the catalog in a read-only transaction and writes nothing. Add a row for
+each new migration file; `tests/migration-ledger.test.js` fails without one.
 
 **Never edit a migration at or below the boundary.** A file that has already
 run somewhere is a historical record, not a source of truth you can revise: the

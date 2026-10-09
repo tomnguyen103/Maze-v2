@@ -26,14 +26,54 @@ export function resolveEnforcement(env) {
   if (env.RUN_ACCESS_ENFORCEMENT_ENABLED !== "true") {
     return { enabled: false, refusal: null };
   }
-  const { config, refusal } = describeLifetimeConfig(env);
+  const { mode, config, refusal } = describeLifetimeConfig(env);
   if (config === null) {
     return {
       enabled: false,
       refusal: `${ENFORCEMENT_REFUSAL} Reason: ${refusal ?? "incomplete_configuration"}.`
     };
   }
+  if (mode === "live" && !publicCheckoutOpen(env)) {
+    return {
+      enabled: false,
+      refusal: `${CHECKOUT_CLOSED_REFUSAL} Reason: checkout_closed.`
+    };
+  }
   return { enabled: true, refusal: null };
+}
+
+export const CHECKOUT_CLOSED_REFUSAL =
+  "RUN_ACCESS_ENFORCEMENT_ENABLED is true in live Billing Mode while LIFETIME_PUBLIC_CHECKOUT_ENABLED is not true. Enforcement while the public cannot buy would lock every Explorer out of a Run they cannot buy. Set both to true together after the owner pilot, or set RUN_ACCESS_ENFORCEMENT_ENABLED to false.";
+
+/**
+ * Who may create a Checkout. Test mode is open to every signed-in Explorer.
+ * Live mode is open to every Explorer only when Public Checkout is open, and
+ * otherwise only to the Pilot Accounts in `LIFETIME_PILOT_ACCOUNT_IDS`.
+ *
+ * temporary: plan Phase 4 step 8 keeps live checkout to the owner pilot.
+ * Remove this gate and both variables after the accepted pilot receipt and
+ * plan step 11 open Public Checkout.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {(userId: string) => boolean}
+ */
+export function resolveCheckoutGate(env) {
+  const mode = env.ECHO_MAZE_BILLING_MODE ?? "test";
+  if (mode === "test" || (mode === "live" && publicCheckoutOpen(env))) {
+    return () => true;
+  }
+  const pilots = new Set(
+    (env.LIFETIME_PILOT_ACCOUNT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+  );
+  return (userId) => pilots.has(userId);
+}
+
+/** @param {Record<string, string | undefined>} env */
+function publicCheckoutOpen(env) {
+  return env.LIFETIME_PUBLIC_CHECKOUT_ENABLED === "true";
 }
 
 export const ENFORCEMENT_REFUSAL =

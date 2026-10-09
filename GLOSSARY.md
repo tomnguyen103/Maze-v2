@@ -44,6 +44,18 @@ A Billing Mode is either test or live. Test uses Stripe test data and moves no r
 money. Live uses real Stripe objects and real charges.
 _Avoid_: Environment, payment mode, Stripe mode
 
+**Pilot Account**:
+An Explorer account that the owner lists in `LIFETIME_PILOT_ACCOUNT_IDS`. Before
+Public Checkout opens, only a Pilot Account can create a live Checkout. The list
+is temporary and goes away with the gate.
+_Avoid_: Beta tester, whitelist, staff account
+
+**Public Checkout**:
+The live state in which every signed-in Explorer can create a Lifetime Checkout.
+The owner opens it with `LIFETIME_PUBLIC_CHECKOUT_ENABLED=true` in the same deploy
+that turns on live Run Access enforcement.
+_Avoid_: Launch, general availability, open beta
+
 **Unclassified Purchase**:
 A stored Lifetime purchase that has no Billing Mode. It grants nothing and blocks
 live readiness until Stripe verifies its mode. A Checkout that the player abandoned

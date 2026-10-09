@@ -3225,7 +3225,14 @@ async function resolveLifetimeReturn() {
   const url = new URL(window.location.href);
   const checkout = url.searchParams.get("checkout");
   if (!checkout) {
-    return true;
+    // The owner pilot link: it reaches checkout while enforcement is off.
+    if (url.searchParams.get("membership") !== "open") {
+      return true;
+    }
+    url.searchParams.delete("membership");
+    removeCheckoutParameters(url);
+    lifetimeView.showMembership();
+    return false;
   }
   const sessionId = url.searchParams.get("session_id");
   if (checkout === "canceled") {

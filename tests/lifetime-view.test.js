@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLifetimeView } from "../src/player/lifetime-view.js";
+import { PlayerApiError } from "../src/player/player-client.js";
 
 describe("Lifetime Membership dialog", () => {
   beforeEach(() => {
@@ -93,6 +94,41 @@ describe("Lifetime Membership dialog", () => {
     expect(document.getElementById("lifetime-status")?.textContent).toBe(
       "Opening secure checkout…"
     );
+    await vi.waitFor(() => expect(primary.disabled).toBe(false));
+    expect(document.getElementById("lifetime-status")?.textContent).toBe(
+      "Checkout unavailable. Try again."
+    );
+  });
+
+  it.each([
+    [403, "Lifetime Membership is not on sale yet."],
+    [401, "Sign in to continue."]
+  ])("US-03.3 shows the server message for a %i Checkout answer", async (status, message) => {
+    const unlock = vi.fn(async () => {
+      throw new PlayerApiError(message, status, { error: message });
+    });
+    createLifetimeView({ onUnlock: unlock }).showMembership();
+    const primary = /** @type {HTMLButtonElement} */ (
+      document.getElementById("lifetime-primary")
+    );
+
+    primary.click();
+
+    await vi.waitFor(() => expect(primary.disabled).toBe(false));
+    expect(document.getElementById("lifetime-status")?.textContent).toBe(message);
+  });
+
+  it("US-03.5 keeps the generic message for any other server answer", async () => {
+    const unlock = vi.fn(async () => {
+      throw new PlayerApiError("Internal detail.", 500, { error: "Internal detail." });
+    });
+    createLifetimeView({ onUnlock: unlock }).showMembership();
+    const primary = /** @type {HTMLButtonElement} */ (
+      document.getElementById("lifetime-primary")
+    );
+
+    primary.click();
+
     await vi.waitFor(() => expect(primary.disabled).toBe(false));
     expect(document.getElementById("lifetime-status")?.textContent).toBe(
       "Checkout unavailable. Try again."

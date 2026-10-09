@@ -7,6 +7,7 @@ import {
   LifetimeWebhookVerificationError
 } from "../server/lifetime-domain.js";
 import { LifetimeOwnershipError } from "../server/lifetime-service.js";
+import { UNMETERED } from "../server/rate-limit-config.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const servers = new Set();
@@ -246,5 +247,106 @@ describe("Lifetime Membership HTTP boundary", () => {
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toEqual({ received: true });
     });
+  });
+});
+
+describe("Pilot checkout gate", () => {
+  /** @param {(userId: string) => boolean} checkoutOpen */
+  function gated(checkoutOpen, userId = "user_explorer") {
+    const payment = service();
+    const rateLimit = vi.fn(async () => UNMETERED);
+    const recordAudit = vi.fn(async () => {});
+    const handler = createLifetimeHandler({
+      getUserId: () => userId,
+      service: payment,
+      rateLimit,
+      recordAudit,
+      checkoutOpen
+    });
+    return { handler, payment, rateLimit, recordAudit };
+  }
+
+  it("US-01.1 creates Checkout for a caller the gate opens", async () => {
+    const target = gated((userId) => userId === "user_owner", "user_owner");
+
+    await withServer(target.handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-checkout`, {
+        method: "POST"
+      });
+      expect(response.status).toBe(200);
+    });
+    expect(target.payment.createCheckout).toHaveBeenCalledWith("user_owner");
+  });
+
+  it("US-01.3 answers 403 checkout_closed with no Checkout, rate-limit use or audit", async () => {
+    const target = gated(() => false);
+
+    await withServer(target.handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-checkout`, {
+        method: "POST"
+      });
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        error: "Lifetime Membership is not on sale yet.",
+        code: "checkout_closed"
+      });
+    });
+    expect(target.payment.createCheckout).not.toHaveBeenCalled();
+    expect(target.rateLimit).not.toHaveBeenCalled();
+    expect(target.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("US-01.3 asks a signed-out caller to sign in before the gate answers", async () => {
+    const payment = service();
+    const handler = createLifetimeHandler({
+      getUserId: () => null,
+      service: payment,
+      checkoutOpen: () => false
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-checkout`, {
+        method: "POST"
+      });
+      expect(response.status).toBe(401);
+    });
+  });
+
+  it("US-01.4 answers 403 to each repeated closed request and uses no rate limit", async () => {
+    const target = gated(() => false);
+
+    await withServer(target.handler, async (origin) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetch(`${origin}/api/lifetime-checkout`, {
+          method: "POST"
+        });
+        expect(response.status).toBe(403);
+      }
+    });
+    expect(target.rateLimit).not.toHaveBeenCalled();
+  });
+
+  it("US-01.5 keeps confirm and the webhook open while checkout is closed", async () => {
+    const target = gated(() => false);
+
+    await withServer(target.handler, async (origin) => {
+      const confirm = await fetch(`${origin}/api/lifetime-confirm`, {
+        body: JSON.stringify({ sessionId: "cs_test_echo" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      });
+      expect(confirm.status).toBe(200);
+      const webhook = await fetch(`${origin}/api/stripe-webhook`, {
+        body: '{"id":"evt_1"}',
+        headers: {
+          "content-type": "application/json",
+          "stripe-signature": "t=1,v1=signed"
+        },
+        method: "POST"
+      });
+      expect(webhook.status).toBe(200);
+    });
+    expect(target.payment.confirmCheckout).toHaveBeenCalledOnce();
+    expect(target.payment.processWebhook).toHaveBeenCalledOnce();
   });
 });

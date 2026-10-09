@@ -2,6 +2,7 @@ import {
   LIFETIME_PRICE_LABEL,
   LIFETIME_PRICE_ONCE
 } from "../../shared/lifetime-product.js";
+import { PlayerApiError } from "./player-client.js";
 
 /**
  * @param {{
@@ -140,10 +141,17 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
     setStatus("Opening secure checkout…", "loading");
     try {
       await onUnlock();
-    } catch {
+    } catch (error) {
       elements.primary.disabled = false;
       elements.primary.textContent = "Try again";
-      setStatus("Checkout unavailable. Try again.", "error");
+      // A sign-in or sale-state answer has a message for the Explorer.
+      setStatus(
+        error instanceof PlayerApiError &&
+          (error.status === 401 || error.status === 403)
+          ? error.message
+          : "Checkout unavailable. Try again.",
+        "error"
+      );
       elements.primary.focus();
     }
   }

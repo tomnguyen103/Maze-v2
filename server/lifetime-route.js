@@ -38,6 +38,7 @@ class LifetimeInputError extends Error {
  *   },
  *   recordAudit?: import("./audit.js").RecordAudit,
  *   rateLimit?: import("./rate-limit-request.js").RateLimit,
+ *   checkoutOpen?: (userId: string) => boolean,
  *   inbox?: {
  *     receive: (delivery: {
  *       provider: "stripe",
@@ -53,6 +54,7 @@ export function createLifetimeHandler({
   service,
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED,
+  checkoutOpen = () => true,
   inbox = null
 }) {
   /**
@@ -82,6 +84,13 @@ export function createLifetimeHandler({
     const userId = getUserId(request);
     if (!userId) {
       sendJson(response, 401, { error: "Sign in to continue." });
+      return;
+    }
+    if (pathname === "/api/lifetime-checkout" && !checkoutOpen(userId)) {
+      sendJson(response, 403, {
+        error: "Lifetime Membership is not on sale yet.",
+        code: "checkout_closed"
+      });
       return;
     }
     try {
