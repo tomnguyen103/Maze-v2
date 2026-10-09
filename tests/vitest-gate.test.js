@@ -254,7 +254,7 @@ describe("native-crash retry", () => {
     expect(calls()).toBe(1);
   });
 
-  it("US-01.4: does not retry a signal kill with no summary", async () => {
+  it("does not retry a signal kill with no summary (the retry predicate needs no signal)", async () => {
     const { run, calls } = sequencedRun([
       { ...crash, code: null, signal: "SIGKILL" },
       pass

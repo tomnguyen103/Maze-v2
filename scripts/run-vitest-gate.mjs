@@ -165,7 +165,7 @@ export async function runVitestGate({
         );
       }
       logRetry(
-        `Vitest crashed natively (${exitDescription}, 0xC0000409) before emitting a summary; retrying, attempt ${attempt + 1} of ${MAX_ATTEMPTS}.`
+        `Vitest crashed natively (${exitDescription}, 0x${NATIVE_CRASH_EXIT_CODE.toString(16).toUpperCase()}) before emitting a summary; retrying, attempt ${attempt + 1} of ${MAX_ATTEMPTS}.`
       );
       continue;
     }

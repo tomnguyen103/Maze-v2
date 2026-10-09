@@ -12,7 +12,9 @@ never executed reported `gate passed`. That is `T-01`.
 
 ## What did not work
 
-Retrying. The failure is input-dependent, not flaky — it reproduces whenever a
+Retrying, for the merged-stream defect. (The native crash later in this entry
+is a different failure, and a bounded retry does fix it.) The failure is
+input-dependent, not flaky — it reproduces whenever a
 test writes to stderr while the reporter is writing its summary, which depends
 on test ordering and on how the operating system interleaves two pipes.
 
@@ -152,7 +154,8 @@ between batches, and count exit 1 apart from `3221226505`.
 
 ### Fix
 
-`runVitestGate` retries a run when all three of these conditions are true:
+`runVitestGate` (`scripts/run-vitest-gate.mjs:127-186`) retries a run when all
+three of these conditions are true:
 
 - The exit code is `3221226505`. Node reports a signal kill as code `null`, so
   a signal never matches.
