@@ -44,17 +44,22 @@ describe("Funnel Count migration 0033", () => {
     );
     const body = functionBody("activate_personal_run");
     expect(body).toMatch(
-      /AND first_run_grant_at IS NULL;\s+IF FOUND THEN\s+PERFORM public\.bump_funnel_count\('personal_run_activated', '', ''\);/
+      /AND first_run_grant_at IS NULL;\s+IF FOUND AND NOT EXISTS \(\s+SELECT 1 FROM public\.run_access_grants\s+WHERE player_id = NEW\.player_id AND id <> NEW\.id\s+\) THEN\s+PERFORM public\.bump_funnel_count\('personal_run_activated', '', ''\);/
     );
     // The dedup update must fail loudly, so no block swallows it.
     expect(body).not.toContain("EXCEPTION");
   });
 
-  it("US-06.2 backfills the first Grant time, so an earlier Explorer never counts again", () => {
-    expect(sql).toMatch(
-      /UPDATE player_access AS access\s+SET first_run_grant_at = earliest\.created_at[\s\S]*min\(created_at\)[\s\S]*AND access\.first_run_grant_at IS NULL;\s+COMMIT;/
+  it("US-06.2 stamps the earliest Grant, so an Explorer with an earlier Grant never counts", () => {
+    expect(functionBody("activate_personal_run")).toMatch(
+      /SET first_run_grant_at = \(\s+SELECT min\(created_at\) FROM public\.run_access_grants\s+WHERE player_id = NEW\.player_id\s+\)/
     );
-    // Only the definer function writes counts, so the backfill counts nothing.
+    expect(sql).toMatch(
+      /GRANT SELECT \(id, player_id, created_at\) ON TABLE run_access_grants\s+TO echo_maze_tenant_owner;/
+    );
+    // No full-table update holds the migration locks, and only the definer
+    // function writes counts.
+    expect(sql).not.toMatch(/^UPDATE /m);
     expect(sql.match(/INSERT INTO (public\.)?funnel_counts/g)).toHaveLength(1);
     expect(sql).not.toMatch(/^(SELECT|PERFORM) /m);
   });
@@ -68,9 +73,12 @@ describe("Funnel Count migration 0033", () => {
     );
   });
 
-  it("US-08.3 swallows a counter failure, so analytics never blocks the write that fired it", () => {
+  it("US-08.3 turns a counter failure or a long lock wait into a warning, so analytics never blocks the write that fired it", () => {
     expect(functionBody("bump_funnel_count")).toMatch(
-      /BEGIN\s+BEGIN\s+INSERT INTO public\.funnel_counts[\s\S]*ON CONFLICT \(day, metric, campaign, mode\)\s+DO UPDATE SET count = public\.funnel_counts\.count \+ 1;\s+EXCEPTION WHEN OTHERS THEN\s+NULL;\s+END;\s+END/
+      /BEGIN\s+BEGIN\s+INSERT INTO public\.funnel_counts[\s\S]*ON CONFLICT \(day, metric, campaign, mode\)\s+DO UPDATE SET count = public\.funnel_counts\.count \+ 1;\s+EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING 'funnel count dropped: %', SQLSTATE;\s+END;\s+END/
+    );
+    expect(sql).toMatch(
+      /FUNCTION bump_funnel_count\([^)]*\)[^$]*SET lock_timeout = '200ms'\s+AS \$\$/
     );
   });
 
@@ -78,7 +86,7 @@ describe("Funnel Count migration 0033", () => {
     for (const name of FUNCTIONS) {
       expect(sql).toMatch(
         new RegExp(
-          `CREATE OR REPLACE FUNCTION ${name}\\([^)]*\\)\\s+RETURNS \\w+\\s+LANGUAGE plpgsql\\s+SECURITY DEFINER\\s+SET search_path = pg_catalog, public\\s+AS`
+          `CREATE OR REPLACE FUNCTION ${name}\\([^)]*\\)\\s+RETURNS \\w+\\s+LANGUAGE plpgsql\\s+SECURITY DEFINER\\s+SET search_path = pg_catalog, public\\s+(SET lock_timeout = '\\d+ms'\\s+)?AS`
         )
       );
       expect(sql).toMatch(
@@ -126,7 +134,7 @@ describe("Funnel Count migration 0033", () => {
     expect(check.test("https://example.test")).toBe(false);
   });
 
-  it("US-06.4 runs the trigger and the backfill in one transaction with a short lock wait", () => {
+  it("US-06.4 runs the migration in one transaction with a short lock wait", () => {
     expect(sql).toMatch(/^BEGIN;\s+SET LOCAL lock_timeout = '3s';/m);
     expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
   });

@@ -5,6 +5,13 @@ import { createRunAccessHandler } from "../server/run-access-route.js";
 import { CAMPAIGN_CODES, campaignCodeFor } from "../shared/campaign-codes.js";
 
 const BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0";
+const METERED = Object.freeze({
+  allowed: true,
+  degraded: false,
+  limit: 60,
+  remaining: 59,
+  retryAfterSeconds: 0
+});
 
 /**
  * @param {(
@@ -42,14 +49,14 @@ async function withServer(handler, callback) {
  */
 function visitHandler({
   recordVisit = vi.fn(async () => {}),
-  rateLimit = undefined
+  rateLimit = vi.fn(async () => ({ ...METERED }))
 } = {}) {
   const getUserId = vi.fn(() => null);
   const handler = createRunAccessHandler({
     store: { getAccess: vi.fn(), authorizeRun: vi.fn() },
     funnelStore: { recordVisit },
     getUserId,
-    ...(rateLimit ? { rateLimit } : {})
+    rateLimit
   });
   return { getUserId, handler, recordVisit };
 }
@@ -135,6 +142,7 @@ describe("Adult offer visit route", () => {
     await withServer(handler, async (origin) => {
       for (const userAgent of [
         "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
         "facebookexternalhit/1.1",
         "Mozilla/5.0 HeadlessChrome/130.0",
         "Chrome-Lighthouse",
@@ -146,6 +154,20 @@ describe("Adult offer visit route", () => {
       }
     });
     expect(recordVisit).not.toHaveBeenCalled();
+  });
+
+  it("US-09.3 counts a phone whose brand name ends in bot", async () => {
+    const { handler, recordVisit } = visitHandler();
+
+    await withServer(handler, async (origin) => {
+      const response = await postVisit(
+        origin,
+        { campaign: "search" },
+        "Mozilla/5.0 (Linux; Android 12; CUBOT X50) Chrome/130.0 Mobile"
+      );
+      expect(response.status).toBe(204);
+    });
+    expect(recordVisit.mock.calls).toEqual([["search"]]);
   });
 
   it("US-09.3 refuses a body over 4 KiB, invalid JSON and a non-POST method", async () => {
@@ -179,6 +201,17 @@ describe("Adult offer visit route", () => {
       expect(response.headers.get("retry-after")).toBe("30");
     });
     expect(rateLimit).toHaveBeenCalledWith("access.visit", expect.anything(), null);
+    expect(recordVisit).not.toHaveBeenCalled();
+  });
+
+  it("US-09.4 counts nothing when the rate limit is unmetered", async () => {
+    const rateLimit = vi.fn(async () => ({ ...METERED, degraded: true }));
+    const { handler, recordVisit } = visitHandler({ rateLimit });
+
+    await withServer(handler, async (origin) => {
+      expect((await postVisit(origin, { campaign: "reddit" })).status).toBe(204);
+    });
+    expect(rateLimit).toHaveBeenCalledTimes(1);
     expect(recordVisit).not.toHaveBeenCalled();
   });
 

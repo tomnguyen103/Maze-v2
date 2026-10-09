@@ -5,12 +5,13 @@
 -- change that makes each step true, so a step counts once with no
 -- deduplication table. A counter failure never fails the write that fired it.
 --
--- One transaction. The trigger on run_access_grants locks Grant inserts until
--- the first_run_grant_at backfill commits, so no Grant falls between the two.
--- Every statement survives a re-run. The file backfills no counter.
+-- One transaction with a short lock wait. Every statement survives a re-run.
+-- The file updates no existing row: the activation trigger reads the Grant
+-- history of one Explorer when it fires, so an Explorer with a Grant from
+-- before this migration never counts as new.
 --
 -- Rollback: drop the three triggers, the five functions, funnel_counts and
--- player_access.first_run_grant_at.
+-- player_access.first_run_grant_at, and revoke the run_access_grants read.
 
 BEGIN;
 
@@ -42,9 +43,13 @@ ALTER TABLE player_access
   ADD COLUMN IF NOT EXISTS first_run_grant_at TIMESTAMPTZ;
 GRANT UPDATE (first_run_grant_at) ON TABLE player_access
   TO echo_maze_tenant_owner;
+-- The activation trigger reads the Grant history of one Explorer.
+GRANT SELECT (id, player_id, created_at) ON TABLE run_access_grants
+  TO echo_maze_tenant_owner;
 
--- The one counter write. The inner block swallows a failure, so analytics
--- never blocks an account, a Run Grant, a Checkout or a visit.
+-- The one counter write. The inner block turns a failure into a warning, so
+-- analytics never blocks an account, a Run Grant, a Checkout or a visit. A
+-- wait for a busy counter row over 200 ms is a failure too.
 CREATE OR REPLACE FUNCTION bump_funnel_count(
   p_metric TEXT,
   p_campaign TEXT,
@@ -54,6 +59,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
+SET lock_timeout = '200ms'
 AS $$
 BEGIN
   BEGIN
@@ -62,7 +68,7 @@ BEGIN
     ON CONFLICT (day, metric, campaign, mode)
       DO UPDATE SET count = public.funnel_counts.count + 1;
   EXCEPTION WHEN OTHERS THEN
-    NULL;
+    RAISE WARNING 'funnel count dropped: %', SQLSTATE;
   END;
 END
 $$;
@@ -81,8 +87,10 @@ BEGIN
 END
 $$;
 
--- The first Personal Run Grant activates an Explorer. The update sits outside
--- the swallowed block: the row change is the dedup, so the count follows it.
+-- The first Personal Run Grant activates an Explorer. The update stamps the
+-- earliest Grant, so an Explorer with a Grant from before this migration gets
+-- that time and counts nothing. The update sits outside the swallowed block:
+-- the row change is the dedup, so the count follows it.
 CREATE OR REPLACE FUNCTION activate_personal_run()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -91,10 +99,16 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   UPDATE public.player_access
-  SET first_run_grant_at = NEW.created_at
+  SET first_run_grant_at = (
+    SELECT min(created_at) FROM public.run_access_grants
+    WHERE player_id = NEW.player_id
+  )
   WHERE clerk_user_id = NEW.player_id
     AND first_run_grant_at IS NULL;
-  IF FOUND THEN
+  IF FOUND AND NOT EXISTS (
+    SELECT 1 FROM public.run_access_grants
+    WHERE player_id = NEW.player_id AND id <> NEW.id
+  ) THEN
     PERFORM public.bump_funnel_count('personal_run_activated', '', '');
   END IF;
   RETURN NULL;
@@ -159,16 +173,5 @@ CREATE TRIGGER lifetime_purchases_count_checkout_created
   FOR EACH ROW
   WHEN (OLD.checkout_session_id IS NULL AND NEW.checkout_session_id IS NOT NULL)
   EXECUTE FUNCTION count_checkout_created();
-
--- A Grant made before this migration is never a first Grant later.
-UPDATE player_access AS access
-SET first_run_grant_at = earliest.created_at
-FROM (
-  SELECT player_id, min(created_at) AS created_at
-  FROM run_access_grants
-  GROUP BY player_id
-) AS earliest
-WHERE access.clerk_user_id = earliest.player_id
-  AND access.first_run_grant_at IS NULL;
 
 COMMIT;

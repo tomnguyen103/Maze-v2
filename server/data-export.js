@@ -81,7 +81,7 @@ const SECTION_QUERIES = {
     WHERE player_id = $1 AND classroom_id = $2
     ORDER BY created_at, id`,
   access: `SELECT free_runs_used, membership_state, entitlement_updated_at,
-      created_at, updated_at
+      first_run_grant_at, created_at, updated_at
     FROM player_access WHERE clerk_user_id = $1`,
   grants: `SELECT run_id, seed, level_id, labyrinth_number, grant_source,
       created_at

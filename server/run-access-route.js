@@ -17,9 +17,9 @@ export const ACCESS_PATHS = new Set([
 ]);
 
 // A crawler, a link preview or a headless browser is not a visit. An empty
-// user agent counts as a bot too.
+// user agent counts as a bot too. A Cubot phone is a browser.
 const BOT_USER_AGENT =
-  /bot|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|^$/i;
+  /(?<!cu)bot\b|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|^$/i;
 
 /** @param {import("node:http").ServerResponse} response */
 function noStore(response) {
@@ -240,7 +240,12 @@ export function createRunAccessHandler({
         }
         const body = await readJsonBody(request);
         const userAgent = request.headers["user-agent"] ?? "";
-        if (funnelStore && !BOT_USER_AGENT.test(userAgent)) {
+        // An unmetered request has no rate budget, so it counts nothing.
+        if (
+          funnelStore &&
+          !limitDecision.degraded &&
+          !BOT_USER_AGENT.test(userAgent)
+        ) {
           const campaign = campaignCodeFor(
             body && typeof body === "object"
               ? /** @type {Record<string, unknown>} */ (body).campaign
