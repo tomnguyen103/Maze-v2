@@ -71,6 +71,7 @@ import {
   trustsProxyHeaders
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
+import { createFunnelStore } from "./funnel-store.js";
 import {
   describeLifetimeConfig,
   resolveEnforcement
@@ -274,6 +275,13 @@ export function createPlayerApi(env = process.env) {
         );
         return;
       }
+      if (pathname === "/api/access/visit" && request.method === "POST") {
+        // No database holds the count, so the visit is dropped.
+        response.statusCode = 204;
+        response.setHeader("cache-control", "no-store");
+        response.end();
+        return;
+      }
       if (
         pathname === "/api/access/guest-runs" &&
         request.method === "POST"
@@ -346,6 +354,7 @@ export function createPlayerApi(env = process.env) {
   const storeMode = billing.mode ?? "test";
   const accessStore = createRunAccessStore(pool, { mode: storeMode });
   const guestDemoStore = createGuestDemoStore(pool);
+  const funnelStore = createFunnelStore(pool);
   const lifetimeStore = createLifetimeStore(pool, { mode: storeMode });
   const learningJournalStore = createLearningJournalStore(pool);
   const echoFossilStore = createEchoFossilStore(pool);
@@ -752,6 +761,7 @@ export function createPlayerApi(env = process.env) {
     addressHashFor,
     getUserId,
     enforcementEnabled: enforcementDecision.enabled,
+    funnelStore,
     guestDemoEnforcementEnabled: Boolean(addressSalt),
     rateLimit,
     recordEvent: recordProductEvent,
@@ -770,6 +780,7 @@ export function createPlayerApi(env = process.env) {
       addressHashFor,
       getUserId: () => null,
       enforcementEnabled: false,
+      funnelStore,
       guestDemoEnforcementEnabled: Boolean(addressSalt),
       rateLimit
     });
@@ -968,11 +979,13 @@ export function createPlayerApi(env = process.env) {
       pathname === "/api/leaderboard" ||
       pathname === DAILY_LEADERBOARD_PATH ||
       pathname === "/api/access/config" ||
-      pathname === "/api/access/guest-runs"
+      pathname === "/api/access/guest-runs" ||
+      pathname === "/api/access/visit"
     ) {
       if (
         pathname === "/api/access/config" ||
-        pathname === "/api/access/guest-runs"
+        pathname === "/api/access/guest-runs" ||
+        pathname === "/api/access/visit"
       ) {
         void dispatch(accessHandler, request, response, next);
         return;

@@ -44,6 +44,7 @@ function fixtureAdapter() {
       free_runs_used: 2,
       membership_state: "active",
       entitlement_updated_at: "2026-01-04T00:00:00.000Z",
+      first_run_grant_at: "2026-01-04T00:00:00.000Z",
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-04T00:00:00.000Z"
     },
@@ -218,7 +219,8 @@ describe("buildUserExport", () => {
       score: 900
     });
     expect(exported.data.run_access.access).toMatchObject({
-      membership_state: "active"
+      membership_state: "active",
+      first_run_grant_at: "2026-01-04T00:00:00.000Z"
     });
     expect(exported.data.run_access.grants).toHaveLength(1);
     expect(exported.data.lifetime_purchases[0]).toMatchObject({

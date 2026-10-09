@@ -1,4 +1,5 @@
 import { URL } from "node:url";
+import { campaignCodeFor } from "../shared/campaign-codes.js";
 import { sendRateLimited } from "./rate-limit-request.js";
 import { setRetryAfter } from "./http-retry.js";
 import { answerDeletedUser } from "./deleted-user-guard.js";
@@ -11,8 +12,14 @@ export const ACCESS_PATHS = new Set([
   "/api/access",
   "/api/access/config",
   "/api/access/guest-runs",
-  "/api/access/runs"
+  "/api/access/runs",
+  "/api/access/visit"
 ]);
+
+// A crawler, a link preview or a headless browser is not a visit. An empty
+// user agent counts as a bot too. A Cubot phone is a browser.
+const BOT_USER_AGENT =
+  /(?<!cu)bot(?![a-z])|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|phantomjs|inspectiontool|mediapartners|monitor|pinger|pingdom|health-?check|curl|wget|python|node-fetch|axios|okhttp|go-http-client|^$/i;
 
 /** @param {import("node:http").ServerResponse} response */
 function noStore(response) {
@@ -83,7 +90,7 @@ export function validateRunRequest(value) {
 }
 
 /** @param {import("node:http").IncomingMessage} request */
-async function readRunRequest(request) {
+async function readJsonBody(request) {
   let body = "";
   for await (const chunk of request) {
     body += chunk;
@@ -97,7 +104,12 @@ async function readRunRequest(request) {
   } catch {
     throw new RunAccessInputError("Request body must be valid JSON.");
   }
-  return validateRunRequest(parsed);
+  return parsed;
+}
+
+/** @param {import("node:http").IncomingMessage} request */
+async function readRunRequest(request) {
+  return validateRunRequest(await readJsonBody(request));
 }
 
 /**
@@ -156,6 +168,7 @@ async function readRunRequest(request) {
  *     request: import("node:http").IncomingMessage
  *   ) => string | null | Promise<string | null>,
  *   enforcementEnabled?: boolean,
+ *   funnelStore?: { recordVisit: (campaign: string) => Promise<void> },
  *   guestDemoEnforcementEnabled?: boolean,
  *   rateLimit?: import("./rate-limit-request.js").RateLimit,
  *   recordEvent?: (
@@ -171,6 +184,7 @@ export function createRunAccessHandler({
   addressHashFor = () => null,
   getUserId,
   enforcementEnabled = false,
+  funnelStore = undefined,
   guestDemoEnforcementEnabled = false,
   rateLimit = async () => ({
     allowed: true,
@@ -207,6 +221,48 @@ export function createRunAccessHandler({
           enforcementEnabled,
           guestDemoEnforcementEnabled
         });
+        return;
+      }
+      if (pathname === "/api/access/visit") {
+        if (request.method !== "POST") {
+          response.setHeader("allow", "POST");
+          sendJson(response, 405, { error: "Use POST to count a visit." });
+          return;
+        }
+        const limitDecision = await rateLimit("access.visit", request, null);
+        if (!limitDecision.allowed) {
+          sendRateLimited(
+            response,
+            limitDecision,
+            "Too many visits were sent. Try again shortly."
+          );
+          return;
+        }
+        const body = await readJsonBody(request);
+        const userAgent = request.headers["user-agent"] ?? "";
+        // An unmetered request has no rate budget, so it counts nothing.
+        if (
+          funnelStore &&
+          !limitDecision.degraded &&
+          !BOT_USER_AGENT.test(userAgent)
+        ) {
+          const campaign = campaignCodeFor(
+            body && typeof body === "object"
+              ? /** @type {Record<string, unknown>} */ (body).campaign
+              : undefined
+          );
+          try {
+            await funnelStore.recordVisit(campaign);
+          } catch (error) {
+            // A lost visit count never fails the landing page.
+            console.error("[access] visit count failed", {
+              name: safeErrorName(error)
+            });
+          }
+        }
+        response.statusCode = 204;
+        noStore(response);
+        response.end();
         return;
       }
       if (pathname === "/api/access/guest-runs") {

@@ -9,7 +9,12 @@ const handler = createPlayerApi();
 export default function access(request, response) {
   const url = new URL(request.url ?? "", "http://local");
   const route = url.searchParams.get("_accessRoute");
-  if (route === "config" || route === "runs" || route === "guest-runs") {
+  if (
+    route === "config" ||
+    route === "runs" ||
+    route === "guest-runs" ||
+    route === "visit"
+  ) {
     url.searchParams.delete("_accessRoute");
     const query = url.searchParams.toString();
     request.url = `/api/access/${route}${query ? `?${query}` : ""}`;
