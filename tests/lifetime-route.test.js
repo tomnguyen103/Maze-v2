@@ -203,7 +203,7 @@ describe("Lifetime Membership HTTP boundary", () => {
     });
   });
 
-  it("returns a generic rejection for an invalid webhook signature", async () => {
+  it("US-04.3 returns a generic rejection for an invalid webhook signature", async () => {
     const payment = service();
     payment.processWebhook.mockRejectedValue(
       new LifetimeWebhookVerificationError()
@@ -223,6 +223,28 @@ describe("Lifetime Membership HTTP boundary", () => {
       await expect(response.json()).resolves.toEqual({
         error: "Webhook rejected."
       });
+    });
+  });
+
+  it("US-04.2 answers 200 when the service ignores a wrong-mode event", async () => {
+    const payment = service();
+    payment.processWebhook.mockResolvedValue({
+      outcome: "ignored",
+      reason: "mode_mismatch"
+    });
+    const handler = createLifetimeHandler({
+      getUserId: () => null,
+      service: payment
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/stripe-webhook`, {
+        body: "{}",
+        headers: { "stripe-signature": "t=1,v1=signed" },
+        method: "POST"
+      });
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ received: true });
     });
   });
 });

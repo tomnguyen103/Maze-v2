@@ -1,5 +1,7 @@
 export class LifetimeConfigurationError extends Error {}
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
 /**
  * Whether Run Access enforcement is both requested and achievable.
  *
@@ -24,17 +26,18 @@ export function resolveEnforcement(env) {
   if (env.RUN_ACCESS_ENFORCEMENT_ENABLED !== "true") {
     return { enabled: false, refusal: null };
   }
-  if (loadLifetimeConfig(env) === null) {
+  const { config, refusal } = describeLifetimeConfig(env);
+  if (config === null) {
     return {
       enabled: false,
-      refusal: ENFORCEMENT_REFUSAL
+      refusal: `${ENFORCEMENT_REFUSAL} Reason: ${refusal ?? "incomplete_configuration"}.`
     };
   }
   return { enabled: true, refusal: null };
 }
 
 export const ENFORCEMENT_REFUSAL =
-  "RUN_ACCESS_ENFORCEMENT_ENABLED is true but the Lifetime Membership configuration is incomplete or not in test mode. Enforcement without a usable checkout would lock every Explorer out of a Run they cannot buy. Fix STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET and ECHO_MAZE_APP_ORIGIN, or set RUN_ACCESS_ENFORCEMENT_ENABLED to false deliberately.";
+  "RUN_ACCESS_ENFORCEMENT_ENABLED is true but the Lifetime Membership configuration is incomplete or refused. Enforcement without a usable checkout would lock every Explorer out of a Run they cannot buy. Fix STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET and ECHO_MAZE_APP_ORIGIN, or set RUN_ACCESS_ENFORCEMENT_ENABLED to false deliberately.";
 
 /**
  * The boot-time form: refuse to start. Used by the long-running server, where
@@ -53,34 +56,104 @@ export function resolveEnforcementEnabled(env) {
 }
 
 /**
+ * Refuses a Billing Mode the deployment may not run, whether or not
+ * enforcement is requested. An incomplete configuration is not a refusal.
+ *
  * @param {Record<string, string | undefined>} env
+ * @throws {LifetimeConfigurationError}
  */
-export function loadLifetimeConfig(env) {
+export function resolveBillingConfiguration(env) {
+  const decision = describeLifetimeConfig(env);
+  if (decision.refusal) {
+    throw new LifetimeConfigurationError(
+      `Billing Mode refused: ${decision.refusal}.`
+    );
+  }
+  return decision;
+}
+
+/**
+ * Resolves the Billing Mode and the configuration that mode allows. A refusal
+ * names its reason and carries no config. An incomplete configuration carries
+ * no refusal, so the caller reports the gap instead of failing.
+ *
+ * TEMPORARY: live mode stays refused while the purchase store ignores the mode,
+ * because a test purchase would then grant live Run Access. The records PR
+ * (migration 0031) partitions the store and removes `storePartitioned`.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {{ storePartitioned?: boolean }} [options]
+ * @returns {{
+ *   mode: "test" | "live" | null,
+ *   config: {
+ *     appOrigin: string,
+ *     priceId: string,
+ *     secretKey: string,
+ *     webhookSecret: string,
+ *     expedition: { basePriceId: string, extensionPriceId: string } | null
+ *   } | null,
+ *   refusal: string | null
+ * }}
+ */
+export function describeLifetimeConfig(env, { storePartitioned = false } = {}) {
+  const mode = env.ECHO_MAZE_BILLING_MODE ?? "test";
+  if (mode !== "test" && mode !== "live") {
+    return { mode: null, config: null, refusal: "invalid_mode" };
+  }
   const secretKey = env.STRIPE_SECRET_KEY?.trim() ?? "";
+  const keyIsLive = secretKey.startsWith("sk_live_");
+  const keyIsTest = secretKey.startsWith("sk_test_");
+  if ((mode === "live" && keyIsTest) || (mode === "test" && keyIsLive)) {
+    return { mode, config: null, refusal: "key_mode_mismatch" };
+  }
+  if (mode === "live" && (env.VERCEL_ENV || env.NODE_ENV) !== "production") {
+    return { mode, config: null, refusal: "live_requires_production" };
+  }
+  const rawOrigin = env.ECHO_MAZE_APP_ORIGIN ?? "";
+  if (mode === "live" && !isHttpsPublicOrigin(rawOrigin)) {
+    return { mode, config: null, refusal: "live_requires_https_origin" };
+  }
+  if (mode === "live" && !storePartitioned) {
+    return { mode, config: null, refusal: "live_requires_partitioned_store" };
+  }
   const priceId = env.STRIPE_PRICE_ID?.trim() ?? "";
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
-  const appOrigin = normalizeAppOrigin(env.ECHO_MAZE_APP_ORIGIN ?? "");
+  const appOrigin = normalizeAppOrigin(rawOrigin);
+  const keyMatchesMode = mode === "live" ? keyIsLive : keyIsTest;
   if (
-    !secretKey.startsWith("sk_test_") ||
+    !keyMatchesMode ||
     !priceId.startsWith("price_") ||
     !webhookSecret.startsWith("whsec_") ||
     !appOrigin
   ) {
-    return null;
+    return { mode, config: null, refusal: null };
   }
   return {
-    appOrigin,
-    priceId,
-    secretKey,
-    webhookSecret,
-    expedition: loadExpeditionPrices(env)
+    mode,
+    config: {
+      appOrigin,
+      priceId,
+      secretKey,
+      webhookSecret,
+      // Class Expedition billing stays test-only: live mode never opens a Session for it.
+      expedition: mode === "live" ? null : loadExpeditionPrices(env)
+    },
+    refusal: null
   };
+}
+
+/**
+ * @param {Record<string, string | undefined>} env
+ * @param {{ storePartitioned?: boolean }} [options]
+ */
+export function loadLifetimeConfig(env, options) {
+  return describeLifetimeConfig(env, options).config;
 }
 
 /**
  * Class Expedition License prices are optional: without both test prices the
  * sponsor purchase surface reports itself unconfigured instead of guessing.
- * The same sk_test_-only gate above still applies to every checkout.
+ * The caller drops them in live mode.
  *
  * @param {Record<string, string | undefined>} env
  */
@@ -98,11 +171,25 @@ function loadExpeditionPrices(env) {
 }
 
 /** @param {string} value */
+function isHttpsPublicOrigin(value) {
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.replace(/\.$/, "");
+    return (
+      url.protocol === "https:" &&
+      !LOCAL_HOSTS.has(host) &&
+      !host.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** @param {string} value */
 function normalizeAppOrigin(value) {
   try {
     const url = new URL(value.trim());
-    const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
-    if (url.protocol !== "https:" && !localHosts.has(url.hostname)) {
+    if (url.protocol !== "https:" && !LOCAL_HOSTS.has(url.hostname)) {
       return null;
     }
     if (url.username || url.password || url.search || url.hash) {

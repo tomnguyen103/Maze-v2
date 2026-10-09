@@ -72,7 +72,7 @@ import {
 } from "./request-identity.js";
 import { createGuestDemoStore } from "./guest-demo-store.js";
 import {
-  loadLifetimeConfig,
+  describeLifetimeConfig,
   resolveEnforcement
 } from "./lifetime-config.js";
 import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
@@ -214,6 +214,10 @@ function sendError(response, status, error) {
 
 /** @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env */
 export function createPlayerApi(env = process.env) {
+  const billing = describeLifetimeConfig(env);
+  if (billing.refusal) {
+    console.error("[billing] Billing Mode refused", { reason: billing.refusal });
+  }
   const connectionString = env.DATABASE_URL;
   const logRequest = createRequestLogger({ logger: createLogger(env) });
   const version =
@@ -227,7 +231,7 @@ export function createPlayerApi(env = process.env) {
     const healthHandler = createHealthHandler({
       version,
       checkDatabase: null,
-      stripeConfigured: loadLifetimeConfig(env) !== null,
+      stripeConfigured: billing.config !== null,
       clerkConfigured
     });
     /**
@@ -362,7 +366,7 @@ export function createPlayerApi(env = process.env) {
   });
   const roleStore = createRoleStore(queryAdapter);
   const roleResolver = createRoleResolver({ store: roleStore });
-  const lifetimeConfig = loadLifetimeConfig(env);
+  const lifetimeConfig = billing.config;
   // Asking for enforcement without a usable checkout is a misconfiguration,
   // and it used to resolve silently to "off" — a state operators read as an
   // intentional billing-disable. It is loud now, but not fatal: this factory
@@ -570,18 +574,20 @@ export function createPlayerApi(env = process.env) {
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
-  const lifetimeProvider = lifetimeConfig && getStripe
+  const lifetimeProvider = lifetimeConfig && billing.mode && getStripe
     ? createStripeLifetimeProvider({
         appOrigin: lifetimeConfig.appOrigin,
+        mode: billing.mode,
         priceId: lifetimeConfig.priceId,
         getStripe,
         webhookSecret: lifetimeConfig.webhookSecret
       })
     : null;
   const lifetimeService =
-    lifetimeConfig && lifetimeProvider
+    lifetimeConfig && billing.mode && lifetimeProvider
       ? createLifetimeService({
         config: lifetimeConfig,
+        mode: billing.mode,
         provider: lifetimeProvider,
         recordEvent: recordProductEvent,
         store: lifetimeStore
@@ -652,7 +658,8 @@ export function createPlayerApi(env = process.env) {
           undefined,
           {
             eventType: event.eventType,
-            outcome: result?.outcome ?? null
+            outcome: result?.outcome ?? null,
+            reason: result?.reason ?? null
           }
         );
         return;

@@ -16,6 +16,7 @@ export class LifetimeOwnershipError extends Error {
  * @param {{
  *   config: { priceId: string },
  *   createId?: () => string,
+ *   mode: "test" | "live",
  *   provider: {
  *     constructWebhookEvent: (body: Buffer, signature: string) => Promise<unknown>,
  *     createCheckout: (purchase: { purchaseId: string, userId: string }) => Promise<{ checkoutUrl: string, sessionId: string }>,
@@ -38,6 +39,7 @@ export class LifetimeOwnershipError extends Error {
 export function createLifetimeService({
   config,
   createId = randomUUID,
+  mode,
   provider,
   recordEvent = () => {},
   store
@@ -88,6 +90,7 @@ export function createLifetimeService({
             );
             if (existing.paymentStatus === "paid") {
               verifyLifetimeCheckout(existing, {
+                mode,
                 priceId: config.priceId,
                 purchaseId: reservation.purchaseId,
                 userId
@@ -154,6 +157,7 @@ export function createLifetimeService({
       }
       const checkout = await provider.retrieveCheckout(sessionId);
       verifyLifetimeCheckout(checkout, {
+        mode,
         priceId: purchase.priceId,
         purchaseId: purchase.purchaseId,
         userId
@@ -209,6 +213,10 @@ export function createLifetimeService({
         recordEvent("lifetime_webhook", { outcome: "ignored" });
         return { outcome: "ignored" };
       }
+      if (normalized.livemode !== (mode === "live")) {
+        recordEvent("lifetime_webhook", { outcome: "ignored" });
+        return { outcome: "ignored", reason: "mode_mismatch" };
+      }
       if (
         normalized.kind === "checkout-closed" &&
         "sessionId" in normalized
@@ -255,6 +263,7 @@ export function createLifetimeService({
         normalized.sessionId
       );
       verifyLifetimeCheckout(checkout, {
+        mode,
         priceId: config.priceId,
         purchaseId: String(checkout.purchaseId),
         userId: String(checkout.ownerId)

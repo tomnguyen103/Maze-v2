@@ -8,13 +8,14 @@ import {
 /**
  * @param {{
  *   appOrigin: string,
+ *   mode: "test" | "live",
  *   priceId: string,
  *   getStripe: () => Promise<any>,
  *   webhookSecret: string
  * }} configuration
  */
 export function createStripeLifetimeProvider(configuration) {
-  const { appOrigin, priceId, getStripe, webhookSecret } = configuration;
+  const { appOrigin, mode, priceId, getStripe, webhookSecret } = configuration;
   return {
     /**
      * Starts the provider refund. Entitlement is intentionally left alone:
@@ -25,7 +26,7 @@ export function createStripeLifetimeProvider(configuration) {
     async issueRefund(payment) {
       const refund = await (await getStripe()).refunds.create(
         { payment_intent: payment.paymentIntentId },
-        { idempotencyKey: `echo-maze-refund:${payment.purchaseId}` }
+        { idempotencyKey: `echo-maze-refund:${mode}:${payment.purchaseId}` }
       );
       return {
         refundId: String(refund.id ?? ""),
@@ -54,10 +55,10 @@ export function createStripeLifetimeProvider(configuration) {
           success_url:
             `${appOrigin}/play?checkout=success&session_id={CHECKOUT_SESSION_ID}`
         },
-        { idempotencyKey: `echo-maze-lifetime:${purchase.purchaseId}` }
+        { idempotencyKey: `echo-maze-lifetime:${mode}:${purchase.purchaseId}` }
       );
       const normalized = normalizeStripeCheckoutSession(session);
-      validateCreatedCheckout(normalized, purchase, priceId);
+      validateCreatedCheckout(normalized, purchase, priceId, mode);
       const checkoutUrl = String(session.url ?? "");
       const checkoutHost = safeHostname(checkoutUrl);
       if (checkoutHost !== "checkout.stripe.com") {
@@ -98,6 +99,9 @@ export function createStripeLifetimeProvider(configuration) {
         paymentIntentId,
         { expand: ["latest_charge"] }
       );
+      if (paymentIntent.livemode !== (mode === "live")) {
+        throw new LifetimeVerificationError("mode_mismatch");
+      }
       const ownerId = String(
         metadataValue(paymentIntent.metadata, "clerk_user_id")
       );
@@ -110,7 +114,6 @@ export function createStripeLifetimeProvider(configuration) {
           ? paymentIntent.latest_charge
           : null;
       if (
-        paymentIntent.livemode === true ||
         paymentIntent.status !== "succeeded" ||
         Number(paymentIntent.amount_received) !== LIFETIME_AMOUNT ||
         paymentIntent.currency !== LIFETIME_CURRENCY ||
@@ -188,10 +191,11 @@ export function normalizeStripeCheckoutSession(session) {
  * @param {ReturnType<typeof normalizeStripeCheckoutSession>} checkout
  * @param {{ purchaseId: string, userId: string }} purchase
  * @param {string} priceId
+ * @param {"test" | "live"} mode
  */
-function validateCreatedCheckout(checkout, purchase, priceId) {
+function validateCreatedCheckout(checkout, purchase, priceId, mode) {
   if (
-    checkout.livemode ||
+    checkout.livemode !== (mode === "live") ||
     checkout.mode !== "payment" ||
     checkout.amountTotal !== LIFETIME_AMOUNT ||
     checkout.currency !== LIFETIME_CURRENCY ||

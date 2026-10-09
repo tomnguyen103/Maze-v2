@@ -5,6 +5,80 @@ import {
   isHealthPath,
   READY_PATH
 } from "../server/health-route.js";
+import { loadLifetimeConfig } from "../server/lifetime-config.js";
+
+describe("US-02.5 readiness with a refused live configuration", () => {
+  it("US-02.5 answers 503 with stripe unconfigured", async () => {
+    const stripeConfigured =
+      loadLifetimeConfig({
+        ECHO_MAZE_BILLING_MODE: "live",
+        ECHO_MAZE_APP_ORIGIN: "https://maze.example",
+        STRIPE_PRICE_ID: "price_echo_live",
+        STRIPE_SECRET_KEY: "sk_live_safe-placeholder",
+        STRIPE_WEBHOOK_SECRET: "whsec_safe-placeholder",
+        VERCEL_ENV: "preview"
+      }) !== null;
+    const handler = createHealthHandler({ ...healthy(), stripeConfigured });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.stripe).toBe("unconfigured");
+  });
+});
+
+describe("US-09 readiness follows the configuration of the selected mode", () => {
+  const testEnv = {
+    ECHO_MAZE_APP_ORIGIN: "https://maze.example",
+    STRIPE_PRICE_ID: "price_echo_test",
+    STRIPE_SECRET_KEY: "sk_test_safe-placeholder",
+    STRIPE_WEBHOOK_SECRET: "whsec_safe-placeholder"
+  };
+  const liveEnv = {
+    ...testEnv,
+    ECHO_MAZE_BILLING_MODE: "live",
+    STRIPE_PRICE_ID: "price_echo_live",
+    STRIPE_SECRET_KEY: "sk_live_safe-placeholder",
+    VERCEL_ENV: "production"
+  };
+
+  /** @param {Record<string, string>} env */
+  async function ready(env) {
+    const handler = createHealthHandler({
+      ...healthy(),
+      stripeConfigured: loadLifetimeConfig(env, { storePartitioned: true }) !== null
+    });
+    const response = fakeResponse();
+    await handler(fakeRequest({ url: READY_PATH }), response);
+    return response;
+  }
+
+  it.each([
+    ["test", testEnv],
+    ["live", liveEnv]
+  ])("US-09.1 reports stripe ok for a valid %s configuration", async (_mode, env) => {
+    const response = await ready(env);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().checks.stripe).toBe("ok");
+  });
+
+  it("US-09.3 answers 503 for an incomplete configuration", async () => {
+    const response = await ready({ ...testEnv, STRIPE_PRICE_ID: "" });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().checks.stripe).toBe("unconfigured");
+  });
+
+  it("US-09.3 answers 503 when the key prefix does not match the mode", async () => {
+    const response = await ready({ ...liveEnv, STRIPE_SECRET_KEY: testEnv.STRIPE_SECRET_KEY });
+    expect(response.statusCode).toBe(503);
+  });
+
+  it("US-09.5 never names the mode in the readiness body", async () => {
+    for (const env of [testEnv, liveEnv]) {
+      const text = JSON.stringify((await ready(env)).json());
+      expect(text).not.toMatch(/live|"mode"/i);
+    }
+  });
+});
 
 /** @param {{ url?: string, method?: string }} [options] */
 function fakeRequest({ url = HEALTH_PATH, method = "GET" } = {}) {

@@ -25,11 +25,11 @@ export class LifetimeWebhookVerificationError extends Error {
 
 /**
  * @param {Record<string, unknown>} checkout
- * @param {{ priceId: string, purchaseId: string, userId: string }} expected
+ * @param {{ mode: "test" | "live", priceId: string, purchaseId: string, userId: string }} expected
  */
 export function verifyLifetimeCheckout(checkout, expected) {
   const checks = [
-    [checkout.livemode === false, "Checkout must use Stripe test mode."],
+    [checkout.livemode === (expected.mode === "live"), "mode_mismatch"],
     [checkout.mode === "payment", "Checkout must be a one-time payment."],
     [checkout.paymentStatus === "paid", "Checkout is not paid."],
     [checkout.amountTotal === LIFETIME_AMOUNT, "Checkout amount is invalid."],
@@ -55,6 +55,7 @@ export function verifyLifetimeCheckout(checkout, expected) {
  *   id?: unknown,
  *   type?: unknown,
  *   created?: unknown,
+ *   livemode?: unknown,
  *   data?: { object?: Record<string, unknown> }
  * }} event
  */
@@ -67,12 +68,15 @@ export function normalizeLifetimeProviderEvent(event) {
   ) {
     return null;
   }
+  const object = event.data.object;
   const base = {
     eventCreated: Number(event.created),
     eventId: String(event.id),
-    eventType: String(event.type)
+    eventType: String(event.type),
+    livemode: typeof event.livemode === "boolean"
+      ? event.livemode
+      : object.livemode
   };
-  const object = event.data.object;
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"

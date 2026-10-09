@@ -6,10 +6,23 @@ import {
 import { describe, expect, it } from "vitest";
 
 const EXPECTED = {
+  mode: /** @type {const} */ ("test"),
   priceId: "price_echo_maze_test",
   purchaseId: "94c80187-3b30-4f61-a7b7-b07ce9e4ba9e",
   userId: "user_explorer"
 };
+
+/** @type {Array<[string, Record<string, unknown>]>} */
+const MISMATCHES = [
+  ["amount", { amountTotal: 600 }],
+  ["currency", { currency: "cad" }],
+  ["mode", { mode: "subscription" }],
+  ["owner", { ownerId: "user_someone_else" }],
+  ["paid status", { paymentStatus: "unpaid" }],
+  ["Price", { priceId: "price_wrong" }],
+  ["purchase", { purchaseId: "purchase_wrong" }],
+  ["quantity", { quantity: 2 }]
+];
 
 function paidCheckout(overrides = {}) {
   return {
@@ -30,29 +43,46 @@ function paidCheckout(overrides = {}) {
 }
 
 describe("lifetime Checkout verification", () => {
-  it("accepts exactly one paid $5.99 USD test-mode lifetime purchase", () => {
+  it("US-03.1 accepts a paid live-mode Checkout when the mode is live", () => {
+    const checkout = paidCheckout({ livemode: true });
+    expect(
+      verifyLifetimeCheckout(checkout, { ...EXPECTED, mode: "live" })
+    ).toEqual(checkout);
+  });
+
+  it("US-03.2 accepts a paid test-mode Checkout when the mode is test", () => {
     expect(verifyLifetimeCheckout(paidCheckout(), EXPECTED)).toEqual(
       paidCheckout()
     );
   });
 
-  it.each([
-    ["amount", { amountTotal: 600 }],
-    ["currency", { currency: "cad" }],
-    ["environment", { livemode: true }],
-    ["mode", { mode: "subscription" }],
-    ["owner", { ownerId: "user_someone_else" }],
-    ["paid status", { paymentStatus: "unpaid" }],
-    ["Price", { priceId: "price_wrong" }],
-    ["purchase", { purchaseId: "purchase_wrong" }],
-    ["quantity", { quantity: 2 }]
-  ])("rejects a mismatched %s", (_label, override) => {
+  it.each(
+    /** @type {Array<["test" | "live", boolean]>} */ ([
+      ["test", true],
+      ["live", false]
+    ])
+  )("US-03.2 rejects a Checkout whose livemode disagrees with mode %s", (mode, livemode) => {
     expect(() =>
-      verifyLifetimeCheckout(paidCheckout(override), EXPECTED)
+      verifyLifetimeCheckout(paidCheckout({ livemode }), { ...EXPECTED, mode })
+    ).toThrow(/^mode_mismatch$/);
+  });
+
+  it.each(
+    /** @type {Array<[string, "test" | "live", Record<string, unknown>]>} */ (
+      /** @type {const} */ (["test", "live"]).flatMap((mode) =>
+        MISMATCHES.map(([label, override]) => [label, mode, override])
+      )
+    )
+  )("US-03.3 rejects a mismatched %s in %s mode", (_label, mode, override) => {
+    expect(() =>
+      verifyLifetimeCheckout(
+        paidCheckout({ livemode: mode === "live", ...override }),
+        { ...EXPECTED, mode }
+      )
     ).toThrow(LifetimeVerificationError);
   });
 
-  it("requires opaque Stripe Session and PaymentIntent identities", () => {
+  it("US-03.3 requires opaque Stripe Session and PaymentIntent identities", () => {
     expect(() =>
       verifyLifetimeCheckout(
         paidCheckout({ paymentIntentId: "", sessionId: "" }),
@@ -227,5 +257,15 @@ describe("lifetime provider event normalization", () => {
     for (const event of events) {
       expect(normalizeLifetimeProviderEvent(event)).toBeNull();
     }
+  });
+
+  it("US-04.2 carries the event livemode flag on the normalized event", () => {
+    expect(normalizeLifetimeProviderEvent({
+      id: "evt_live",
+      type: "checkout.session.completed",
+      created: 5,
+      livemode: true,
+      data: { object: { id: "cs_live" } }
+    })).toMatchObject({ kind: "checkout-paid", livemode: true });
   });
 });

@@ -145,7 +145,7 @@ describe("Class Expedition billing", () => {
     ]);
   });
 
-  it("refuses a live-mode, closed, or off-host created checkout", async () => {
+  it("US-12.2 refuses a live-mode, closed, or off-host created checkout", async () => {
     for (const overrides of [
       { livemode: true },
       { status: "complete" },
@@ -205,6 +205,23 @@ describe("Class Expedition billing", () => {
     );
   });
 
+  it("US-04.2 leaves a live-mode refund event to the Lifetime service without a Stripe lookup", async () => {
+    const stripe = fakeStripe();
+    const owner = billing(stripe, fakeStore());
+    await expect(
+      owner.ownsEvent({
+        id: "evt_live_1",
+        type: "refund.created",
+        livemode: true,
+        created: 100,
+        data: {
+          object: { payment_intent: "pi_expedition_1", status: "succeeded" }
+        }
+      })
+    ).resolves.toBe(false);
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+  });
+
   it("activates the License from a paid test-mode checkout event", async () => {
     const stripe = fakeStripe({ status: "complete" });
     const store = fakeStore();
@@ -225,7 +242,7 @@ describe("Class Expedition billing", () => {
     expect(result).toMatchObject({ outcome: "activated" });
   });
 
-  it("never activates from a live-mode or unpaid session", async () => {
+  it("US-12.2 never activates from a live-mode or unpaid session", async () => {
     for (const overrides of [
       { livemode: true },
       { payment_status: "unpaid" },
