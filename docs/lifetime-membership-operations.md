@@ -284,8 +284,9 @@ member shows no membership, because an Unclassified Purchase grants nothing.
 1. **Create the live Stripe objects.** Owner action.
    Create one live Product named `Echo Maze Lifetime Membership`. Add one live
    one-time Price for exactly `$5.99 USD`. Subscribe the live webhook endpoint to the
-   events listed under Stripe test setup. Store the live values only in the
-   production environment.
+   events listed under Stripe test setup. At step 6 the Price id becomes
+   `STRIPE_PRICE_ID` and the signing secret of that endpoint becomes
+   `STRIPE_WEBHOOK_SECRET`. Store the live values only in the production environment.
 
 2. **Apply migration 0031.** Owner action.
    Apply `db/migrations/0031_billing_mode.sql` to the production database. Do not
@@ -322,7 +323,8 @@ member shows no membership, because an Unclassified Purchase grants nothing.
    values for `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET`
    there too. Keep `RUN_ACCESS_ENFORCEMENT_ENABLED` false until the approvals above
    exist. Set `LIFETIME_PILOT_ACCOUNT_IDS` to the Clerk user id of each Pilot
-   Account. Keep `LIFETIME_PUBLIC_CHECKOUT_ENABLED` false, so only a Pilot Account
+   Account, separated by commas, spaces or new lines. Keep
+   `LIFETIME_PUBLIC_CHECKOUT_ENABLED` false, so only a Pilot Account
    can open a live Checkout. Redeploy. Live needs a production deployment and an
    HTTPS origin.
 
@@ -335,8 +337,10 @@ member shows no membership, because an Unclassified Purchase grants nothing.
    Sign in with a Pilot Account and open `/play?membership=open`. Make one live
    purchase with a card you own. This charges real money, so it needs
    the approval listed under External production approvals. Refund the purchase in
-   Stripe. Confirm that the signed refund event blocks the next new Run, as the
-   refund section describes.
+   Stripe. Request `/api/access` before and after the refund. Expect `state`
+   `member`, then `membership-blocked`. Enforcement is still off, so
+   `enforcementEnabled` is false and the next Run still starts. The Run block shows
+   only after step 9.
 
 9. **Open Public Checkout.** Owner action.
    Start this step only after the pilot and production acceptance receipts in

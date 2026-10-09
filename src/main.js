@@ -308,6 +308,7 @@ const elements = {
   firstLightSkip: requiredElement("first-light-skip", HTMLButtonElement),
   firstLightStart: requiredElement("first-light-start", HTMLButtonElement),
   firstLightTitle: requiredElement("first-light-title", HTMLElement),
+  lifetimeDialog: requiredElement("lifetime-dialog", HTMLDialogElement),
   freshRun: requiredElement("fresh-run", HTMLButtonElement),
   hintButton: requiredElement("hint-button", HTMLButtonElement),
   journalBands: requiredElement("journal-bands", HTMLElement),
@@ -3232,6 +3233,12 @@ async function resolveLifetimeReturn() {
     url.searchParams.delete("membership");
     removeCheckoutParameters(url);
     lifetimeView.showMembership();
+    // "Not now" falls through to the normal Run entry.
+    elements.lifetimeDialog.addEventListener(
+      "close",
+      () => void initializeRunEntry(),
+      { once: true }
+    );
     return false;
   }
   const sessionId = url.searchParams.get("session_id");

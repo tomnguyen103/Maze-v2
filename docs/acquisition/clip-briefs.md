@@ -23,7 +23,7 @@ Pulse shows nearby passages. The Explorer picks up an Echo.
 
 **Caption:** Every Run is a new hidden Labyrinth. Recover each Echo to open the Gate.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
 
 ## Clip 2: A puzzle with choices
 
@@ -35,7 +35,7 @@ the end.
 
 **Caption:** A puzzle game where each step is a choice.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
 
 ## Clip 3: The Warden catches up
 
@@ -47,7 +47,7 @@ Warden is defeated.
 
 **Caption:** Caught by a Warden? Answer the Question to clear the path.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
 
 ## Clip 4: Can you answer this?
 
@@ -58,7 +58,7 @@ Then the answer and the brief explanation show.
 
 **Caption:** Every Warden Question has one clear answer, a free Hint and a short explanation.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
 
 ## Clip 5: One price, once
 
@@ -69,7 +69,7 @@ same Warden rules.
 
 **Caption:** $5.99 USD once. Unlimited Runs for one Explorer account. No subscription.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
 
 ## Clip 6: Try it before you buy
 
@@ -80,7 +80,14 @@ Then the membership dialog.
 
 **Caption:** Play one Guest Run, then three more Runs with a free account. Buy only if it fits.
 
-**Link:** `/?c=youtube` on Shorts, `/?c=instagram` on Reels.
+**Link:** See Links below.
+
+## Links
+
+A Shorts description and a Reels caption do not make a link clickable. Put
+`/?c=youtube` in the YouTube channel profile link, or link each Short to the
+gameplay explainer video, which carries the link in its description. Put
+`/?c=instagram` in the Instagram profile link.
 
 ## TikTok
 

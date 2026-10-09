@@ -716,6 +716,24 @@ test("presents transparent lifetime pricing in a focused dialog", async ({ page 
   );
 });
 
+test("US-03.1 opens membership from the owner link, then Not now enters the Run", async ({
+  page
+}) => {
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await expect(
+    page.getByRole("heading", { name: "Unlock every future Run" })
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("membership")).toBe(false);
+
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Choose a Practice Intention" })
+  ).toBeVisible();
+});
+
 test("keeps Practice Intention explicit, transient, and rejected before storage", async ({
   page
 }, testInfo) => {

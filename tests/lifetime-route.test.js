@@ -63,6 +63,7 @@ describe("Lifetime Membership HTTP boundary", () => {
   it("creates Checkout from an empty authenticated request", async () => {
     const payment = service();
     const handler = createLifetimeHandler({
+      checkoutOpen: () => true,
       getUserId: () => "user_explorer",
       service: payment
     });
@@ -84,6 +85,7 @@ describe("Lifetime Membership HTTP boundary", () => {
   it("rejects browser-supplied commercial fields", async () => {
     const payment = service();
     const handler = createLifetimeHandler({
+      checkoutOpen: () => true,
       getUserId: () => "user_explorer",
       service: payment
     });
@@ -294,6 +296,22 @@ describe("Pilot checkout gate", () => {
     expect(target.payment.createCheckout).not.toHaveBeenCalled();
     expect(target.rateLimit).not.toHaveBeenCalled();
     expect(target.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("US-01.3 keeps Checkout closed when the caller passes no gate", async () => {
+    const payment = service();
+    const handler = createLifetimeHandler({
+      getUserId: () => "user_explorer",
+      service: payment
+    });
+
+    await withServer(handler, async (origin) => {
+      const response = await fetch(`${origin}/api/lifetime-checkout`, {
+        method: "POST"
+      });
+      expect(response.status).toBe(403);
+    });
+    expect(payment.createCheckout).not.toHaveBeenCalled();
   });
 
   it("US-01.3 asks a signed-out caller to sign in before the gate answers", async () => {

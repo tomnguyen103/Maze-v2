@@ -227,6 +227,7 @@ describe("rate limiting on Lifetime Checkout creation", () => {
   it("meters checkout creation against the checkout budget", async () => {
     const limiter = stubRateLimit({ allowed: true });
     const handler = createLifetimeHandler({
+      checkoutOpen: () => true,
       getUserId: () => "user_1",
       service,
       rateLimit: limiter.rateLimit
@@ -251,6 +252,7 @@ describe("rate limiting on Lifetime Checkout creation", () => {
     const limiter = stubRateLimit({ allowed: false, retryAfterSeconds: 25 });
     let created = false;
     const handler = createLifetimeHandler({
+      checkoutOpen: () => true,
       getUserId: () => "user_1",
       service: {
         ...service,

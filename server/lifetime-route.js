@@ -54,7 +54,8 @@ export function createLifetimeHandler({
   service,
   recordAudit = async () => {},
   rateLimit = async () => UNMETERED,
-  checkoutOpen = () => true,
+  // Fail closed: a caller that passes no gate opens Checkout to nobody.
+  checkoutOpen = () => false,
   inbox = null
 }) {
   /**

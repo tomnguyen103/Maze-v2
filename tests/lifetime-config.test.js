@@ -214,11 +214,12 @@ describe("Pilot checkout gate", () => {
   it("US-01.2 matches trimmed ids exactly and lets no empty entry match", () => {
     const open = resolveCheckoutGate({
       ...liveEnv,
-      LIFETIME_PILOT_ACCOUNT_IDS: " user_a , ,user_b,"
+      LIFETIME_PILOT_ACCOUNT_IDS: " user_a , ,user_b,\nuser_c user_d"
     });
 
-    expect(open("user_a")).toBe(true);
-    expect(open("user_b")).toBe(true);
+    for (const id of ["user_a", "user_b", "user_c", "user_d"]) {
+      expect(open(id)).toBe(true);
+    }
     expect(open("")).toBe(false);
     expect(open("user_")).toBe(false);
     expect(open("user_a ")).toBe(false);

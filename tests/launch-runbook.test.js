@@ -98,14 +98,48 @@ describe("Launch runbook", () => {
       "Stripe",
       "Vercel",
       "Clerk",
-      "Neon",
-      "Google"
+      "Neon"
     ]);
     for (const cells of rows) {
       expect(cells.slice(2)).toEqual(["", "", "", ""]);
     }
     expect(sheet).toContain("not invoices");
     expect(sheet).not.toMatch(/\$\d/);
+  });
+
+  it("US-04.6 checks the pilot refund through Run Access while enforcement is off", () => {
+    const operations = section(read(OPERATIONS), "## Live cutover");
+
+    for (const text of [step(9), operations]) {
+      expect(text).toContain("/api/access");
+      expect(text).toContain("membership-blocked");
+      expect(text).not.toContain("blocks the next new Run");
+    }
+    expect(step(12)).toContain("/api/access/config");
+  });
+
+  it("US-04.6 names the live Stripe objects and variables before Billing Mode goes live", () => {
+    expect(step(6)).toContain("Live cutover step 1");
+    for (const name of ["STRIPE_SECRET_KEY", "STRIPE_PRICE_ID", "STRIPE_WEBHOOK_SECRET"]) {
+      expect(step(6)).toContain(name);
+    }
+  });
+
+  it("US-04.6 holds the three F3 owner records with evidence slots", () => {
+    const records = section(runbook, "## Launch records");
+    const expected = {
+      "### PostHog live check": ["POSTHOG_API_KEY", "POSTHOG_HOST"],
+      "### Financial retention decision": ["ADR 0049", "Funnel Counts"],
+      "### Campaign Code list review": ["shared/campaign-codes.js"]
+    };
+
+    for (const [heading, names] of Object.entries(expected)) {
+      const text = section(records, heading);
+      expect(text, heading).toContain("**Evidence:** _empty_");
+      for (const name of names) {
+        expect(text, heading).toContain(name);
+      }
+    }
   });
 
   it("US-04.5 holds the children's privacy review with the FTC guidance", () => {

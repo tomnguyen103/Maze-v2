@@ -9,7 +9,7 @@ voice, name or account.
 | Time | Screen | Voice |
 | :-- | :-- | :-- |
 | 0:00 | The landing page. | Echo Maze is a browser puzzle game. Each Run is a new Labyrinth hidden in Fog. |
-| 0:10 | A Run starts. The Explorer stands at the center. | You move the Explorer one step at a time. Passages appear as you explore. |
+| 0:10 | A Run starts. The Explorer stands at the entrance in a corner of the Labyrinth. | You move the Explorer one step at a time. Passages appear as you explore. |
 | 0:25 | The Explorer uses a Pulse. | A Pulse shows nearby passages without a move. It is limited, so choose the moment. |
 | 0:40 | The Explorer picks up an Echo. | Recover every Echo. The Gate opens only when all of them are safe. |
 | 0:55 | A Warden moves after the Explorer moves. | Wardens move after you act. Each Warden follows a tactic you can read. |

@@ -41,8 +41,7 @@ function signatureTokens(check) {
   const patterns = [
     /to_regclass\('public\.(\w+)'\)/g,
     /to_regprocedure\('public\.(\w+)\(/g,
-    /table_name = '(\w+)'/g,
-    /column_name = '(\w+)'/g,
+    /attname = '(\w+)'/g,
     /conname = '(\w+)'/g,
     /(?<!NOT )LIKE '%([^%']+)%'/g
   ];
@@ -88,6 +87,18 @@ describe("Migration ledger check", () => {
       }
     }
   );
+
+  it.each(
+    rows
+      .filter((row) => /CONCURRENTLY/.test(read(`db/migrations/${row.file}`)))
+      .map((row) => [row.file, row.check])
+  )("US-05.2 counts the concurrent index of %s only when it is valid", (_file, check) => {
+    expect(check).toContain("indisvalid");
+  });
+
+  it("US-05.2 reads no privilege-filtered information_schema view", () => {
+    expect(withoutComments(sql)).not.toMatch(/information_schema/i);
+  });
 
   it("US-05.3 holds no write or schema statement", () => {
     expect(withoutComments(sql)).not.toMatch(

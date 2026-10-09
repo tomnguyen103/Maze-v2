@@ -70,9 +70,13 @@ destination. The Stripe test setup section of
 
 **Owner:** owner.
 
-**Action:** Select the approved commercial host plan. Set the reviewed live
-values in the production environment only. Keep each secret out of the
-repository, the pull requests and this runbook.
+**Action:** Select the approved commercial host plan. Run Live cutover step 1
+to create the live Product, the one-time `$5.99 USD` Price and the live webhook
+endpoint. Set `STRIPE_SECRET_KEY` to the live secret key, `STRIPE_PRICE_ID` to
+the live Price id and `STRIPE_WEBHOOK_SECRET` to the signing secret of the live
+endpoint. Set these values in the production environment only, as Live cutover
+step 6 describes. Keep each secret out of the repository, the pull requests and
+this runbook.
 
 **Evidence:** _empty_
 
@@ -91,7 +95,9 @@ Count.
 **Owner:** owner.
 
 **Action:** Set `ECHO_MAZE_BILLING_MODE=live`. Set `LIFETIME_PILOT_ACCOUNT_IDS`
-to the Clerk user id of each Pilot Account, separated by commas. Keep
+to the Clerk user id of each Pilot Account. The Clerk dashboard shows the id on
+the user's page, and it starts with `user_`. Separate the ids with commas,
+spaces or new lines. Never use an email address. Keep
 `LIFETIME_PUBLIC_CHECKOUT_ENABLED=false` and
 `RUN_ACCESS_ENFORCEMENT_ENABLED=false`. Redeploy. Any other Explorer gets the
 answer "Lifetime Membership is not on sale yet."
@@ -103,9 +109,13 @@ answer "Lifetime Membership is not on sale yet."
 **Owner:** owner.
 
 **Action:** Sign in with a Pilot Account and open `/play?membership=open`. Buy
-with a card you own. This charges real money. Confirm that Lifetime access
-activates. Refund the purchase in Stripe. Confirm that the refund blocks the
-next new Run. Replay the webhook event and confirm that nothing changes twice.
+with a card you own. This charges real money. While signed in, request
+`/api/access` and expect `state` `member`. Refund the purchase in Stripe.
+Request `/api/access` again and expect `state` `membership-blocked`.
+Enforcement stays off until step 11, so the response also shows
+`enforcementEnabled` false and the next Run still starts. The Run block becomes
+visible only after step 11. Replay the refund webhook event and confirm that
+`/api/access` does not change.
 
 **Evidence:** _empty_
 
@@ -135,10 +145,54 @@ lock Explorers out.
 
 **Owner:** owner.
 
-**Action:** Request `/api/ready` and expect 200. Sign in as an Explorer who is
-not a Pilot Account and press Unlock. Confirm that Stripe Checkout opens, then
-leave it without a payment. Confirm that the admin funnel export shows the
-step 9 purchase and refund.
+**Action:** Request `/api/ready` and expect 200. Request `/api/access/config`
+and expect `enforcementEnabled` true. Any value other than the exact text
+`true` keeps enforcement off. Sign in as an Explorer who is not a Pilot Account
+and press Unlock. Confirm that Stripe Checkout opens, then leave it without a
+payment. Confirm that the admin funnel export shows the step 9 purchase and
+refund. Complete the PostHog live check under Launch records.
+
+**Evidence:** _empty_
+
+## Launch records
+
+The F3 records (ADR 0049 and `docs/data-privacy.md`) leave three owner
+decisions to this runbook. Record each outcome in its evidence slot.
+
+### PostHog live check
+
+**Owner:** owner.
+
+**Action:** Decide whether production sends product events to PostHog. To send
+them, set `POSTHOG_API_KEY` in the production environment. Set `POSTHOG_HOST`
+only for a host other than the default in `.env.example`. With no key,
+`server/product-events.js` forwards nothing. After step 12, confirm in the
+PostHog project that a `run_access_decision` event arrives with `source`
+`server` and no Explorer id or email. No Financial Fact or Funnel Count goes to
+PostHog.
+
+**Evidence:** _empty_
+
+### Financial retention decision
+
+**Owner:** owner.
+
+**Action:** Code deletes no Financial Fact (ADR 0049). Decide how long the
+business keeps Financial Facts, under the tax and accounting rules that apply
+to it. Decide how long Funnel Counts stay. Record both periods and their
+reasons. `docs/data-privacy.md` names this decision.
+
+**Evidence:** _empty_
+
+### Campaign Code list review
+
+**Owner:** owner.
+
+**Action:** Review the Campaign Codes in `shared/campaign-codes.js` against the
+channels in `docs/acquisition/README.md`. A code holds only lowercase letters,
+digits and hyphens, at most 32 characters (`db/migrations/0033_funnel_counts.sql`).
+A link with a code outside the list counts under the empty campaign. Add or
+remove a code through a reviewed code change before Phase 5 starts.
 
 **Evidence:** _empty_
 
@@ -162,9 +216,9 @@ an account page shows the figure.
 | Vercel | Host |  |  |  |  |
 | Clerk | Sign-in |  |  |  |  |
 | Neon | Database |  |  |  |  |
-| Google | Gemini API |  |  |  |  |
 
-Record one row for each other service that charges money. A new recurring
+Questions come from the bundled reviewed deck (ADR 0048), so no model
+provider has a row. Record one row for each other service that charges money. A new recurring
 charge needs owner approval before it starts.
 
 ## Children's privacy review

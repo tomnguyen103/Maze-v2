@@ -64,8 +64,7 @@ export function resolveCheckoutGate(env) {
   }
   const pilots = new Set(
     (env.LIFETIME_PILOT_ACCOUNT_IDS ?? "")
-      .split(",")
-      .map((id) => id.trim())
+      .split(/[\s,]+/)
       .filter(Boolean)
   );
   return (userId) => pilots.has(userId);
