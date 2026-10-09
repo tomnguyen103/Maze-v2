@@ -45,7 +45,7 @@ describe("US-09 readiness follows the configuration of the selected mode", () =>
   async function ready(env) {
     const handler = createHealthHandler({
       ...healthy(),
-      stripeConfigured: loadLifetimeConfig(env) !== null
+      stripeConfigured: loadLifetimeConfig(env, { storePartitioned: true }) !== null
     });
     const response = fakeResponse();
     await handler(fakeRequest({ url: READY_PATH }), response);

@@ -23,6 +23,9 @@ const liveEnv = {
   VERCEL_ENV: "production"
 };
 
+// The records PR removes this option together with the live gate.
+const partitioned = { storePartitioned: true };
+
 /** @param {Record<string, string | undefined>} env @param {string} key */
 function without(env, key) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => name !== key));
@@ -42,7 +45,7 @@ describe("US-01 Billing Mode configuration", () => {
   });
 
   it("US-01.2 live loads with a live key on production over https", () => {
-    const result = describeLifetimeConfig(liveEnv);
+    const result = describeLifetimeConfig(liveEnv, partitioned);
     expect(result.mode).toBe("live");
     expect(result.refusal).toBeNull();
     expect(result.config).toEqual({
@@ -156,8 +159,18 @@ describe("US-02 live mode only in production", () => {
       loadLifetimeConfig({ ...testEnv, ...expeditionPrices })?.expedition
     ).not.toBeNull();
     expect(
-      loadLifetimeConfig({ ...liveEnv, ...expeditionPrices })?.expedition
+      loadLifetimeConfig({ ...liveEnv, ...expeditionPrices }, partitioned)?.expedition
     ).toBeNull();
+  });
+
+  it("US-02.6 live stays refused until the purchase store is partitioned", () => {
+    const result = describeLifetimeConfig(liveEnv);
+    expect(result.mode).toBe("live");
+    expect(result.config).toBeNull();
+    expect(result.refusal).toBe("live_requires_partitioned_store");
+    expect(() => resolveBillingConfiguration(liveEnv)).toThrow(
+      "live_requires_partitioned_store"
+    );
   });
 
   it("US-02.4 a refused live config makes the boot throw with the reason", () => {

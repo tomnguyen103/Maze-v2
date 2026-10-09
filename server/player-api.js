@@ -216,7 +216,7 @@ function sendError(response, status, error) {
 export function createPlayerApi(env = process.env) {
   const billing = describeLifetimeConfig(env);
   if (billing.refusal) {
-    console.error("[billing] live mode refused", { reason: billing.refusal });
+    console.error("[billing] Billing Mode refused", { reason: billing.refusal });
   }
   const connectionString = env.DATABASE_URL;
   const logRequest = createRequestLogger({ logger: createLogger(env) });
