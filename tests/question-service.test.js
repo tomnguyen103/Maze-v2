@@ -516,4 +516,14 @@ describe("question bank in Postgres", () => {
     expect(first.question).toEqual(reviewedQuestion);
     expect(replay).toEqual(first);
   });
+
+  it("US-13.4 resolves the same bundled Revision for the same seed and Challenge", async () => {
+    const service = createQuestionService();
+
+    const first = await service.getQuestion(REQUEST);
+    const replay = await service.getQuestion({ ...REQUEST });
+
+    expect(first.source).toBe("bundled");
+    expect(replay).toEqual(first);
+  });
 });
