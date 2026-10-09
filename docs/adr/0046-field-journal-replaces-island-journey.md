@@ -30,7 +30,7 @@ same generic look.
   locks the copies.
 - The Stitch project keeps its id. Its design system is replaced by a Field Journal
   design system built from `design.md`.
-- Island and blob tokens are retired in a later change.
+- The same programme retires the island and blob tokens.
 
 ## Rejected alternatives
 
