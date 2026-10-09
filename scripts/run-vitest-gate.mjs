@@ -16,9 +16,9 @@ const OUTPUT_TAIL_LIMIT = 1024 * 1024;
 const WORKER_LOSS_SCAN_TAIL = 128;
 /**
  * Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409), the native Vitest crash.
- * Workaround: Node 24.15.0's `fetch` crashes the process natively on Windows,
- * so the gate retries this code. Remove the retry when a Node version passes
- * the repro in docs/solutions/testing/gate-summary-parsed-from-merged-streams.md.
+ * Workaround: the evidence points to Node 24.15.0's `fetch` on Windows, so the
+ * gate retries this code. The removal rule (2 conditions) is in
+ * docs/solutions/testing/gate-summary-parsed-from-merged-streams.md.
  */
 export const NATIVE_CRASH_EXIT_CODE = 3221226505;
 const MAX_ATTEMPTS = 3;
@@ -119,8 +119,8 @@ export function runVitest({
  * This exported seam keeps the package-level gate testable without spawning a
  * real Vitest process.
  *
- * A run that exits with the native crash code before it prints a summary is
- * retried, up to `MAX_ATTEMPTS` runs in total. Any other failure is final.
+ * The gate retries a run that exits with the native crash code before it prints
+ * a summary, up to `MAX_ATTEMPTS` runs in total. Any other failure is final.
  *
  * @param {{ run?: () => Promise<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>, expected?: { testFiles: number, tests: number, skipped?: number | null } | null, logRetry?: (message: string) => void }} options
  */

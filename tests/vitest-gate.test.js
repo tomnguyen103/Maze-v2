@@ -254,6 +254,18 @@ describe("native-crash retry", () => {
     expect(calls()).toBe(1);
   });
 
+  it("US-01.4: does not retry a signal kill with no summary", async () => {
+    const { run, calls } = sequencedRun([
+      { ...crash, code: null, signal: "SIGKILL" },
+      pass
+    ]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow("signal SIGKILL");
+    expect(calls()).toBe(1);
+  });
+
   it("US-01.6: passes after two native crashes and reports 2 retries", async () => {
     const { run, calls } = sequencedRun([crash, crash, pass]);
 

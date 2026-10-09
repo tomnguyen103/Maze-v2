@@ -127,14 +127,14 @@ contrast changes two variables.
 
 ### Ruled out
 
-Each row changes one variable and still crashes. So that variable is not the trigger.
+Each row changes one variable and still crashes. So that variable alone does not cause the crash.
 
 | Candidate | Evidence |
 | :-- | :-- |
 | undici keep-alive sockets | A dispatcher with keep-alive off: 8 of 40 |
 | Open server connections at close | `closeAllConnections()` before close: 11 of 40 |
 | Request logs | `LOG_LEVEL=silent`: 7 of 40 |
-| The dot reporter and its pipes | Crashes still occur with stdout sent to a file |
+| The dot reporter and its pipes | Crashes still occur with stdout sent to a file (count not recorded) |
 | The early 413 body-limit path | A normal 200-path cycle crashes too (4 of 20) |
 | The WASM trap handler | `--disable-wasm-trap-handler`: 3 of 30 |
 | The WASM compiler tier of llhttp | `--liftoff-only` 6 of 70, control 8 of 70 |
@@ -157,25 +157,26 @@ between batches, and count exit 1 apart from `3221226505`.
 - The exit code is `3221226505`. Node reports a signal kill as code `null`, so
   a signal never matches.
 - No worker-loss marker appears.
-- The output holds no summary that can be parsed.
+- The parser finds no summary in the output.
 
 The gate makes at most 3 attempts. Each retry prints one stderr line with the
-code and the attempt number. The pass line names the retry count. When all 3
-attempts crash, the gate fails with the code and the attempt count.
+code and the attempt number. After a retry, the pass line names the retry
+count. When all 3 attempts crash, the gate fails with the code and the attempt
+count.
 
 The gate does not retry a run that prints a summary. So a failed test, a count
 mismatch, or worker loss in a complete run fails on the first run. Any other
 exit code with no summary also fails on the first run.
 
-The retry has one limit. The gate discards the output of a crashed attempt. A
-flaky test can fail in that attempt and pass in the next one, and the gate then
+The retry has one limit. The gate parses only the last attempt. A flaky test
+can fail in a crashed attempt and pass in the next one, and the gate then
 passes. A manual re-run has the same limit. A deterministic failure fails every
 attempt, so the retry does not hide it.
 
-An armed database or object-store lane runs again on each retry. Its tests use
-their own fixtures, so a second run is safe.
+An armed database or object-store lane runs again on each retry. Its tests roll
+back their transactions and use random IDs, so a second run is safe.
 
-The fix measures this way, over 12 full gate runs on 2026-10-09:
+These are the results of 12 full gate runs with the fix on 2026-10-09:
 
 | Measure | Result |
 | :-- | :-- |
