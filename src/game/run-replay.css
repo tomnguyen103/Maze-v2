@@ -17,7 +17,6 @@
 
 .run-replay-dialog::backdrop {
   background: var(--color-overlay);
-  backdrop-filter: blur(0.18rem);
 }
 
 .run-replay-dialog .dialog-heading {
@@ -86,9 +85,9 @@
 }
 
 .run-replay-controls .control-button[aria-pressed="true"] {
-  color: var(--color-on-signal-deep);
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-deep);
+  color: var(--color-accent-ink);
+  border: 1px solid var(--color-accent-ink);
+  background: var(--color-signal);
 }
 
 .run-replay-controls label {
@@ -148,7 +147,8 @@
 }
 
 .run-replay-events li strong {
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
 }
 
 .run-replay-events li span {

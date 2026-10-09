@@ -265,7 +265,14 @@ a:hover {
   grid-area: theme;
   padding: 0;
   place-items: center;
-  border-radius: 50%;
+  color: var(--color-accent-ink);
+  border: 1px solid var(--color-accent-ink);
+  border-radius: 0.5rem;
+  background: var(--color-signal);
+}
+
+.theme-button:is(:hover, :active):not(:disabled) {
+  background: color-mix(in oklab, var(--color-signal) 88%, var(--color-accent-ink));
 }
 
 .theme-button svg {
@@ -454,19 +461,19 @@ a:hover {
 .scoreboard-button {
   grid-column: 1 / -1;
   min-height: 2.8125rem;
-  padding: var(--space-2);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--color-stone);
-  color: var(--color-ink);
-  font-size: var(--text-compact);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-accent-ink);
+  border-radius: 0.5rem;
+  background: var(--color-signal);
+  color: var(--color-accent-ink);
+  font-size: var(--text-body);
   font-weight: 700;
   cursor: pointer;
 }
 
-.scoreboard-button:hover {
-  background: var(--color-stone-raised);
-  border-color: var(--color-line);
+.scoreboard-button:hover:not(:disabled),
+.scoreboard-button:active:not(:disabled) {
+  background: color-mix(in oklab, var(--color-signal) 88%, var(--color-accent-ink));
 }
 
 .status-deck__heading,
@@ -725,9 +732,9 @@ a:hover {
   max-width: 100%;
   aspect-ratio: 1;
   margin-inline: auto;
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-fog);
+  background: var(--color-paper-deep);
   isolation: isolate;
 }
 
@@ -847,11 +854,11 @@ html .trail-compass[hidden] {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-on-signal-deep);
-  border: 1px solid var(--color-signal-deep);
-  border-radius: var(--radius-md);
-  background: var(--color-signal-deep);
-  box-shadow: 0 6px 16px -8px var(--color-signal-deep);
+  color: var(--color-accent-ink);
+  border: 1px solid var(--color-accent-ink);
+  border-radius: 0.5rem;
+  background: var(--color-signal);
+  box-shadow: var(--shadow-panel);
   text-align: left;
   white-space: normal;
   cursor: pointer;
@@ -860,14 +867,19 @@ html .trail-compass[hidden] {
     box-shadow var(--duration-press) var(--ease-out);
 }
 
+/* Beats the global button hover fill, which would otherwise turn Pulse grey. */
+.pulse-button:not(.bell-button):is(:hover, :active):not(:disabled) {
+  background: color-mix(in oklab, var(--color-signal) 88%, var(--color-accent-ink));
+}
+
 .pulse-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -10px var(--color-signal-deep);
+  box-shadow: 0 10px 22px -10px var(--color-shadow);
 }
 
 .pulse-button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 2px 6px -4px var(--color-signal-deep);
+  box-shadow: 0 2px 6px -4px var(--color-shadow);
 }
 
 .pulse-button:disabled {
@@ -891,7 +903,7 @@ html .trail-compass[hidden] {
 
 .pulse-button strong {
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: var(--text-body);
   font-weight: 750;
   line-height: 1.15;
 }
@@ -915,8 +927,8 @@ kbd {
 }
 
 .pulse-button kbd {
-  border-color: color-mix(in oklab, var(--color-on-signal-deep) 45%, transparent);
-  background: color-mix(in oklab, var(--color-on-signal-deep) 16%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent-ink) 45%, transparent);
+  background: color-mix(in oklab, var(--color-accent-ink) 12%, transparent);
   color: inherit;
 }
 
@@ -925,9 +937,9 @@ kbd {
   width: 1.5rem;
   height: 1.5rem;
   place-items: center;
-  color: var(--color-signal-deep);
+  color: var(--color-ink);
   border-radius: 50%;
-  background: var(--color-on-signal-deep);
+  background: var(--color-panel);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
@@ -1404,10 +1416,10 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .level-card__badge {
   padding: var(--space-1) var(--space-3);
-  color: var(--color-on-signal-deep);
-  border-radius: var(--radius-pill);
-  background: var(--color-signal-deep);
-  font-size: 0.72rem;
+  color: var(--color-accent-ink);
+  border-radius: var(--radius-md);
+  background: var(--color-signal);
+  font-size: 0.875rem;
   font-weight: 650;
 }
 
@@ -1589,8 +1601,9 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .direction-button:active:not(:disabled) {
-    background: var(--color-signal-deep);
-    color: var(--color-on-signal-deep);
+    border-color: var(--color-accent-ink);
+    background: var(--color-signal);
+    color: var(--color-accent-ink);
   }
 
   .direction-button--up {
@@ -1743,6 +1756,25 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 }
 
+/* Portrait phones: the board takes the panel width and the controls sit below it. */
+@media (max-width: 48rem) and (orientation: portrait) {
+  .play-workbench {
+    padding-inline: var(--space-1);
+  }
+
+  .play-grid {
+    width: 100%;
+  }
+
+  .labyrinth-panel {
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .canvas-frame {
+    width: 100%;
+  }
+}
+
 @media (max-width: 22rem) {
   .seed-copy__hint {
     display: none;
@@ -1857,7 +1889,7 @@ body[data-run-mode="first-light"] .play-workbench {
   line-height: 0.88;
 }
 
-.landing-hero__copy > p:not(.section-label):not(.landing-auth-status),
+.landing-hero__copy > p:not(.section-label):not(.landing-auth-status):not(.landing-hero__price),
 .landing-levels > div > p,
 .landing-account p {
   max-width: 34rem;
@@ -2008,9 +2040,57 @@ body[data-run-mode="first-light"] .play-workbench {
   color: var(--color-ink-muted);
 }
 
+.landing-hero__price {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink);
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.landing-hero__figure {
+  position: relative;
+  margin: 0 0 var(--space-8);
+}
+
+/* Fixed 4:3 frame: a failed image still reserves its space, so nothing shifts. */
+.landing-hero__frame {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-stone);
+}
+
+.landing-hero__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-hero__trail {
+  position: absolute;
+  left: 0;
+  bottom: calc(-1 * var(--space-6));
+  width: 100%;
+  height: 3rem;
+  overflow: visible;
+  fill: none;
+  stroke: var(--color-focus);
+  stroke-width: 3;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .landing-page :is(a, button):focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
+}
+
+@media (min-width: 58.0625rem) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
 }
 
 @media (max-width: 58rem) {
@@ -2041,5 +2121,27 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .landing-levels li {
     display: grid;
+  }
+}
+
+@keyframes landing-trail-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* One draw of the trail, shown only when motion is not reduced. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero__trail {
+    stroke-dasharray: 1;
+    animation-name: landing-trail-draw;
+    animation-duration: 1.6s;
+    animation-timing-function: ease-out;
+    animation-iteration-count: 1;
+    animation-fill-mode: both;
   }
 }
