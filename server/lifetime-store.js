@@ -1,7 +1,7 @@
 import {
   transitionLifetimeState
 } from "./lifetime-state.js";
-import { recordPaidFact, transitionFact } from "./financial-facts.js";
+import { recordFact, transitionFact } from "./financial-facts.js";
 import {
   activeUserGuardCtes,
   DeletedUserError,
@@ -169,10 +169,6 @@ export function createLifetimeStore(pool, { mode }) {
         if (event && !(await beginWebhookEvent(client, event, mode))) {
           return { outcome: "duplicate" };
         }
-        if (event && checkout.paymentState !== "paid") {
-          await finishWebhookEvent(client, event.eventId, "ignored");
-          return { outcome: "ignored" };
-        }
         const purchaseResult = await client.query(
           `SELECT
              id,
@@ -208,6 +204,23 @@ export function createLifetimeStore(pool, { mode }) {
             await finishWebhookEvent(client, event.eventId, "unlinked");
           }
           return { outcome: "unlinked" };
+        }
+        /** @param {"paid" | "refunded" | "disputed"} status @param {number} eventCreated */
+        const writeFact = (status, eventCreated) => recordFact(client, {
+          paymentIntentId: String(checkout.paymentIntentId),
+          billingMode: mode,
+          eventCreated,
+          status,
+          refundedCents: Number(checkout.refundedCents ?? 0)
+        });
+        if (event && checkout.paymentState !== "paid") {
+          // The charge was taken, so the fact records it without access.
+          await writeFact(
+            checkout.paymentState === "disputed" ? "disputed" : "refunded",
+            event.eventCreated
+          );
+          await finishWebhookEvent(client, event.eventId, "ignored");
+          return { outcome: "ignored" };
         }
         const accessResult = await client.query(
           `SELECT membership_state, membership_mode, lifetime_state_event_created
@@ -291,13 +304,10 @@ export function createLifetimeStore(pool, { mode }) {
               mode
             ]
           );
-          await recordPaidFact(client, {
-            paymentIntentId: String(checkout.paymentIntentId),
-            billingMode: mode,
-            eventCreated: transition.eventCreated,
-            paidAt: new Date()
-          });
         }
+        // Stripe reports the charge paid, so the fact exists even when an
+        // older access clock makes the entitlement transition stale.
+        await writeFact("paid", event ? event.eventCreated : transition.eventCreated);
         if (event) {
           await finishWebhookEvent(
             client,

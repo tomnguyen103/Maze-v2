@@ -6,29 +6,45 @@ import { transitionLifetimeState } from "./lifetime-state.js";
  */
 
 /**
- * Writes the paid Financial Fact for one PaymentIntent. A repeat write keeps
+ * Writes the Financial Fact for one verified, linked PaymentIntent. The
+ * status is the charge state when the payment is processed, so a payment
+ * refunded before its paid event still leaves a fact. A repeat write keeps
  * one row and only advances its event clock.
  * @param {FactClient} client
- * @param {{ paymentIntentId: string, billingMode: "test" | "live", eventCreated: number, paidAt: Date }} fact
+ * @param {{
+ *   paymentIntentId: string,
+ *   billingMode: "test" | "live",
+ *   eventCreated: number,
+ *   status: "paid" | "refunded" | "disputed",
+ *   refundedCents: number
+ * }} fact
  */
-export async function recordPaidFact(client, { paymentIntentId, billingMode, eventCreated, paidAt }) {
+export async function recordFact(client, { paymentIntentId, billingMode, eventCreated, status, refundedCents }) {
   await client.query(
     `INSERT INTO financial_facts (
-       payment_intent_id, billing_mode, amount_cents, currency, status, paid_at, provider_event_created
-     ) VALUES ($1, $2, $3, $4, 'paid', $5, $6)
+       payment_intent_id, billing_mode, amount_cents, currency, status, refunded_cents,
+       paid_at, refunded_at, disputed_at, provider_event_created
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, NOW(),
+       CASE WHEN $5 = 'refunded' THEN NOW() END,
+       CASE WHEN $5 = 'disputed' THEN NOW() END,
+       $7
+     )
      ON CONFLICT (payment_intent_id) DO UPDATE
      SET provider_event_created = GREATEST(
            financial_facts.provider_event_created,
            EXCLUDED.provider_event_created
          )`,
-    [paymentIntentId, billingMode, LIFETIME_AMOUNT, LIFETIME_CURRENCY, paidAt, eventCreated]
+    [paymentIntentId, billingMode, LIFETIME_AMOUNT, LIFETIME_CURRENCY, status, refundedCents, eventCreated]
   );
 }
 
 /**
  * Applies a verified refund or dispute event to the Financial Fact. The fact
  * keeps its own event clock, so it stays true after the account is deleted.
- * A partial refund raises `refunded_cents` and keeps the fact `paid`.
+ * A partial refund raises `refunded_cents` and keeps the fact `paid`. A full
+ * refund makes the fact `refunded` whatever the event order, because the
+ * refunded cents come from the charge as it is now.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -63,10 +79,12 @@ export async function transitionFact(client, event) {
     : { eventCreated: Number(fact.provider_event_created), outcome: "ignored", state: currentState };
   // Refunds only accumulate, so a larger amount is never stale.
   const refundedCents = Math.max(currentCents, event.refundedCents);
-  if (transition.outcome !== "processed" && refundedCents === currentCents) {
+  const fullyRefunded = refundedCents >= LIFETIME_AMOUNT && fact.status !== "refunded";
+  if (!fullyRefunded && transition.outcome !== "processed" && refundedCents === currentCents) {
     return /** @type {"duplicate" | "stale" | "ignored"} */ (transition.outcome);
   }
-  const status = transition.state === "active" ? "paid" : transition.state;
+  const status = fullyRefunded ? "refunded" : transition.state === "active" ? "paid" : transition.state;
+  const eventCreated = Math.max(transition.eventCreated, fullyRefunded ? event.eventCreated : 0);
   await client.query(
     `UPDATE financial_facts
      SET refunded_at = CASE
@@ -82,7 +100,7 @@ export async function transitionFact(client, event) {
          provider_event_created = $4,
          updated_at = NOW()
      WHERE payment_intent_id = $1`,
-    [event.paymentIntentId, status, refundedCents, transition.eventCreated]
+    [event.paymentIntentId, status, refundedCents, eventCreated]
   );
   return "processed";
 }

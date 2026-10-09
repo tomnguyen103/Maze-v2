@@ -226,7 +226,7 @@ describe("Lifetime Membership service", () => {
       state: "lifetime_active"
     });
     expect(deps.store.activatePurchase).toHaveBeenCalledWith(
-      paidCheckout(),
+      { ...paidCheckout(), refundedCents: 0 },
       null
     );
     expect(deps.provider.retrievePaymentReference).toHaveBeenCalledWith(
@@ -295,7 +295,7 @@ describe("Lifetime Membership service", () => {
       service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
     ).resolves.toEqual({ outcome: "processed" });
     expect(deps.store.activatePurchase).toHaveBeenCalledWith(
-      { ...paidCheckout(), paymentState: "paid" },
+      { ...paidCheckout(), paymentState: "paid", refundedCents: 0 },
       {
         eventCreated: 100,
         eventId: "evt_paid",

@@ -111,7 +111,7 @@ describe("Clerk user deletion store", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("rolls back when deletion fails", async () => {
+  it("US-04.5 rolls back when deletion fails and never touches a Financial Fact", async () => {
     const client = {
       query: vi.fn()
         .mockResolvedValueOnce({ rows: [] })
@@ -127,6 +127,7 @@ describe("Clerk user deletion store", () => {
       "database unavailable"
     );
     expect(client.query).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("financial_facts"))).toBe(false);
     expect(client.release).toHaveBeenCalledOnce();
   });
 

@@ -1,7 +1,5 @@
-import { recordPaidFact, transitionFact } from "../server/financial-facts.js";
+import { recordFact, transitionFact } from "../server/financial-facts.js";
 import { describe, expect, it, vi } from "vitest";
-
-const PAID_AT = new Date("2026-10-09T10:00:00.000Z");
 
 function clientStub() {
   return { query: vi.fn().mockResolvedValue({ rows: [] }) };
@@ -11,28 +9,29 @@ describe("Financial Facts", () => {
   it("US-01.1 writes one paid live fact with the spec amount and currency", async () => {
     const client = clientStub();
 
-    await recordPaidFact(client, {
+    await recordFact(client, {
       paymentIntentId: "pi_live_echo",
       billingMode: "live",
       eventCreated: 100,
-      paidAt: PAID_AT
+      status: "paid",
+      refundedCents: 0
     });
 
     expect(client.query).toHaveBeenCalledOnce();
     const [sql, values] = client.query.mock.calls[0];
     expect(sql).toContain("INSERT INTO financial_facts");
-    expect(sql).toContain("'paid'");
-    expect(values).toEqual(["pi_live_echo", "live", 599, "usd", PAID_AT, 100]);
+    expect(values).toEqual(["pi_live_echo", "live", 599, "usd", "paid", 0, 100]);
   });
 
   it("US-01.2 stores the test Billing Mode on a test-mode fact", async () => {
     const client = clientStub();
 
-    await recordPaidFact(client, {
+    await recordFact(client, {
       paymentIntentId: "pi_test_echo",
       billingMode: "test",
       eventCreated: 100,
-      paidAt: PAID_AT
+      status: "paid",
+      refundedCents: 0
     });
 
     expect(client.query.mock.calls[0][1]).toEqual([
@@ -40,7 +39,8 @@ describe("Financial Facts", () => {
       "test",
       599,
       "usd",
-      PAID_AT,
+      "paid",
+      0,
       100
     ]);
   });
@@ -48,11 +48,12 @@ describe("Financial Facts", () => {
   it("US-01.4 keeps one row per payment intent and only advances its event clock", async () => {
     const client = clientStub();
 
-    await recordPaidFact(client, {
+    await recordFact(client, {
       paymentIntentId: "pi_live_echo",
       billingMode: "live",
       eventCreated: 100,
-      paidAt: PAID_AT
+      status: "paid",
+      refundedCents: 0
     });
 
     const sql = String(client.query.mock.calls[0][0]).replace(/\s+/g, " ");
@@ -163,6 +164,25 @@ describe("Financial Fact transitions", () => {
     ).resolves.toBe("stale");
     expect(table.client.query.mock.calls.some(([sql]) => String(sql).includes("UPDATE financial_facts"))).toBe(false);
     expect(table.read()).toMatchObject({ status: "disputed", provider_event_created: 200 });
+  });
+
+  it("US-02.3 makes a fully refunded fact refunded even when the refund event is older", async () => {
+    const table = factTable({ ...PAID_FACT, status: "disputed", provider_event_created: 300 });
+
+    await expect(
+      transitionFact(table.client, factEvent({ eventCreated: 250, requestedState: "refunded", refundedCents: 599 }))
+    ).resolves.toBe("processed");
+    expect(table.read()).toMatchObject({
+      status: "refunded",
+      refunded_cents: 599,
+      refunded_at: "now",
+      provider_event_created: 300
+    });
+
+    await expect(
+      transitionFact(table.client, factEvent({ eventCreated: 400, requestedState: "active", refundedCents: 599 }))
+    ).resolves.toBe("ignored");
+    expect(table.read()).toMatchObject({ status: "refunded" });
   });
 
   it("US-02.5 returns a disputed fact to paid only when the dispute is won", async () => {

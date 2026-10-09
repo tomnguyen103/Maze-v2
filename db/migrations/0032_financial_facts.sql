@@ -1,5 +1,7 @@
 -- 0032: account-free Financial Facts. One row per paid PaymentIntent.
 -- The table holds no account, contact, Checkout Session or name column.
+-- payment_intent_id is the Stripe reconciliation key. Stripe keeps its own
+-- payer record under that id as an accounting record outside this database.
 SET lock_timeout = '3s';
 
 CREATE TABLE IF NOT EXISTS financial_facts (
