@@ -2,6 +2,7 @@ import {
   LIFETIME_PRICE_LABEL,
   LIFETIME_PRICE_ONCE
 } from "../../shared/lifetime-product.js";
+import { PlayerApiError } from "./player-client.js";
 
 /**
  * @param {{
@@ -26,6 +27,7 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   /** @type {((confirmed: boolean) => void) | null} */
   let resolveLastFreeRun = null;
   let mode = "membership";
+  let checkoutPending = false;
 
   elements.primary.addEventListener("click", () => {
     if (mode === "last-free") {
@@ -35,6 +37,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
     void openCheckout();
   });
   elements.close.addEventListener("click", () => {
+    if (checkoutPending) {
+      return;
+    }
     if (mode === "last-free") {
       settleLastFreeRun(false);
       return;
@@ -43,6 +48,9 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   });
   elements.dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
+    if (checkoutPending) {
+      return;
+    }
     if (mode === "last-free") {
       settleLastFreeRun(false);
       return;
@@ -135,16 +143,30 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
   }
 
   async function openCheckout() {
+    // "Not now" waits for the Unlock answer, so one Run entry path runs.
+    checkoutPending = true;
+    elements.close.disabled = true;
     elements.primary.disabled = true;
     elements.primary.textContent = "Opening…";
     setStatus("Opening secure checkout…", "loading");
     try {
       await onUnlock();
-    } catch {
+    } catch (error) {
       elements.primary.disabled = false;
       elements.primary.textContent = "Try again";
-      setStatus("Checkout unavailable. Try again.", "error");
+      // A sign-in or sale-state answer has a message for the Explorer.
+      setStatus(
+        error instanceof PlayerApiError &&
+          (error.status === 401 || error.status === 403) &&
+          typeof error.body.error === "string"
+          ? error.message
+          : "Checkout unavailable. Try again.",
+        "error"
+      );
       elements.primary.focus();
+    } finally {
+      checkoutPending = false;
+      elements.close.disabled = false;
     }
   }
 

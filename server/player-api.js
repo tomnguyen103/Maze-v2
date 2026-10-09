@@ -74,6 +74,7 @@ import { createGuestDemoStore } from "./guest-demo-store.js";
 import { createFunnelStore } from "./funnel-store.js";
 import {
   describeLifetimeConfig,
+  resolveCheckoutGate,
   resolveEnforcement
 } from "./lifetime-config.js";
 import { loadOfflineContinuityConfig } from "./offline-continuity-config.js";
@@ -746,6 +747,7 @@ export function createPlayerApi(env = process.env) {
     recordAudit,
     rateLimit,
     inbox,
+    checkoutOpen: resolveCheckoutGate(env),
     service: lifetimeService
   });
   const questProgressHandler = createQuestProgressHandler({

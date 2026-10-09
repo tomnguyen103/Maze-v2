@@ -308,6 +308,7 @@ const elements = {
   firstLightSkip: requiredElement("first-light-skip", HTMLButtonElement),
   firstLightStart: requiredElement("first-light-start", HTMLButtonElement),
   firstLightTitle: requiredElement("first-light-title", HTMLElement),
+  lifetimeDialog: requiredElement("lifetime-dialog", HTMLDialogElement),
   freshRun: requiredElement("fresh-run", HTMLButtonElement),
   hintButton: requiredElement("hint-button", HTMLButtonElement),
   journalBands: requiredElement("journal-bands", HTMLElement),
@@ -603,6 +604,10 @@ let pendingRunReplay = null;
 /** @type {{ freeRunsRemaining: number, state: string } | null} */
 let latestRunAccess = null;
 let lifetimeReturnConfirmed = false;
+// Set before Unlock closes the dialog to resume a saved Run, so the owner
+// link close listener starts nothing more. Without a saved Run it stays false
+// and the listener opens the normal Run entry. A failed resume clears it.
+let lifetimeUnlockResumed = false;
 let pendingLifetimeSessionId = "";
 let mustChooseLevel =
   dailyRequest.status === "none" &&
@@ -3191,8 +3196,7 @@ async function openLifetimeCheckout() {
     await confirmLifetimeSession(pendingLifetimeSessionId);
     pendingLifetimeSessionId = "";
     removeCheckoutParameters(new URL(window.location.href));
-    lifetimeView.close();
-    await resumePendingRun();
+    await resumeAfterUnlock();
     return;
   }
   const checkout = await playerController.createLifetimeCheckout();
@@ -3201,8 +3205,7 @@ async function openLifetimeCheckout() {
       "Lifetime access is already active. Resuming your saved Run.",
       "success"
     );
-    lifetimeView.close();
-    await resumePendingRun();
+    await resumeAfterUnlock();
     return;
   }
   const checkoutUrl = String(checkout.checkoutUrl ?? "");
@@ -3221,11 +3224,57 @@ async function openLifetimeCheckout() {
   window.location.assign(destination.href);
 }
 
+async function resumeAfterUnlock() {
+  lifetimeUnlockResumed = activeRunLocator !== null;
+  lifetimeView.close();
+  if (!lifetimeUnlockResumed) {
+    return;
+  }
+  let started = false;
+  try {
+    started = await resumePendingRun();
+  } finally {
+    if (!started) {
+      lifetimeUnlockResumed = false;
+      // A refusal opens its own dialog. Otherwise reopen this one, so the
+      // Explorer can try again or choose "Not now".
+      if (!document.querySelector("dialog[open]")) {
+        lifetimeView.showMembership(
+          "Your saved Run did not start. Try again.",
+          "error"
+        );
+      }
+    }
+  }
+}
+
 async function resolveLifetimeReturn() {
   const url = new URL(window.location.href);
   const checkout = url.searchParams.get("checkout");
   if (!checkout) {
-    return true;
+    // The owner pilot link: it reaches checkout while enforcement is off.
+    if (url.searchParams.get("membership") !== "open") {
+      return true;
+    }
+    url.searchParams.delete("membership");
+    removeCheckoutParameters(url);
+    lifetimeView.showMembership();
+    // "Not now" falls through to the normal Run entry. A close that already
+    // resumed the saved Run (Unlock with access active) starts nothing more.
+    // The listener stays while a resume runs, so a failed resume that reopens
+    // the dialog keeps "Not now" working.
+    const offerFirstLight = firstLightEntryPending;
+    const enterOnClose = () => {
+      // The close event is queued, so a dialog that reopened since then wins.
+      if (lifetimeUnlockResumed || elements.lifetimeDialog.open) {
+        return;
+      }
+      elements.lifetimeDialog.removeEventListener("close", enterOnClose);
+      firstLightEntryPending = offerFirstLight;
+      void initializeRunEntry();
+    };
+    elements.lifetimeDialog.addEventListener("close", enterOnClose);
+    return false;
   }
   const sessionId = url.searchParams.get("session_id");
   if (checkout === "canceled") {
@@ -3295,18 +3344,19 @@ async function resumePendingRun() {
     return false;
   }
   lifetimeReturnConfirmed = true;
-  const started = await startSharedRun(
-    activeRunLocator.seed,
-    activeRunLocator.levelId,
-    activeRunLocator.labyrinthNumber,
-    false,
-    activeRunLocator.runId,
-    rulesetIdentityFromLocator(activeRunLocator)
-  );
-  if (!started) {
+  try {
+    return await startSharedRun(
+      activeRunLocator.seed,
+      activeRunLocator.levelId,
+      activeRunLocator.labyrinthNumber,
+      false,
+      activeRunLocator.runId,
+      rulesetIdentityFromLocator(activeRunLocator)
+    );
+  } finally {
+    // A Campfire resume or a failed start returns before startRun reads the flag.
     lifetimeReturnConfirmed = false;
   }
-  return started;
 }
 
 function showDemoAccountGate() {

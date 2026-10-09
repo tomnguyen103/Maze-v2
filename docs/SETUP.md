@@ -193,6 +193,8 @@ CLERK_SECRET_KEY=your-clerk-secret-key
 CLERK_WEBHOOK_SIGNING_SECRET=your-clerk-webhook-signing-secret
 RUN_ACCESS_ENFORCEMENT_ENABLED=false
 ECHO_MAZE_BILLING_MODE=test
+LIFETIME_PILOT_ACCOUNT_IDS=
+LIFETIME_PUBLIC_CHECKOUT_ENABLED=false
 STRIPE_SECRET_KEY=your-stripe-test-secret-key
 STRIPE_PRICE_ID=your-599-usd-one-time-test-price-id
 STRIPE_WEBHOOK_SECRET=your-stripe-test-webhook-secret
@@ -373,7 +375,11 @@ The browser reads the server-owned rollback state before admission; there is no
 client flag that can bypass it. `RUN_ACCESS_ENFORCEMENT_ENABLED=true` becomes
 effective only when the complete Stripe configuration for the Billing Mode is valid,
 so a partial payment setup cannot strand signed-in players. `ECHO_MAZE_BILLING_MODE`
-selects `test` (the default) or `live`. The live cutover steps are in
+selects `test` (the default) or `live`. In live mode, only the Pilot Accounts in
+`LIFETIME_PILOT_ACCOUNT_IDS` can open Checkout until
+`LIFETIME_PUBLIC_CHECKOUT_ENABLED=true`. Live enforcement needs
+`RUN_ACCESS_ENFORCEMENT_ENABLED=true` and `LIFETIME_PUBLIC_CHECKOUT_ENABLED=true`.
+The live cutover steps are in
 `docs/lifetime-membership-operations.md`. Production remains
 `false` until the production release checklist is approved. Hosted database
 URLs are normalized to `sslmode=verify-full`.

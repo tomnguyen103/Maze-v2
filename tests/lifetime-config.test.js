@@ -5,7 +5,10 @@ import {
   describeLifetimeConfig,
   LifetimeConfigurationError,
   loadLifetimeConfig,
-  resolveBillingConfiguration
+  resolveBillingConfiguration,
+  resolveCheckoutGate,
+  resolveEnforcement,
+  resolveEnforcementEnabled
 } from "../server/lifetime-config.js";
 import { createPlayerApi } from "../server/player-api.js";
 
@@ -185,5 +188,106 @@ describe("US-02 live mode only in production", () => {
       expect.any(String),
       expect.objectContaining({ reason: "live_requires_production" })
     );
+  });
+});
+
+describe("Pilot checkout gate", () => {
+  it("US-01.1 opens live checkout to a Pilot Account while Public Checkout is closed", () => {
+    const open = resolveCheckoutGate({
+      ...liveEnv,
+      LIFETIME_PILOT_ACCOUNT_IDS: "user_owner"
+    });
+
+    expect(open("user_owner")).toBe(true);
+    expect(open("user_stranger")).toBe(false);
+  });
+
+  it("US-01.2 opens checkout to every caller in test mode or with Public Checkout open", () => {
+    expect(resolveCheckoutGate(testEnv)("user_any")).toBe(true);
+    expect(
+      resolveCheckoutGate({ ...liveEnv, LIFETIME_PUBLIC_CHECKOUT_ENABLED: "true" })(
+        "user_any"
+      )
+    ).toBe(true);
+  });
+
+  it("US-01.2 matches trimmed ids exactly and lets no empty entry match", () => {
+    const open = resolveCheckoutGate({
+      ...liveEnv,
+      LIFETIME_PILOT_ACCOUNT_IDS: " user_a , ,user_b,\nuser_c user_d"
+    });
+
+    for (const id of ["user_a", "user_b", "user_c", "user_d"]) {
+      expect(open(id)).toBe(true);
+    }
+    expect(open("")).toBe(false);
+    expect(open("user_")).toBe(false);
+    expect(open("user_a ")).toBe(false);
+  });
+
+  it.each(["TRUE", "1", "yes", " true", ""])(
+    "US-01.3 keeps Public Checkout closed for the value %j",
+    (value) => {
+      const open = resolveCheckoutGate({
+        ...liveEnv,
+        LIFETIME_PUBLIC_CHECKOUT_ENABLED: value
+      });
+
+      expect(open("user_any")).toBe(false);
+    }
+  );
+
+  it("US-01.3 closes checkout to every caller with no pilot list or an unknown mode", () => {
+    expect(resolveCheckoutGate(liveEnv)("user_any")).toBe(false);
+    expect(
+      resolveCheckoutGate({ ...testEnv, ECHO_MAZE_BILLING_MODE: "Live" })("user_any")
+    ).toBe(false);
+  });
+});
+
+describe("Enforcement with Public Checkout", () => {
+  const enforcedLive = { ...liveEnv, RUN_ACCESS_ENFORCEMENT_ENABLED: "true" };
+
+  it("US-02.1 enables live enforcement once Public Checkout is open", () => {
+    expect(
+      resolveEnforcement({ ...enforcedLive, LIFETIME_PUBLIC_CHECKOUT_ENABLED: "true" })
+    ).toEqual({ enabled: true, refusal: null });
+  });
+
+  it("US-02.2 ignores the Public Checkout switch in test mode", () => {
+    expect(
+      resolveEnforcement({ ...testEnv, RUN_ACCESS_ENFORCEMENT_ENABLED: "true" })
+    ).toEqual({ enabled: true, refusal: null });
+  });
+
+  it("US-02.3 refuses live enforcement while Public Checkout is closed, with Pilot Accounts too", () => {
+    const decision = resolveEnforcement({
+      ...enforcedLive,
+      LIFETIME_PILOT_ACCOUNT_IDS: "user_owner"
+    });
+
+    expect(decision.enabled).toBe(false);
+    expect(decision.refusal).toContain("LIFETIME_PUBLIC_CHECKOUT_ENABLED");
+    expect(decision.refusal).toMatch(/Reason: checkout_closed\.$/);
+  });
+
+  it("US-02.4 returns the same decision for the same environment", () => {
+    expect(resolveEnforcement(enforcedLive)).toEqual(resolveEnforcement(enforcedLive));
+  });
+
+  it("US-02.5 makes the long-running boot throw the checkout_closed refusal", () => {
+    expect(() => resolveEnforcementEnabled(enforcedLive)).toThrow(
+      LifetimeConfigurationError
+    );
+    expect(() => resolveEnforcementEnabled(enforcedLive)).toThrow("checkout_closed");
+  });
+
+  it("US-07.3 wires the gate into the checkout route", () => {
+    const api = readFileSync(
+      fileURLToPath(new URL("../server/player-api.js", import.meta.url)),
+      "utf8"
+    );
+
+    expect(api).toContain("checkoutOpen: resolveCheckoutGate(env)");
   });
 });

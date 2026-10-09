@@ -194,6 +194,18 @@ test("starts normal gameplay at a clean play route", async ({ page }) => {
   expect(new URL(page.url()).search).toBe("");
 });
 
+test("US-03.1 keeps the First Light offer after Not now on the owner link", async ({
+  page
+}) => {
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Your First Light" })
+  ).toBeVisible();
+});
+
 test("completes First Light without writing product progress", async ({
   page
 }) => {

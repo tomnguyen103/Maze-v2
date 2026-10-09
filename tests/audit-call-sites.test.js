@@ -369,6 +369,7 @@ describe("audit call sites", () => {
   it("writes lifetime rows for checkout, confirmation, and the Stripe webhook", async () => {
     const audit = createAuditSpy();
     const handler = createLifetimeHandler({
+      checkoutOpen: () => true,
       getUserId: () => "user_1",
       recordAudit: audit.recordAudit,
       service: {

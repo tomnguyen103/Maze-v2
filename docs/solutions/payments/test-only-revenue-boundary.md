@@ -11,9 +11,9 @@ record its mode, so the mode could not be checked later.
 ## Boundary
 
 - One deployment runs one Billing Mode. An unset `ECHO_MAZE_BILLING_MODE` means test.
-  `server/lifetime-config.js:101-109` refuses a secret key whose prefix does not match
+  `server/lifetime-config.js:137-149` refuses a secret key whose prefix does not match
   the mode. It refuses live outside production and without an HTTPS origin.
-- Live mode sets Class Expedition billing to null. `server/lifetime-config.js:131`
+- Live mode sets Class Expedition billing to null. `server/lifetime-config.js:170`
   never opens an Expedition Session in live mode.
 - `server/class-expedition-billing.js:143` refuses a Session whose `livemode` is true.
 - `server/lifetime-domain.js:32` returns `mode_mismatch` when the Checkout `livemode`
