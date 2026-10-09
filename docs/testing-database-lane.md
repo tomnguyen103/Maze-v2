@@ -10,7 +10,7 @@ nowhere while every gate run reported green. The A+ audit filed it as `T-02`.
 
 ## What changed
 
-- `npm test` still runs with no database, and still reports those 23 as
+- `npm test` still runs with no database, and still reports those 24 as
   skipped — but `scripts/vitest-test-count.json` now pins `skipped`, so the
   count cannot grow silently. Moving a test from executed to skipped fails the
   gate.
