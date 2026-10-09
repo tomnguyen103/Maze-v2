@@ -342,9 +342,11 @@ export function createPlayerApi(env = process.env) {
   const store = createPlayerStore(pool);
   const dailyStore = createDailyStore(pool);
   const constellationStore = createConstellationStore(pool);
-  const accessStore = createRunAccessStore(pool);
+  // An invalid Billing Mode yields a null mode; both stores then fall back to test.
+  const storeMode = billing.mode ?? "test";
+  const accessStore = createRunAccessStore(pool, { mode: storeMode });
   const guestDemoStore = createGuestDemoStore(pool);
-  const lifetimeStore = createLifetimeStore(pool);
+  const lifetimeStore = createLifetimeStore(pool, { mode: storeMode });
   const learningJournalStore = createLearningJournalStore(pool);
   const echoFossilStore = createEchoFossilStore(pool);
   const accessSettingsStore = createAccessSettingsStore(queryAdapter);

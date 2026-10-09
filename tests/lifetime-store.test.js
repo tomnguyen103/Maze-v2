@@ -1,6 +1,7 @@
 import {
   createLifetimeStore
 } from "../server/lifetime-store.js";
+import { createRunAccessStore } from "../server/run-access-store.js";
 import { describe, expect, it, vi } from "vitest";
 
 /** @param {Record<string, unknown>[][]} results */
@@ -33,7 +34,7 @@ describe("Lifetime Membership store", () => {
       }],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.reservePurchase("user_explorer", "purchase_123", "price_test")
@@ -65,11 +66,12 @@ describe("Lifetime Membership store", () => {
       [],
       [{
         active_purchase_id: "purchase_paid",
+        membership_mode: "test",
         membership_state: "active"
       }],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.reservePurchase("user_explorer", "purchase_new", "price_test")
@@ -98,7 +100,7 @@ describe("Lifetime Membership store", () => {
         }]
       })
     };
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.findPurchaseBySession("cs_test_echo")
@@ -118,7 +120,7 @@ describe("Lifetime Membership store", () => {
         rows: [{ id: "purchase_123" }]
       })
     };
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await store.attachCheckout("purchase_123", "cs_test_echo");
 
@@ -136,7 +138,7 @@ describe("Lifetime Membership store", () => {
         rows: [{ id: "purchase_123" }]
       })
     };
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.abandonCheckout("purchase_123", "cs_test_closed")
@@ -164,7 +166,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.activatePurchase({
@@ -204,7 +206,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.activatePurchase(
@@ -247,7 +249,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.activatePurchase(
@@ -276,7 +278,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.activatePurchase(
@@ -309,7 +311,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(store.transitionEntitlement({
       eventCreated: 102,
@@ -346,7 +348,7 @@ describe("Lifetime Membership store", () => {
       [],
       []
     ]);
-    const store = createLifetimeStore(pool);
+    const store = createLifetimeStore(pool, { mode: "test" });
 
     await expect(
       store.transitionEntitlement({
@@ -372,6 +374,215 @@ describe("Lifetime Membership store", () => {
     );
     expect(client.query.mock.calls[5][0]).toContain(
       "membership_state = $1"
+    );
+  });
+
+  it("US-06.2 grants no membership from a test-mode projection under live", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [],
+      [],
+      [{
+        active_purchase_id: "purchase_paid",
+        membership_mode: "test",
+        membership_state: "active"
+      }],
+      [{
+        checkout_session_id: null,
+        id: "purchase_new",
+        status: "pending"
+      }],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.reservePurchase("user_explorer", "purchase_new", "price_live")
+    ).resolves.toEqual({
+      purchaseId: "purchase_new",
+      sessionId: null,
+      state: "reserved"
+    });
+    expect(client.query.mock.calls[4][0]).toContain(
+      "INSERT INTO lifetime_purchases"
+    );
+  });
+
+  it("US-06.1 grants membership from a live projection under live", async () => {
+    const { pool } = transactionalPool([
+      [],
+      [],
+      [],
+      [{
+        active_purchase_id: "purchase_paid",
+        membership_mode: "live",
+        membership_state: "active"
+      }],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.reservePurchase("user_explorer", "purchase_new", "price_live")
+    ).resolves.toEqual({
+      purchaseId: "purchase_paid",
+      sessionId: null,
+      state: "member"
+    });
+  });
+
+  it("US-05.1 writes the configured mode on a new purchase", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [],
+      [],
+      [{
+        active_purchase_id: null,
+        membership_mode: null,
+        membership_state: "none"
+      }],
+      [{
+        checkout_session_id: null,
+        id: "purchase_new",
+        status: "pending"
+      }],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.reservePurchase("user_explorer", "purchase_new", "price_live");
+    expect(client.query.mock.calls[4][0]).toContain("billing_mode");
+    expect(client.query.mock.calls[4][1]).toEqual([
+      "purchase_new",
+      "user_explorer",
+      "price_live",
+      "live"
+    ]);
+  });
+
+  it("US-07.2 reuses only a pending purchase of the configured mode", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [],
+      [],
+      [{
+        active_purchase_id: null,
+        membership_mode: null,
+        membership_state: "none"
+      }],
+      [{
+        checkout_session_id: null,
+        id: "purchase_new",
+        status: "pending"
+      }],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.reservePurchase("user_explorer", "purchase_new", "price_live");
+    expect(client.query.mock.calls[2][0]).toContain("billing_mode = $2");
+    expect(client.query.mock.calls[2][1]).toEqual([
+      "user_explorer",
+      "live"
+    ]);
+  });
+
+  it("US-05.2 records the configured mode on each webhook event", async () => {
+    const { client, pool } = transactionalPool([[], []]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.activatePurchase({
+        ownerId: "user_explorer",
+        paymentIntentId: "pi_live",
+        paymentState: "paid",
+        priceId: "price_live",
+        purchaseId: "purchase_123",
+        sessionId: "cs_live_echo"
+      }, {
+        eventCreated: 100,
+        eventId: "evt_live",
+        eventType: "checkout.session.completed"
+      })
+    ).resolves.toEqual({ outcome: "duplicate" });
+    expect(client.query.mock.calls[1][0]).toContain("billing_mode");
+    expect(client.query.mock.calls[1][1]).toContain("live");
+  });
+
+  it("US-06.4 writes the live mode onto the projection on activation", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{
+        id: "purchase_123",
+        player_id: "user_explorer",
+        provider_event_created: 0,
+        status: "open"
+      }],
+      [{
+        lifetime_state_event_created: 0,
+        membership_mode: "test",
+        membership_state: "active"
+      }],
+      [],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.activatePurchase({
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_live",
+      priceId: "price_live",
+      purchaseId: "purchase_123",
+      sessionId: "cs_live_echo"
+    }, null);
+    expect(client.query.mock.calls[4][0]).toContain("membership_mode");
+    expect(client.query.mock.calls[4][1]).toContain("live");
+  });
+
+  it("US-07.3 ignores a refund of the other mode without touching the purchase", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_refund_test" }],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 103,
+      eventId: "evt_refund_test",
+      eventType: "charge.refunded",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_test",
+      purchaseId: "purchase_123",
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "unlinked" });
+    expect(client.query.mock.calls[2][0]).toContain("billing_mode");
+    expect(client.query.mock.calls[2][1]).toContain("live");
+  });
+
+  it("US-06.5 admits a live member from the stored projection with no Stripe call", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [],
+      [{ free_runs_used: 0, membership_state: "active" }],
+      [],
+      [],
+      []
+    ]);
+    const store = createRunAccessStore(pool, { mode: "live" });
+
+    await expect(
+      store.authorizeRun("user_explorer", {
+        runId: "access_live_member",
+        seed: "MOSS-WATCH-11",
+        levelId: "trail-scout",
+        labyrinthNumber: 4
+      })
+    ).resolves.toMatchObject({ allowed: true, state: "member" });
+    expect(client.query.mock.calls[2][0]).toContain(
+      "CASE WHEN membership_mode = 'live'"
     );
   });
 });

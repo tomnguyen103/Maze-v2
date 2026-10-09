@@ -43,8 +43,14 @@ function accessState(row) {
  *     release: () => void
  *   }>
  * }} pool
+ * @param {{ mode?: "test" | "live" }} [options] The Billing Mode this deployment runs.
  */
-export function createRunAccessStore(pool) {
+export function createRunAccessStore(pool, { mode = "test" } = {}) {
+  if (mode !== "test" && mode !== "live") {
+    throw new Error("Run Access store needs a Billing Mode of test or live.");
+  }
+  // Membership counts only when the projection row was written in this mode.
+  const membership = `CASE WHEN membership_mode = '${mode}' THEN membership_state ELSE 'none' END`;
   return {
     /** @param {string} userId */
     async getAccess(userId) {
@@ -61,7 +67,7 @@ export function createRunAccessStore(pool) {
            SELECT free_runs_used, membership_state
            FROM ensured_access
            UNION ALL
-           SELECT free_runs_used, membership_state
+           SELECT free_runs_used, ${membership} AS membership_state
            FROM player_access
            WHERE clerk_user_id = $1
              AND EXISTS (SELECT 1 FROM active_user)
@@ -130,7 +136,7 @@ export function createRunAccessStore(pool) {
         );
         if (guard.rows[0]?.deleted === true) throw new DeletedUserError();
         const accessResult = await client.query(
-          `SELECT free_runs_used, membership_state
+          `SELECT free_runs_used, ${membership} AS membership_state
            FROM player_access
            WHERE clerk_user_id = $1
            FOR UPDATE`,
@@ -236,7 +242,7 @@ export function createRunAccessStore(pool) {
            SET free_runs_used = free_runs_used + 1,
                updated_at = NOW()
            WHERE clerk_user_id = $1
-           RETURNING free_runs_used, membership_state`,
+           RETURNING free_runs_used, ${membership} AS membership_state`,
           [userId]
         );
         await client.query("COMMIT");

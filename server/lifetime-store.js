@@ -15,8 +15,12 @@ import {
  *   }>,
  *   query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
  * }} pool
+ * @param {{ mode: "test" | "live" }} options The Billing Mode this deployment runs.
  */
-export function createLifetimeStore(pool) {
+export function createLifetimeStore(pool, { mode }) {
+  if (mode !== "test" && mode !== "live") {
+    throw new Error("Lifetime store needs a Billing Mode of test or live.");
+  }
   return {
     /**
      * @param {string} userId
@@ -41,14 +45,15 @@ export function createLifetimeStore(pool) {
           `SELECT id, checkout_session_id, status
            FROM lifetime_purchases
            WHERE player_id = $1
+             AND billing_mode = $2
              AND status IN ('pending', 'open')
            ORDER BY created_at DESC
            LIMIT 1
            FOR UPDATE`,
-          [userId]
+          [userId, mode]
         );
         const access = await client.query(
-          `SELECT membership_state, active_purchase_id
+          `SELECT membership_state, membership_mode, active_purchase_id
            FROM player_access
            WHERE clerk_user_id = $1
            FOR UPDATE`,
@@ -61,7 +66,7 @@ export function createLifetimeStore(pool) {
         // nothing — the child keeps zero Runs while a stranger has three, and
         // deleting the account is the only way out. The refusal is a state a
         // human resolves, not one a payment can.
-        const membershipState = String(accessRow.membership_state ?? "none");
+        const membershipState = projectedAccess(accessRow, mode).state;
         if (membershipState !== "none" && membershipState !== "active") {
           return {
             purchaseId: String(accessRow.active_purchase_id ?? purchaseId),
@@ -85,11 +90,12 @@ export function createLifetimeStore(pool) {
           `INSERT INTO lifetime_purchases (
              id,
              player_id,
-             stripe_price_id
+             stripe_price_id,
+             billing_mode
            )
-           VALUES ($1, $2, $3)
+           VALUES ($1, $2, $3, $4)
            RETURNING id, checkout_session_id, status`,
-          [purchaseId, userId, priceId]
+          [purchaseId, userId, priceId, mode]
         );
         return reservation(inserted.rows[0] ?? { id: purchaseId }, "reserved");
       });
@@ -146,8 +152,9 @@ export function createLifetimeStore(pool) {
            stripe_price_id,
            status
          FROM lifetime_purchases
-         WHERE checkout_session_id = $1`,
-        [sessionId]
+         WHERE checkout_session_id = $1
+           AND billing_mode = $2`,
+        [sessionId, mode]
       );
       return result.rows[0] ? purchaseRecord(result.rows[0]) : null;
     },
@@ -158,7 +165,7 @@ export function createLifetimeStore(pool) {
      */
     async activatePurchase(checkout, event) {
       return transact(pool, async (client) => {
-        if (event && !(await beginWebhookEvent(client, event))) {
+        if (event && !(await beginWebhookEvent(client, event, mode))) {
           return { outcome: "duplicate" };
         }
         if (event && checkout.paymentState !== "paid") {
@@ -183,13 +190,15 @@ export function createLifetimeStore(pool) {
                payment_intent_id IS NULL OR
                payment_intent_id = $5
              )
+             AND billing_mode = $6
            FOR UPDATE`,
           [
             checkout.sessionId,
             checkout.purchaseId,
             checkout.ownerId,
             checkout.priceId,
-            checkout.paymentIntentId
+            checkout.paymentIntentId,
+            mode
           ]
         );
         const purchase = purchaseResult.rows[0];
@@ -200,34 +209,30 @@ export function createLifetimeStore(pool) {
           return { outcome: "unlinked" };
         }
         const accessResult = await client.query(
-          `SELECT membership_state, lifetime_state_event_created
+          `SELECT membership_state, membership_mode, lifetime_state_event_created
            FROM player_access
            WHERE clerk_user_id = $1
            FOR UPDATE`,
           [purchase.player_id]
         );
-        const access = accessResult.rows[0] ?? {};
+        const access = projectedAccess(accessResult.rows[0] ?? {}, mode);
         if (
           !event &&
-          (access.membership_state === "refunded" ||
-            access.membership_state === "disputed")
+          (access.state === "refunded" ||
+            access.state === "disputed")
         ) {
-          return lifetimeResult(String(access.membership_state), "ignored");
+          return lifetimeResult(access.state, "ignored");
         }
         const transition = event
           ? transitionLifetimeState({
-              currentEventCreated: Number(
-                access.lifetime_state_event_created ?? 0
-              ),
-              currentState: String(access.membership_state ?? "none"),
+              currentEventCreated: access.eventCreated,
+              currentState: access.state,
               eventCreated: event.eventCreated,
               requestedState: "active",
               source: "checkout"
             })
           : {
-              eventCreated: Number(
-                access.lifetime_state_event_created ?? 0
-              ),
+              eventCreated: access.eventCreated,
               outcome: "processed",
               state: "active"
             };
@@ -257,6 +262,7 @@ export function createLifetimeStore(pool) {
           await client.query(
             `UPDATE player_access
              SET membership_state = 'active',
+                 membership_mode = $4,
                  active_purchase_id = $2,
                  lifetime_activated_at = COALESCE(
                    lifetime_activated_at,
@@ -268,11 +274,16 @@ export function createLifetimeStore(pool) {
                  ),
                  entitlement_updated_at = NOW(),
                  updated_at = NOW()
-             WHERE clerk_user_id = $1`,
+             WHERE clerk_user_id = $1
+               AND (
+                 membership_mode = $4 OR
+                 (membership_mode IS NULL AND membership_state = 'none')
+               )`,
             [
               purchase.player_id,
               purchase.id,
-              transition.eventCreated
+              transition.eventCreated,
+              mode
             ]
           );
         }
@@ -291,7 +302,7 @@ export function createLifetimeStore(pool) {
     /** @param {Record<string, unknown>} event */
     async transitionEntitlement(event) {
       return transact(pool, async (client) => {
-        if (!(await beginWebhookEvent(client, event))) {
+        if (!(await beginWebhookEvent(client, event, mode))) {
           return { outcome: "duplicate" };
         }
         if (
@@ -315,11 +326,13 @@ export function createLifetimeStore(pool) {
                payment_intent_id IS NULL OR
                payment_intent_id = $1
              )
+             AND billing_mode = $4
            FOR UPDATE`,
           [
             event.paymentIntentId,
             event.purchaseId,
-            event.ownerId
+            event.ownerId,
+            mode
           ]
         );
         const purchase = purchaseResult.rows[0];
@@ -328,18 +341,16 @@ export function createLifetimeStore(pool) {
           return { outcome: "unlinked" };
         }
         const accessResult = await client.query(
-          `SELECT membership_state, lifetime_state_event_created
+          `SELECT membership_state, membership_mode, lifetime_state_event_created
            FROM player_access
            WHERE clerk_user_id = $1
            FOR UPDATE`,
           [purchase.player_id]
         );
-        const access = accessResult.rows[0] ?? {};
+        const access = projectedAccess(accessResult.rows[0] ?? {}, mode);
         const transition = transitionLifetimeState({
-          currentEventCreated: Number(
-            access.lifetime_state_event_created ?? 0
-          ),
-          currentState: String(access.membership_state ?? "none"),
+          currentEventCreated: access.eventCreated,
+          currentState: access.state,
           eventCreated: Number(event.eventCreated),
           requestedState:
             /** @type {"active" | "refunded" | "disputed"} */ (event.state),
@@ -374,6 +385,7 @@ export function createLifetimeStore(pool) {
           await client.query(
             `UPDATE player_access
              SET membership_state = $1,
+                 membership_mode = $5,
                  active_purchase_id = $2,
                  lifetime_activated_at = CASE
                    WHEN $1 = 'active' THEN COALESCE(
@@ -385,12 +397,17 @@ export function createLifetimeStore(pool) {
                  lifetime_state_event_created = $3,
                  entitlement_updated_at = NOW(),
                  updated_at = NOW()
-             WHERE clerk_user_id = $4`,
+             WHERE clerk_user_id = $4
+               AND (
+                 membership_mode = $5 OR
+                 (membership_mode IS NULL AND membership_state = 'none')
+               )`,
             [
               transition.state,
               purchase.id,
               transition.eventCreated,
-              purchase.player_id
+              purchase.player_id,
+              mode
             ]
           );
         }
@@ -409,15 +426,16 @@ export function createLifetimeStore(pool) {
     /** @param {Record<string, unknown>} event */
     async closeCheckout(event) {
       return transact(pool, async (client) => {
-        if (!(await beginWebhookEvent(client, event))) {
+        if (!(await beginWebhookEvent(client, event, mode))) {
           return { outcome: "duplicate" };
         }
         const purchaseResult = await client.query(
           `SELECT id, status, provider_event_created
            FROM lifetime_purchases
            WHERE checkout_session_id = $1
+             AND billing_mode = $2
            FOR UPDATE`,
-          [event.sessionId]
+          [event.sessionId, mode]
         );
         const purchase = purchaseResult.rows[0];
         if (!purchase) {
@@ -526,6 +544,21 @@ function lifetimeResult(state, outcome) {
   };
 }
 
+/**
+ * A projection row counts only in the Billing Mode that wrote it.
+ * @param {Record<string, unknown>} row
+ * @param {"test" | "live"} mode
+ */
+function projectedAccess(row, mode) {
+  if (row.membership_mode !== mode) {
+    return { state: "none", eventCreated: 0 };
+  }
+  return {
+    state: String(row.membership_state ?? "none"),
+    eventCreated: Number(row.lifetime_state_event_created ?? 0)
+  };
+}
+
 /** @param {string} state */
 function purchaseStatus(state) {
   return state === "active" ? "paid" : state;
@@ -534,19 +567,21 @@ function purchaseStatus(state) {
 /**
  * @param {{ query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }} client
  * @param {Record<string, unknown>} event
+ * @param {"test" | "live"} mode
  */
-async function beginWebhookEvent(client, event) {
+async function beginWebhookEvent(client, event, mode) {
   const result = await client.query(
     `INSERT INTO stripe_webhook_events (
        event_id,
        event_type,
        stripe_created,
-       outcome
+       outcome,
+       billing_mode
      )
-     VALUES ($1, $2, $3, 'processing')
+     VALUES ($1, $2, $3, 'processing', $4)
      ON CONFLICT (event_id) DO NOTHING
      RETURNING event_id`,
-    [event.eventId, event.eventType, event.eventCreated]
+    [event.eventId, event.eventType, event.eventCreated, mode]
   );
   return Boolean(result.rows[0]);
 }
