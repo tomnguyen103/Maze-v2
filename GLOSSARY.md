@@ -86,14 +86,15 @@ amber, Tideglass indigo, Bellroot pink. Atlas islands, Labyrinth tiles, and
 tinted cards on the admin and Classroom surfaces reuse it as decoration only.
 _Avoid_: Island colour, status colour, difficulty colour
 
-**Journey**:
-The visual design system of every Echo Maze surface: sky-tinted grid paper,
-white panels, and Region Hue cards. It names presentation, never a game rule.
-_Avoid_: Theme (alone), skin, mode
+**Field Journal**:
+The visual identity of every Echo Maze surface: ivory paper, charcoal ink,
+lantern amber actions, and drawn Atlas territories. It names presentation,
+never a game rule.
+_Avoid_: Journey, Theme (alone), skin, mode
 
 **Theme Choice**:
-An Explorer setting of light, dark, or system appearance for the Journey
-design system. It changes no Run, score, or progress.
+An Explorer setting of light, dark, or system appearance for the Field
+Journal identity. It changes no Run, score, or progress.
 _Avoid_: Palette, Region Theme
 
 **Warden Guild**:
