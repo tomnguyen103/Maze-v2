@@ -118,9 +118,13 @@ describe("Lifetime Membership dialog", () => {
     expect(document.getElementById("lifetime-status")?.textContent).toBe(message);
   });
 
-  it("US-03.5 keeps the generic message for any other server answer", async () => {
+  it.each([
+    ["a server error", new PlayerApiError("Internal detail.", 500, { error: "Internal detail." })],
+    ["a 403 without a server message", new PlayerApiError("Player services are unavailable. Guest play still works.", 403, {})],
+    ["a network failure", new TypeError("Failed to fetch")]
+  ])("US-03.5 keeps the generic message for %s", async (_name, failure) => {
     const unlock = vi.fn(async () => {
-      throw new PlayerApiError("Internal detail.", 500, { error: "Internal detail." });
+      throw failure;
     });
     createLifetimeView({ onUnlock: unlock }).showMembership();
     const primary = /** @type {HTMLButtonElement} */ (

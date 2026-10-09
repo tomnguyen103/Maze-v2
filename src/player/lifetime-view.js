@@ -147,7 +147,8 @@ export function createLifetimeView({ onUnlock = async () => {} } = {}) {
       // A sign-in or sale-state answer has a message for the Explorer.
       setStatus(
         error instanceof PlayerApiError &&
-          (error.status === 401 || error.status === 403)
+          (error.status === 401 || error.status === 403) &&
+          typeof error.body.error === "string"
           ? error.message
           : "Checkout unavailable. Try again.",
         "error"
