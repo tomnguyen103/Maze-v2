@@ -536,7 +536,18 @@ describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () 
     }
   });
 
-  it("keeps the amber action label and the pressed-control label at 4.5:1 (US-06.2)", () => {
+  it("keeps the Constellation tiles at 3:1 on the map ground (US-06.1)", () => {
+    const ground = token("--color-night-deep");
+    const signal = token("--color-signal");
+    const css = source("src/game/daily-constellation.css");
+    expect(css).toMatch(/\.daily-constellation__map \{[^}]*background: var\(--color-night-deep\)/);
+    expect(contrast(signal, ground)).toBeGreaterThanOrEqual(3);
+    // The glowing band draws at 0.62 opacity; blend it over the ground.
+    const glowing = signal.map((channel, index) => 0.62 * channel + 0.38 * ground[index]);
+    expect(contrast(/** @type {[number, number, number]} */ (glowing), ground)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the amber action label and the signal-deep label at 4.5:1 (US-06.2)", () => {
     for (const block of blocks) {
       for (const [text, ground] of [
         ["--color-accent-ink", "--color-signal"],

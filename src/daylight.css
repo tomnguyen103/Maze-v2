@@ -471,7 +471,8 @@ a:hover {
   cursor: pointer;
 }
 
-.scoreboard-button:hover:not(:disabled) {
+.scoreboard-button:hover:not(:disabled),
+.scoreboard-button:active:not(:disabled) {
   background: color-mix(in oklab, var(--color-signal) 88%, var(--color-accent-ink));
 }
 
@@ -2041,9 +2042,8 @@ body[data-run-mode="first-light"] .play-workbench {
 .landing-hero__price {
   margin: var(--space-4) 0 0;
   color: var(--color-ink);
-  font-family: var(--font-display);
   font-size: 1.15rem;
-  font-weight: 760;
+  font-weight: 700;
 }
 
 .landing-hero__figure {
