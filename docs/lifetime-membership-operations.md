@@ -305,8 +305,8 @@ member shows no membership, because an Unclassified Purchase grants nothing.
    Confirm that every row reports a mode. Resolve each reported row in Stripe or in
    the database. Do not edit a row by hand. Repeat step 3 until no row reports a
    problem. The row problem `open_purchase_conflict` means the player already holds
-   another open purchase of the same mode. Expire one of the two in Stripe, then
-   run step 3 again.
+   another open purchase of the same mode. Expire the already classified open
+   Checkout in Stripe, not the unclassified one. Then run step 3 again.
 
 5. **Apply the classification.** Owner action.
    Run `npm run classify:lifetime-purchases -- --apply` with the same test key. The

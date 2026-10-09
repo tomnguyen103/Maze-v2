@@ -215,7 +215,7 @@ export function createLifetimeStore(pool, { mode }) {
            FOR UPDATE`,
           [purchase.player_id]
         );
-        const access = projectedAccess(accessResult.rows[0] ?? {}, mode);
+        const access = entitlementBasis(accessResult.rows[0] ?? {}, purchase, mode);
         if (
           !event &&
           (access.state === "refunded" ||

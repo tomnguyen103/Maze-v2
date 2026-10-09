@@ -690,6 +690,39 @@ describe("Lifetime Membership store", () => {
     expect(statements.some((sql) => sql.includes("UPDATE player_access"))).toBe(false);
   });
 
+  it("US-06.3 a late test checkout event keeps a refunded test purchase refunded under a live projection", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_late_checkout" }],
+      [{ id: "purchase_123", player_id: "user_explorer", status: "refunded", provider_event_created: 200 }],
+      [{
+        lifetime_state_event_created: 900,
+        membership_mode: "live",
+        membership_state: "active"
+      }],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    const result = await store.activatePurchase({
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_test",
+      paymentState: "paid",
+      priceId: "price_test",
+      purchaseId: "purchase_123",
+      sessionId: "cs_test_echo"
+    }, {
+      eventCreated: 100,
+      eventId: "evt_late_checkout",
+      eventType: "checkout.session.completed"
+    });
+
+    expect(result.outcome).not.toBe("processed");
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes("UPDATE lifetime_purchases"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("UPDATE player_access"))).toBe(false);
+  });
+
   it("US-07.3 ignores a refund of the other mode without touching the purchase", async () => {
     const { client, pool } = transactionalPool([
       [],
