@@ -5,7 +5,7 @@ import { getRegionTheme } from "../src/game/region-theme.js";
 import { renderAtlasIllustrationMarkup } from "../src/game/quest-atlas-view.js";
 
 const ATLAS_REGION_IDS = ["foundation", "developing", "capable", "advanced", "mastery"];
-const NEUTRAL_WASH = "color-mix(in oklab, var(--color-ink-muted) 30%, var(--color-paper))";
+const NEUTRAL_WASH = "color-mix(in oklab, var(--color-ink-muted) 60%, var(--color-ink))";
 const tokensCss = readFileSync(resolve(process.cwd(), "tokens.css"), "utf8");
 const atlasCss = readFileSync(resolve(process.cwd(), "src/game/quest-atlas.css"), "utf8");
 
@@ -116,6 +116,25 @@ describe("US-07 — Atlas territories", () => {
       const ground = oklabOf(tokenValue(scope, "--color-paper"));
       for (const fill of fills) {
         expect(contrastRatio(mixedOklab(fill, scope), ground)).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("US-07.2 keeps the neutral wash at 3:1 against the Atlas ground in light and Night", () => {
+    for (const scope of [LIGHT, NIGHT]) {
+      const ground = oklabOf(tokenValue(scope, "--color-paper"));
+      expect(contrastRatio(mixedOklab(NEUTRAL_WASH, scope), ground)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("US-07.1 keeps the stamps and Gate flags at 3:1 against every territory fill in light and Night", () => {
+    expect(atlasFill(".atlas-illustration__stamp")).toBe("var(--color-paper)");
+    const gateRule = atlasCss.slice(atlasCss.indexOf(".atlas-illustration__gate {"));
+    expect(gateRule.slice(0, gateRule.indexOf("}"))).toContain("stroke: var(--color-paper);");
+    for (const scope of [LIGHT, NIGHT]) {
+      const mark = oklabOf(tokenValue(scope, "--color-paper"));
+      for (const fill of [...territoryFills(atlasMarkup()), NEUTRAL_WASH]) {
+        expect(contrastRatio(mixedOklab(fill, scope), mark)).toBeGreaterThanOrEqual(3);
       }
     }
   });

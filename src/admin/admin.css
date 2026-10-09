@@ -155,7 +155,7 @@
   gap: var(--space-3);
 }
 
-/* Each card takes a region hue: 9% fill, 44% border, as in the Atlas. */
+/* Each card takes a region hue for its border and marker. */
 .admin-metric {
   --territory: var(--region-windcall);
   display: grid;

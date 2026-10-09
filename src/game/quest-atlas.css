@@ -115,7 +115,7 @@
 
 /* Each fill is a Region Hue wash; an unknown Region keeps the neutral wash. */
 .atlas-illustration__territory {
-  fill: color-mix(in oklab, var(--color-ink-muted) 30%, var(--color-paper));
+  fill: color-mix(in oklab, var(--color-ink-muted) 60%, var(--color-ink));
   stroke: var(--color-line);
   stroke-width: 2;
   stroke-linejoin: round;
@@ -142,12 +142,12 @@
 }
 
 .atlas-illustration__stamp {
-  fill: var(--color-ink);
+  fill: var(--color-paper);
 }
 
 .atlas-illustration__gate {
   fill: none;
-  stroke: var(--color-ink);
+  stroke: var(--color-paper);
   stroke-width: 2;
   stroke-linejoin: round;
 }

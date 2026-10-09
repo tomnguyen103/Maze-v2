@@ -700,20 +700,20 @@ function getCanvasContext(canvas) {
 }
 
 function readPalette() {
-  // Read from body so the Region tile hue on body reaches the canvas.
+  // Read from body so a scope set on body reaches the canvas. The board marks
+  // use their own tokens, because Night draws them on a light passage.
   const styles = getComputedStyle(document.body ?? document.documentElement);
-  /** @param {string} name */
   /**
    * @param {string} name
    * @param {string} fallback
    */
   const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    echo: color("--color-echo", FALLBACK_PALETTE.echo),
+    echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
     fogGrid: color("--color-fog-grid", FALLBACK_PALETTE.fogGrid),
-    gate: color("--color-gate", FALLBACK_PALETTE.gate),
+    gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
     grid: color("--color-grid", FALLBACK_PALETTE.grid),
     ink: color("--color-ink", FALLBACK_PALETTE.ink),
     markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
@@ -728,7 +728,7 @@ function readPalette() {
     wall: color("--color-wall", FALLBACK_PALETTE.wall),
     wallGrid: color("--color-wall-grid", FALLBACK_PALETTE.wallGrid),
     wallMark: color("--color-wall-mark", FALLBACK_PALETTE.wallMark),
-    warden: color("--color-warden", FALLBACK_PALETTE.warden)
+    warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
   };
 }
 

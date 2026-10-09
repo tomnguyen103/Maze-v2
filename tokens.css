@@ -63,6 +63,9 @@
   --color-wall: oklch(30% 0.012 60);
   --color-wall-grid: oklch(20% 0.012 60 / 85%);
   --color-wall-mark: oklch(48% 0.014 60 / 75%);
+  --color-board-gate: var(--color-gate);
+  --color-board-warden: var(--color-warden);
+  --color-board-echo: var(--color-echo);
   --color-grid: oklch(40% 0.02 60 / 35%);
   --color-pulse: oklch(68.5% 0.169 237 / 30%);
   --access-fog: oklch(90% 0.02 230);
@@ -183,6 +186,9 @@
     --color-wall: oklch(30% 0.012 65);
     --color-wall-grid: oklch(10% 0.012 65 / 90%);
     --color-wall-mark: oklch(50% 0.014 65 / 75%);
+    --color-board-gate: oklch(48% 0.14 155);
+    --color-board-warden: oklch(50% 0.19 24);
+    --color-board-echo: oklch(48% 0.17 237);
     --color-grid: oklch(72% 0.02 80 / 30%);
   }
 }
@@ -228,5 +234,8 @@
   --color-wall: oklch(30% 0.012 65);
   --color-wall-grid: oklch(10% 0.012 65 / 90%);
   --color-wall-mark: oklch(50% 0.014 65 / 75%);
+  --color-board-gate: oklch(48% 0.14 155);
+  --color-board-warden: oklch(50% 0.19 24);
+  --color-board-echo: oklch(48% 0.17 237);
   --color-grid: oklch(72% 0.02 80 / 30%);
 }

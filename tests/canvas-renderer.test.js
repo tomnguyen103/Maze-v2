@@ -334,7 +334,7 @@ describe("Canvas renderer", () => {
       markFills.push(fillStyle);
     });
     document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
-    document.body.style.setProperty("--color-warden", "rgb(200, 0, 0)");
+    document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
 
     renderer.render({
       ...run,
@@ -450,6 +450,17 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
+  it("US-08.1 keeps the Gate, Warden and Echo marks at 3:1 against the passage in light and Night", () => {
+    for (const scope of [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT]) {
+      const passage = oklabOf(canvasToken(scope, "--color-passage"));
+      for (const name of ["--color-board-gate", "--color-board-warden", "--color-board-echo"]) {
+        const value = canvasToken(scope, name);
+        const mark = oklabOf(value.startsWith("var(") ? canvasToken(LIGHT, value.slice(4, -1)) : value);
+        expect(contrastRatio(mark, passage)).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
   it("US-08.1 leaves the passage colour to the canvas tokens, so no Region theme tints it", () => {
     const regionCss = readFileSync(resolve(process.cwd(), "src/game/region-theme.css"), "utf8");
 
@@ -458,7 +469,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {
-    document.body.style.setProperty("--color-warden", "rgb(200, 0, 0)");
+    document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
     const modes = /** @type {const} */ (["patrol", "hunt", "intercept", "lured"]);
 
     const shapes = modes.map((mode) => {
