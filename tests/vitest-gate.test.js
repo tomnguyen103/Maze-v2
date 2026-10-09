@@ -6,7 +6,12 @@ import {
   assertVitestGate,
   parseVitestSummary
 } from "../scripts/vitest-gate.mjs";
-import { runVitest, runVitestGate } from "../scripts/run-vitest-gate.mjs";
+import {
+  gatePassLine,
+  NATIVE_CRASH_EXIT_CODE,
+  runVitest,
+  runVitestGate
+} from "../scripts/run-vitest-gate.mjs";
 
 const EXPECTED = {
   testFiles: 147,
@@ -172,7 +177,7 @@ describe("Vitest gate validation", () => {
 
 describe("native-crash retry", () => {
   const crash = {
-    code: 3221226505,
+    code: NATIVE_CRASH_EXIT_CODE,
     signal: null,
     output: "",
     stderr: ""
@@ -202,7 +207,8 @@ describe("native-crash retry", () => {
     expect(gate).toMatchObject({ tests: 1324, retries: 1 });
     expect(calls()).toBe(2);
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("3221226505");
+    expect(lines[0]).toContain(String(NATIVE_CRASH_EXIT_CODE));
+    expect(lines[0]).toContain("attempt 2 of 3");
   });
 
   it("US-01.2: fails with the code and attempt count when every run crashes", async () => {
@@ -246,6 +252,29 @@ describe("native-crash retry", () => {
       "Vitest exited with code 3221226505 before emitting a summary."
     );
     expect(calls()).toBe(1);
+  });
+
+  it("US-01.6: passes after two native crashes and reports 2 retries", async () => {
+    const { run, calls } = sequencedRun([crash, crash, pass]);
+
+    const gate = await runVitestGate({ expected: EXPECTED, run, logRetry: () => {} });
+
+    expect(gate).toMatchObject({ tests: 1324, retries: 2 });
+    expect(calls()).toBe(3);
+  });
+
+  it("US-01.7: names the retry count on the pass line", () => {
+    const gate = { passed: 9, skipped: 1, testFiles: 2, tests: 10 };
+
+    expect(gatePassLine({ ...gate, retries: 0 })).toBe(
+      "Vitest gate passed: 9 passed, 1 skipped across 2 files (10 total)."
+    );
+    expect(gatePassLine({ ...gate, retries: 1 })).toContain(
+      "passed after 1 native-crash retry:"
+    );
+    expect(gatePassLine({ ...gate, retries: 2 })).toContain(
+      "passed after 2 native-crash retries:"
+    );
   });
 });
 

@@ -105,11 +105,17 @@ the next attempt with no change.
 
 ### Trigger
 
-The trigger is the `fetch` client (undici) of Node 24.15.0 on Windows. Every
-HTTP route test sends `fetch` requests to a loopback server. A plain Node
-script with no Vitest repeats one cycle 300 times: start a server, send one
-`fetch` POST, and close the server. That script crashes with the same
-`0xC0000409` and an empty stderr.
+The evidence points to the `fetch` client (undici) of Node 24.15.0 on Windows.
+The evidence does not prove it. Every HTTP route test sends `fetch` requests to
+a loopback server. A plain Node script with no Vitest repeats one cycle 300
+times: start a server, send one `fetch` POST, and close the server. That script
+crashes with the same `0xC0000409` and an empty stderr.
+
+The contrast with `node:http` is 4 of 40 against 0 of 40. A one-sided Fisher
+test gives p ≈ 0.06, so that row alone is weak. The `fetch` variants in the
+"Ruled out" table crash at similar rates, and that makes the case stronger.
+`node:http` also uses a different llhttp build (native, not WASM), so the
+contrast changes two variables.
 
 | Variant | Native crashes |
 | :-- | :-- |
@@ -126,8 +132,8 @@ Each row changes one variable and still crashes. So that variable is not the tri
 | Candidate | Evidence |
 | :-- | :-- |
 | undici keep-alive sockets | A dispatcher with keep-alive off: 8 of 40 |
-| Closing every server connection | `closeAllConnections()` before close: 11 of 40 |
-| Request logging | `LOG_LEVEL=silent`: 7 of 40 |
+| Open server connections at close | `closeAllConnections()` before close: 11 of 40 |
+| Request logs | `LOG_LEVEL=silent`: 7 of 40 |
 | The dot reporter and its pipes | Crashes still occur with stdout sent to a file |
 | The early 413 body-limit path | A normal 200-path cycle crashes too (4 of 20) |
 | The WASM trap handler | `--disable-wasm-trap-handler`: 3 of 30 |
@@ -148,34 +154,51 @@ between batches, and count exit 1 apart from `3221226505`.
 
 `runVitestGate` retries a run when all three of these conditions are true:
 
-- The exit code is `3221226505`.
-- No signal ends the run, and no worker-loss marker appears.
+- The exit code is `3221226505`. Node reports a signal kill as code `null`, so
+  a signal never matches.
+- No worker-loss marker appears.
 - The output holds no summary that can be parsed.
 
 The gate makes at most 3 attempts. Each retry prints one stderr line with the
 code and the attempt number. The pass line names the retry count. When all 3
 attempts crash, the gate fails with the code and the attempt count.
 
-The retry cannot hide a real failure. A run that prints a summary is never
-retried, so a failed test, a count mismatch, or worker loss fails on the first
-run. Any other exit code with no summary also fails on the first run.
+The gate does not retry a run that prints a summary. So a failed test, a count
+mismatch, or worker loss in a complete run fails on the first run. Any other
+exit code with no summary also fails on the first run.
+
+The retry has one limit. The gate discards the output of a crashed attempt. A
+flaky test can fail in that attempt and pass in the next one, and the gate then
+passes. A manual re-run has the same limit. A deterministic failure fails every
+attempt, so the retry does not hide it.
+
+An armed database or object-store lane runs again on each retry. Its tests use
+their own fixtures, so a second run is safe.
 
 The fix measures this way, over 12 full gate runs on 2026-10-09:
 
 | Measure | Result |
 | :-- | :-- |
 | Vitest runs that crashed natively | 5 of 17 (29%) |
-| Gate runs that needed a retry | 4 of 12 |
-| Gate runs that needed 2 retries | 1 of 12 |
+| Gate runs with at least 1 retry | 4 of 12 |
+| Gate runs with 2 retries (included in the row above) | 1 of 12 |
 | Gate runs that failed | 0 of 12 |
 
 The gate fails only when 3 runs in a row crash. At a 29% crash rate, that is
-about 2.4% of gate runs. Each pass line names its retry count, so a rise in the
-crash rate stays visible.
+about 2.4% of gate runs. This number assumes that the attempts are independent.
+The sample is small: the 95% interval for the crash rate is about 13% to 53%,
+so the gate failure rate is between about 0.2% and 15%. Each pass line names its
+retry count, so a rise in the crash rate stays visible.
 
 ### Remove the retry when
 
-A Node version stops the crash in the plain Node `fetch` repro. A version
-change needs an owner download, so this work did not test one. Run the repro
-loop against the new version and count `3221226505` exits. When 0 of 40 crash,
-remove the retry and this section's workaround label.
+Both of these conditions are true:
+
+1. A Node version stops the crash in the plain Node `fetch` repro. Run the
+   repro loop against the new version and count `3221226505` exits. The
+   result must be 0 of 40.
+2. 10 full gate runs on that version show no native crash.
+
+A version change needs an owner download, so this work did not test one. When
+both conditions are true, remove the retry and the `[SCHEMA/TOOL]` label from
+this section's heading.
