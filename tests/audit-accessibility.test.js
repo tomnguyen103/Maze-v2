@@ -534,4 +534,18 @@ describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () 
       }
     }
   });
+
+  it("keeps the amber action label and the pressed-control label at 4.5:1 (US-06.2)", () => {
+    for (const block of blocks) {
+      for (const [text, ground] of [
+        ["--color-accent-ink", "--color-signal"],
+        ["--color-on-signal-deep", "--color-signal-deep"]
+      ]) {
+        expect(
+          contrast(rgbOf(declared(block, text)), rgbOf(declared(block, ground))),
+          `${text} on ${ground}`
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });
