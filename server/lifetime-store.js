@@ -333,12 +333,13 @@ export function createLifetimeStore(pool, { mode }) {
         // The Financial Fact names no account, so it updates even when no
         // purchase row links. It is locked last, after the purchase and
         // access rows, in the same order as `activatePurchase`.
+        const refundedCents = Number(event.refundedCents ?? 0);
         /** @param {"active" | "refunded" | "disputed" | null} requestedState */
         const applyFact = (requestedState) => transitionFact(client, {
           billingMode: mode,
           eventCreated: Number(event.eventCreated),
           paymentIntentId: String(event.paymentIntentId),
-          refundedCents: Number(event.refundedCents ?? 0),
+          refundedCents,
           requestedState
         });
         if (
@@ -394,9 +395,10 @@ export function createLifetimeStore(pool, { mode }) {
         );
         // The refunded cents come from the charge as it is now, not as of the
         // event, so a full refund wins whatever the event order. The clock
-        // never moves back, and `refunded` stays absorbing (ADR 0007).
+        // never moves back, and `refunded` stays absorbing
+        // (`transitionLifetimeState`).
         const transition =
-          Number(event.refundedCents ?? 0) >= LIFETIME_AMOUNT &&
+          refundedCents >= LIFETIME_AMOUNT &&
           access.state !== "refunded"
             ? {
                 eventCreated: Math.max(
