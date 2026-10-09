@@ -213,6 +213,10 @@ export function createLifetimeService({
         recordEvent("lifetime_webhook", { outcome: "ignored" });
         return { outcome: "ignored" };
       }
+      if (normalized.livemode !== (mode === "live")) {
+        recordEvent("lifetime_webhook", { outcome: "ignored" });
+        return { outcome: "ignored", reason: "mode_mismatch" };
+      }
       if (
         normalized.kind === "checkout-closed" &&
         "sessionId" in normalized

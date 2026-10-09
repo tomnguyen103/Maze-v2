@@ -258,4 +258,14 @@ describe("lifetime provider event normalization", () => {
       expect(normalizeLifetimeProviderEvent(event)).toBeNull();
     }
   });
+
+  it("US-04.2 carries the event livemode flag on the normalized event", () => {
+    expect(normalizeLifetimeProviderEvent({
+      id: "evt_live",
+      type: "checkout.session.completed",
+      created: 5,
+      livemode: true,
+      data: { object: { id: "cs_live" } }
+    })).toMatchObject({ kind: "checkout-paid", livemode: true });
+  });
 });

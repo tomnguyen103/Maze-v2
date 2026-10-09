@@ -55,6 +55,7 @@ export function verifyLifetimeCheckout(checkout, expected) {
  *   id?: unknown,
  *   type?: unknown,
  *   created?: unknown,
+ *   livemode?: unknown,
  *   data?: { object?: Record<string, unknown> }
  * }} event
  */
@@ -67,12 +68,15 @@ export function normalizeLifetimeProviderEvent(event) {
   ) {
     return null;
   }
+  const object = event.data.object;
   const base = {
     eventCreated: Number(event.created),
     eventId: String(event.id),
-    eventType: String(event.type)
+    eventType: String(event.type),
+    livemode: typeof event.livemode === "boolean"
+      ? event.livemode
+      : object.livemode
   };
-  const object = event.data.object;
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"

@@ -279,12 +279,13 @@ describe("Lifetime Membership service", () => {
     expect(deps.store.activatePurchase).not.toHaveBeenCalled();
   });
 
-  it("uses the same activation operation for a signed paid webhook", async () => {
+  it("US-04.1 uses the same activation operation for a signed paid webhook", async () => {
     const deps = dependencies();
     deps.provider.constructWebhookEvent.mockReturnValue({
       id: "evt_paid",
       type: "checkout.session.completed",
       created: 100,
+      livemode: false,
       data: { object: { id: SESSION_ID } }
     });
     const service = createLifetimeService(deps);
@@ -309,6 +310,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_paid_conflict",
       type: "checkout.session.completed",
       created: 100,
+      livemode: false,
       data: { object: { id: SESSION_ID } }
     });
     deps.provider.retrievePaymentReference.mockResolvedValue({
@@ -330,6 +332,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_paid_stale",
       type: "checkout.session.completed",
       created: 90,
+      livemode: false,
       data: { object: { id: SESSION_ID } }
     });
     deps.store.activatePurchase.mockResolvedValue({ outcome: "stale" });
@@ -350,6 +353,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_dispute",
       type: "charge.dispute.created",
       created: 101,
+      livemode: false,
       data: { object: { payment_intent: "pi_echo" } }
     });
     const service = createLifetimeService(deps);
@@ -377,6 +381,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_expired",
       type: "checkout.session.expired",
       created: 102,
+      livemode: false,
       data: { object: { id: SESSION_ID } }
     });
     const service = createLifetimeService(deps);
@@ -396,6 +401,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_unknown",
       type: "customer.secret_payload",
       created: 103,
+      livemode: false,
       data: { object: { raw: "must-not-leak" } }
     });
     const service = createLifetimeService(deps);
@@ -414,6 +420,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_partial",
       type: "refund.updated",
       created: 102,
+      livemode: false,
       data: {
         object: {
           amount: 300,
@@ -443,6 +450,7 @@ describe("Lifetime Membership service", () => {
       id: "evt_split_complete",
       type: "refund.updated",
       created: 103,
+      livemode: false,
       data: {
         object: {
           amount: 299,
@@ -464,5 +472,66 @@ describe("Lifetime Membership service", () => {
     expect(deps.store.transitionEntitlement).toHaveBeenLastCalledWith(
       expect.objectContaining({ state: "refunded" })
     );
+  });
+
+  it.each([
+    ["checkout.session.completed", { id: SESSION_ID }],
+    ["charge.dispute.created", { payment_intent: "pi_echo" }]
+  ])("US-04.2 ignores a live %s event under test mode without a store call", async (type, object) => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_live_in_test",
+      type,
+      created: 100,
+      livemode: true,
+      data: { object }
+    });
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).resolves.toEqual({ outcome: "ignored", reason: "mode_mismatch" });
+    expect(deps.provider.retrieveCheckout).not.toHaveBeenCalled();
+    expect(deps.store.activatePurchase).not.toHaveBeenCalled();
+    expect(deps.store.transitionEntitlement).not.toHaveBeenCalled();
+    expect(deps.store.closeCheckout).not.toHaveBeenCalled();
+    expect(deps.recordEvent).toHaveBeenCalledWith("lifetime_webhook", {
+      outcome: "ignored"
+    });
+  });
+
+  it("US-04.4 returns the store duplicate outcome for a repeated event", async () => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_repeat",
+      type: "charge.dispute.created",
+      created: 101,
+      livemode: false,
+      data: { object: { payment_intent: "pi_echo" } }
+    });
+    deps.store.transitionEntitlement.mockResolvedValue({ outcome: "duplicate" });
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).resolves.toEqual({ outcome: "duplicate" });
+  });
+
+  it("US-04.5 rethrows a store error and records no outcome", async () => {
+    const deps = dependencies();
+    deps.provider.constructWebhookEvent.mockReturnValue({
+      id: "evt_store_down",
+      type: "checkout.session.completed",
+      created: 100,
+      livemode: false,
+      data: { object: { id: SESSION_ID } }
+    });
+    deps.store.activatePurchase.mockRejectedValue(new Error("store down"));
+    const service = createLifetimeService(deps);
+
+    await expect(
+      service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
+    ).rejects.toThrow("store down");
+    expect(deps.recordEvent).not.toHaveBeenCalled();
   });
 });
