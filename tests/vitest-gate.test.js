@@ -179,7 +179,7 @@ describe("native-crash retry", () => {
   };
   const pass = { code: 0, signal: null, output: reporterOutput() };
 
-  /** @param {Array<{ code: number | null, signal: string | null, output: string, stderr?: string }>} results */
+  /** @param {Array<{ code: number | null, signal: string | null, output: string, stderr?: string, workerLossDetected?: boolean }>} results */
   function sequencedRun(results) {
     let calls = 0;
     return {
@@ -231,6 +231,20 @@ describe("native-crash retry", () => {
     await expect(
       runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
     ).rejects.toThrow("Vitest exited with code 1 before emitting a summary.");
+    expect(calls()).toBe(1);
+  });
+
+  it("US-01.5: does not retry a native crash that also lost a worker", async () => {
+    const { run, calls } = sequencedRun([
+      { ...crash, workerLossDetected: true },
+      pass
+    ]);
+
+    await expect(
+      runVitestGate({ expected: EXPECTED, run, logRetry: () => {} })
+    ).rejects.toThrow(
+      "Vitest exited with code 3221226505 before emitting a summary."
+    );
     expect(calls()).toBe(1);
   });
 });

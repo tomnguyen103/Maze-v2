@@ -14,7 +14,12 @@ const countPath = join(root, "scripts", "vitest-test-count.json");
 const vitestPath = join(root, "node_modules", "vitest", "vitest.mjs");
 const OUTPUT_TAIL_LIMIT = 1024 * 1024;
 const WORKER_LOSS_SCAN_TAIL = 128;
-/** Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409), the native Vitest crash. */
+/**
+ * Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409), the native Vitest crash.
+ * Workaround: Node 24.15.0's `fetch` crashes the process natively on Windows,
+ * so the gate retries this code. Remove the retry when a Node version passes
+ * the repro in docs/solutions/testing/gate-summary-parsed-from-merged-streams.md.
+ */
 export const NATIVE_CRASH_EXIT_CODE = 3221226505;
 
 /**
@@ -143,7 +148,11 @@ export async function runVitestGate({
       // "did not emit a complete test summary", which names the symptom and
       // hides the cause.
       if (!exited) throw error;
-      if (result.code !== NATIVE_CRASH_EXIT_CODE || result.signal) {
+      if (
+        result.code !== NATIVE_CRASH_EXIT_CODE ||
+        result.signal ||
+        result.workerLossDetected
+      ) {
         throw new Error(
           `Vitest exited with ${exitDescription} before emitting a summary.`,
           { cause: error }

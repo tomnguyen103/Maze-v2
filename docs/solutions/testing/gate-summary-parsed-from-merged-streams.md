@@ -98,8 +98,84 @@ the Node process on Windows, not a test failure and not a parser problem. Under
 the old ordering this same run reported "Vitest did not emit a complete test
 summary", which is why the first investigation went looking at the parser.
 
-It reproduces at roughly one run in ten on this workstation and passes on the
-next attempt with no change. It is a runner-level crash, so a re-run is a
-legitimate response — but it is now a re-run of a *named* failure rather than
-of an unexplained one. If it becomes frequent, the next step is
-`--pool=forks` or a smaller `maxWorkers`, not another look at the parser.
+It reproduces in 1 to 3 of 10 full gate runs on this workstation and passes on
+the next attempt with no change.
+
+## The trigger, and the bounded retry `[SCHEMA/TOOL]`
+
+### Trigger
+
+The trigger is the `fetch` client (undici) of Node 24.15.0 on Windows. Every
+HTTP route test sends `fetch` requests to a loopback server. A plain Node
+script with no Vitest repeats one cycle 300 times: start a server, send one
+`fetch` POST, and close the server. That script crashes with the same
+`0xC0000409` and an empty stderr.
+
+| Variant | Native crashes |
+| :-- | :-- |
+| Full gate, before this change | 3 of 10 |
+| HTTP route subset (15 files) | 6 of 30 |
+| Plain Node repro with `fetch` | 4 of 40 |
+| Plain Node repro with `node:http` `request` | 0 of 40 |
+| Plain Node repro with no network (timers and CPU only) | 0 of 60 |
+
+### Ruled out
+
+Each row changes one variable and still crashes. So that variable is not the trigger.
+
+| Candidate | Evidence |
+| :-- | :-- |
+| undici keep-alive sockets | A dispatcher with keep-alive off: 8 of 40 |
+| Closing every server connection | `closeAllConnections()` before close: 11 of 40 |
+| Request logging | `LOG_LEVEL=silent`: 7 of 40 |
+| The dot reporter and its pipes | Crashes still occur with stdout sent to a file |
+| The early 413 body-limit path | A normal 200-path cycle crashes too (4 of 20) |
+| The WASM trap handler | `--disable-wasm-trap-handler`: 3 of 30 |
+| The WASM compiler tier of llhttp | `--liftoff-only` 6 of 70, control 8 of 70 |
+| Test isolation | `--isolate=false`: 5 of 30 |
+
+`--pool=forks` keeps the main process alive, but the crash moves into the
+worker: 10 of 30 runs report "Worker exited unexpectedly". The gate fails on
+worker loss, so `forks` changes the message and not the result.
+
+Port exhaustion contaminates a long repro loop on Windows. Thousands of
+loopback connections fill the ephemeral port range with `TIME_WAIT` sockets.
+`fetch` then fails with `connect ETIMEDOUT 127.0.0.1:49152` and exit code 1.
+That is a JavaScript error, not the native crash. Wait for `TIME_WAIT` to drain
+between batches, and count exit 1 apart from `3221226505`.
+
+### Fix
+
+`runVitestGate` retries a run when all three of these conditions are true:
+
+- The exit code is `3221226505`.
+- No signal ends the run, and no worker-loss marker appears.
+- The output holds no summary that can be parsed.
+
+The gate makes at most 3 attempts. Each retry prints one stderr line with the
+code and the attempt number. The pass line names the retry count. When all 3
+attempts crash, the gate fails with the code and the attempt count.
+
+The retry cannot hide a real failure. A run that prints a summary is never
+retried, so a failed test, a count mismatch, or worker loss fails on the first
+run. Any other exit code with no summary also fails on the first run.
+
+The fix measures this way, over 12 full gate runs on 2026-10-09:
+
+| Measure | Result |
+| :-- | :-- |
+| Vitest runs that crashed natively | 5 of 17 (29%) |
+| Gate runs that needed a retry | 4 of 12 |
+| Gate runs that needed 2 retries | 1 of 12 |
+| Gate runs that failed | 0 of 12 |
+
+The gate fails only when 3 runs in a row crash. At a 29% crash rate, that is
+about 2.4% of gate runs. Each pass line names its retry count, so a rise in the
+crash rate stays visible.
+
+### Remove the retry when
+
+A Node version stops the crash in the plain Node `fetch` repro. A version
+change needs an owner download, so this work did not test one. Run the repro
+loop against the new version and count `3221226505` exits. When 0 of 40 crash,
+remove the retry and this section's workaround label.
