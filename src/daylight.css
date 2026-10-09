@@ -850,11 +850,7 @@ html .trail-compass[hidden] {
   color: var(--color-on-signal-deep);
   border: 1px solid var(--color-signal-deep);
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    120deg,
-    var(--color-signal-deep),
-    color-mix(in oklab, var(--color-signal-deep), black 16%)
-  );
+  background: var(--color-signal-deep);
   box-shadow: 0 6px 16px -8px var(--color-signal-deep);
   text-align: left;
   white-space: normal;

@@ -62,7 +62,7 @@ Every colour is an `oklch()` token in `tokens.css`. Components use no raw hex or
 
 - Use the 4-point spacing scale from `tokens.css` (`--space-1` to `--space-16`).
 - Touch targets are at least 40px by 40px. Controls keep 8px between them.
-- The mobile breakpoint is 768px.
+- The mobile breakpoint is 768px. The shared sheet still breaks at 58rem; ticket 05 moves it to 768px.
 - Buttons use an 8px radius. Cards and panels use a 16px radius.
 - Headers are solid and opaque. A header has no blur and no translucent fill.
 - Dashboard tab strips use an underline. The active tab shows an amber underline.
