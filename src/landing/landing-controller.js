@@ -26,7 +26,7 @@ export function renderLanding(root) {
             <a class="primary-button" href="/play" id="landing-primary-action">Enter the Maze</a>
             <button class="control-button" id="landing-sign-in-hero" type="button">Sign in</button>
           </div>
-          <p class="landing-hero__price">${LIFETIME_PRICE_LABEL} once, bought by an adult</p>
+          <p class="landing-hero__price">${LIFETIME_PRICE_LABEL} USD once, bought by an adult</p>
           <p class="landing-auth-status" id="landing-auth-status" role="status" hidden></p>
         </div>
         <figure class="landing-hero__figure">
@@ -62,7 +62,7 @@ export function renderLanding(root) {
         </div>
         <aside class="landing-membership-preview" aria-labelledby="landing-membership-title">
           <h3 id="landing-membership-title">Optional lifetime access</h3>
-          <p class="landing-membership-price">$5.99 USD once</p>
+          <p class="landing-membership-price">${LIFETIME_PRICE_LABEL} USD once</p>
           <ul>
             <li>Unlimited Runs for this Explorer account</li>
             <li>No subscription or renewal</li>

@@ -89,7 +89,7 @@ test("explains free and optional lifetime access below the game-first hero", asy
   const accountSection = page.getByRole("region", { name: "Play your way" });
 
   await expect(hero.locator(".landing-hero__price")).toContainText(
-    "$5.99 once, bought by an adult"
+    "$5.99 USD once, bought by an adult"
   );
   await expect(accountSection).toContainText("one Guest Run");
   await expect(accountSection).toContainText("three more Runs");

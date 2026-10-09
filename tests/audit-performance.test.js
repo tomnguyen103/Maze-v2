@@ -200,10 +200,10 @@ describe("US-03 and US-04 — the landing hero shows the demo, the price and one
     expect(LIFETIME_PRICE_LABEL).toBe("$5.99");
     const [staticMarkup, renderedMarkup] = markups();
     expect(staticMarkup).toContain(
-      '<p class="landing-hero__price">$5.99 once, bought by an adult</p>'
+      '<p class="landing-hero__price">$5.99 USD once, bought by an adult</p>'
     );
     expect(renderedMarkup).toContain(
-      '<p class="landing-hero__price">${LIFETIME_PRICE_LABEL} once, bought by an adult</p>'
+      '<p class="landing-hero__price">${LIFETIME_PRICE_LABEL} USD once, bought by an adult</p>'
     );
   });
 
@@ -232,7 +232,9 @@ describe("US-03 and US-04 — the landing hero shows the demo, the price and one
     const css = source("src/daylight.css");
     const keyframes = css.indexOf("@keyframes landing-trail-draw {");
     expect(keyframes).toBeGreaterThan(-1);
-    expect(css.slice(keyframes, keyframes + 200)).toContain("stroke-dashoffset");
+    expect(css.slice(keyframes, keyframes + 200)).toMatch(
+      /from\s*\{[^}]*stroke-dashoffset:\s*1;[^}]*\}\s*to\s*\{[^}]*stroke-dashoffset:\s*0;/
+    );
   });
 
   it("US-04.2 runs the trail animation once, only under no-preference", () => {

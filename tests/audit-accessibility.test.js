@@ -459,6 +459,7 @@ describe("US-01 — Field Journal palette tokens", () => {
 
 /** Dialog and learning stylesheets that ticket 06 restyles. */
 const SURFACE_SHEETS = [
+  "src/daylight.css",
   "src/game/game-dialogs.css",
   "src/game/run-replay.css",
   "src/game/first-light.css",
@@ -509,7 +510,7 @@ describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () 
     for (const relative of SURFACE_SHEETS) {
       for (const match of source(relative).matchAll(/outline:\s*([^;]+);/g)) {
         const value = match[1];
-        if (!/transparent|none|0\b/.test(value) && !value.includes("var(--color-focus)")) {
+        if (!/^(?:none|0)$|transparent/.test(value.trim()) && !value.includes("var(--color-focus)")) {
           offenders.push(`${relative}: ${value}`);
         }
       }
@@ -525,7 +526,7 @@ describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () 
         "--color-warden-text",
         "--color-gate-text"
       ]) {
-        for (const ground of ["--color-panel", "--color-stone-raised"]) {
+        for (const ground of ["--color-panel", "--color-stone-raised", "--color-stone"]) {
           expect(
             contrast(rgbOf(declared(block, text)), rgbOf(declared(block, ground))),
             `${text} on ${ground}`
