@@ -1,6 +1,7 @@
 import {
   transitionLifetimeState
 } from "./lifetime-state.js";
+import { recordPaidFact, transitionFact } from "./financial-facts.js";
 import {
   activeUserGuardCtes,
   DeletedUserError,
@@ -290,6 +291,12 @@ export function createLifetimeStore(pool, { mode }) {
               mode
             ]
           );
+          await recordPaidFact(client, {
+            paymentIntentId: String(checkout.paymentIntentId),
+            billingMode: mode,
+            eventCreated: transition.eventCreated,
+            paidAt: new Date()
+          });
         }
         if (event) {
           await finishWebhookEvent(
@@ -309,14 +316,28 @@ export function createLifetimeStore(pool, { mode }) {
         if (!(await beginWebhookEvent(client, event, mode))) {
           return { outcome: "duplicate" };
         }
+        // The Financial Fact names no account, so it updates even when no
+        // purchase row links. It is locked last, after the purchase and
+        // access rows, in the same order as `activatePurchase`.
+        /** @param {"active" | "refunded" | "disputed" | null} requestedState */
+        const applyFact = (requestedState) => transitionFact(client, {
+          billingMode: mode,
+          eventCreated: Number(event.eventCreated),
+          paymentIntentId: String(event.paymentIntentId),
+          refundedCents: Number(event.refundedCents ?? 0),
+          requestedState
+        });
         if (
           event.state !== "active" &&
           event.state !== "refunded" &&
           event.state !== "disputed"
         ) {
+          await applyFact(null);
           await finishWebhookEvent(client, String(event.eventId), "ignored");
           return { outcome: "ignored" };
         }
+        const requestedState =
+          /** @type {"active" | "refunded" | "disputed"} */ (event.state);
         const purchaseResult = await client.query(
           `SELECT
              id,
@@ -341,6 +362,7 @@ export function createLifetimeStore(pool, { mode }) {
         );
         const purchase = purchaseResult.rows[0];
         if (!purchase) {
+          await applyFact(requestedState);
           await finishWebhookEvent(client, String(event.eventId), "unlinked");
           return { outcome: "unlinked" };
         }
@@ -360,8 +382,7 @@ export function createLifetimeStore(pool, { mode }) {
           currentEventCreated: access.eventCreated,
           currentState: access.state,
           eventCreated: Number(event.eventCreated),
-          requestedState:
-            /** @type {"active" | "refunded" | "disputed"} */ (event.state),
+          requestedState,
           source: "provider"
         });
         if (transition.outcome === "processed") {
@@ -420,6 +441,7 @@ export function createLifetimeStore(pool, { mode }) {
             ]
           );
         }
+        await applyFact(requestedState);
         await finishWebhookEvent(
           client,
           String(event.eventId),

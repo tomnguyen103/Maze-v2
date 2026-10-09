@@ -20,6 +20,283 @@ function transactionalPool(results) {
   };
 }
 
+/** @param {Record<string, unknown>[][]} results @param {{ failFact?: boolean }} [options] */
+function paidPool(results, { failFact = false } = {}) {
+  const queue = [...results];
+  const query = vi.fn(/** @type {(sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>} */ (async (sql) => {
+    if (failFact && String(sql).includes("INSERT INTO financial_facts")) {
+      throw new Error("financial fact insert failed");
+    }
+    return { rows: queue.shift() ?? [] };
+  }));
+  const client = { query, release: vi.fn() };
+  return {
+    client,
+    pool: { connect: vi.fn().mockResolvedValue(client), query: vi.fn() }
+  };
+}
+
+/** BEGIN, webhook claim, linked purchase, empty projection, then the writes. */
+const LINKED_PAID = [
+  [],
+  [{ event_id: "evt_paid" }],
+  [{
+    id: "purchase_123",
+    player_id: "user_explorer",
+    provider_event_created: 0,
+    status: "pending"
+  }],
+  [{ lifetime_state_event_created: 0, membership_state: "none" }],
+  [],
+  [],
+  [],
+  [],
+  []
+];
+
+const PAID_EVENT = {
+  eventCreated: 100,
+  eventId: "evt_paid",
+  eventType: "checkout.session.completed"
+};
+
+const REFUND_EVENT = {
+  eventCreated: 200,
+  eventId: "evt_refund",
+  eventType: "charge.refunded",
+  ownerId: "user_deleted",
+  paymentIntentId: "pi_live_echo",
+  purchaseId: "purchase_123"
+};
+
+/** @param {string} paymentIntentId */
+function paidCheckout(paymentIntentId) {
+  return {
+    ownerId: "user_explorer",
+    paymentIntentId,
+    paymentState: "paid",
+    priceId: "price_live",
+    purchaseId: "purchase_123",
+    sessionId: "cs_live_echo"
+  };
+}
+
+/** @param {{ query: { mock: { calls: unknown[][] } } }} client */
+function factWrites(client) {
+  return client.query.mock.calls.filter(([sql]) =>
+    String(sql).includes("INSERT INTO financial_facts")
+  );
+}
+
+describe("Lifetime Financial Facts", () => {
+  it("US-01.1 writes one paid live fact inside the purchase transaction", async () => {
+    const { client, pool } = paidPool(LINKED_PAID);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.activatePurchase(paidCheckout("pi_live_echo"), PAID_EVENT)
+    ).resolves.toEqual({ outcome: "processed" });
+
+    const writes = factWrites(client);
+    expect(writes).toHaveLength(1);
+    expect(writes[0][1]).toEqual([
+      "pi_live_echo",
+      "live",
+      599,
+      "usd",
+      expect.any(Date),
+      100
+    ]);
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.findIndex((sql) => sql.includes("INSERT INTO financial_facts"))).toBeLessThan(
+      statements.indexOf("COMMIT")
+    );
+  });
+
+  it("US-01.2 stores the test Billing Mode on a test-mode fact", async () => {
+    const { client, pool } = paidPool(LINKED_PAID);
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await store.activatePurchase(paidCheckout("pi_test_echo"), PAID_EVENT);
+
+    expect(factWrites(client)[0][1]).toEqual([
+      "pi_test_echo",
+      "test",
+      599,
+      "usd",
+      expect.any(Date),
+      100
+    ]);
+  });
+
+  it("US-01.2 writes no fact for an Unclassified Purchase", async () => {
+    const { client, pool } = paidPool([[], [{ event_id: "evt_paid" }], []]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.activatePurchase(paidCheckout("pi_live_echo"), PAID_EVENT)
+    ).resolves.toEqual({ outcome: "unlinked" });
+    expect(factWrites(client)).toHaveLength(0);
+  });
+
+  it("US-01.3 writes no fact when the purchase fails the link checks", async () => {
+    const { client, pool } = paidPool([[], [{ event_id: "evt_paid" }], []]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.activatePurchase(paidCheckout("pi_other_echo"), PAID_EVENT);
+
+    expect(factWrites(client)).toHaveLength(0);
+  });
+
+  it("US-01.5 rolls the purchase back when the fact write fails", async () => {
+    const { client, pool } = paidPool(LINKED_PAID, { failFact: true });
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(
+      store.activatePurchase(paidCheckout("pi_live_echo"), PAID_EVENT)
+    ).rejects.toThrow("financial fact insert failed");
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements).toContain("ROLLBACK");
+    expect(statements).not.toContain("COMMIT");
+  });
+
+  it("US-03.1 refunds the fact of a deleted account and keeps the event unlinked", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [],
+      [{ provider_event_created: 100, refunded_cents: 0, status: "paid" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      refundedCents: 599,
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "unlinked" });
+
+    const calls = client.query.mock.calls;
+    const update = calls.find(([sql]) => sql.includes("UPDATE financial_facts"));
+    expect(update?.[1]).toEqual(["pi_live_echo", "refunded", 599, 200]);
+    const finish = calls.find(([sql]) => sql.includes("UPDATE stripe_webhook_events"));
+    expect(finish?.[1]).toContain("unlinked");
+    expect(calls.map(([sql]) => sql)).toContain("COMMIT");
+  });
+
+  it("US-03.3 recreates no account row for a deleted account", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [],
+      [{ provider_event_created: 100, refunded_cents: 0, status: "paid" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await store.transitionEntitlement({ ...REFUND_EVENT, refundedCents: 599, state: "refunded" });
+
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    for (const table of ["player_access", "players", "lifetime_purchases"]) {
+      expect(statements.some((sql) =>
+        new RegExp(`(INSERT INTO|UPDATE) ${table}\b`).test(sql)
+      )).toBe(false);
+    }
+  });
+
+  it("US-02.2 raises refunded cents for a partial refund with no state change", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [{ provider_event_created: 100, refunded_cents: 0, status: "paid" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      refundedCents: 300,
+      state: null
+    })).resolves.toEqual({ outcome: "ignored" });
+
+    const update = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes("UPDATE financial_facts")
+    );
+    expect(update?.[1]).toEqual(["pi_live_echo", "paid", 300, 100]);
+  });
+
+  it("US-03.2 returns a deleted account's disputed fact to paid when the dispute is won", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [],
+      [{ provider_event_created: 150, refunded_cents: 0, status: "disputed" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      eventType: "charge.dispute.closed",
+      state: "active"
+    })).resolves.toEqual({ outcome: "unlinked" });
+
+    const update = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes("UPDATE financial_facts")
+    );
+    expect(update?.[1]).toEqual(["pi_live_echo", "paid", 0, 200]);
+  });
+
+  it("US-03.4 applies a repeated event to the fact only once", async () => {
+    const { client, pool } = paidPool([[], []]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      refundedCents: 599,
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "duplicate" });
+    expect(client.query.mock.calls.some(([sql]) =>
+      String(sql).includes("financial_facts")
+    )).toBe(false);
+  });
+
+  it("US-03.5 records an unlinked event with no fact and creates none", async () => {
+    const { client, pool } = paidPool([[], [{ event_id: "evt_refund" }], [], []]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      refundedCents: 599,
+      state: "refunded"
+    })).resolves.toEqual({ outcome: "unlinked" });
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes("INSERT INTO financial_facts"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("UPDATE financial_facts"))).toBe(false);
+  });
+
+  it("US-04.4 locks the fact after the purchase and access rows", async () => {
+    const { client, pool } = paidPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 100, status: "paid" }],
+      [{ lifetime_state_event_created: 100, membership_mode: "live", membership_state: "active" }],
+      [],
+      [],
+      [{ provider_event_created: 100, refunded_cents: 0, status: "paid" }]
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      ...REFUND_EVENT,
+      refundedCents: 599,
+      state: "refunded"
+    })).resolves.toMatchObject({ outcome: "processed" });
+
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    const at = (/** @type {string} */ text) => statements.findIndex((sql) => sql.includes(text));
+    expect(at("FROM lifetime_purchases")).toBeLessThan(at("FROM player_access"));
+    expect(at("FROM player_access")).toBeLessThan(at("FROM financial_facts"));
+    expect(at("UPDATE player_access")).toBeLessThan(at("UPDATE financial_facts"));
+  });
+});
+
 describe("Lifetime Membership store", () => {
   it("reserves one pending purchase under the player row lock", async () => {
     const { client, pool } = transactionalPool([

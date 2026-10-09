@@ -22,7 +22,7 @@ export class LifetimeOwnershipError extends Error {
  *     createCheckout: (purchase: { purchaseId: string, userId: string }) => Promise<{ checkoutUrl: string, sessionId: string }>,
  *     retrieveCheckout: (sessionId: string) => Promise<Record<string, unknown>>,
  *     retrieveCheckoutLink: (sessionId: string) => Promise<string>,
- *     retrievePaymentReference: (paymentIntentId: string) => Promise<{ ownerId: string, purchaseId: string, state: string }>
+ *     retrievePaymentReference: (paymentIntentId: string) => Promise<{ ownerId: string, purchaseId: string, refundedCents: number, state: string }>
  *   },
  *   recordEvent?: (eventName: string, fields: Record<string, unknown>) => void,
  *   store: {
@@ -251,6 +251,7 @@ export function createLifetimeService({
           ownerId: reference.ownerId,
           paymentIntentId: normalized.paymentIntentId,
           purchaseId: reference.purchaseId,
+          refundedCents: reference.refundedCents,
           state
         });
         recordEvent("lifetime_webhook", {

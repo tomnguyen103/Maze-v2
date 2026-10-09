@@ -63,6 +63,8 @@ describe("Clerk user deletion store", () => {
     expect(client.query.mock.calls[3][1]).toEqual([
       expect.stringMatching(/^[a-f0-9]{64}$/)
     ]);
+    // US-04.1: Financial Facts name no account, so deletion keeps them.
+    expect(client.query.mock.calls.some(([sql]) => sql.includes("financial_facts"))).toBe(false);
     expect(client.release).toHaveBeenCalledOnce();
   });
 
