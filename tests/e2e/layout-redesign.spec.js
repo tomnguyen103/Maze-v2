@@ -212,4 +212,26 @@ test.describe("layout redesign & edge viewports", () => {
       });
     }
   });
+
+  // US-05.1: on a portrait phone the board dominates and the controls sit below it.
+  for (const vp of [
+    { width: 390, height: 844 },
+    { width: 320, height: 568 }
+  ]) {
+    test(`fills the width with the board and places controls below at ${vp.width}x${vp.height}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=BOARD-DOMINANT&level=trail-scout");
+      await expectGameReady(page);
+
+      const frame = await page.locator("#canvas-frame").boundingBox();
+      const controls = await page.locator(".arena-actions").boundingBox();
+      if (!frame || !controls) {
+        throw new Error("board or controls have no bounding box");
+      }
+      expect(frame.width, "board width vs viewport").toBeGreaterThanOrEqual(vp.width * 0.9);
+      expect(controls.y, "controls start below the board").toBeGreaterThanOrEqual(
+        frame.y + frame.height - 1
+      );
+    });
+  }
 });
