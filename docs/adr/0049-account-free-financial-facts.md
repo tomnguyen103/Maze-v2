@@ -27,14 +27,16 @@ the account record, and analytics must never rebuild an identity.
    visit, account created, Personal Run activated and Checkout created. A counter
    row holds a UTC day, a metric, an allowlisted Campaign Code and a Billing Mode.
 5. Database triggers count the account, activation and Checkout steps. The visit
-   step has no row change, so `POST /api/visit` counts it through a
+   step has no row change, so `POST /api/access/visit` counts it through a
    `SECURITY DEFINER` function.
 6. A counter failure drops one increment and never blocks play or payment. A fact
    failure is a financial failure and blocks the transition.
 7. The runtime role cannot write `funnel_counts` directly. Only the definer
    functions write it.
 8. `GET /api/admin/funnel` returns the counts and the fact totals of one Billing
-   Mode for a range of at most 366 UTC days, as JSON or CSV. It requires
+   Mode for a range of at most 366 UTC days, as JSON or CSV. The visit, account
+   and activation counts carry no mode, so both modes return them. A fact counts
+   on the UTC day the server first recorded it. The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from
    owner inputs. It reads no stored data.

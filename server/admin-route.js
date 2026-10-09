@@ -817,9 +817,11 @@ function funnelQuery(params) {
 /** @param {string | null} value @param {string} label */
 function isoDay(value, label) {
   // The round trip rejects a day the calendar lacks, such as 2026-02-30.
+  // Postgres has no year 0, so that year is rejected here too.
   if (
     value === null ||
     !ISO_DAY.test(value) ||
+    value.startsWith("0000-") ||
     Number.isNaN(Date.parse(value)) ||
     new Date(value).toISOString().slice(0, 10) !== value
   ) {

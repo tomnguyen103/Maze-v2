@@ -32,6 +32,18 @@ describe("Unit economics", () => {
     ).toBe(-91);
   });
 
+  it("US-11.5 rejects inputs whose Contribution has no exact integer value", () => {
+    expect(() =>
+      contributionCents({
+        grossCents: 0,
+        feeCents: Number.MAX_SAFE_INTEGER,
+        refundLossCents: Number.MAX_SAFE_INTEGER,
+        serviceCents: 0,
+        provisionCents: 0
+      })
+    ).toThrow(RangeError);
+  });
+
   it("US-11.4 returns equal outputs for equal inputs and changes no input", () => {
     const purchase = { ...PURCHASE };
     const period = { fixedCents: 10_000, contributionCents: 434 };

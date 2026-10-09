@@ -64,10 +64,11 @@ async function send(incoming, handler) {
 /**
  * @param {{
  *   role?: "admin" | "moderator" | "player" | null,
- *   report?: typeof REPORT
+ *   report?: typeof REPORT,
+ *   auditFails?: boolean
  * }} [options]
  */
-function harness({ role = "admin", report = REPORT } = {}) {
+function harness({ role = "admin", report = REPORT, auditFails = false } = {}) {
   /** @type {Record<string, unknown>[]} */
   const audits = [];
   /** @type {unknown[]} */
@@ -89,6 +90,9 @@ function harness({ role = "admin", report = REPORT } = {}) {
       resolver: { roleFor: async () => role ?? "player" }
     }),
     recordAudit: async (_request, event) => {
+      if (auditFails) {
+        throw new Error("audit store down");
+      }
       audits.push(event);
     }
   });
@@ -160,6 +164,7 @@ describe("Admin funnel export", () => {
     ["a missing end", "from=2026-10-01"],
     ["a reversed range", "from=2026-10-07&to=2026-10-01"],
     ["a day the calendar lacks", "from=2026-02-30&to=2026-03-01"],
+    ["year 0, which Postgres lacks", "from=0000-01-01&to=0000-01-02"],
     ["a timestamp", "from=2026-10-01T00:00:00Z&to=2026-10-07"],
     ["an unknown mode", `${RANGE}&mode=all`],
     ["an unknown format", `${RANGE}&format=xlsx`]
@@ -258,7 +263,17 @@ describe("Admin funnel export", () => {
     ]);
   });
 
-  it("US-10.5 answers 503 when the funnel store is absent", async () => {
+  it("US-10.4 answers 503 and sends no report when the audit row fails", async () => {
+    const target = harness({ auditFails: true });
+
+    const result = await target.get(`/api/admin/funnel?${RANGE}&format=csv`);
+
+    expect(result.statusCode).toBe(503);
+    expect(result.body).not.toContain("adult_offer_visit");
+    expect(result.body).not.toContain("599");
+  });
+
+  it("US-10.1 answers 503 when the funnel store is absent", async () => {
     const handler = createAdminHandler({
       store: {
         /** @returns {Promise<{ previousRole: import("../shared/permissions.js").Role, role: string }>} */

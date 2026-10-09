@@ -20,7 +20,8 @@ export function createFunnelStore(pool) {
      * The daily Funnel Counts and the Financial Fact totals of one Billing
      * Mode, for UTC days `from` to `to` inclusive. The three steps before
      * Checkout carry no mode, so both modes return them. A fact counts on the
-     * day it was paid, and its status is the status now.
+     * UTC day the server first recorded it, which a late webhook can move past
+     * the payment day. Its status is the status now.
      *
      * @param {{ from: string, to: string, mode: "live" | "test" }} range
      */

@@ -32,7 +32,12 @@ export function contributionCents(purchase) {
   const { grossCents, feeCents, refundLossCents, serviceCents, provisionCents } =
     purchase;
   assertCents({ grossCents, feeCents, refundLossCents, serviceCents, provisionCents });
-  return grossCents - feeCents - refundLossCents - serviceCents - provisionCents;
+  const result =
+    grossCents - feeCents - refundLossCents - serviceCents - provisionCents;
+  if (!Number.isSafeInteger(result)) {
+    throw new RangeError("The Contribution is outside the exact integer range.");
+  }
+  return result;
 }
 
 /**

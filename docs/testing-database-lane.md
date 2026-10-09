@@ -1,6 +1,6 @@
 # Running the database and object-store test lanes
 
-Nine test files — 23 tests — need a live PostgreSQL database, and one needs an
+Nine test files — 24 tests — need a live PostgreSQL database, and one needs an
 object store. They are written as `describe.runIf(...)`, so with the environment
 absent they report as skipped and the suite still exits 0.
 

@@ -202,3 +202,72 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
     });
   }
 );
+
+// Only the definer functions write funnel_counts for the runtime role, so the
+// owner role seeds the rows of the report test.
+describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
+  "Funnel report on PostgreSQL",
+  () => {
+    beforeAll(() => {
+      adminPool = new Pool({
+        connectionString: normalizeDatabaseConnectionString(adminDatabaseUrl),
+        max: 1
+      });
+    });
+
+    afterAll(async () => {
+      await adminPool?.end();
+    });
+
+    it("US-10.1 buckets stored rows by UTC day with both range ends included", async () => {
+      await rolledBack(async (connection) => {
+        // A non-UTC session zone proves the report buckets by UTC day.
+        await connection.query("SET LOCAL TIME ZONE 'America/Los_Angeles'");
+        await connection.query(
+          `INSERT INTO funnel_counts (day, metric, campaign, mode, count) VALUES
+             ('1999-12-31', 'adult_offer_visit', '', '', 5),
+             ('2000-01-01', 'adult_offer_visit', 'youtube', '', 2),
+             ('2000-01-01', 'checkout_created', '', 'live', 3),
+             ('2000-01-01', 'checkout_created', '', 'test', 7),
+             ('2000-01-02', 'account_created', '', '', 4),
+             ('2000-01-03', 'account_created', '', '', 9)`
+        );
+        const id = randomUUID();
+        await connection.query(
+          `INSERT INTO financial_facts (
+             payment_intent_id, billing_mode, amount_cents, currency, status,
+             refunded_cents, paid_at
+           ) VALUES
+             ($1 || '_start', 'live', 599, 'usd', 'paid', 0, '2000-01-01 00:00:00+00'),
+             ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, '2000-01-02 23:59:59+00'),
+             ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, '2000-01-02 12:00:00+00'),
+             ($1 || '_before', 'live', 599, 'usd', 'paid', 0, '1999-12-31 23:59:59+00'),
+             ($1 || '_after', 'live', 599, 'usd', 'paid', 0, '2000-01-03 00:00:00+00'),
+             ($1 || '_test', 'test', 599, 'usd', 'paid', 0, '2000-01-01 12:00:00+00')`,
+          [`pi_funnel_${id}`]
+        );
+
+        const report = await createFunnelStore(connection).report({
+          from: "2000-01-01",
+          to: "2000-01-02",
+          mode: "live"
+        });
+
+        expect(report).toEqual({
+          counts: [
+            { day: "2000-01-01", metric: "adult_offer_visit", campaign: "youtube", count: 2 },
+            { day: "2000-01-01", metric: "checkout_created", campaign: "", count: 3 },
+            { day: "2000-01-02", metric: "account_created", campaign: "", count: 4 }
+          ],
+          summary: {
+            grossPurchases: 3,
+            netPurchases: 1,
+            refundedCount: 1,
+            disputedCount: 1,
+            refundedCents: 599
+          }
+        });
+      }, adminPool);
+    });
+  }
+);

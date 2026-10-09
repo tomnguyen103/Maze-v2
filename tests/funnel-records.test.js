@@ -51,6 +51,26 @@ describe("Funnel records", () => {
     expect(read(GLOSSARY)).toMatch(new RegExp(`^\\*\\*${term}\\*\\*:`, "m"));
   });
 
+  it("US-12.1 keeps implementation detail out of the six glossary definitions", () => {
+    const glossary = read(GLOSSARY);
+
+    for (const term of [
+      "Campaign Code",
+      "Qualified Adult Visit",
+      "Net Purchase",
+      "Financial Fact",
+      "Funnel Count",
+      "Contribution"
+    ]) {
+      const start = glossary.indexOf(`\n**${term}**:\n`);
+      const end = glossary.indexOf("\n\n", start + 1);
+      const definition = glossary.slice(start, end === -1 ? undefined : end);
+
+      expect(start).toBeGreaterThan(-1);
+      expect(definition).not.toMatch(/`|\.js\b|\/api\/|\b[a-z]+_[a-z_]+\b/);
+    }
+  });
+
   it("US-12.2 records the account-free fact decision and its retention reading", () => {
     const adr = read(ADR);
 
