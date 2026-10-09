@@ -38,6 +38,17 @@ Permanent Run Access attached to one Clerk identity after one verified $5.99
 USD purchase. It has no renewal and changes no gameplay rule.
 _Avoid_: Subscription, plan, premium power
 
+**Billing Mode**:
+The deployment setting that binds Lifetime Membership purchases to one Stripe mode.
+A Billing Mode is either test or live. Test uses Stripe test data and moves no real
+money. Live uses real Stripe objects and real charges.
+_Avoid_: Environment, payment mode, Stripe mode
+
+**Unclassified Purchase**:
+A stored Lifetime purchase that has no Billing Mode. It grants nothing and blocks
+live readiness until Stripe verifies its mode.
+_Avoid_: Legacy purchase, empty-mode purchase, orphan purchase
+
 **Quest Level**:
 The learning tier chosen before a Quest. It sets Question complexity and the
 overall Labyrinth challenge range across all twenty Labyrinths.
