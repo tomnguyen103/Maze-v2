@@ -292,7 +292,9 @@ or a command. No step records a secret value.
    before the cutover are test-mode objects, and a live key cannot read them. Run
    `npm run classify:lifetime-purchases`. The dry-run writes nothing. Exit code 0
    means every row verified. Exit code 1 means a row needs review. Exit code 2 means
-   the script could not run.
+   the script could not run. The script checks the Checkout Session and the
+   PaymentIntent of each row, and the two must name each other. A row with no
+   Stripe object and no payment is skipped, and it does not block readiness.
 
 4. **Review the dry-run output.** Owner review.
    Confirm that every row reports a mode. Resolve each reported row in Stripe or in
@@ -302,7 +304,10 @@ or a command. No step records a secret value.
 5. **Apply the classification.** Owner action.
    Run `npm run classify:lifetime-purchases -- --apply` with the same test key. The
    script verifies every row first. It writes all verified rows in one transaction.
-   Exit code 1 means a row stayed unchanged. Resolve that row, then repeat step 3.
+   The same transaction sets the mode on the member's access record, so a legacy
+   member keeps live access. Exit code 1 means a row stayed unchanged. Resolve that
+   row, then repeat step 3. A Stripe object of the other mode reports as missing.
+   Run the script again with the key of that mode.
 
 6. **Set Billing Mode to live.** Owner action.
    Set `ECHO_MAZE_BILLING_MODE` to `live` in the production environment. Set the live

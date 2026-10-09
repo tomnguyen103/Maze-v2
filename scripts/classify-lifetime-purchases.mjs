@@ -5,9 +5,14 @@
 // Session and its PaymentIntent both report the livemode of the money movement.
 // Each row is verified against both objects. Dry-run is the default and writes
 // nothing. --apply writes a mode only when both objects agree, in one transaction.
+// An abandoned Checkout has no PaymentIntent, so its Session alone decides.
+// The write also sets the mode on the player_access row that points at the purchase.
+//
+// One key sees one mode only. A row whose objects the key cannot see is reported
+// as missing and stays unchanged. Run again with the key of the other mode.
 //
 // Exit codes: 0 every row verified, 1 at least one row reported, 2 could not run.
-// A Stripe or database error writes nothing.
+// Any other Stripe or database error writes nothing.
 //
 // Usage: node scripts/classify-lifetime-purchases.mjs [--apply]
 
@@ -18,9 +23,34 @@ import Stripe from "stripe";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 
 /**
- * @typedef {{ id: string, checkoutSessionId: string | null, paymentIntentId: string | null }} Purchase
+ * @typedef {{ id: string, status: string, checkoutSessionId: string | null, paymentIntentId: string | null }} Purchase
  * @typedef {{ id: string, mode: "test" | "live" | null, problem: string | null }} Verification
  */
+
+const PAID_STATUSES = new Set(["paid", "refunded", "disputed"]);
+
+/**
+ * Stripe answers resource_missing for an object of the other mode, so one run
+ * with one key cannot see every row. The row is reported and the run goes on.
+ *
+ * @param {() => Promise<any>} retrieve
+ */
+async function retrieveOrMissing(retrieve) {
+  try {
+    return await retrieve();
+  } catch (error) {
+    if (/** @type {{ code?: unknown }} */ (error)?.code === "resource_missing") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** @param {any} session */
+function sessionPaymentIntentId(session) {
+  const intent = session?.payment_intent;
+  return typeof intent === "string" ? intent : (intent?.id ?? null);
+}
 
 /**
  * @param {Purchase} purchase
@@ -29,24 +59,38 @@ import { normalizeDatabaseConnectionString } from "../server/database.js";
  */
 async function verifyPurchase(purchase, stripe) {
   const unverified = { id: purchase.id, mode: null };
+  const paid = PAID_STATUSES.has(purchase.status);
   if (!purchase.checkoutSessionId) {
     return { ...unverified, problem: "missing_session_id" };
   }
-  if (!purchase.paymentIntentId) {
+  if (!purchase.paymentIntentId && paid) {
     return { ...unverified, problem: "missing_payment_intent_id" };
   }
-  const session = await stripe.checkout.sessions.retrieve(purchase.checkoutSessionId);
-  const paymentIntent = await stripe.paymentIntents.retrieve(purchase.paymentIntentId);
+  const sessionId = purchase.checkoutSessionId;
+  const session = await retrieveOrMissing(() => stripe.checkout.sessions.retrieve(sessionId));
   if (typeof session?.livemode !== "boolean") {
     return { ...unverified, problem: "missing_session_object" };
   }
+  const mode = session.livemode ? "live" : "test";
+  if (!purchase.paymentIntentId) {
+    // An abandoned Checkout stores no PaymentIntent. Stripe must agree no money moved.
+    return session.payment_status === "paid"
+      ? { ...unverified, problem: "paid_without_payment_intent_id" }
+      : { id: purchase.id, mode, problem: null };
+  }
+  const paymentIntentId = purchase.paymentIntentId;
+  const paymentIntent = await retrieveOrMissing(() => stripe.paymentIntents.retrieve(paymentIntentId));
   if (typeof paymentIntent?.livemode !== "boolean") {
     return { ...unverified, problem: "missing_payment_intent_object" };
   }
   if (session.livemode !== paymentIntent.livemode) {
     return { ...unverified, problem: "livemode_conflict" };
   }
-  return { id: purchase.id, mode: session.livemode ? "live" : "test", problem: null };
+  const linkedIntent = sessionPaymentIntentId(session);
+  if (linkedIntent !== null && linkedIntent !== paymentIntentId) {
+    return { ...unverified, problem: "payment_intent_mismatch" };
+  }
+  return { id: purchase.id, mode, problem: null };
 }
 
 /**
@@ -105,13 +149,19 @@ export function createPurchaseClassificationStore(pool) {
     /** @returns {Promise<Purchase[]>} */
     async listUnclassified() {
       const result = await pool.query(
-        `SELECT id, checkout_session_id, payment_intent_id
+        `SELECT id, status, checkout_session_id, payment_intent_id
          FROM lifetime_purchases
          WHERE billing_mode IS NULL
+           AND (
+             checkout_session_id IS NOT NULL OR
+             payment_intent_id IS NOT NULL OR
+             status IN ('paid', 'refunded', 'disputed')
+           )
          ORDER BY id`
       );
       return result.rows.map((row) => ({
         id: String(row.id),
+        status: String(row.status),
         checkoutSessionId: row.checkout_session_id ? String(row.checkout_session_id) : null,
         paymentIntentId: row.payment_intent_id ? String(row.payment_intent_id) : null
       }));
@@ -136,6 +186,17 @@ export function createPurchaseClassificationStore(pool) {
             throw new Error(`Purchase ${update.id} changed during classification.`);
           }
         }
+        // A legacy member keeps the state and gains the verified mode, so live reads still see the membership.
+        await client.query(
+          `UPDATE player_access
+           SET membership_mode = p.billing_mode,
+               updated_at = NOW()
+           FROM lifetime_purchases p
+           WHERE player_access.active_purchase_id = p.id
+             AND p.id = ANY($1::uuid[])
+             AND player_access.membership_mode IS NULL`,
+          [updates.map((update) => update.id)]
+        );
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK").catch(() => {

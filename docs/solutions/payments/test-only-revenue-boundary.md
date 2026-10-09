@@ -25,8 +25,15 @@ record its mode, so the mode could not be checked later.
   counted as `unclassified`.
 - `server/lifetime-store.js:46-49` reads open purchases for one mode only.
 - `server/admin-store.js:136` counts conversions from live rows only.
-- `scripts/classify-lifetime-purchases.mjs:46-49` writes a mode only when the Session
-  and the PaymentIntent agree.
+- `scripts/classify-lifetime-purchases.mjs:60-94` writes a mode only when the Session
+  and the PaymentIntent agree and name each other. An abandoned Checkout has no
+  PaymentIntent, so its Session decides when Stripe reports no payment.
+- `scripts/classify-lifetime-purchases.mjs:189-199` copies the verified mode onto the
+  player projection in the same transaction.
+- `server/lifetime-store.js:481-492` counts a NULL-mode row only when it carries a
+  Stripe object or a paid status.
+- `server/lifetime-store.js:280-285` and `:405-409` let a live event replace a test
+  projection and never let a test event replace a live one.
 - `server/player-api.js:396-399` counts unclassified rows in live store mode only.
 - `server/health-route.js:113-114` marks Stripe failed while unclassified rows exist.
 

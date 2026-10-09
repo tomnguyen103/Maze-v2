@@ -536,8 +536,126 @@ describe("Lifetime Membership store", () => {
       purchaseId: "purchase_123",
       sessionId: "cs_live_echo"
     }, null);
-    expect(client.query.mock.calls[4][0]).toContain("membership_mode");
-    expect(client.query.mock.calls[4][1]).toContain("live");
+    const projectionSql = client.query.mock.calls[4][0];
+    expect(projectionSql).toContain("membership_mode = $4");
+    expect(projectionSql).toContain("$4::text = 'live'");
+    expect(client.query.mock.calls[4][1]).toEqual([
+      "user_explorer",
+      "purchase_123",
+      0,
+      "live"
+    ]);
+  });
+
+  it.each([
+    ["a test-mode projection", "test", "active"],
+    ["an unclassified projection", null, "refunded"]
+  ])(
+    "US-06.4 a live activation replaces %s once and resets the event clock",
+    async (_label, projectionMode, projectionState) => {
+      const { client, pool } = transactionalPool([
+        [],
+        [{ event_id: "evt_live" }],
+        [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 0 }],
+        [{
+          lifetime_state_event_created: 900,
+          membership_mode: projectionMode,
+          membership_state: projectionState
+        }],
+        [],
+        [],
+        [],
+        []
+      ]);
+      const store = createLifetimeStore(pool, { mode: "live" });
+
+      await expect(store.activatePurchase({
+        ownerId: "user_explorer",
+        paymentIntentId: "pi_live",
+        paymentState: "paid",
+        priceId: "price_live",
+        purchaseId: "purchase_123",
+        sessionId: "cs_live_echo"
+      }, {
+        eventCreated: 100,
+        eventId: "evt_live",
+        eventType: "checkout.session.completed"
+      })).resolves.toEqual({ outcome: "processed" });
+      const [projectionSql, projectionValues] = client.query.mock.calls[5];
+      expect(projectionSql).toContain("UPDATE player_access");
+      expect(projectionSql).toMatch(/WHEN membership_mode = \$4::text THEN GREATEST/);
+      expect(projectionSql).toMatch(/ELSE \$3\s+END/);
+      expect(projectionValues).toEqual(["user_explorer", "purchase_123", 100, "live"]);
+    }
+  );
+
+  it("US-06.3 a test activation reads a live projection as no membership and cannot overwrite it", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_test" }],
+      [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 0 }],
+      [{
+        lifetime_state_event_created: 900,
+        membership_mode: "live",
+        membership_state: "active"
+      }],
+      [],
+      [],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "test" });
+
+    await expect(store.activatePurchase({
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_test",
+      paymentState: "paid",
+      priceId: "price_test",
+      purchaseId: "purchase_123",
+      sessionId: "cs_test_echo"
+    }, {
+      eventCreated: 100,
+      eventId: "evt_test",
+      eventType: "checkout.session.completed"
+    })).resolves.toEqual({ outcome: "processed" });
+    const [projectionSql, projectionValues] = client.query.mock.calls[5];
+    expect(projectionSql).toMatch(
+      /membership_mode IS NULL OR\s+membership_mode = \$4::text OR\s+\$4::text = 'live'/
+    );
+    expect(projectionValues[3]).toBe("test");
+  });
+
+  it("US-06.4 a live refund guards the projection write with the same mode rule", async () => {
+    const { client, pool } = transactionalPool([
+      [],
+      [{ event_id: "evt_refund" }],
+      [{ id: "purchase_123", player_id: "user_explorer", provider_event_created: 0 }],
+      [{
+        lifetime_state_event_created: 100,
+        membership_mode: "live",
+        membership_state: "active"
+      }],
+      [],
+      [],
+      [],
+      []
+    ]);
+    const store = createLifetimeStore(pool, { mode: "live" });
+
+    await expect(store.transitionEntitlement({
+      eventCreated: 200,
+      eventId: "evt_refund",
+      eventType: "charge.refunded",
+      ownerId: "user_explorer",
+      paymentIntentId: "pi_live",
+      purchaseId: "purchase_123",
+      state: "refunded"
+    })).resolves.toMatchObject({ outcome: "processed" });
+    const [projectionSql, projectionValues] = client.query.mock.calls[5];
+    expect(projectionSql).toMatch(
+      /membership_mode IS NULL OR\s+membership_mode = \$5::text OR\s+\$5::text = 'live'/
+    );
+    expect(projectionValues).toEqual(["refunded", "purchase_123", 200, "user_explorer", "live"]);
   });
 
   it("US-07.3 ignores a refund of the other mode without touching the purchase", async () => {
@@ -595,6 +713,10 @@ describe("Lifetime Membership store", () => {
 
     await expect(store.countUnclassifiedPurchases()).resolves.toBe(3);
     expect(pool.query).toHaveBeenCalledTimes(1);
-    expect(pool.query.mock.calls[0][0]).toContain("WHERE billing_mode IS NULL");
+    const sql = pool.query.mock.calls[0][0];
+    expect(sql).toContain("WHERE billing_mode IS NULL");
+    expect(sql).toContain("checkout_session_id IS NOT NULL");
+    expect(sql).toContain("payment_intent_id IS NOT NULL");
+    expect(sql).toContain("status IN ('paid', 'refunded', 'disputed')");
   });
 });

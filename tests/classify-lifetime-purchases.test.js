@@ -8,6 +8,7 @@ import {
 function purchase(overrides) {
   return {
     id: "lp_1",
+    status: "paid",
     checkoutSessionId: "cs_1",
     paymentIntentId: "pi_1",
     billingMode: null,
@@ -23,8 +24,9 @@ function memoryStore(rows) {
     listUnclassified: vi.fn(async () =>
       state
         .filter((row) => row.billingMode === null)
-        .map(({ id, checkoutSessionId, paymentIntentId }) => ({
+        .map(({ id, status, checkoutSessionId, paymentIntentId }) => ({
           id,
+          status,
           checkoutSessionId,
           paymentIntentId
         }))
@@ -60,15 +62,30 @@ function stripeStub({ sessions = {}, paymentIntents = {} }) {
   };
 }
 
+/** @param {string} code */
+function stripeError(code) {
+  return Object.assign(new Error(`Stripe ${code}`), { code });
+}
+
 const AGREEING_ROWS = [
   purchase({ id: "lp_1", checkoutSessionId: "cs_1", paymentIntentId: "pi_1" }),
   purchase({ id: "lp_2", checkoutSessionId: "cs_2", paymentIntentId: "pi_2" })
 ];
 
 const AGREEING_OBJECTS = {
-  sessions: { cs_1: { livemode: false }, cs_2: { livemode: true } },
+  sessions: {
+    cs_1: { livemode: false, payment_intent: "pi_1", payment_status: "paid" },
+    cs_2: { livemode: true, payment_intent: "pi_2", payment_status: "paid" }
+  },
   paymentIntents: { pi_1: { livemode: false }, pi_2: { livemode: true } }
 };
+
+/** @param {Awaited<ReturnType<typeof classifyPurchases>>} result */
+function problemsOf(result) {
+  return Object.fromEntries(
+    result.results.filter((row) => row.problem !== null).map((row) => [row.id, row.problem])
+  );
+}
 
 describe("classify lifetime purchases script", () => {
   it("US-10.1 dry-run prints the verified livemode per row, exits 0 and writes nothing", async () => {
@@ -121,9 +138,9 @@ describe("classify lifetime purchases script", () => {
     ]);
     const stripe = stripeStub({
       sessions: {
-        cs_ok: { livemode: false },
-        cs_gone: { livemode: false },
-        cs_mixed: { livemode: true }
+        cs_ok: { livemode: false, payment_intent: "pi_ok" },
+        cs_gone: { livemode: false, payment_intent: "pi_gone" },
+        cs_mixed: { livemode: true, payment_intent: "pi_mixed" }
       },
       paymentIntents: {
         pi_ok: { livemode: false },
@@ -141,12 +158,7 @@ describe("classify lifetime purchases script", () => {
     });
 
     expect(result.exitCode).toBe(1);
-    const problems = Object.fromEntries(
-      result.results
-        .filter((row) => row.problem !== null)
-        .map((row) => [row.id, row.problem])
-    );
-    expect(problems).toEqual({
+    expect(problemsOf(result)).toEqual({
       lp_no_session: "missing_session_id",
       lp_no_object: "missing_payment_intent_object",
       lp_conflict: "livemode_conflict"
@@ -161,6 +173,74 @@ describe("classify lifetime purchases script", () => {
       lp_conflict: null
     });
     expect(lines).toContain("lp_conflict problem=livemode_conflict unchanged");
+  });
+
+  it("US-10.3 reports a Session whose PaymentIntent differs from the stored one", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_swap", checkoutSessionId: "cs_swap", paymentIntentId: "pi_stored" })
+    ]);
+    const stripe = stripeStub({
+      sessions: { cs_swap: { livemode: false, payment_intent: "pi_other" } },
+      paymentIntents: { pi_stored: { livemode: false } }
+    });
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(result.exitCode).toBe(1);
+    expect(problemsOf(result)).toEqual({ lp_swap: "payment_intent_mismatch" });
+    expect(store.writeBillingModes).not.toHaveBeenCalled();
+  });
+
+  it("US-10.3 reports a paid row that stores no PaymentIntent id", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_paid_bare", status: "refunded", paymentIntentId: null })
+    ]);
+    const stripe = stripeStub(AGREEING_OBJECTS);
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(problemsOf(result)).toEqual({ lp_paid_bare: "missing_payment_intent_id" });
+    expect(stripe.checkout.sessions.retrieve).not.toHaveBeenCalled();
+    expect(store.writeBillingModes).not.toHaveBeenCalled();
+  });
+
+  it("US-10.3 an abandoned Checkout takes the Session livemode when no money moved", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_open", status: "open", checkoutSessionId: "cs_open", paymentIntentId: null }),
+      purchase({ id: "lp_late", status: "open", checkoutSessionId: "cs_late", paymentIntentId: null })
+    ]);
+    const stripe = stripeStub({
+      sessions: {
+        cs_open: { livemode: true, payment_intent: null, payment_status: "unpaid" },
+        cs_late: { livemode: true, payment_intent: "pi_late", payment_status: "paid" }
+      }
+    });
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(problemsOf(result)).toEqual({ lp_late: "paid_without_payment_intent_id" });
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+    expect(store.writeBillingModes).toHaveBeenCalledWith([{ id: "lp_open", mode: "live" }]);
+  });
+
+  it("US-10.3 an object of the other mode is reported and the run goes on", async () => {
+    const store = memoryStore([
+      purchase({ id: "lp_other_key", checkoutSessionId: "cs_other", paymentIntentId: "pi_other" }),
+      purchase({ id: "lp_ok", checkoutSessionId: "cs_ok", paymentIntentId: "pi_ok" })
+    ]);
+    const stripe = stripeStub({
+      sessions: {
+        cs_other: stripeError("resource_missing"),
+        cs_ok: { livemode: false, payment_intent: "pi_ok" }
+      },
+      paymentIntents: { pi_ok: { livemode: false } }
+    });
+
+    const result = await classifyPurchases({ store, stripe, apply: true, log: () => {} });
+
+    expect(result.exitCode).toBe(1);
+    expect(problemsOf(result)).toEqual({ lp_other_key: "missing_session_object" });
+    expect(store.writeBillingModes).toHaveBeenCalledWith([{ id: "lp_ok", mode: "test" }]);
   });
 
   it("US-10.4 a second --apply run reads no classified row, calls no Stripe object and changes nothing", async () => {
@@ -186,7 +266,10 @@ describe("classify lifetime purchases script", () => {
   it("US-10.5 a Stripe error stops the run before the first write", async () => {
     const store = memoryStore(AGREEING_ROWS);
     const stripe = stripeStub({
-      sessions: { cs_1: { livemode: false }, cs_2: new Error("Stripe is unavailable") },
+      sessions: {
+        cs_1: AGREEING_OBJECTS.sessions.cs_1,
+        cs_2: new Error("Stripe is unavailable")
+      },
       paymentIntents: AGREEING_OBJECTS.paymentIntents
     });
 
@@ -245,5 +328,52 @@ describe("classify lifetime purchases script", () => {
     const update = writeCalls.find((call) => String(call[0]).startsWith("UPDATE"));
     expect(String(update?.[0])).toMatch(/AND billing_mode IS NULL/);
     expect(update?.[1]).toEqual(["lp_1", "live"]);
+  });
+
+  it("US-05.5 the write copies the verified mode onto the matching empty projection in the same transaction", async () => {
+    const client = {
+      query: vi.fn(async () => ({ rowCount: 1, rows: [] })),
+      release: vi.fn()
+    };
+    const pool = { query: vi.fn(), connect: vi.fn(async () => client) };
+
+    await createPurchaseClassificationStore(pool).writeBillingModes([
+      { id: "lp_1", mode: "live" },
+      { id: "lp_2", mode: "test" }
+    ]);
+
+    const calls = /** @type {unknown[][]} */ (client.query.mock.calls);
+    const statements = calls.map(([sql]) => String(sql));
+    const projection = calls.find((call) => String(call[0]).includes("UPDATE player_access"));
+    expect(String(projection?.[0])).toMatch(/membership_mode IS NULL/);
+    expect(projection?.[1]).toEqual([["lp_1", "lp_2"]]);
+    expect(statements.indexOf("BEGIN")).toBeLessThan(statements.indexOf(String(projection?.[0])));
+    expect(statements.indexOf(String(projection?.[0]))).toBeLessThan(statements.indexOf("COMMIT"));
+  });
+
+  it("US-09.2 the store lists only rows that carry a Stripe object or a paid status", async () => {
+    const pool = {
+      query: vi.fn(async () => ({
+        rows: [
+          {
+            id: "lp_1",
+            status: "open",
+            checkout_session_id: "cs_1",
+            payment_intent_id: null
+          }
+        ]
+      })),
+      connect: vi.fn()
+    };
+
+    const rows = await createPurchaseClassificationStore(pool).listUnclassified();
+
+    expect(rows).toEqual([
+      { id: "lp_1", status: "open", checkoutSessionId: "cs_1", paymentIntentId: null }
+    ]);
+    const queryCalls = /** @type {unknown[][]} */ (pool.query.mock.calls);
+    expect(String(queryCalls[0]?.[0])).toMatch(
+      /checkout_session_id IS NOT NULL[\s\S]*payment_intent_id IS NOT NULL[\s\S]*status IN \('paid', 'refunded', 'disputed'\)/
+    );
   });
 });

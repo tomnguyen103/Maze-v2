@@ -268,16 +268,20 @@ export function createLifetimeStore(pool, { mode }) {
                    lifetime_activated_at,
                    NOW()
                  ),
-                 lifetime_state_event_created = GREATEST(
-                   lifetime_state_event_created,
-                   $3
-                 ),
+                 lifetime_state_event_created = CASE
+                   WHEN membership_mode = $4::text THEN GREATEST(
+                     lifetime_state_event_created,
+                     $3
+                   )
+                   ELSE $3
+                 END,
                  entitlement_updated_at = NOW(),
                  updated_at = NOW()
              WHERE clerk_user_id = $1
                AND (
-                 membership_mode = $4 OR
-                 (membership_mode IS NULL AND membership_state = 'none')
+                 membership_mode IS NULL OR
+                 membership_mode = $4::text OR
+                 $4::text = 'live'
                )`,
             [
               purchase.player_id,
@@ -399,8 +403,9 @@ export function createLifetimeStore(pool, { mode }) {
                  updated_at = NOW()
              WHERE clerk_user_id = $4
                AND (
-                 membership_mode = $5 OR
-                 (membership_mode IS NULL AND membership_state = 'none')
+                 membership_mode IS NULL OR
+                 membership_mode = $5::text OR
+                 $5::text = 'live'
                )`,
             [
               transition.state,
@@ -474,8 +479,16 @@ export function createLifetimeStore(pool, { mode }) {
 
     /** Purchases with no Billing Mode. Live readiness waits for zero. */
     async countUnclassifiedPurchases() {
+      // A row with no Stripe object and no paid status never moved money, so it needs no mode.
       const result = await pool.query(
-        "SELECT COUNT(*) AS count FROM lifetime_purchases WHERE billing_mode IS NULL"
+        `SELECT COUNT(*) AS count
+         FROM lifetime_purchases
+         WHERE billing_mode IS NULL
+           AND (
+             checkout_session_id IS NOT NULL OR
+             payment_intent_id IS NOT NULL OR
+             status IN ('paid', 'refunded', 'disputed')
+           )`
       );
       return Number(result.rows[0]?.count ?? 0);
     }
