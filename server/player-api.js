@@ -575,18 +575,20 @@ export function createPlayerApi(env = process.env) {
   });
   // Hoisted so the webhook inbox can reach the same service instance the
   // route uses: the retry loop must take exactly the inline path's route.
-  const lifetimeProvider = lifetimeConfig && getStripe
+  const lifetimeProvider = lifetimeConfig && billing.mode && getStripe
     ? createStripeLifetimeProvider({
         appOrigin: lifetimeConfig.appOrigin,
+        mode: billing.mode,
         priceId: lifetimeConfig.priceId,
         getStripe,
         webhookSecret: lifetimeConfig.webhookSecret
       })
     : null;
   const lifetimeService =
-    lifetimeConfig && lifetimeProvider
+    lifetimeConfig && billing.mode && lifetimeProvider
       ? createLifetimeService({
         config: lifetimeConfig,
+        mode: billing.mode,
         provider: lifetimeProvider,
         recordEvent: recordProductEvent,
         store: lifetimeStore

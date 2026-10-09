@@ -27,14 +27,52 @@ function stripeSession(overrides = {}) {
   };
 }
 
+function paymentIntent(overrides = {}) {
+  return {
+    amount_received: 599,
+    currency: "usd",
+    latest_charge: {
+      amount_refunded: 0,
+      disputed: false,
+      refunded: false
+    },
+    livemode: false,
+    metadata: {
+      clerk_user_id: "user_explorer",
+      purchase_id: "purchase_123"
+    },
+    status: "succeeded",
+    ...overrides
+  };
+}
+
+/**
+ * @param {"test" | "live"} mode
+ * @param {Record<string, unknown>} intent
+ */
+function paymentProvider(mode, intent) {
+  return createStripeLifetimeProvider({
+    appOrigin: "https://maze.example",
+    mode,
+    priceId: "price_echo_test",
+    getStripe: async () => ({
+      checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
+      paymentIntents: { retrieve: vi.fn().mockResolvedValue(intent) },
+      webhooks: { constructEvent: vi.fn() }
+    }),
+    webhookSecret: "whsec_test"
+  });
+}
+
 describe("Stripe lifetime adapter", () => {
-  it("issues one full refund per purchase with a stable idempotency key", async () => {
+  it("US-07.4 issues one full refund per purchase with a mode-scoped idempotency key", async () => {
     const createRefund = vi.fn().mockResolvedValue({
       id: "re_echo",
       status: "pending"
     });
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
+      mode: "test",
       priceId: "price_echo_test",
       getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
@@ -53,11 +91,56 @@ describe("Stripe lifetime adapter", () => {
     ).resolves.toEqual({ refundId: "re_echo", status: "pending" });
     expect(createRefund).toHaveBeenCalledWith(
       { payment_intent: "pi_echo" },
-      { idempotencyKey: "echo-maze-refund:purchase_123" }
+      { idempotencyKey: "echo-maze-refund:test:purchase_123" }
     );
   });
 
-  it("creates only the fixed one-time Checkout contract with an idempotency key", async () => {
+  it("US-07.4 keys live Checkout and refund by the live mode", async () => {
+    const create = vi.fn().mockResolvedValue(
+      stripeSession({
+        line_items: {
+          data: [{ price: { id: "price_echo_live" }, quantity: 1 }]
+        },
+        livemode: true,
+        payment_intent: null,
+        payment_status: "unpaid",
+        status: "open"
+      })
+    );
+    const createRefund = vi.fn().mockResolvedValue({
+      id: "re_live",
+      status: "pending"
+    });
+    const provider = createStripeLifetimeProvider({
+      appOrigin: "https://maze.example",
+      mode: "live",
+      priceId: "price_echo_live",
+      getStripe: async () => ({
+        checkout: { sessions: { create, retrieve: vi.fn() } },
+        paymentIntents: { retrieve: vi.fn() },
+        refunds: { create: createRefund },
+        webhooks: { constructEvent: vi.fn() }
+      }),
+      webhookSecret: "whsec_live"
+    });
+
+    await provider.createCheckout({
+      purchaseId: "purchase_123",
+      userId: "user_explorer"
+    });
+    await provider.issueRefund({
+      paymentIntentId: "pi_echo",
+      purchaseId: "purchase_123"
+    });
+    expect(create.mock.calls[0][1]).toEqual({
+      idempotencyKey: "echo-maze-lifetime:live:purchase_123"
+    });
+    expect(createRefund.mock.calls[0][1]).toEqual({
+      idempotencyKey: "echo-maze-refund:live:purchase_123"
+    });
+  });
+
+  it("creates only the fixed one-time Checkout contract with a mode-scoped idempotency key", async () => {
     const create = vi.fn().mockResolvedValue(
       stripeSession({
         payment_intent: null,
@@ -67,6 +150,7 @@ describe("Stripe lifetime adapter", () => {
     );
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
+      mode: "test",
       priceId: "price_echo_test",
       getStripe: async () => ({
         checkout: { sessions: { create, retrieve: vi.fn() } },
@@ -106,29 +190,16 @@ describe("Stripe lifetime adapter", () => {
         success_url:
           "https://maze.example/play?checkout=success&session_id={CHECKOUT_SESSION_ID}"
       },
-      { idempotencyKey: "echo-maze-lifetime:purchase_123" }
+      { idempotencyKey: "echo-maze-lifetime:test:purchase_123" }
     );
   });
 
   it("retrieves expanded Checkout facts and never returns the raw object", async () => {
     const retrieve = vi.fn().mockResolvedValue(stripeSession());
-    const retrievePaymentIntent = vi.fn().mockResolvedValue({
-      amount_received: 599,
-      currency: "usd",
-      latest_charge: {
-        amount_refunded: 0,
-        disputed: false,
-        refunded: false
-      },
-      livemode: false,
-      metadata: {
-        clerk_user_id: "user_explorer",
-        purchase_id: "purchase_123"
-      },
-      status: "succeeded"
-    });
+    const retrievePaymentIntent = vi.fn().mockResolvedValue(paymentIntent());
     const provider = createStripeLifetimeProvider({
       appOrigin: "http://localhost:3000",
+      mode: "test",
       priceId: "price_echo_test",
       getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve } },
@@ -167,33 +238,37 @@ describe("Stripe lifetime adapter", () => {
     });
   });
 
-  it("reports a fully refunded PaymentIntent as ineligible for confirmation", async () => {
-    const provider = createStripeLifetimeProvider({
-      appOrigin: "http://localhost:3000",
-      priceId: "price_echo_test",
-      getStripe: async () => ({
-        checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },
-        paymentIntents: {
-          retrieve: vi.fn().mockResolvedValue({
-            amount_received: 599,
-            currency: "usd",
-            latest_charge: {
-              amount_refunded: 599,
-              disputed: false,
-              refunded: true
-            },
-            livemode: false,
-            metadata: {
-              clerk_user_id: "user_explorer",
-              purchase_id: "purchase_123"
-            },
-            status: "succeeded"
-          })
-        },
-        webhooks: { constructEvent: vi.fn() }
-      }),
-      webhookSecret: "whsec_test"
+  it("US-03.1 verifies a live-mode PaymentIntent when the mode is live", async () => {
+    const provider = paymentProvider("live", paymentIntent({ livemode: true }));
+
+    await expect(
+      provider.retrievePaymentReference("pi_echo")
+    ).resolves.toEqual({
+      ownerId: "user_explorer",
+      purchaseId: "purchase_123",
+      state: "paid"
     });
+  });
+
+  it("US-03.2 rejects a PaymentIntent whose livemode disagrees with the test mode", async () => {
+    const provider = paymentProvider("test", paymentIntent({ livemode: true }));
+
+    await expect(
+      provider.retrievePaymentReference("pi_echo")
+    ).rejects.toThrow(/^mode_mismatch$/);
+  });
+
+  it("reports a fully refunded PaymentIntent as ineligible for confirmation", async () => {
+    const provider = paymentProvider(
+      "test",
+      paymentIntent({
+        latest_charge: {
+          amount_refunded: 599,
+          disputed: false,
+          refunded: true
+        }
+      })
+    );
 
     await expect(provider.retrievePaymentReference("pi_echo")).resolves.toEqual({
       ownerId: "user_explorer",
@@ -206,6 +281,7 @@ describe("Stripe lifetime adapter", () => {
     const constructEvent = vi.fn().mockReturnValue({ id: "evt_verified" });
     const provider = createStripeLifetimeProvider({
       appOrigin: "https://maze.example",
+      mode: "test",
       priceId: "price_echo_test",
       getStripe: async () => ({
         checkout: { sessions: { create: vi.fn(), retrieve: vi.fn() } },

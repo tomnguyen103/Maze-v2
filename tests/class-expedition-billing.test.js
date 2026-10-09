@@ -145,7 +145,7 @@ describe("Class Expedition billing", () => {
     ]);
   });
 
-  it("refuses a live-mode, closed, or off-host created checkout", async () => {
+  it("US-12.2 refuses a live-mode, closed, or off-host created checkout", async () => {
     for (const overrides of [
       { livemode: true },
       { status: "complete" },
@@ -225,7 +225,7 @@ describe("Class Expedition billing", () => {
     expect(result).toMatchObject({ outcome: "activated" });
   });
 
-  it("never activates from a live-mode or unpaid session", async () => {
+  it("US-12.2 never activates from a live-mode or unpaid session", async () => {
     for (const overrides of [
       { livemode: true },
       { payment_status: "unpaid" },

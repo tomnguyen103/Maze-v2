@@ -77,6 +77,7 @@ function dependencies(overrides = {}) {
   return {
     config: CONFIG,
     createId: () => PURCHASE_ID,
+    mode: /** @type {const} */ ("test"),
     provider,
     recordEvent: vi.fn(),
     store,

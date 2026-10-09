@@ -25,11 +25,11 @@ export class LifetimeWebhookVerificationError extends Error {
 
 /**
  * @param {Record<string, unknown>} checkout
- * @param {{ priceId: string, purchaseId: string, userId: string }} expected
+ * @param {{ mode: "test" | "live", priceId: string, purchaseId: string, userId: string }} expected
  */
 export function verifyLifetimeCheckout(checkout, expected) {
   const checks = [
-    [checkout.livemode === false, "Checkout must use Stripe test mode."],
+    [checkout.livemode === (expected.mode === "live"), "mode_mismatch"],
     [checkout.mode === "payment", "Checkout must be a one-time payment."],
     [checkout.paymentStatus === "paid", "Checkout is not paid."],
     [checkout.amountTotal === LIFETIME_AMOUNT, "Checkout amount is invalid."],
