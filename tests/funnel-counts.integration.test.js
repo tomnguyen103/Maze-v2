@@ -5,10 +5,13 @@ import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { createFunnelStore } from "../server/funnel-store.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
+const adminDatabaseUrl = process.env.DATABASE_ADMIN_URL ?? "";
 const runIntegration =
   process.env.RUN_DATABASE_INTEGRATION === "1" && Boolean(databaseUrl);
 /** @type {Pool | null} */
 let pool = null;
+/** @type {Pool | null} */
+let adminPool = null;
 
 /**
  * Today's count of one step. Each case reads it before and after its writes
@@ -29,10 +32,13 @@ async function countOf(connection, metric, campaign = "") {
   return Number(result.rows[0]?.count ?? 0);
 }
 
-/** @param {(connection: import("pg").PoolClient) => Promise<void>} callback */
-async function rolledBack(callback) {
-  if (!pool) throw new Error("Database pool was not initialized.");
-  const connection = await pool.connect();
+/**
+ * @param {(connection: import("pg").PoolClient) => Promise<void>} callback
+ * @param {Pool | null} [source]
+ */
+async function rolledBack(callback, source = pool) {
+  if (!source) throw new Error("Database pool was not initialized.");
+  const connection = await source.connect();
   try {
     await connection.query("BEGIN");
     await callback(connection);
@@ -147,3 +153,52 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
     });
   });
 });
+
+// The runtime role cannot clear the stamp, so the owner role builds the state
+// of an Explorer whose Grant predates migration 0033.
+describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
+  "Funnel Counts for an Explorer with an earlier Grant",
+  () => {
+    beforeAll(() => {
+      adminPool = new Pool({
+        connectionString: normalizeDatabaseConnectionString(adminDatabaseUrl),
+        max: 1
+      });
+    });
+
+    afterAll(async () => {
+      await adminPool?.end();
+    });
+
+    it("US-06.2 stamps the earliest Grant and counts no activation", async () => {
+      await rolledBack(async (connection) => {
+        const playerId = `user_funnel_${randomUUID()}`;
+        await connection.query(
+          "INSERT INTO player_access (clerk_user_id) VALUES ($1)",
+          [playerId]
+        );
+        await insertGrant(connection, playerId, "funnel-legacy-1");
+        await connection.query(
+          `UPDATE player_access SET first_run_grant_at = NULL
+           WHERE clerk_user_id = $1`,
+          [playerId]
+        );
+        const before = await countOf(connection, "personal_run_activated");
+
+        await insertGrant(connection, playerId, "funnel-legacy-2");
+
+        expect(await countOf(connection, "personal_run_activated")).toBe(
+          before
+        );
+        const access = await connection.query(
+          `SELECT first_run_grant_at = (
+             SELECT min(created_at) FROM run_access_grants WHERE player_id = $1
+           ) AS earliest
+           FROM player_access WHERE clerk_user_id = $1`,
+          [playerId]
+        );
+        expect(access.rows[0]?.earliest).toBe(true);
+      }, adminPool);
+    });
+  }
+);

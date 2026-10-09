@@ -4,6 +4,8 @@
 -- Triggers count the account, activation and Checkout steps from the row
 -- change that makes each step true, so a step counts once with no
 -- deduplication table. A counter failure never fails the write that fired it.
+-- A dropped increment never replays, so each count is a lower bound. The
+-- Postgres log shows each drop as a warning.
 --
 -- One transaction with a short lock wait. Every statement survives a re-run.
 -- The file updates no existing row: the activation trigger reads the Grant
@@ -16,6 +18,11 @@
 BEGIN;
 
 SET LOCAL lock_timeout = '3s';
+
+-- A non-superuser can give an object only to an owner with CREATE on the
+-- schema. 0014 revokes that privilege, so this file grants it for the
+-- ownership transfers and revokes it again before COMMIT.
+GRANT CREATE ON SCHEMA public TO echo_maze_tenant_owner;
 
 CREATE TABLE IF NOT EXISTS funnel_counts (
   day DATE NOT NULL,
@@ -173,5 +180,7 @@ CREATE TRIGGER lifetime_purchases_count_checkout_created
   FOR EACH ROW
   WHEN (OLD.checkout_session_id IS NULL AND NEW.checkout_session_id IS NOT NULL)
   EXECUTE FUNCTION count_checkout_created();
+
+REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner;
 
 COMMIT;

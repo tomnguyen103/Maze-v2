@@ -138,4 +138,25 @@ describe("Funnel Count migration 0033", () => {
     expect(sql).toMatch(/^BEGIN;\s+SET LOCAL lock_timeout = '3s';/m);
     expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
   });
+
+  it("US-08.1 lends the tenant owner schema CREATE only for the ownership transfers", () => {
+    const grant = sql.indexOf(
+      "GRANT CREATE ON SCHEMA public TO echo_maze_tenant_owner;"
+    );
+    const revoke = sql.indexOf(
+      "REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner;"
+    );
+    const transfers = [...sql.matchAll(/ OWNER TO echo_maze_tenant_owner;/g)].map(
+      (match) => match.index
+    );
+
+    expect(grant).toBeGreaterThan(-1);
+    expect(transfers.length).toBeGreaterThan(0);
+    expect(transfers.every((index) => index > grant && index < revoke)).toBe(
+      true
+    );
+    expect(sql.slice(revoke)).toMatch(
+      /^REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner;\s+COMMIT;\s*$/
+    );
+  });
 });

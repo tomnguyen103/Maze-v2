@@ -19,7 +19,7 @@ export const ACCESS_PATHS = new Set([
 // A crawler, a link preview or a headless browser is not a visit. An empty
 // user agent counts as a bot too. A Cubot phone is a browser.
 const BOT_USER_AGENT =
-  /(?<!cu)bot\b|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|^$/i;
+  /(?<!cu)bot(?![a-z])|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|phantomjs|inspectiontool|mediapartners|monitor|pinger|pingdom|health-?check|curl|wget|python|node-fetch|axios|okhttp|go-http-client|^$/i;
 
 /** @param {import("node:http").ServerResponse} response */
 function noStore(response) {
