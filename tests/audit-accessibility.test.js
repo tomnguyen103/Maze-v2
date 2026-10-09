@@ -420,7 +420,7 @@ describe("US-01 — Field Journal palette tokens", () => {
 
   it("mixes colours in oklab when one side is white or hueless (US-01.5)", () => {
     const oklchMixes = cssFiles().filter((relative) =>
-      /color-mix\(in (?:oklch|lch|hsl|hwb)\b/.test(source(relative))
+      /color-mix\(\s*in\s+(?:oklch|lch|hsl|hwb)\b/.test(source(relative))
     );
     expect(oklchMixes).toEqual([]);
   });
@@ -443,7 +443,7 @@ describe("US-01 — Field Journal palette tokens", () => {
         const open = rule.lastIndexOf("{");
         const body = rule.slice(open + 1);
         const signalDeepFill =
-          /(?:^|[\s;])(?:background|background-color)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
+          /(?:^|[\s;])(?:background|background-color|--fill)\s*:[^;]*var\(--color-signal-deep\)/.test(body);
         if (
           signalDeepFill &&
           /(?:^|[\s;])color\s*:/.test(body) &&

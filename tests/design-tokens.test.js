@@ -135,7 +135,7 @@ describe("Field Journal identity", () => {
       "16px",
       "768px"
     ]) {
-      expect(design).toMatch(new RegExp(`(?<![d.])${literal}`));
+      expect(design).toMatch(new RegExp(String.raw`(?<![\d.])${literal}`));
     }
   });
 
