@@ -63,6 +63,8 @@ describe("Clerk user deletion store", () => {
     expect(client.query.mock.calls[3][1]).toEqual([
       expect.stringMatching(/^[a-f0-9]{64}$/)
     ]);
+    // US-04.1: Financial Facts name no account, so deletion keeps them.
+    expect(client.query.mock.calls.some(([sql]) => sql.includes("financial_facts"))).toBe(false);
     expect(client.release).toHaveBeenCalledOnce();
   });
 
@@ -109,7 +111,7 @@ describe("Clerk user deletion store", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("rolls back when deletion fails", async () => {
+  it("US-04.5 rolls back when deletion fails and never touches a Financial Fact", async () => {
     const client = {
       query: vi.fn()
         .mockResolvedValueOnce({ rows: [] })
@@ -125,6 +127,7 @@ describe("Clerk user deletion store", () => {
       "database unavailable"
     );
     expect(client.query).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("financial_facts"))).toBe(false);
     expect(client.release).toHaveBeenCalledOnce();
   });
 

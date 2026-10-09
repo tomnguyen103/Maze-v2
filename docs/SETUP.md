@@ -67,6 +67,11 @@ For Vercel, connect the Neon project and apply the migrations in order:
 29. `db/migrations/0029_class_expedition_constellation.sql`
 30. `db/migrations/0030_domain_autojoin_and_leaderboard_index.sql`
 31. `db/migrations/0031_billing_mode.sql`
+32. `db/migrations/0032_financial_facts.sql`
+
+Apply migration 0032 before the release that writes Financial Facts. Without
+the table, every Lifetime paid, refund and dispute webhook and every Checkout
+confirmation rolls back, and Stripe retries the webhooks.
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.
 Use `DATABASE_ADMIN_URL`, never the application `DATABASE_URL`, for all fifteen.

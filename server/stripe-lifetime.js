@@ -132,7 +132,11 @@ export function createStripeLifetimeProvider(configuration) {
           : charge.disputed === true
             ? "disputed"
             : "paid";
-      return { ownerId, purchaseId, state };
+      // Cumulative across partial refunds, so a Financial Fact never under-counts.
+      const refundedCents = Number.isInteger(charge.amount_refunded)
+        ? Math.min(Number(charge.amount_refunded), LIFETIME_AMOUNT)
+        : 0;
+      return { ownerId, purchaseId, refundedCents, state };
     },
 
     /** @param {Buffer} rawBody @param {string} signature */

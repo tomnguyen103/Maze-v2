@@ -50,6 +50,37 @@ live readiness until Stripe verifies its mode. A Checkout that the player abando
 before payment is classified from its Checkout Session alone.
 _Avoid_: Legacy purchase, empty-mode purchase, orphan purchase
 
+**Financial Fact**:
+The account-free record of one paid Lifetime purchase: its amount, its Billing Mode,
+and whether it was later refunded or disputed. It names no player, so it outlives
+account deletion.
+_Avoid_: Order record, receipt, ledger row
+
+**Net Purchase**:
+A paid Lifetime purchase that no full refund or open dispute has reversed. A
+partial refund keeps the Net Purchase, and its refunded cents still reduce revenue.
+_Avoid_: Sale, conversion, successful payment
+
+**Campaign Code**:
+A short, owner-chosen label that tags a visit to the adult offer with the outreach
+that caused it. It identifies a channel, never a person.
+_Avoid_: Referral code, tracking ID, UTM
+
+**Qualified Adult Visit**:
+One non-bot request to the adult offer, counted under its Campaign Code or under
+the empty campaign. It counts requests, not unique people.
+_Avoid_: Unique visitor, session, lead
+
+**Funnel Count**:
+A daily total of one step on the path from visit to purchase, kept per Campaign
+Code and Billing Mode. It holds no player identity.
+_Avoid_: Analytics event, user journey, cohort
+
+**Contribution**:
+The money one Net Purchase leaves after payment fees, expected refund loss, service
+cost and provision. Cash break-even is the fixed cost divided by Contribution.
+_Avoid_: Profit, margin, LTV
+
 **Quest Level**:
 The learning tier chosen before a Quest. It sets Question complexity and the
 overall Labyrinth challenge range across all twenty Labyrinths.

@@ -22,7 +22,7 @@ export class LifetimeOwnershipError extends Error {
  *     createCheckout: (purchase: { purchaseId: string, userId: string }) => Promise<{ checkoutUrl: string, sessionId: string }>,
  *     retrieveCheckout: (sessionId: string) => Promise<Record<string, unknown>>,
  *     retrieveCheckoutLink: (sessionId: string) => Promise<string>,
- *     retrievePaymentReference: (paymentIntentId: string) => Promise<{ ownerId: string, purchaseId: string, state: string }>
+ *     retrievePaymentReference: (paymentIntentId: string) => Promise<{ ownerId: string, purchaseId: string, refundedCents: number, state: string }>
  *   },
  *   recordEvent?: (eventName: string, fields: Record<string, unknown>) => void,
  *   store: {
@@ -104,7 +104,10 @@ export function createLifetimeService({
                   "Payment is no longer eligible for Lifetime Membership."
                 );
               }
-              const result = await store.activatePurchase(existing, null);
+              const result = await store.activatePurchase(
+                { ...existing, refundedCents: payment.refundedCents },
+                null
+              );
               if (result.lifetime === true) {
                 return {
                   checkoutUrl: null,
@@ -171,7 +174,10 @@ export function createLifetimeService({
           "Payment is no longer eligible for Lifetime Membership."
         );
       }
-      const result = await store.activatePurchase(checkout, null);
+      const result = await store.activatePurchase(
+        { ...checkout, refundedCents: payment.refundedCents },
+        null
+      );
       recordEvent("lifetime_confirmation", {
         outcome: result.outcome ?? "activated"
       });
@@ -251,6 +257,7 @@ export function createLifetimeService({
           ownerId: reference.ownerId,
           paymentIntentId: normalized.paymentIntentId,
           purchaseId: reference.purchaseId,
+          refundedCents: reference.refundedCents,
           state
         });
         recordEvent("lifetime_webhook", {
@@ -274,7 +281,8 @@ export function createLifetimeService({
       verifyPaymentIdentity(checkout, payment);
       const result = await store.activatePurchase({
         ...checkout,
-        paymentState: payment.state
+        paymentState: payment.state,
+        refundedCents: payment.refundedCents
       }, {
         eventCreated: normalized.eventCreated,
         eventId: normalized.eventId,

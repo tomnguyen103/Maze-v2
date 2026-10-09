@@ -231,6 +231,7 @@ describe("Stripe lifetime adapter", () => {
     ).resolves.toEqual({
       ownerId: "user_explorer",
       purchaseId: "purchase_123",
+      refundedCents: 0,
       state: "paid"
     });
     expect(retrievePaymentIntent).toHaveBeenCalledWith("pi_echo", {
@@ -246,6 +247,7 @@ describe("Stripe lifetime adapter", () => {
     ).resolves.toEqual({
       ownerId: "user_explorer",
       purchaseId: "purchase_123",
+      refundedCents: 0,
       state: "paid"
     });
   });
@@ -273,7 +275,28 @@ describe("Stripe lifetime adapter", () => {
     await expect(provider.retrievePaymentReference("pi_echo")).resolves.toEqual({
       ownerId: "user_explorer",
       purchaseId: "purchase_123",
+      refundedCents: 599,
       state: "refunded"
+    });
+  });
+
+  it("US-02.2 reports the cumulative refunded cents of a partial refund", async () => {
+    const provider = paymentProvider(
+      "test",
+      paymentIntent({
+        latest_charge: {
+          amount_refunded: 300,
+          disputed: false,
+          refunded: false
+        }
+      })
+    );
+
+    await expect(provider.retrievePaymentReference("pi_echo")).resolves.toEqual({
+      ownerId: "user_explorer",
+      purchaseId: "purchase_123",
+      refundedCents: 300,
+      state: "paid"
     });
   });
 

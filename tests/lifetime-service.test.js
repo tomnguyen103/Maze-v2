@@ -71,6 +71,7 @@ function dependencies(overrides = {}) {
     retrievePaymentReference: vi.fn().mockResolvedValue({
       ownerId: USER_ID,
       purchaseId: PURCHASE_ID,
+      refundedCents: 0,
       state: "paid"
     })
   };
@@ -225,7 +226,7 @@ describe("Lifetime Membership service", () => {
       state: "lifetime_active"
     });
     expect(deps.store.activatePurchase).toHaveBeenCalledWith(
-      paidCheckout(),
+      { ...paidCheckout(), refundedCents: 0 },
       null
     );
     expect(deps.provider.retrievePaymentReference).toHaveBeenCalledWith(
@@ -294,7 +295,7 @@ describe("Lifetime Membership service", () => {
       service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
     ).resolves.toEqual({ outcome: "processed" });
     expect(deps.store.activatePurchase).toHaveBeenCalledWith(
-      { ...paidCheckout(), paymentState: "paid" },
+      { ...paidCheckout(), paymentState: "paid", refundedCents: 0 },
       {
         eventCreated: 100,
         eventId: "evt_paid",
@@ -367,6 +368,7 @@ describe("Lifetime Membership service", () => {
       ownerId: USER_ID,
       paymentIntentId: "pi_echo",
       purchaseId: PURCHASE_ID,
+      refundedCents: 0,
       state: "disputed"
     });
     expect(deps.recordEvent).toHaveBeenCalledWith("lifetime_webhook", {
@@ -432,6 +434,7 @@ describe("Lifetime Membership service", () => {
     deps.provider.retrievePaymentReference.mockResolvedValue({
       ownerId: USER_ID,
       purchaseId: PURCHASE_ID,
+      refundedCents: 300,
       state: "paid"
     });
     deps.store.transitionEntitlement.mockResolvedValue({
@@ -442,8 +445,9 @@ describe("Lifetime Membership service", () => {
     await expect(
       service.processWebhook(Buffer.from("{}"), "t=1,v1=signed")
     ).resolves.toEqual({ outcome: "ignored" });
+    // US-02.2: the cumulative refunded cents reach the Financial Fact.
     expect(deps.store.transitionEntitlement).toHaveBeenCalledWith(
-      expect.objectContaining({ state: null })
+      expect.objectContaining({ refundedCents: 300, state: null })
     );
 
     deps.provider.constructWebhookEvent.mockReturnValue({
