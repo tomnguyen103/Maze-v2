@@ -42,7 +42,7 @@ export function resolveEnforcement(env) {
   return { enabled: true, refusal: null };
 }
 
-export const CHECKOUT_CLOSED_REFUSAL =
+const CHECKOUT_CLOSED_REFUSAL =
   "RUN_ACCESS_ENFORCEMENT_ENABLED is true in live Billing Mode while LIFETIME_PUBLIC_CHECKOUT_ENABLED is not true. Enforcement while the public cannot buy would lock every Explorer out of a Run they cannot buy. Set both to true together after the owner pilot, or set RUN_ACCESS_ENFORCEMENT_ENABLED to false.";
 
 /**
@@ -51,8 +51,8 @@ export const CHECKOUT_CLOSED_REFUSAL =
  * otherwise only to the Pilot Accounts in `LIFETIME_PILOT_ACCOUNT_IDS`.
  *
  * temporary: plan Phase 4 step 8 keeps live checkout to the owner pilot.
- * Remove this gate and both variables after the accepted pilot receipt and
- * plan step 11 open Public Checkout.
+ * Remove this gate, the enforcement coupling and both variables after launch
+ * runbook step 12 passes (ADR 0050).
  *
  * @param {Record<string, string | undefined>} env
  * @returns {(userId: string) => boolean}

@@ -14,9 +14,9 @@ voice, name or account.
 | 0:40 | The Explorer picks up an Echo. | Recover every Echo. The Gate opens only when all of them are safe. |
 | 0:55 | A Warden moves after the Explorer moves. | Wardens move after you act. Each Warden follows a tactic you can read. |
 | 1:10 | A Warden Challenge opens. | When a Warden catches you, a Warden Challenge starts. You answer a short multiple-choice Question. |
-| 1:25 | The Hint shows, then a correct answer. | Every Question has a free Hint. A correct answer defeats that Warden. A wrong answer costs Vitality and brings a fresh Question. |
+| 1:25 | The Question Hint shows, then a correct answer. | Every Question has a free Question Hint. A correct answer defeats that Warden. A wrong answer costs Vitality and brings a fresh Question. |
 | 1:40 | The Explorer reaches the Gate. | Reach the Gate to escape. A Quest has twenty Labyrinths. |
-| 1:50 | The Quest Level choice. | Choose Bright Start, Trail Scout or Maze Master. The level sets the Question complexity. |
+| 1:50 | The Quest Level choice. | Choose Bright Start, Trail Scout or Maze Master. The Quest Level sets the Question complexity. |
 | 2:00 | The membership dialog. | Play one Guest Run. A free Explorer account adds three more Runs. An adult can buy Lifetime Membership for $5.99 USD once. It gives unlimited Runs for that account, with no subscription and no paid power. |
 
 ## Claims to keep out

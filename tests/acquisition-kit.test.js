@@ -132,5 +132,6 @@ describe("Pilot checkout gate records", () => {
     const config = read("server/lifetime-config.js");
 
     expect(config).toMatch(/temporary: .+\n.+Remove this gate/);
+    expect(config).toContain("runbook step 12");
   });
 });

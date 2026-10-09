@@ -203,8 +203,8 @@ remove a code through a reviewed code change before Phase 5 starts.
 ## Gate removal
 
 The pilot checkout gate is temporary (ADR 0050). After step 12 passes, open a
-change that removes `resolveCheckoutGate`, the `checkout_closed` answer and the
-two variables `LIFETIME_PILOT_ACCOUNT_IDS` and
+change that removes `resolveCheckoutGate`, the `checkout_closed` answer, the
+enforcement coupling and the two variables `LIFETIME_PILOT_ACCOUNT_IDS` and
 `LIFETIME_PUBLIC_CHECKOUT_ENABLED`. Remove both variables from the production
 environment after that change deploys.
 

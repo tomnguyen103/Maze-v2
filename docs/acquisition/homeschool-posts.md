@@ -20,7 +20,7 @@ Here is a real Question from the game:
 > - circle
 > - square
 
-Every Question has a free Hint, one clear answer and a short explanation. The
+Every Question has a free Question Hint, one clear answer and a short explanation. The
 player chooses a Quest Level before a Quest: Bright Start, Trail Scout or Maze
 Master.
 
@@ -44,7 +44,7 @@ Here is a real Question from the game:
 > - very noisy
 > - hard to find
 
-The Hint says to think about why the shell needs gentle hands. After the
+The Question Hint says to think about why the shell needs gentle hands. After the
 answer, the game explains that fragile means easily broken.
 
 Try one Guest Run first. If it fits your week, a parent can buy Lifetime

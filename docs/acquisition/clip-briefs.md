@@ -42,7 +42,7 @@ the end.
 **Demonstration:** Warden Challenge.
 
 **Shots:** A Warden moves after the Explorer moves. Contact opens a Warden
-Challenge. The player opens the free Hint and picks the correct answer. The
+Challenge. The player opens the free Question Hint and picks the correct answer. The
 Warden is defeated.
 
 **Caption:** Caught by a Warden? Answer the Question to clear the path.
@@ -56,7 +56,7 @@ Warden is defeated.
 **Shots:** The Question fills the screen first. A pause lets the viewer think.
 Then the answer and the brief explanation show.
 
-**Caption:** Every Warden Question has one clear answer, a free Hint and a short explanation.
+**Caption:** Every Warden Question has one clear answer, a free Question Hint and a short explanation.
 
 **Link:** See Links below.
 

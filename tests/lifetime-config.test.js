@@ -287,13 +287,7 @@ describe("Enforcement with Public Checkout", () => {
       fileURLToPath(new URL("../server/player-api.js", import.meta.url)),
       "utf8"
     );
-    const config = readFileSync(
-      fileURLToPath(new URL("../server/lifetime-config.js", import.meta.url)),
-      "utf8"
-    );
 
     expect(api).toContain("checkoutOpen: resolveCheckoutGate(env)");
-    expect(config).toMatch(/temporary: .+/);
-    expect(config).toContain("step 11");
   });
 });
