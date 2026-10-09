@@ -221,7 +221,9 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
 
     it("US-10.1 buckets stored rows by UTC day with both range ends included", async () => {
       await rolledBack(async (connection) => {
-        // A non-UTC session zone proves the report buckets by UTC day.
+        // A non-UTC session zone proves the report buckets by UTC day. Each
+        // boundary fact carries its own partial refund, so a zone bug changes
+        // the refunded cents: it drops _start (1) and adds _after (2).
         await connection.query("SET LOCAL TIME ZONE 'America/Los_Angeles'");
         await connection.query(
           `INSERT INTO funnel_counts (day, metric, campaign, mode, count) VALUES
@@ -238,11 +240,11 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
              payment_intent_id, billing_mode, amount_cents, currency, status,
              refunded_cents, paid_at
            ) VALUES
-             ($1 || '_start', 'live', 599, 'usd', 'paid', 0, '2000-01-01 00:00:00+00'),
+             ($1 || '_start', 'live', 599, 'usd', 'paid', 1, '2000-01-01 00:00:00+00'),
              ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, '2000-01-02 23:59:59+00'),
              ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, '2000-01-02 12:00:00+00'),
-             ($1 || '_before', 'live', 599, 'usd', 'paid', 0, '1999-12-31 23:59:59+00'),
-             ($1 || '_after', 'live', 599, 'usd', 'paid', 0, '2000-01-03 00:00:00+00'),
+             ($1 || '_before', 'live', 599, 'usd', 'paid', 4, '1999-12-31 23:59:59+00'),
+             ($1 || '_after', 'live', 599, 'usd', 'paid', 2, '2000-01-03 00:00:00+00'),
              ($1 || '_test', 'test', 599, 'usd', 'paid', 0, '2000-01-01 12:00:00+00')`,
           [`pi_funnel_${id}`]
         );
@@ -264,7 +266,7 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
             netPurchases: 1,
             refundedCount: 1,
             disputedCount: 1,
-            refundedCents: 599
+            refundedCents: 600
           }
         });
       }, adminPool);

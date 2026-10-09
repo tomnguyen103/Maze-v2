@@ -73,6 +73,7 @@ function harness({ role = "admin", report = REPORT, auditFails = false } = {}) {
   const audits = [];
   /** @type {unknown[]} */
   const reads = [];
+  let auditAttempts = 0;
   const handler = createAdminHandler({
     store: {
       /** @returns {Promise<{ previousRole: import("../shared/permissions.js").Role, role: string }>} */
@@ -90,6 +91,7 @@ function harness({ role = "admin", report = REPORT, auditFails = false } = {}) {
       resolver: { roleFor: async () => role ?? "player" }
     }),
     recordAudit: async (_request, event) => {
+      auditAttempts += 1;
       if (auditFails) {
         throw new Error("audit store down");
       }
@@ -99,6 +101,7 @@ function harness({ role = "admin", report = REPORT, auditFails = false } = {}) {
   return {
     audits,
     reads,
+    auditAttempts: () => auditAttempts,
     handler,
     /** @param {string} url */
     get: (url) => send(request(url), handler)
@@ -269,6 +272,7 @@ describe("Admin funnel export", () => {
     const result = await target.get(`/api/admin/funnel?${RANGE}&format=csv`);
 
     expect(result.statusCode).toBe(503);
+    expect(target.auditAttempts()).toBe(1);
     expect(result.body).not.toContain("adult_offer_visit");
     expect(result.body).not.toContain("599");
   });

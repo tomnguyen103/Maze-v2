@@ -67,7 +67,9 @@ describe("Funnel records", () => {
       const definition = glossary.slice(start, end === -1 ? undefined : end);
 
       expect(start).toBeGreaterThan(-1);
-      expect(definition).not.toMatch(/`|\.js\b|\/api\/|\b[a-z]+_[a-z_]+\b/);
+      expect(definition).not.toMatch(
+        /`|\.js\b|\w\/\w|\b[a-z]+_[a-z_]+\b|[a-z][A-Z]/
+      );
     }
   });
 
