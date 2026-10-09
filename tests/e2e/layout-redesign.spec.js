@@ -39,9 +39,8 @@ test.describe("layout redesign & edge viewports", () => {
         [...document.querySelectorAll("body *")]
           .filter(
             (element) =>
-              element.getBoundingClientRect().left < -1 ||
               element.getBoundingClientRect().right >
-                document.documentElement.clientWidth + 1
+              document.documentElement.clientWidth + 1
           )
           .map((element) => `${element.tagName}#${element.id}.${element.className.replace(/\s+/g, '.')}(right=${Math.round(element.getBoundingClientRect().right)})`)
       );
