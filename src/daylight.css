@@ -1448,7 +1448,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 58rem) {
   .command-bar__actions > * {
     padding-inline: var(--space-3);
   }
@@ -2086,13 +2086,13 @@ body[data-run-mode="first-light"] .play-workbench {
   outline-offset: 3px;
 }
 
-@media (min-width: 48.0625rem) {
+@media (min-width: 58.0625rem) {
   .landing-hero {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 58rem) {
   .landing-hero {
     grid-template-columns: 1fr;
     min-height: 0;

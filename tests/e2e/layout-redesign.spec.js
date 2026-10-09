@@ -39,12 +39,21 @@ test.describe("layout redesign & edge viewports", () => {
         [...document.querySelectorAll("body *")]
           .filter(
             (element) =>
+              element.getBoundingClientRect().left < -1 ||
               element.getBoundingClientRect().right >
-              document.documentElement.clientWidth + 1
+                document.documentElement.clientWidth + 1
           )
           .map((element) => `${element.tagName}#${element.id}.${element.className.replace(/\s+/g, '.')}(right=${Math.round(element.getBoundingClientRect().right)})`)
       );
       expect(docOverflow, `Page should not have horizontal overflow on ${vp.name}: ${overflowSources.slice(0, 5).join(", ")}`).toBeLessThanOrEqual(1);
+
+      // Overflow past the left edge cannot scroll, so scrollWidth never shows it.
+      const clippedLeft = await page.evaluate(() =>
+        [...document.querySelectorAll(".play-grid, .play-grid > *")]
+          .filter((element) => element.getBoundingClientRect().left < -1)
+          .map((element) => element.className)
+      );
+      expect(clippedLeft, `Play layout should not clip past the left edge on ${vp.name}`).toEqual([]);
 
       const actionsOverflow = await page.evaluate(() => {
         const actions = document.querySelector(".command-bar__actions");
