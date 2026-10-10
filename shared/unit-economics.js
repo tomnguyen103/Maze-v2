@@ -17,23 +17,44 @@ function assertCents(values) {
 
 /**
  * The Contribution of one purchase: the gross price less the payment fee, the
- * expected refund loss, the per-purchase service cost and the provision.
+ * expected refund loss, the acquisition cost, the per-purchase service cost and
+ * the provision. The caller states the acquisition cost on purpose; zero is a
+ * valid value.
  *
  * @param {{
  *   grossCents: number,
  *   feeCents: number,
  *   refundLossCents: number,
+ *   acquisitionCents: number,
  *   serviceCents: number,
  *   provisionCents: number
  * }} purchase
  * @returns {number} The Contribution in cents. It can be zero or negative.
  */
 export function contributionCents(purchase) {
-  const { grossCents, feeCents, refundLossCents, serviceCents, provisionCents } =
-    purchase;
-  assertCents({ grossCents, feeCents, refundLossCents, serviceCents, provisionCents });
+  const {
+    grossCents,
+    feeCents,
+    refundLossCents,
+    acquisitionCents,
+    serviceCents,
+    provisionCents
+  } = purchase;
+  assertCents({
+    grossCents,
+    feeCents,
+    refundLossCents,
+    acquisitionCents,
+    serviceCents,
+    provisionCents
+  });
   const result =
-    grossCents - feeCents - refundLossCents - serviceCents - provisionCents;
+    grossCents -
+    feeCents -
+    refundLossCents -
+    acquisitionCents -
+    serviceCents -
+    provisionCents;
   if (!Number.isSafeInteger(result)) {
     throw new RangeError("The Contribution is outside the exact integer range.");
   }

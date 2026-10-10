@@ -89,8 +89,9 @@ Code and Billing Mode. It holds no player identity.
 _Avoid_: Analytics event, user journey, cohort
 
 **Contribution**:
-The money one Net Purchase leaves after payment fees, expected refund loss, service
-cost and provision. Cash break-even is the fixed cost divided by Contribution.
+The money one Net Purchase leaves after payment fees, expected refund loss,
+acquisition cost, service cost and provision. Cash break-even is the fixed cost
+divided by Contribution.
 _Avoid_: Profit, margin, LTV
 
 **Quest Level**:

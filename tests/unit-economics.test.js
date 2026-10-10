@@ -8,6 +8,7 @@ const PURCHASE = Object.freeze({
   grossCents: 599,
   feeCents: 47,
   refundLossCents: 18,
+  acquisitionCents: 0,
   serviceCents: 25,
   provisionCents: 75
 });
@@ -15,6 +16,23 @@ const PURCHASE = Object.freeze({
 describe("Unit economics", () => {
   it("US-11.1 gives a Contribution of 434 cents for the reference purchase", () => {
     expect(contributionCents(PURCHASE)).toBe(434);
+  });
+
+  it("US-11.6 subtracts acquisition cost from the Contribution", () => {
+    expect(contributionCents({ ...PURCHASE, acquisitionCents: 100 })).toBe(334);
+  });
+
+  it("US-11.6 requires the acquisition cost", () => {
+    const withoutAcquisition = {
+      grossCents: 599,
+      feeCents: 47,
+      refundLossCents: 18,
+      serviceCents: 25,
+      provisionCents: 75
+    };
+
+    // @ts-expect-error The test omits the required field on purpose.
+    expect(() => contributionCents(withoutAcquisition)).toThrow(RangeError);
   });
 
   it("US-11.2 rounds break-even up to the next whole purchase", () => {
@@ -38,6 +56,7 @@ describe("Unit economics", () => {
         grossCents: 0,
         feeCents: Number.MAX_SAFE_INTEGER,
         refundLossCents: Number.MAX_SAFE_INTEGER,
+        acquisitionCents: 0,
         serviceCents: 0,
         provisionCents: 0
       })

@@ -42,7 +42,15 @@ the account record, and analytics must never rebuild an identity.
    The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from
-   owner inputs. It reads no stored data.
+   owner inputs. It reads no stored data. Contribution subtracts the acquisition
+   cost, and the caller must state that cost.
+10. `account_created` counts the first server sighting of any Clerk account. The
+    count includes every path that inserts a `player_access` row: the Lifetime,
+    Run Access, Echo Fossil, Quest Progress and Learning Journal stores, and the
+    Classroom authority path. Classroom accounts therefore count. The activation
+    rate is `personal_run_activated` divided by `account_created`. The
+    visit-to-account and account-to-Checkout ratios are aggregate diagnostics.
+    They have no cohort link, so the owner never reads them as a conversion rate.
 
 ## Consequences
 
