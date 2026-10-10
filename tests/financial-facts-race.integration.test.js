@@ -209,4 +209,54 @@ describe.runIf(runIntegration)("Financial Fact writes under concurrency", () => 
       );
     }
   });
+
+  it("US-02.9 freezes the refunded cents of a lagging row on a full refund", async () => {
+    const transitioned = `pi_race_${randomUUID()}`;
+    const recorded = `pi_race_${randomUUID()}`;
+    const ids = [transitioned, recorded];
+    try {
+      for (const id of ids) {
+        await recordFact(pool(), {
+          paymentIntentId: id,
+          billingMode: "test",
+          eventCreated: 1000,
+          status: "paid",
+          refundedCents: 0
+        });
+      }
+      // Code from before 0035 raises refunded_cents and leaves the column at 0.
+      await pool().query(
+        "UPDATE financial_facts SET refunded_cents = 300 WHERE payment_intent_id = ANY($1)",
+        [ids]
+      );
+      await transitionFact(pool(), {
+        paymentIntentId: transitioned,
+        billingMode: "test",
+        eventCreated: 1001,
+        requestedState: "refunded",
+        refundedCents: 599
+      });
+      await recordFact(pool(), {
+        paymentIntentId: recorded,
+        billingMode: "test",
+        eventCreated: 1001,
+        status: "refunded",
+        refundedCents: 599
+      });
+
+      for (const id of ids) {
+        expect((await snapshot(id)).fact).toMatchObject({
+          status: "refunded",
+          refunded_cents: 599,
+          partial_refunded_cents: 300,
+          refunded: true
+        });
+      }
+    } finally {
+      await pool().query(
+        "DELETE FROM financial_facts WHERE payment_intent_id = ANY($1)",
+        [ids]
+      );
+    }
+  });
 });

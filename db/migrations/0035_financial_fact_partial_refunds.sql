@@ -11,7 +11,10 @@
 -- report counts these cents on the paid day and the remaining cents on the
 -- refund day. The report reads refunded_cents for a fact with no refund time,
 -- so the column matters only after the full refund. Code from before 0035
--- raises refunded_cents and leaves the column behind until then.
+-- raises refunded_cents and leaves the column behind. A full refund that the
+-- new code writes freezes the right value. A full refund that the old code
+-- writes freezes the stale value: the total stays right, but some partial
+-- cents move to the refund day.
 --
 -- Backfill: a fact that is not fully refunded takes partial_refunded_cents =
 -- refunded_cents. A fact that is already fully refunded keeps 0, so its cents

@@ -41,8 +41,10 @@ Migration 0034 splits each counter into 16 shard rows
 shard whose advisory transaction lock is free. The start shard is
 `pg_backend_pid() % 16`
 (`db/migrations/0034_funnel_counter_shards.sql:70`). The bump then tries the next
-shards in order and never waits for a lock
-(`db/migrations/0034_funnel_counter_shards.sql:74`). Every writer goes through
+shards in order without a wait
+(`db/migrations/0034_funnel_counter_shards.sql:74`). When all 16 locks are held,
+the bump writes the start shard and can still wait 200 ms and drop
+(`db/migrations/0034_funnel_counter_shards.sql:85`). Every writer goes through
 `bump_funnel_count`, so a free advisory lock means no open row lock on that
 shard. The report sums the shard rows of each key.
 

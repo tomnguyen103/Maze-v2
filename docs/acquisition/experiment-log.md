@@ -20,7 +20,9 @@ days. Record cash cost in USD and owner minutes as whole numbers.
   purchase to a code, so a purchase is a window total. Net Purchases already
   exclude fully refunded and disputed purchases, so never subtract Refunds from
   Purchases.
-- **Refunds:** full and partial refunds recorded in the window.
+- **Refunds:** the export refund count in the window. It counts full refunds
+  on their refund day. A partial refund has no count, and its cents stay on the
+  paid day.
 - **Cash cost:** money spent on this creative, for example a stock asset.
 - **Owner minutes:** owner time to make, approve, send and answer this item.
 
