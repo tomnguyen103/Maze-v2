@@ -265,6 +265,18 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         )
       ).resolves.toEqual({
         domain: verifiedDomain,
+        autoJoinEnabled: false
+      });
+      // ADR 0023: auto-join is opt-in, so the teacher arms it explicitly.
+      await expect(
+        domainStore.registerDomain(
+          explorerId,
+          classroomA,
+          verifiedDomain,
+          true
+        )
+      ).resolves.toEqual({
+        domain: verifiedDomain,
         autoJoinEnabled: true
       });
       await expect(
@@ -1236,6 +1248,22 @@ describe.runIf(runIntegration)("Classroom PostgreSQL tenant boundary", () => {
         [[classroomA, classroomB]]
       ).catch(() => {});
     }
+  });
+
+  it("refuses to erase the Membership versions of another Explorer", async () => {
+    if (!runtimePool) throw new Error("Database pools were not initialized.");
+    const suffix = randomUUID().replaceAll("-", "");
+    await expect(
+      withTenantContext(
+        runtimePool,
+        { explorerId: `user_${suffix}`, classroomId: null },
+        (client) => client.query(
+          "SELECT erase_membership_authority_versions($1)",
+          [`user_other_${suffix}`]
+        )
+      )
+    ).rejects.toMatchObject({ code: "P0001" });
+    await expectTenantContextCleared(runtimePool);
   });
 });
 

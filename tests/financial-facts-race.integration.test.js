@@ -259,4 +259,40 @@ describe.runIf(runIntegration)("Financial Fact writes under concurrency", () => 
       );
     }
   });
+
+  it("US-02.10 keeps the first dispute day when a won dispute is disputed again", async () => {
+    const id = `pi_race_${randomUUID()}`;
+    try {
+      await recordFact(pool(), {
+        paymentIntentId: id,
+        billingMode: "test",
+        eventCreated: 1000,
+        status: "paid",
+        refundedCents: 0
+      });
+      await transitionFact(pool(), { paymentIntentId: id, billingMode: "test", eventCreated: 1001, requestedState: "disputed", refundedCents: 0 });
+      // Move the first dispute into a closed period.
+      await pool().query(
+        "UPDATE financial_facts SET disputed_at = '2000-01-01T12:00:00Z' WHERE payment_intent_id = $1",
+        [id]
+      );
+      await transitionFact(pool(), {
+        paymentIntentId: id,
+        billingMode: "test",
+        eventCreated: 1002,
+        requestedState: "active",
+        refundedCents: 0
+      });
+      await transitionFact(pool(), { paymentIntentId: id, billingMode: "test", eventCreated: 1003, requestedState: "disputed", refundedCents: 0 });
+
+      const result = await pool().query(
+        `SELECT status, (disputed_at AT TIME ZONE 'UTC')::date::text AS dispute_day
+         FROM financial_facts WHERE payment_intent_id = $1`,
+        [id]
+      );
+      expect(result.rows[0]).toEqual({ status: "disputed", dispute_day: "2000-01-01" });
+    } finally {
+      await pool().query("DELETE FROM financial_facts WHERE payment_intent_id = $1", [id]);
+    }
+  });
 });

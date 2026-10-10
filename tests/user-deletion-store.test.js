@@ -7,7 +7,7 @@ describe("Clerk user deletion store", () => {
       query: vi.fn(async (...args) => {
         const [sql] = args;
         return {
-          rows: sql.includes("AS tombstone_present") ? [{
+          rows: sql.includes("AS erased") ? [{ erased: true }] : sql.includes("AS tombstone_present") ? [{
               tombstone_present: true,
               cloud_deleted: true,
               player_deleted: true,
@@ -53,13 +53,16 @@ describe("Clerk user deletion store", () => {
       // Ordered before the Membership rows go: this table records a
       // Membership by its Clerk membership id, so the join back to the
       // Explorer only exists while `classroom_memberships` still does.
-      expect.stringContaining("DELETE FROM classroom_authority_versions"),
+      expect.stringContaining("erase_membership_authority_versions"),
       expect.stringContaining("DELETE FROM player_access"),
       expect.stringContaining("AS tombstone_present"),
       "COMMIT"
     ]);
     expect(client.query.mock.calls[1][1]).toEqual(["user_deleted", ""]);
     expect(client.query.mock.calls[2][1]).toEqual(["user_deleted"]);
+    // The runtime cannot read the authority table, so the verification row
+    // carries the result of the definer function.
+    expect(client.query.mock.calls[12][1]?.[2]).toBe(true);
     expect(client.query.mock.calls[3][1]).toEqual([
       expect.stringMatching(/^[a-f0-9]{64}$/)
     ]);

@@ -69,7 +69,9 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
  * refunded cents come from the charge as it is now. The partial refunded
  * cents freeze when the fact becomes fully refunded, at the refunded cents
  * from before that refund. The report reads refunded cents for a fact with no
- * refund time, so the column matters only after the full refund.
+ * refund time, so the column matters only after the full refund. The first
+ * dispute day sticks, so a dispute after a won dispute leaves a closed period
+ * unchanged.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -117,7 +119,7 @@ export async function transitionFact(client, event) {
            ELSE refunded_at
          END,
          disputed_at = CASE
-           WHEN $2 = 'disputed' AND status <> 'disputed' THEN NOW()
+           WHEN $2 = 'disputed' THEN COALESCE(disputed_at, NOW())
            ELSE disputed_at
          END,
          status = $2,

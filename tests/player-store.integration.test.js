@@ -9,6 +9,28 @@ const runIntegration =
 /** @type {Pool | null} */
 let pool = null;
 
+/**
+ * Splits a migration into its top-level statements. A statement ends at a
+ * line that ends with `;` outside a dollar-quoted body.
+ *
+ * @param {string} sql
+ */
+function statements(sql) {
+  /** @type {string[]} */
+  const result = [];
+  let current = "";
+  for (const line of sql.split("\n")) {
+    current += `${line}\n`;
+    const insideBody = (current.match(/\$\$/g) ?? []).length % 2 === 1;
+    if (!insideBody && line.trimEnd().endsWith(";")) {
+      result.push(current);
+      current = "";
+    }
+  }
+  if (current.trim()) result.push(current);
+  return result;
+}
+
 describe.runIf(runIntegration)("regional Score Entry migration on PostgreSQL", () => {
   beforeAll(async () => {
     pool = new Pool({
@@ -31,8 +53,11 @@ describe.runIf(runIntegration)("regional Score Entry migration on PostgreSQL", (
       "utf8"
     );
     const client = await pool.connect();
+    let failed = false;
     try {
-      await client.query("BEGIN");
+      // 0019 commits inside its backfill and builds an index CONCURRENTLY, so
+      // it runs one statement at a time with no outer transaction. The temp
+      // table shadows the real `score_entries` for this session only.
       await client.query(`
         CREATE TEMP TABLE score_entries (
           id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -61,7 +86,9 @@ describe.runIf(runIntegration)("regional Score Entry migration on PostgreSQL", (
           ('legacy-advanced', 13, 1000, 60, 6000),
           ('legacy-mastery', 20, 1100, 50, 5000)
       `);
-      await client.query(migration);
+      for (const statement of statements(migration)) {
+        await client.query(statement);
+      }
 
       const legacy = await client.query(`
         SELECT atlas_region_id, ruleset_revision
@@ -122,9 +149,13 @@ describe.runIf(runIntegration)("regional Score Entry migration on PostgreSQL", (
           'tide-doors-v1'
         )
       `)).rejects.toMatchObject({ code: "23514" });
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
-      await client.query("ROLLBACK");
-      client.release();
+      await client.query("DROP TABLE IF EXISTS pg_temp.score_entries").catch(() => undefined);
+      // A failed run can leave `lock_timeout` set, so the session is dropped.
+      client.release(failed);
     }
   });
 });

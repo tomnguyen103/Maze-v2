@@ -1,7 +1,7 @@
 # Running the database and object-store test lanes
 
-Ten test files — 29 tests — need a live PostgreSQL database, and one needs an
-object store. They are written as `describe.runIf(...)`, so with the environment
+Eleven test files — 33 tests — need a live service. 32 tests need a live
+PostgreSQL database, and one needs an object store. They are written as `describe.runIf(...)`, so with the environment
 absent they report as skipped and the suite still exits 0.
 
 That is how the repository's strongest security assertion, forced-RLS
@@ -10,7 +10,7 @@ nowhere while every gate run reported green. The A+ audit filed it as `T-02`.
 
 ## What changed
 
-- `npm test` still runs with no database, and still reports those 29 as
+- `npm test` still runs with no database, and still reports those 33 as
   skipped — but `scripts/vitest-test-count.json` now pins `skipped`, so the
   count cannot grow silently. Moving a test from executed to skipped fails the
   gate.
@@ -71,7 +71,7 @@ their own fixture rows, and `tests/classroom-rls.integration.test.js` asserts
 denial by attempting cross-tenant reads.
 
 Migrations `0001` through `0017` are applied to the live database;
-`0018` through `0035` are not. A scratch database for this lane should have the
+`0018` through `0036` are not. A scratch database for this lane should have the
 full migration set applied, or the newer tables the lanes touch will not exist.
 
 On a fresh scratch cluster, the migrations do not grant the runtime login its

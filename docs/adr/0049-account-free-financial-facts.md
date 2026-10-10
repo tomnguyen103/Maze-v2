@@ -39,7 +39,8 @@ the account record, and analytics must never rebuild an identity.
    Mode for a range of at most 366 UTC days, as JSON or CSV. The visit, account
    and activation counts carry no mode, so both modes return them. A purchase
    counts on its paid day. A full refund counts on its refund day. A dispute
-   counts on its dispute day. The cents of a partial refund stay on the paid day,
+   counts on its first dispute day. A dispute after a won dispute keeps that
+   day, so a closed period keeps its dispute. The cents of a partial refund stay on the paid day,
    because a partial refund has no refund time. A later full refund moves only
    the cents it adds to the refund day. The fact freezes its partial refunded
    cents when it becomes fully refunded. The report reads the refunded cents of

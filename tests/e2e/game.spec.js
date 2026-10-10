@@ -734,6 +734,29 @@ test("US-03.1 opens membership from the owner link, then Not now enters the Run"
   ).toBeVisible();
 });
 
+for (const [name, path] of [
+  ["a canceled Checkout", "/play?checkout=canceled"],
+  ["an invalid Checkout return", "/play?checkout=success&session_id=bad"],
+  // Signed out, so the confirm fails and the return stays retryable.
+  ["a failed confirm", "/play?checkout=success&session_id=cs_test_return"]
+]) {
+  test(`US-03.5 enters the Run after Not now on ${name}`, async ({ page }) => {
+    await page.goto(path);
+    await expectGameReady(page);
+
+    await expect(
+      page.getByRole("heading", { name: "Unlock every future Run" })
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Not now" }).click();
+    await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Choose a Practice Intention" })
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.has("checkout")).toBe(false);
+  });
+}
+
 test("US-03.1 resumes the saved Run once when Unlock finds access already active", async ({
   page
 }) => {

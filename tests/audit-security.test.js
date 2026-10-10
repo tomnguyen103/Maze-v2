@@ -202,7 +202,11 @@ describe("TM-11 — erasure leaves no Clerk identifier behind", () => {
     const store = source("server/user-deletion-store.js");
     expect(store).toContain("DELETE FROM user_roles");
     expect(store).toContain("DELETE FROM rate_limit_counters");
-    expect(store).toContain("DELETE FROM classroom_authority_versions");
+    // The runtime cannot touch this table, so a definer function deletes it.
+    expect(store).toContain("erase_membership_authority_versions($1)");
+    expect(
+      source("db/migrations/0036_erase_membership_authority_versions.sql")
+    ).toContain("DELETE FROM public.classroom_authority_versions");
   });
 
   it("asserts each of them, so a silent failure is not a success", () => {
