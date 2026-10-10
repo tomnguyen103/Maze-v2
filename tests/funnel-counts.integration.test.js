@@ -135,7 +135,7 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
     });
   });
 
-  it("US-01.1 keeps four open transactions from dropping a count on one key", async () => {
+  it("US-13.8 keeps four open transactions from dropping a count on one key", async () => {
     // Each connection stays in its own open transaction, as the write that
     // fires a bump does. Before migration 0034 the second bump waited for the
     // 200 ms lock timeout and warned.

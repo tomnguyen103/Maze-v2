@@ -20,7 +20,7 @@ function functionBody(name) {
 // Row and lock behaviour needs a live DATABASE_URL. These source checks pin
 // the contract in the default gate.
 describe("Funnel counter shard migration 0034", () => {
-  it("US-01.1 adds a shard column from 0 to 15 and puts it in the primary key", () => {
+  it("US-13.1 adds a shard column from 0 to 15 and puts it in the primary key", () => {
     expect(sql).toMatch(
       /ADD COLUMN IF NOT EXISTS shard SMALLINT NOT NULL DEFAULT 0\s+CHECK \(shard BETWEEN 0 AND 15\);/
     );
@@ -29,7 +29,7 @@ describe("Funnel counter shard migration 0034", () => {
     );
   });
 
-  it("US-05.1 takes the first free shard from a per-session start, else waits on the start shard", () => {
+  it("US-13.2 takes the first free shard from a per-session start, else waits on the start shard", () => {
     const body = functionBody("bump_funnel_count");
     expect(body).toContain("v_start INT := pg_backend_pid() % 16;");
     expect(body).toContain("FOR v_step IN 0..15 LOOP");
@@ -43,7 +43,7 @@ describe("Funnel counter shard migration 0034", () => {
     );
   });
 
-  it("US-08.3 keeps the warning block and the 200 ms wait of 0033", () => {
+  it("US-13.3 keeps the warning block and the 200 ms wait of 0033", () => {
     expect(functionBody("bump_funnel_count")).toMatch(
       /EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING 'funnel count dropped: %', SQLSTATE;\s+END;\s+END/
     );
@@ -52,7 +52,7 @@ describe("Funnel counter shard migration 0034", () => {
     );
   });
 
-  it("US-06.3 runs the activation stamp and the bump in one warning block", () => {
+  it("US-13.4 runs the activation stamp and the bump in one warning block", () => {
     const body = functionBody("activate_personal_run");
     expect(body).toMatch(
       /^\s*BEGIN\s+BEGIN\s+UPDATE public\.player_access[\s\S]*PERFORM public\.bump_funnel_count\('personal_run_activated', '', ''\);\s+END IF;\s+EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING 'funnel count dropped: %', SQLSTATE;\s+END;\s+RETURN NULL;\s+END\s*$/
@@ -61,7 +61,7 @@ describe("Funnel counter shard migration 0034", () => {
     expect(body.indexOf("UPDATE ")).toBeLessThan(body.indexOf("EXCEPTION"));
   });
 
-  it("US-08.1 keeps the owner, revokes and grants of 0033 and narrows the search path", () => {
+  it("US-13.5 keeps the owner, revokes and grants of 0033 and narrows the search path", () => {
     for (const [name, args] of [
       ["bump_funnel_count", "TEXT, TEXT, TEXT"],
       ["activate_personal_run", ""]
@@ -84,7 +84,7 @@ describe("Funnel counter shard migration 0034", () => {
     expect(sql).not.toMatch(/GRANT (EXECUTE|INSERT|UPDATE|DELETE|ALL)/);
   });
 
-  it("US-06.4 runs in one transaction with a short lock wait and lends schema CREATE only for the ownership transfers", () => {
+  it("US-13.6 runs in one transaction with a short lock wait and lends schema CREATE only for the ownership transfers", () => {
     expect(sql).toMatch(/^BEGIN;\s+SET LOCAL lock_timeout = '3s';/m);
     expect(sql.trimEnd().endsWith("COMMIT;")).toBe(true);
     const grant = sql.indexOf(
@@ -104,7 +104,7 @@ describe("Funnel counter shard migration 0034", () => {
     );
   });
 
-  it("US-06.5 re-runs without error and names the rollback steps", () => {
+  it("US-13.7 re-runs without error and names the rollback steps", () => {
     expect(sql).not.toMatch(/^CREATE TABLE (?!IF NOT EXISTS)/m);
     expect(sql).not.toMatch(/^CREATE (UNIQUE )?INDEX (?!IF NOT EXISTS)/m);
     expect(sql).not.toMatch(/^\s*ADD COLUMN (?!IF NOT EXISTS)/m);
