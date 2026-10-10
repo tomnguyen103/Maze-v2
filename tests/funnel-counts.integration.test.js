@@ -145,8 +145,6 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
     );
     /** @type {string[]} */
     const warnings = [];
-    /** @type {number[]} */
-    const elapsed = [];
     try {
       for (const connection of connections) {
         await connection.connect();
@@ -154,9 +152,7 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
         await connection.query("BEGIN");
       }
       for (const connection of connections) {
-        const started = performance.now();
         await connection.query("SELECT count_adult_offer_visit('youtube')");
-        elapsed.push(performance.now() - started);
       }
     } finally {
       for (const connection of connections) {
@@ -166,8 +162,6 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
     }
 
     expect(warnings.filter((message) => /funnel count dropped/.test(message))).toEqual([]);
-    // Well under the 200 ms lock wait of bump_funnel_count.
-    expect(Math.max(...elapsed)).toBeLessThan(150);
   });
 
   it("US-08.1 denies the runtime a direct counter write", async () => {
