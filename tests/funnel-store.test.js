@@ -91,6 +91,26 @@ describe("Funnel store report", () => {
     expect(sql).toContain("ORDER BY day, metric, campaign");
   });
 
+  it("US-10.1 groups each fact total by its own UTC day", async () => {
+    const pool = fakePool([[], []]);
+
+    await createFunnelStore(pool).report({
+      from: "2026-10-01",
+      to: "2026-10-07",
+      mode: "live"
+    });
+
+    const sql = (pool.calls[1]?.sql ?? "").replace(/\s+/g, " ");
+    expect(sql).toContain("COUNT(*) FILTER (WHERE paid_in) AS gross_purchases");
+    expect(sql).toContain("COUNT(*) FILTER (WHERE paid_in AND status = 'paid') AS net_purchases");
+    expect(sql).toContain("COUNT(*) FILTER (WHERE refunded_in) AS refunded_count");
+    expect(sql).toContain("COUNT(*) FILTER (WHERE disputed_in) AS disputed_count");
+    expect(sql).toContain("WHERE refunded_in OR (refunded_at IS NULL AND paid_in)");
+    expect(sql).toContain("(paid_at AT TIME ZONE 'UTC')::date BETWEEN $1::date AND $2::date AS paid_in");
+    expect(sql).toContain("(refunded_at AT TIME ZONE 'UTC')::date");
+    expect(sql).toContain("(disputed_at AT TIME ZONE 'UTC')::date");
+  });
+
   it("US-10.1 reports zero totals for a range with no facts", async () => {
     const pool = fakePool([[], [{}]]);
 

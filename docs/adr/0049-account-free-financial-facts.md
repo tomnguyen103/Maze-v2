@@ -35,8 +35,11 @@ the account record, and analytics must never rebuild an identity.
    functions write it.
 8. `GET /api/admin/funnel` returns the counts and the fact totals of one Billing
    Mode for a range of at most 366 UTC days, as JSON or CSV. The visit, account
-   and activation counts carry no mode, so both modes return them. A fact counts
-   on the UTC day the server first recorded it. The route requires
+   and activation counts carry no mode, so both modes return them. A purchase
+   counts on its paid day. A full refund counts on its refund day. A dispute
+   counts on its dispute day. The cents of a partial refund stay on the paid day,
+   because a partial refund has no refund time. Net Purchases use the status now.
+   The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from
    owner inputs. It reads no stored data.

@@ -221,9 +221,10 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
 
     it("US-10.1 buckets stored rows by UTC day with both range ends included", async () => {
       await rolledBack(async (connection) => {
-        // A non-UTC session zone proves the report buckets by UTC day. Each
-        // boundary fact carries its own partial refund, so a zone bug changes
-        // the refunded cents: it drops _start (1) and adds _after (2).
+        // A non-UTC session zone proves the report buckets by UTC day. Under a
+        // zone bug, _start leaves the range (1 cent lost), _after enters it
+        // (2 cents added), _end gains a refund in range, and _old_dispute
+        // loses its dispute.
         await connection.query("SET LOCAL TIME ZONE 'America/Los_Angeles'");
         await connection.query(
           `INSERT INTO funnel_counts (day, metric, campaign, mode, count) VALUES
@@ -243,14 +244,20 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
         await connection.query(
           `INSERT INTO financial_facts (
              payment_intent_id, billing_mode, amount_cents, currency, status,
-             refunded_cents, paid_at
+             refunded_cents, paid_at, refunded_at, disputed_at
            ) VALUES
-             ($1 || '_start', 'live', 599, 'usd', 'paid', 1, '2000-01-01 00:00:00+00'),
-             ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, '2000-01-02 23:59:59+00'),
-             ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, '2000-01-02 12:00:00+00'),
-             ($1 || '_before', 'live', 599, 'usd', 'paid', 4, '1999-12-31 23:59:59+00'),
-             ($1 || '_after', 'live', 599, 'usd', 'paid', 2, '2000-01-03 00:00:00+00'),
-             ($1 || '_test', 'test', 599, 'usd', 'paid', 0, '2000-01-01 12:00:00+00')`,
+             ($1 || '_start', 'live', 599, 'usd', 'paid', 1, '2000-01-01 00:00:00+00', NULL, NULL),
+             ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, '2000-01-02 23:59:59+00',
+              '2000-01-03 00:00:00+00', NULL),
+             ($1 || '_late_refund', 'live', 599, 'usd', 'refunded', 599, '1999-12-31 23:59:59+00',
+              '2000-01-02 23:59:59+00', NULL),
+             ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, '2000-01-02 12:00:00+00',
+              NULL, '2000-01-02 13:00:00+00'),
+             ($1 || '_old_dispute', 'live', 599, 'usd', 'disputed', 0, '1999-12-30 12:00:00+00',
+              NULL, '2000-01-01 00:00:00+00'),
+             ($1 || '_before', 'live', 599, 'usd', 'paid', 4, '1999-12-31 23:59:59+00', NULL, NULL),
+             ($1 || '_after', 'live', 599, 'usd', 'paid', 2, '2000-01-03 00:00:00+00', NULL, NULL),
+             ($1 || '_test', 'test', 599, 'usd', 'paid', 0, '2000-01-01 12:00:00+00', NULL, NULL)`,
           [`pi_funnel_${id}`]
         );
 
@@ -270,7 +277,7 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
             grossPurchases: 3,
             netPurchases: 1,
             refundedCount: 1,
-            disputedCount: 1,
+            disputedCount: 2,
             refundedCents: 600
           }
         });
