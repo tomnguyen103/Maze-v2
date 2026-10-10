@@ -74,8 +74,8 @@ export function createUserDeletionStore(pool) {
            WHERE split_part(key, ':user:', 2) = $1`,
           [userId]
         );
-        // Ordered before the Membership rows are gone: this table records a
-        // Membership by its Clerk membership id, so the join is the only way
+        // Ordered before the Classroom Membership rows are gone: this table
+        // records a Membership by its Clerk membership id, so the join is the only way
         // back to the Explorer. The runtime has no privilege on the table, so
         // a definer function (migration 0036) deletes and checks the rows.
         const authority = await client.query(

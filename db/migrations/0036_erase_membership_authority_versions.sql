@@ -6,12 +6,12 @@
 -- deletes from that table directly, so each account deletion fails with
 -- "permission denied" and rolls back. No account can be erased.
 --
--- Fix: a SECURITY DEFINER function deletes the Membership versions of one
--- Explorer as the table owner. The function accepts only the Explorer of the
--- current tenant context, so the runtime cannot erase the versions of another
--- Explorer. The function returns TRUE when no Membership version of that
--- Explorer remains. It runs before the Memberships are deleted, because the
--- Membership rows are the only link from a version to the Explorer.
+-- Fix: a SECURITY DEFINER function deletes the Classroom Membership versions
+-- of one Explorer as the table owner. The function accepts only the Explorer
+-- of the current tenant context, the same trust the RLS policies of migration
+-- 0014 use. The function returns TRUE when no Membership version of that
+-- Explorer remains. It runs before the Classroom Memberships are deleted,
+-- because the Membership rows are the only link from a version to the Explorer.
 --
 -- The function pins search_path to pg_catalog, pg_temp. Every table name in
 -- the body is schema-qualified, as in migration 0034. A NULL Explorer id or

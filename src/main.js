@@ -3306,7 +3306,8 @@ async function resolveLifetimeReturn() {
  * close that already resumed the saved Run (Unlock with access active) starts
  * nothing more. The listener stays while a resume runs, so a failed resume
  * that reopens the dialog keeps "Not now" working. The close removes the
- * Checkout parameters, so the Run entry does not retry a failed confirm.
+ * Checkout parameters and the pending Checkout Session, so neither the Run
+ * entry nor a later Unlock retries a failed confirm.
  */
 function enterRunOnLifetimeClose() {
   const offerFirstLight = firstLightEntryPending;
@@ -3316,6 +3317,7 @@ function enterRunOnLifetimeClose() {
       return;
     }
     elements.lifetimeDialog.removeEventListener("close", enterOnClose);
+    pendingLifetimeSessionId = "";
     removeCheckoutParameters(new URL(window.location.href));
     firstLightEntryPending = offerFirstLight;
     void initializeRunEntry();

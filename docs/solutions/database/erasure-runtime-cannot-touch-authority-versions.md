@@ -28,9 +28,8 @@ reported success.
   `SECURITY DEFINER` function that the tenant owner owns. It deletes the
   Membership versions of one Explorer and returns `TRUE` when none remain.
 - The function raises an exception for an Explorer other than the tenant
-  context Explorer, so the runtime cannot erase the versions of another
-  Explorer.
-- The store calls the function before the Memberships are deleted, and the
+  context Explorer, the same trust the RLS policies of migration 0014 use.
+- The store calls the function before the Classroom Memberships are deleted, and the
   verification query asserts the function result.
 - A runtime grant on the table is rejected, because it lets the runtime
   delete the versions of any Explorer.
