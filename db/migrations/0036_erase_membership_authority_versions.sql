@@ -13,10 +13,19 @@
 -- Explorer remains. It runs before the Memberships are deleted, because the
 -- Membership rows are the only link from a version to the Explorer.
 --
+-- The function pins search_path to pg_catalog, pg_temp. Every table name in
+-- the body is schema-qualified, as in migration 0034. A NULL Explorer id or
+-- an unset tenant context is refused too.
+--
 -- Rollback (an agent never runs it): drop the function. The deletion store
 -- from before 0036 then fails as described above.
 
 BEGIN;
+
+-- A non-superuser can give an object only to an owner with CREATE on the
+-- schema. 0014 revokes that privilege, so this file grants it for the
+-- ownership transfer and revokes it again before COMMIT.
+GRANT CREATE ON SCHEMA public TO echo_maze_tenant_owner;
 
 CREATE OR REPLACE FUNCTION erase_membership_authority_versions(
   p_clerk_user_id TEXT
@@ -24,10 +33,10 @@ CREATE OR REPLACE FUNCTION erase_membership_authority_versions(
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
-  IF p_clerk_user_id IS DISTINCT FROM
+  IF p_clerk_user_id IS NULL OR p_clerk_user_id IS DISTINCT FROM
      NULLIF(current_setting('echo_maze.explorer_id', true), '') THEN
     RAISE EXCEPTION 'Membership authority erasure needs the Explorer tenant context.';
   END IF;
@@ -59,5 +68,7 @@ REVOKE ALL ON FUNCTION erase_membership_authority_versions(TEXT)
   FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION erase_membership_authority_versions(TEXT)
   TO echo_maze_runtime;
+
+REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner;
 
 COMMIT;
