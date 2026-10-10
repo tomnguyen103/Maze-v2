@@ -11,7 +11,9 @@ import { transitionLifetimeState } from "./lifetime-state.js";
  * refunded before its paid event still leaves a fact. A repeat write keeps
  * one row. It merges the larger refunded cents, makes a full refund
  * `refunded`, and advances the event clock. The partial refunded cents
- * freeze when the fact becomes fully refunded.
+ * freeze when the fact becomes fully refunded. The report reads refunded
+ * cents for a fact with no refund time, so the column matters only after the
+ * full refund.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -45,8 +47,9 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
          refunded_cents = GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents),
          partial_refunded_cents = CASE
            WHEN financial_facts.refunded_at IS NOT NULL
-             OR EXCLUDED.refunded_cents >= financial_facts.amount_cents
              THEN financial_facts.partial_refunded_cents
+           WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents
+             THEN financial_facts.refunded_cents
            ELSE GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents)
          END,
          provider_event_created = GREATEST(
@@ -64,7 +67,9 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
  * A partial refund raises `refunded_cents` and keeps the fact `paid`. A full
  * refund makes the fact `refunded` whatever the event order, because the
  * refunded cents come from the charge as it is now. The partial refunded
- * cents freeze when the fact becomes fully refunded.
+ * cents freeze when the fact becomes fully refunded, at the refunded cents
+ * from before that refund. The report reads refunded cents for a fact with no
+ * refund time, so the column matters only after the full refund.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -118,7 +123,8 @@ export async function transitionFact(client, event) {
          status = $2,
          refunded_cents = $3,
          partial_refunded_cents = CASE
-           WHEN $2 = 'refunded' OR refunded_at IS NOT NULL THEN partial_refunded_cents
+           WHEN refunded_at IS NOT NULL THEN partial_refunded_cents
+           WHEN $2 = 'refunded' THEN refunded_cents
            ELSE $3
          END,
          provider_event_created = $4,

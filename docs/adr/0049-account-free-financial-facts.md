@@ -42,9 +42,10 @@ the account record, and analytics must never rebuild an identity.
    counts on its dispute day. The cents of a partial refund stay on the paid day,
    because a partial refund has no refund time. A later full refund moves only
    the cents it adds to the refund day. The fact freezes its partial refunded
-   cents when it becomes fully refunded. A partial refund that arrives after a
-   period closes still adds to its paid day. Net Purchases use the status now.
-   The route requires
+   cents when it becomes fully refunded. The report reads the refunded cents of
+   a fact with no refund time, so the frozen column matters only after the full
+   refund. A partial refund that arrives after a period closes still adds to its
+   paid day. Net Purchases use the status now. The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from
    owner inputs. It reads no stored data. Contribution subtracts the acquisition
@@ -54,8 +55,10 @@ the account record, and analytics must never rebuild an identity.
     Run Access, Echo Fossil, Quest Progress and Learning Journal stores, and the
     Classroom authority path. Classroom accounts therefore count. The activation
     rate is `personal_run_activated` divided by `account_created`. The
-    visit-to-account and account-to-Checkout ratios are aggregate diagnostics.
-    They have no cohort link, so the owner never reads them as a conversion rate.
+    activation rate is also an aggregate ratio with no cohort link, and
+    Classroom accounts lower it. The visit-to-account and account-to-Checkout
+    ratios are aggregate diagnostics too. The owner never reads any of the three
+    as a conversion rate.
 
 ## Consequences
 

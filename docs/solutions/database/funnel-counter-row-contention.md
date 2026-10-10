@@ -37,9 +37,12 @@ once, so the contention stayed hidden.
 ## Fix
 
 Migration 0034 splits each counter into 16 shard rows
-(`db/migrations/0034_funnel_counter_shards.sql:37`). A bump takes the first
-shard whose advisory transaction lock is free. The search starts at a random shard
-(`db/migrations/0034_funnel_counter_shards.sql:66`). Every writer goes through
+(`db/migrations/0034_funnel_counter_shards.sql:45`). A bump takes the first
+shard whose advisory transaction lock is free. The start shard is
+`pg_backend_pid() % 16`
+(`db/migrations/0034_funnel_counter_shards.sql:70`). The bump then tries the next
+shards in order and never waits for a lock
+(`db/migrations/0034_funnel_counter_shards.sql:74`). Every writer goes through
 `bump_funnel_count`, so a free advisory lock means no open row lock on that
 shard. The report sums the shard rows of each key.
 

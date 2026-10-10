@@ -299,6 +299,8 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
         // (2 cents added), _end gains a refund in range, and _old_dispute
         // loses its dispute. The _partial_then_full fact keeps its 100 partial
         // cents on the paid day, inside the range, and its refund day is outside.
+        // The _stale_partial fact has no refund time and a partial column that
+        // lags (0 against 300), as old code leaves it: the report reads 300.
         await connection.query("SET LOCAL TIME ZONE 'America/Los_Angeles'");
         await connection.query(
           `INSERT INTO funnel_counts (day, metric, campaign, mode, count) VALUES
@@ -333,6 +335,8 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
              ($1 || '_after', 'live', 599, 'usd', 'paid', 2, 2, '2000-01-03 00:00:00+00', NULL, NULL),
              ($1 || '_partial_then_full', 'live', 599, 'usd', 'refunded', 599, 100,
               '2000-01-02 06:00:00+00', '2000-01-05 00:00:00+00', NULL),
+             ($1 || '_stale_partial', 'live', 599, 'usd', 'paid', 300, 0, '2000-01-02 08:00:00+00',
+              NULL, NULL),
              ($1 || '_test', 'test', 599, 'usd', 'paid', 0, 0, '2000-01-01 12:00:00+00', NULL, NULL)`,
           [`pi_funnel_${id}`]
         );
@@ -350,11 +354,11 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
             { day: "2000-01-02", metric: "account_created", campaign: "", count: 7 }
           ],
           summary: {
-            grossPurchases: 4,
-            netPurchases: 1,
+            grossPurchases: 5,
+            netPurchases: 2,
             refundedCount: 1,
             disputedCount: 2,
-            refundedCents: 700
+            refundedCents: 1000
           }
         });
       }, adminPool);

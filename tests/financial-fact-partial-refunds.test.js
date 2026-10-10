@@ -34,6 +34,14 @@ describe("Financial Fact partial refund migration 0035", () => {
     expect(sql.match(/^BEGIN;/gm)).toHaveLength(1);
   });
 
+  it("US-02.8 says the report reads refunded cents for a fact with no refund time", () => {
+    const header = sql.slice(0, sql.indexOf("BEGIN;")).replace(/\n-- ?/g, " ");
+    expect(header).toContain("for a fact with no refund time");
+    expect(header).toContain("only after the full refund");
+    expect(header).toContain("a partial refund");
+    expect(header).not.toContain("Partial Refund");
+  });
+
   it("US-02.8 re-runs without error and names the rollback steps", () => {
     expect(sql).not.toMatch(/^\s*ADD COLUMN (?!IF NOT EXISTS)/m);
     expect(sql).not.toMatch(/^\s*DROP CONSTRAINT (?!IF EXISTS)/m);
