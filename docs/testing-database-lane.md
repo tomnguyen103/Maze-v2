@@ -74,6 +74,13 @@ Migrations `0001` through `0017` are applied to the live database;
 `0018` through `0034` are not. A scratch database for this lane should have the
 full migration set applied, or the newer tables the lanes touch will not exist.
 
+On a fresh scratch cluster, the migrations do not grant the runtime login its
+access to the tables that the migration role owns, for example `players`,
+`player_access` and `user_roles`. No migration file holds these grants. Give the runtime login `SELECT, INSERT, UPDATE, DELETE` on those tables,
+`USAGE, SELECT` on their sequences, and `CREATE` on schema `public` (the
+access-store lane creates a fixture table). Do not grant it ownership of a
+tenant table, `BYPASSRLS` or superuser.
+
 ## What this does not cover
 
 Two audit items still need a live database and are not satisfied by this lane:
