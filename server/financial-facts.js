@@ -10,7 +10,8 @@ import { transitionLifetimeState } from "./lifetime-state.js";
  * status is the charge state when the payment is processed, so a payment
  * refunded before its paid event still leaves a fact. A repeat write keeps
  * one row. It merges the larger refunded cents, makes a full refund
- * `refunded`, and advances the event clock.
+ * `refunded`, and advances the event clock. The partial refunded cents
+ * freeze when the fact becomes fully refunded.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -24,9 +25,9 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
   await client.query(
     `INSERT INTO financial_facts (
        payment_intent_id, billing_mode, amount_cents, currency, status, refunded_cents,
-       paid_at, refunded_at, disputed_at, provider_event_created
+       partial_refunded_cents, paid_at, refunded_at, disputed_at, provider_event_created
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, NOW(),
+       $1, $2, $3, $4, $5, $6, CASE WHEN $5 = 'refunded' THEN 0 ELSE $6 END, NOW(),
        CASE WHEN $5 = 'refunded' THEN NOW() END,
        CASE WHEN $5 = 'disputed' THEN NOW() END,
        $7
@@ -42,6 +43,12 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
            ELSE financial_facts.refunded_at
          END,
          refunded_cents = GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents),
+         partial_refunded_cents = CASE
+           WHEN financial_facts.refunded_at IS NOT NULL
+             OR EXCLUDED.refunded_cents >= financial_facts.amount_cents
+             THEN financial_facts.partial_refunded_cents
+           ELSE GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents)
+         END,
          provider_event_created = GREATEST(
            financial_facts.provider_event_created,
            EXCLUDED.provider_event_created
@@ -56,7 +63,8 @@ export async function recordFact(client, { paymentIntentId, billingMode, eventCr
  * keeps its own event clock, so it stays true after the account is deleted.
  * A partial refund raises `refunded_cents` and keeps the fact `paid`. A full
  * refund makes the fact `refunded` whatever the event order, because the
- * refunded cents come from the charge as it is now.
+ * refunded cents come from the charge as it is now. The partial refunded
+ * cents freeze when the fact becomes fully refunded.
  * @param {FactClient} client
  * @param {{
  *   paymentIntentId: string,
@@ -109,6 +117,10 @@ export async function transitionFact(client, event) {
          END,
          status = $2,
          refunded_cents = $3,
+         partial_refunded_cents = CASE
+           WHEN $2 = 'refunded' OR refunded_at IS NOT NULL THEN partial_refunded_cents
+           ELSE $3
+         END,
          provider_event_created = $4,
          updated_at = NOW()
      WHERE payment_intent_id = $1`,

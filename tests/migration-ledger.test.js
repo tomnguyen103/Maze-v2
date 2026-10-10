@@ -136,6 +136,12 @@ describe("Migration ledger check", () => {
       [
         /attrelid = to_regclass\('public\.funnel_counts'\)\s+AND attname = 'shard' AND NOT attisdropped/
       ]
+    ],
+    [
+      "0035_financial_fact_partial_refunds.sql",
+      [
+        /attrelid = to_regclass\('public\.financial_facts'\)\s+AND attname = 'partial_refunded_cents' AND NOT attisdropped/
+      ]
     ]
   ];
 
@@ -167,7 +173,7 @@ describe("Migration ledger check", () => {
 
   it("US-05.5 names a new migration file that has no ledger row", () => {
     expect(
-      filesWithoutRow([...migrations, "0035_future_change.sql"], rows)
-    ).toEqual(["0035_future_change.sql"]);
+      filesWithoutRow([...migrations, "0036_future_change.sql"], rows)
+    ).toEqual(["0036_future_change.sql"]);
   });
 });

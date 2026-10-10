@@ -20,9 +20,9 @@ export function createFunnelStore(pool) {
      * The daily Funnel Counts and the Financial Fact totals of one Billing
      * Mode, for UTC days `from` to `to` inclusive. The three steps before
      * Checkout carry no mode, so both modes return them. A purchase counts on
-     * its paid day. A full refund counts on its refund day, with its cents. A
-     * dispute counts on its dispute day. A partial refund has no refund time,
-     * so its cents stay on the paid day. Net Purchases use the status now.
+     * its paid day. A partial refund counts its cents on the paid day. A full
+     * refund counts on its refund day, with only the cents it adds. A dispute
+     * counts on its dispute day. Net Purchases use the status now.
      *
      * @param {{ from: string, to: string, mode: "live" | "test" }} range
      */
@@ -42,11 +42,11 @@ export function createFunnelStore(pool) {
                 COUNT(*) FILTER (WHERE paid_in AND status = 'paid') AS net_purchases,
                 COUNT(*) FILTER (WHERE refunded_in) AS refunded_count,
                 COUNT(*) FILTER (WHERE disputed_in) AS disputed_count,
-                COALESCE(SUM(refunded_cents) FILTER (
-                  WHERE refunded_in OR (refunded_at IS NULL AND paid_in)
-                ), 0) AS refunded_cents
+                COALESCE(SUM(partial_refunded_cents) FILTER (WHERE paid_in), 0)
+                  + COALESCE(SUM(refunded_cents - partial_refunded_cents)
+                    FILTER (WHERE refunded_in), 0) AS refunded_cents
          FROM (
-           SELECT status, refunded_cents, refunded_at,
+           SELECT status, refunded_cents, partial_refunded_cents,
                   (paid_at AT TIME ZONE 'UTC')::date BETWEEN $1::date AND $2::date
                     AS paid_in,
                   COALESCE((refunded_at AT TIME ZONE 'UTC')::date

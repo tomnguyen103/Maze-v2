@@ -29,13 +29,13 @@ describe("Funnel counter shard migration 0034", () => {
     );
   });
 
-  it("US-05.1 takes the first free shard from a random start, else waits on a random shard", () => {
+  it("US-05.1 takes the first free shard from a per-session start, else waits on the start shard", () => {
     const body = functionBody("bump_funnel_count");
-    expect(body).toContain("v_start INT := floor(random() * 16)::int;");
+    expect(body).toContain("v_start INT := pg_backend_pid() % 16;");
     expect(body).toContain("FOR v_step IN 0..15 LOOP");
     expect(body).toContain("v_shard := (v_start + v_step) % 16;");
     expect(body).toMatch(
-      /EXIT WHEN pg_try_advisory_xact_lock\(\s+hashtext\('funnel_counts'\),\s+hashtext\(concat_ws\('\|', v_day, p_metric, p_campaign, p_mode, v_shard\)\)\s+\);\s+v_shard := NULL;/
+      /EXIT WHEN pg_try_advisory_xact_lock\(\s+hashtext\('funnel_counts'\),\s+hashtext\(concat_ws\(\s+'\|', to_char\(v_day, 'YYYY-MM-DD'\), p_metric, p_campaign, p_mode, v_shard\s+\)\)\s+\);\s+v_shard := NULL;/
     );
     expect(body).toContain("COALESCE(v_shard, v_start)");
     expect(body).toMatch(
@@ -61,20 +61,24 @@ describe("Funnel counter shard migration 0034", () => {
     expect(body.indexOf("UPDATE ")).toBeLessThan(body.indexOf("EXCEPTION"));
   });
 
-  it("US-08.1 matches the owner, search path, revokes and grants of 0033", () => {
+  it("US-08.1 keeps the owner, revokes and grants of 0033 and narrows the search path", () => {
     for (const [name, args] of [
       ["bump_funnel_count", "TEXT, TEXT, TEXT"],
       ["activate_personal_run", ""]
     ]) {
       expect(sql).toMatch(
         new RegExp(
-          `CREATE OR REPLACE FUNCTION ${name}\\([^)]*\\)\\s+RETURNS \\w+\\s+LANGUAGE plpgsql\\s+SECURITY DEFINER\\s+SET search_path = pg_catalog, public\\s+(SET lock_timeout = '200ms'\\s+)?AS`
+          `CREATE OR REPLACE FUNCTION ${name}\\([^)]*\\)\\s+RETURNS \\w+\\s+LANGUAGE plpgsql\\s+SECURITY DEFINER\\s+SET search_path = pg_catalog, pg_temp\\s+(SET lock_timeout = '200ms'\\s+)?AS`
         )
       );
       expect(sql).toContain(
         `ALTER FUNCTION ${name}(${args}) OWNER TO echo_maze_tenant_owner;`
       );
       expect(sql).toContain(`REVOKE ALL ON FUNCTION ${name}(${args}) FROM PUBLIC;`);
+    }
+    // The path is narrower than 0033: no function in 0034 lists public.
+    for (const match of sql.matchAll(/SET search_path = ([^\n]*)/g)) {
+      expect(match[1].split(",").map((item) => item.trim())).not.toContain("public");
     }
     // 0033 grants the runtime no write and no new execute right.
     expect(sql).not.toMatch(/GRANT (EXECUTE|INSERT|UPDATE|DELETE|ALL)/);

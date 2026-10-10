@@ -105,7 +105,10 @@ describe("Funnel store report", () => {
     expect(sql).toContain("COUNT(*) FILTER (WHERE paid_in AND status = 'paid') AS net_purchases");
     expect(sql).toContain("COUNT(*) FILTER (WHERE refunded_in) AS refunded_count");
     expect(sql).toContain("COUNT(*) FILTER (WHERE disputed_in) AS disputed_count");
-    expect(sql).toContain("WHERE refunded_in OR (refunded_at IS NULL AND paid_in)");
+    expect(sql).toContain(
+      "COALESCE(SUM(partial_refunded_cents) FILTER (WHERE paid_in), 0) + COALESCE(SUM(refunded_cents - partial_refunded_cents) FILTER (WHERE refunded_in), 0) AS refunded_cents"
+    );
+    expect(sql).toContain("SELECT status, refunded_cents, partial_refunded_cents,");
     expect(sql).toContain("(paid_at AT TIME ZONE 'UTC')::date BETWEEN $1::date AND $2::date AS paid_in");
     expect(sql).toContain("(refunded_at AT TIME ZONE 'UTC')::date");
     expect(sql).toContain("(disputed_at AT TIME ZONE 'UTC')::date");

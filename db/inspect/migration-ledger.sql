@@ -1,4 +1,4 @@
--- Migration ledger check: one row per migration 0018 to 0034 with `present`
+-- Migration ledger check: one row per migration 0018 to 0035 with `present`
 -- true when the database holds the object that migration creates.
 --
 -- The check reads the system catalog only. It writes nothing, and the
@@ -98,7 +98,11 @@ FROM (
   ('0034_funnel_counter_shards.sql',
     EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
       WHERE attrelid = to_regclass('public.funnel_counts')
-        AND attname = 'shard' AND NOT attisdropped))
+        AND attname = 'shard' AND NOT attisdropped)),
+  ('0035_financial_fact_partial_refunds.sql',
+    EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+      WHERE attrelid = to_regclass('public.financial_facts')
+        AND attname = 'partial_refunded_cents' AND NOT attisdropped))
 ) AS ledger (migration, present)
 ORDER BY migration;
 

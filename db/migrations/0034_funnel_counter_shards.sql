@@ -6,10 +6,18 @@
 -- same key waits 200 ms and then drops with a warning.
 --
 -- Fix: a bump takes the first shard whose advisory transaction lock is free.
--- Every writer goes through bump_funnel_count, so a free lock means no open
--- row lock on that shard. When all 16 shards are busy, the bump upserts a
--- random shard and the 200 ms wait applies, as in 0033. A dropped count stays
--- a warning, so each count is still a lower bound.
+-- A free lock means no open bump holds the row. A fallback bump writes a
+-- shard without its lock, so a later bump on that shard can still wait 200 ms
+-- and drop. When all 16 shards are busy, the bump upserts the start shard and
+-- the 200 ms wait applies, as in 0033. A dropped count stays a warning, so
+-- each count is still a lower bound.
+--
+-- Each session starts at the shard pg_backend_pid() % 16. A transaction then
+-- reuses its shard, because advisory locks are re-entrant.
+--
+-- Both functions pin search_path to pg_catalog, pg_temp. Every name in the
+-- bodies is schema-qualified, so a role with CREATE on public cannot plant
+-- an overload that a definer function runs.
 --
 -- The two-int advisory lock keyspace is separate from the one-bigint locks of
 -- other migrations. A hash collision only makes a free shard look busy.
@@ -54,12 +62,12 @@ CREATE OR REPLACE FUNCTION bump_funnel_count(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 SET lock_timeout = '200ms'
 AS $$
 DECLARE
   v_day DATE := (now() AT TIME ZONE 'UTC')::date;
-  v_start INT := floor(random() * 16)::int;
+  v_start INT := pg_backend_pid() % 16;
   v_shard INT;
 BEGIN
   BEGIN
@@ -67,7 +75,9 @@ BEGIN
       v_shard := (v_start + v_step) % 16;
       EXIT WHEN pg_try_advisory_xact_lock(
         hashtext('funnel_counts'),
-        hashtext(concat_ws('|', v_day, p_metric, p_campaign, p_mode, v_shard))
+        hashtext(concat_ws(
+          '|', to_char(v_day, 'YYYY-MM-DD'), p_metric, p_campaign, p_mode, v_shard
+        ))
       );
       v_shard := NULL;
     END LOOP;
@@ -89,7 +99,7 @@ CREATE OR REPLACE FUNCTION activate_personal_run()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
   BEGIN

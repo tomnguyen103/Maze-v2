@@ -26,6 +26,8 @@ the account record, and analytics must never rebuild an identity.
 4. `funnel_counts` holds daily aggregate counters for four steps: adult offer
    visit, account created, Personal Run activated and Checkout created. A counter
    row holds a UTC day, a metric, an allowlisted Campaign Code and a Billing Mode.
+   Each counter row also carries a shard number from 0 to 15, and a report sums
+   the shards.
 5. Database triggers count the account, activation and Checkout steps. The visit
    step has no row change, so `POST /api/access/visit` counts it through a
    `SECURITY DEFINER` function.
@@ -38,7 +40,10 @@ the account record, and analytics must never rebuild an identity.
    and activation counts carry no mode, so both modes return them. A purchase
    counts on its paid day. A full refund counts on its refund day. A dispute
    counts on its dispute day. The cents of a partial refund stay on the paid day,
-   because a partial refund has no refund time. Net Purchases use the status now.
+   because a partial refund has no refund time. A later full refund moves only
+   the cents it adds to the refund day. The fact freezes its partial refunded
+   cents when it becomes fully refunded. A partial refund that arrives after a
+   period closes still adds to its paid day. Net Purchases use the status now.
    The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from

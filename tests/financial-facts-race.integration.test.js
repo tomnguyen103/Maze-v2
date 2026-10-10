@@ -88,7 +88,8 @@ async function serially(first, second) {
 /** @param {string} id */
 async function snapshot(id) {
   const result = await pool().query(
-    `SELECT status, refunded_cents, provider_event_created::text AS provider_event_created,
+    `SELECT status, refunded_cents, partial_refunded_cents,
+            provider_event_created::text AS provider_event_created,
             refunded_at IS NOT NULL AS refunded, disputed_at IS NOT NULL AS disputed
      FROM financial_facts WHERE payment_intent_id = $1`,
     [id]
@@ -107,7 +108,7 @@ function record(id, status, eventCreated, refundedCents) {
   return (connection) =>
     recordFact(connection, {
       paymentIntentId: id,
-      billingMode: "live",
+      billingMode: "test",
       eventCreated,
       status,
       refundedCents
@@ -125,7 +126,7 @@ function transition(id, requestedState, eventCreated, refundedCents) {
   return (connection) =>
     transitionFact(connection, {
       paymentIntentId: id,
-      billingMode: "live",
+      billingMode: "test",
       eventCreated,
       requestedState,
       refundedCents
@@ -176,7 +177,7 @@ describe.runIf(runIntegration)("Financial Fact writes under concurrency", () => 
       for (const id of [raced, serial]) {
         await recordFact(pool(), {
           paymentIntentId: id,
-          billingMode: "live",
+          billingMode: "test",
           eventCreated: 1000,
           status: "paid",
           refundedCents: 0
