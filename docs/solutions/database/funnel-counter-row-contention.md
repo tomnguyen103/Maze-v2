@@ -50,7 +50,7 @@ shard. The report sums the shard rows of each key.
 
 The race test holds four transactions open on one visit key and expects no
 `funnel count dropped` warning
-(`tests/funnel-counts.integration.test.js`, test US-01.1). On the 0033 single
+(`tests/funnel-counts.integration.test.js`, test US-13.8). On the 0033 single
 row behaviour the same load gave three warnings (`55P03`), and each of the
 three later calls took about 200 ms.
 
