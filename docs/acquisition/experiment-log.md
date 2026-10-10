@@ -17,8 +17,12 @@ days. Record cash cost in USD and owner minutes as whole numbers.
 - **Campaign Code:** one code from `shared/campaign-codes.js`.
 - **Visits:** Qualified Adult Visits under that code in the window.
 - **Purchases:** Net Purchases in the window. The export does not attribute a
-  purchase to a code, so a purchase is a window total.
-- **Refunds:** full and partial refunds recorded in the window.
+  purchase to a code, so a purchase is a window total. Net Purchases already
+  exclude fully refunded and disputed purchases, so never subtract Refunds from
+  Purchases.
+- **Refunds:** the export refund count in the window. It counts full refunds
+  on their refund day. A partial refund has no count, and its cents stay on the
+  paid day.
 - **Cash cost:** money spent on this creative, for example a stock asset.
 - **Owner minutes:** owner time to make, approve, send and answer this item.
 

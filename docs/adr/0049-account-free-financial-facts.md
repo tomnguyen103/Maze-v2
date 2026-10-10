@@ -26,6 +26,8 @@ the account record, and analytics must never rebuild an identity.
 4. `funnel_counts` holds daily aggregate counters for four steps: adult offer
    visit, account created, Personal Run activated and Checkout created. A counter
    row holds a UTC day, a metric, an allowlisted Campaign Code and a Billing Mode.
+   Each counter row also carries a shard number from 0 to 15, and a report sums
+   the shards.
 5. Database triggers count the account, activation and Checkout steps. The visit
    step has no row change, so `POST /api/access/visit` counts it through a
    `SECURITY DEFINER` function.
@@ -35,11 +37,28 @@ the account record, and analytics must never rebuild an identity.
    functions write it.
 8. `GET /api/admin/funnel` returns the counts and the fact totals of one Billing
    Mode for a range of at most 366 UTC days, as JSON or CSV. The visit, account
-   and activation counts carry no mode, so both modes return them. A fact counts
-   on the UTC day the server first recorded it. The route requires
+   and activation counts carry no mode, so both modes return them. A purchase
+   counts on its paid day. A full refund counts on its refund day. A dispute
+   counts on its dispute day. The cents of a partial refund stay on the paid day,
+   because a partial refund has no refund time. A later full refund moves only
+   the cents it adds to the refund day. The fact freezes its partial refunded
+   cents when it becomes fully refunded. The report reads the refunded cents of
+   a fact with no refund time, so the frozen column matters only after the full
+   refund. A partial refund that arrives after a period closes still adds to its
+   paid day. Net Purchases use the status now. The route requires
    `refunds:issue` and writes one audit row per read.
 9. `shared/unit-economics.js` computes Contribution and cash break-even from
-   owner inputs. It reads no stored data.
+   owner inputs. It reads no stored data. Contribution subtracts the acquisition
+   cost, and the caller must state that cost.
+10. `account_created` counts the first server sighting of any Clerk account. The
+    count includes every path that inserts a `player_access` row: the Lifetime,
+    Run Access, Echo Fossil, Quest Progress and Learning Journal stores, and the
+    Classroom authority path. Classroom accounts therefore count. The activation
+    rate is `personal_run_activated` divided by `account_created`. The
+    activation rate is also an aggregate ratio with no cohort link, and
+    Classroom accounts lower it. The visit-to-account and account-to-Checkout
+    ratios are aggregate diagnostics too. The owner never reads any of the three
+    as a conversion rate.
 
 ## Consequences
 

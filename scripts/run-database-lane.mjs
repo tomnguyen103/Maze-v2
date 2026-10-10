@@ -35,8 +35,12 @@ export const AUDIT_SINK_LANE_ENV = Object.freeze({
   AUDIT_CHECKPOINT_HMAC_KEY: "Checkpoint signing key."
 });
 
-/** The lane files each environment set unlocks. */
-const DATABASE_LANE_PATTERN = "tests/*.integration.test.js";
+/**
+ * The lane files each environment set unlocks. Vitest reads a CLI filter as a
+ * substring of the file path, not as a glob, and `spawn` runs no shell to
+ * expand one.
+ */
+const DATABASE_LANE_PATTERN = ".integration.test.js";
 const AUDIT_SINK_LANE_PATTERN =
   "tests/audit-checkpoint-s3.integration.test.js";
 

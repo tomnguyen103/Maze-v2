@@ -32,8 +32,8 @@ Two tables hold no Explorer reference. Account deletion leaves them in place.
 
 | Record | Table | Fields |
 |---|---|---|
-| Financial Fact | `financial_facts` | Stripe PaymentIntent id, Billing Mode, amount, currency, status, refunded cents, paid, refunded and disputed times, provider event clock |
-| Funnel Count | `funnel_counts` | UTC day, metric, allowlisted Campaign Code, Billing Mode, count |
+| Financial Fact | `financial_facts` | Stripe PaymentIntent id, Billing Mode, amount, currency, status, refunded cents, partial refunded cents, paid, refunded and disputed times, provider event clock |
+| Funnel Count | `funnel_counts` | UTC day, metric, allowlisted Campaign Code, Billing Mode, shard, count |
 
 - Neither table stores an account id, username, email, name, address, cookie,
   user agent, URL, referrer, query string, Checkout Session id or free-text

@@ -64,6 +64,9 @@ describe("Financial Facts", () => {
       "SET status = CASE WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents THEN 'refunded' ELSE financial_facts.status END"
     );
     expect(sql).toContain("THEN COALESCE(financial_facts.refunded_at, NOW())");
+    expect(sql).toContain(
+      "partial_refunded_cents = CASE WHEN financial_facts.refunded_at IS NOT NULL THEN financial_facts.partial_refunded_cents WHEN EXCLUDED.refunded_cents >= financial_facts.amount_cents THEN financial_facts.refunded_cents ELSE GREATEST(financial_facts.refunded_cents, EXCLUDED.refunded_cents) END"
+    );
   });
 });
 
@@ -77,6 +80,35 @@ function factTable(initial) {
   let row = initial ? { refunded_at: null, disputed_at: null, ...initial } : null;
   const query = vi.fn(async (sql, values = []) => {
     const text = String(sql);
+    if (text.includes("INSERT INTO financial_facts")) {
+      const [paymentIntentId, billingMode, , , status, refundedCents, eventCreated] = values;
+      const full = row && Number(refundedCents) >= Number(row.amount_cents ?? 599);
+      row = row
+        ? {
+            ...row,
+            status: full ? "refunded" : row.status,
+            refunded_at: full ? (row.refunded_at ?? "now") : row.refunded_at,
+            partial_refunded_cents:
+              row.refunded_at !== null
+                ? row.partial_refunded_cents
+                : full
+                  ? row.refunded_cents
+                  : Math.max(Number(row.refunded_cents), Number(refundedCents)),
+            refunded_cents: Math.max(Number(row.refunded_cents), Number(refundedCents)),
+            provider_event_created: Math.max(Number(row.provider_event_created), Number(eventCreated))
+          }
+        : {
+            payment_intent_id: paymentIntentId,
+            billing_mode: billingMode,
+            status,
+            refunded_cents: refundedCents,
+            partial_refunded_cents: status === "refunded" ? 0 : refundedCents,
+            refunded_at: status === "refunded" ? "now" : null,
+            disputed_at: status === "disputed" ? "now" : null,
+            provider_event_created: eventCreated
+          };
+      return { rows: [] };
+    }
     if (text.includes("SELECT status")) {
       const [paymentIntentId, billingMode] = values;
       const match = row && row.payment_intent_id === paymentIntentId && row.billing_mode === billingMode;
@@ -86,6 +118,12 @@ function factTable(initial) {
       const [, status, refundedCents, eventCreated] = values;
       row = {
         ...row,
+        partial_refunded_cents:
+          row.refunded_at !== null
+            ? row.partial_refunded_cents
+            : status === "refunded"
+              ? row.refunded_cents
+              : refundedCents,
         refunded_at: status === "refunded" && row.status !== "refunded" ? "now" : row.refunded_at,
         disputed_at: status === "disputed" && row.status !== "disputed" ? "now" : row.disputed_at,
         status,
@@ -103,6 +141,7 @@ const PAID_FACT = {
   billing_mode: "live",
   status: "paid",
   refunded_cents: 0,
+  partial_refunded_cents: 0,
   provider_event_created: 100
 };
 
@@ -147,6 +186,45 @@ describe("Financial Fact transitions", () => {
       transitionFact(table.client, factEvent({ eventCreated: 205, refundedCents: 300 }))
     ).resolves.toBe("ignored");
     expect(table.read()).toMatchObject({ refunded_cents: 500 });
+  });
+
+  it("US-02.6 keeps the partial refunded cents when a full refund follows a partial refund", async () => {
+    const table = factTable(PAID_FACT);
+
+    await transitionFact(table.client, factEvent({ refundedCents: 100 }));
+    expect(table.read()).toMatchObject({ refunded_cents: 100, partial_refunded_cents: 100 });
+
+    await transitionFact(
+      table.client,
+      factEvent({ eventCreated: 210, requestedState: "refunded", refundedCents: 599 })
+    );
+    expect(table.read()).toMatchObject({
+      status: "refunded",
+      refunded_cents: 599,
+      partial_refunded_cents: 100,
+      refunded_at: "now"
+    });
+  });
+
+  it("US-02.8 freezes the refunded cents from before the full refund when the column lags", async () => {
+    // Code from before 0035 raises refunded_cents and leaves the column at 0.
+    const table = factTable({ ...PAID_FACT, refunded_cents: 300, partial_refunded_cents: 0 });
+
+    await transitionFact(
+      table.client,
+      factEvent({ eventCreated: 210, requestedState: "refunded", refundedCents: 599 })
+    );
+
+    expect(table.read()).toMatchObject({
+      status: "refunded",
+      refunded_cents: 599,
+      partial_refunded_cents: 300,
+      refunded_at: "now"
+    });
+    const update = table.client.query.mock.calls.find(([sql]) => String(sql).includes("UPDATE financial_facts"));
+    expect(String(update?.[0]).replace(/\s+/g, " ")).toContain(
+      "partial_refunded_cents = CASE WHEN refunded_at IS NOT NULL THEN partial_refunded_cents WHEN $2 = 'refunded' THEN refunded_cents ELSE $3 END"
+    );
   });
 
   it("US-02.3 never reverses a refunded fact on a later paid or won event", async () => {
@@ -198,6 +276,77 @@ describe("Financial Fact transitions", () => {
 
     await transitionFact(table.client, factEvent({ eventCreated: 300, requestedState: "active" }));
     expect(table.read()).toMatchObject({ status: "paid", provider_event_created: 300 });
+  });
+
+  it("US-02.7 records the partial refunded cents of a paid fact and none for a refunded fact", async () => {
+    const paid = factTable(null);
+    await recordFact(paid.client, {
+      paymentIntentId: "pi_live_echo",
+      billingMode: "live",
+      eventCreated: 100,
+      status: "paid",
+      refundedCents: 200
+    });
+    expect(paid.read()).toMatchObject({ refunded_cents: 200, partial_refunded_cents: 200, refunded_at: null });
+
+    const refunded = factTable(null);
+    await recordFact(refunded.client, {
+      paymentIntentId: "pi_live_echo",
+      billingMode: "live",
+      eventCreated: 100,
+      status: "refunded",
+      refundedCents: 599
+    });
+    expect(refunded.read()).toMatchObject({
+      refunded_cents: 599,
+      partial_refunded_cents: 0,
+      refunded_at: "now"
+    });
+  });
+
+  it("US-02.7 freezes the partial refunded cents when a repeat write carries the full refund", async () => {
+    const table = factTable(null);
+    const fact = {
+      paymentIntentId: "pi_live_echo",
+      billingMode: /** @type {const} */ ("live"),
+      eventCreated: 100,
+      status: /** @type {const} */ ("paid"),
+      refundedCents: 100
+    };
+    await recordFact(table.client, fact);
+    await recordFact(table.client, { ...fact, eventCreated: 110, refundedCents: 599 });
+
+    expect(table.read()).toMatchObject({
+      status: "refunded",
+      refunded_cents: 599,
+      partial_refunded_cents: 100
+    });
+  });
+
+  it("US-02.8 freezes the refunded cents from before a repeat write when the column lags", async () => {
+    const table = factTable({ ...PAID_FACT, refunded_cents: 300, partial_refunded_cents: 0 });
+
+    await recordFact(table.client, {
+      paymentIntentId: "pi_live_echo",
+      billingMode: "live",
+      eventCreated: 110,
+      status: "paid",
+      refundedCents: 599
+    });
+    expect(table.read()).toMatchObject({
+      status: "refunded",
+      refunded_cents: 599,
+      partial_refunded_cents: 300
+    });
+
+    await recordFact(table.client, {
+      paymentIntentId: "pi_live_echo",
+      billingMode: "live",
+      eventCreated: 120,
+      status: "paid",
+      refundedCents: 599
+    });
+    expect(table.read()).toMatchObject({ refunded_cents: 599, partial_refunded_cents: 300 });
   });
 
   it("US-03.5 creates nothing for a payment with no fact", async () => {

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   assertLaneExecuted,
@@ -17,9 +17,23 @@ const FULL_DATABASE_ENV = {
 describe("database lane planning", () => {
   it("runs the PostgreSQL lanes when the whole environment is present", () => {
     expect(planDatabaseLane(FULL_DATABASE_ENV)).toEqual({
-      patterns: ["tests/*.integration.test.js"],
+      patterns: [".integration.test.js"],
       problems: []
     });
+  });
+
+  it("selects exactly the integration files under Vitest's substring filter", async () => {
+    // Regression: a glob pattern matched no file, because Vitest treats a CLI
+    // filter as a substring and no shell expands it.
+    const [pattern] = planDatabaseLane(FULL_DATABASE_ENV).patterns;
+    const files = await readdir(new URL(".", import.meta.url));
+    const integration = files.filter((name) =>
+      name.endsWith(".integration.test.js")
+    );
+    expect(integration.length).toBeGreaterThan(0);
+    expect(files.filter((name) => `tests/${name}`.includes(pattern))).toEqual(
+      integration
+    );
   });
 
   it("refuses to start when nothing is configured, rather than passing empty", () => {

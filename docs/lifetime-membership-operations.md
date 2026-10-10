@@ -281,6 +281,9 @@ environment, test mode included. The release queries the new columns. Run the
 classification (steps 3 to 5) in the test environment too. Until then, a legacy
 member shows no membership, because an Unclassified Purchase grants nothing.
 
+Apply migrations 0032 through 0035 before the release that writes Financial
+Facts and Funnel Counts. `docs/SETUP.md` gives the order and the reason.
+
 1. **Create the live Stripe objects.** Owner action.
    Create one live Product named `Echo Maze Lifetime Membership`. Add one live
    one-time Price for exactly `$5.99 USD`. Subscribe the live webhook endpoint to the

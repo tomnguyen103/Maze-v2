@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { createFunnelStore } from "../server/funnel-store.js";
 
@@ -17,7 +17,7 @@ let adminPool = null;
  * Today's count of one step. Each case reads it before and after its writes
  * inside one rolled-back transaction, so other rows never matter.
  *
- * @param {import("pg").PoolClient} connection
+ * @param {import("pg").ClientBase} connection
  * @param {string} metric
  * @param {string} [campaign]
  */
@@ -135,6 +135,39 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
     });
   });
 
+  it("US-13.8 keeps four open transactions from dropping a count on one key", async () => {
+    // Each connection stays in its own open transaction, as the write that
+    // fires a bump does. Before migration 0034 the second bump waited for the
+    // 200 ms lock timeout and warned.
+    const connections = Array.from(
+      { length: 4 },
+      () => new Client({ connectionString: normalizeDatabaseConnectionString(databaseUrl) })
+    );
+    /** @type {string[]} */
+    const warnings = [];
+    try {
+      for (const connection of connections) {
+        await connection.connect();
+        connection.on("notice", (notice) => warnings.push(String(notice.message)));
+        await connection.query("BEGIN");
+      }
+      // A transaction sees its own uncommitted shard row, and the others' rows
+      // stay invisible, so each bump adds exactly 1 to the count it reads.
+      for (const connection of connections) {
+        const before = await countOf(connection, "adult_offer_visit", "youtube");
+        await connection.query("SELECT count_adult_offer_visit('youtube')");
+        expect(await countOf(connection, "adult_offer_visit", "youtube")).toBe(before + 1);
+      }
+    } finally {
+      for (const connection of connections) {
+        await connection.query("ROLLBACK").catch(() => undefined);
+        await connection.end();
+      }
+    }
+
+    expect(warnings.filter((message) => /funnel count dropped/.test(message))).toEqual([]);
+  });
+
   it("US-08.1 denies the runtime a direct counter write", async () => {
     await rolledBack(async (connection) => {
       await connection.query("SAVEPOINT direct_insert");
@@ -200,6 +233,46 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
         expect(access.rows[0]?.earliest).toBe(true);
       }, adminPool);
     });
+
+    it("US-06.6 keeps the Grant when the activation stamp fails", async () => {
+      await rolledBack(async (connection) => {
+        /** @type {string[]} */
+        const notices = [];
+        /** @param {{ message?: string }} notice */
+        const onNotice = (notice) => notices.push(String(notice.message));
+        connection.on("notice", onNotice);
+        try {
+          const playerId = `user_funnel_${randomUUID()}`;
+          await connection.query(
+            "INSERT INTO player_access (clerk_user_id) VALUES ($1)",
+            [playerId]
+          );
+          const before = await countOf(connection, "personal_run_activated");
+          // The constraint and the lock it takes end with the rollback.
+          await connection.query(
+            `ALTER TABLE player_access
+             ADD CONSTRAINT funnel_stamp_fails CHECK (first_run_grant_at IS NULL) NOT VALID`
+          );
+
+          await insertGrant(connection, playerId, "funnel-fail-1");
+
+          const grant = await connection.query(
+            "SELECT 1 FROM run_access_grants WHERE player_id = $1 AND run_id = $2",
+            [playerId, "funnel-fail-1"]
+          );
+          expect(grant.rowCount).toBe(1);
+          expect(notices.some((message) => /funnel count dropped: 23514/.test(message))).toBe(true);
+          const access = await connection.query(
+            "SELECT first_run_grant_at FROM player_access WHERE clerk_user_id = $1",
+            [playerId]
+          );
+          expect(access.rows[0]?.first_run_grant_at).toBeNull();
+          expect(await countOf(connection, "personal_run_activated")).toBe(before);
+        } finally {
+          connection.removeListener("notice", onNotice);
+        }
+      }, adminPool);
+    });
   }
 );
 
@@ -221,9 +294,13 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
 
     it("US-10.1 buckets stored rows by UTC day with both range ends included", async () => {
       await rolledBack(async (connection) => {
-        // A non-UTC session zone proves the report buckets by UTC day. Each
-        // boundary fact carries its own partial refund, so a zone bug changes
-        // the refunded cents: it drops _start (1) and adds _after (2).
+        // A non-UTC session zone proves the report buckets by UTC day. Under a
+        // zone bug, _start leaves the range (1 cent lost), _after enters it
+        // (2 cents added), _end gains a refund in range, and _old_dispute
+        // loses its dispute. The _partial_then_full fact keeps its 100 partial
+        // cents on the paid day, inside the range, and its refund day is outside.
+        // The _stale_partial fact has no refund time and a partial column that
+        // lags (0 against 300), as old code leaves it: the report reads 300.
         await connection.query("SET LOCAL TIME ZONE 'America/Los_Angeles'");
         await connection.query(
           `INSERT INTO funnel_counts (day, metric, campaign, mode, count) VALUES
@@ -234,18 +311,33 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
              ('2000-01-02', 'account_created', '', '', 4),
              ('2000-01-03', 'account_created', '', '', 9)`
         );
+        // A second shard of an existing key: the report sums it (4 + 3 = 7).
+        await connection.query(
+          `INSERT INTO funnel_counts (day, metric, campaign, mode, shard, count)
+           VALUES ('2000-01-02', 'account_created', '', '', 3, 3)`
+        );
         const id = randomUUID();
         await connection.query(
           `INSERT INTO financial_facts (
              payment_intent_id, billing_mode, amount_cents, currency, status,
-             refunded_cents, paid_at
+             refunded_cents, partial_refunded_cents, paid_at, refunded_at, disputed_at
            ) VALUES
-             ($1 || '_start', 'live', 599, 'usd', 'paid', 1, '2000-01-01 00:00:00+00'),
-             ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, '2000-01-02 23:59:59+00'),
-             ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, '2000-01-02 12:00:00+00'),
-             ($1 || '_before', 'live', 599, 'usd', 'paid', 4, '1999-12-31 23:59:59+00'),
-             ($1 || '_after', 'live', 599, 'usd', 'paid', 2, '2000-01-03 00:00:00+00'),
-             ($1 || '_test', 'test', 599, 'usd', 'paid', 0, '2000-01-01 12:00:00+00')`,
+             ($1 || '_start', 'live', 599, 'usd', 'paid', 1, 1, '2000-01-01 00:00:00+00', NULL, NULL),
+             ($1 || '_end', 'live', 599, 'usd', 'refunded', 599, 0, '2000-01-02 23:59:59+00',
+              '2000-01-03 00:00:00+00', NULL),
+             ($1 || '_late_refund', 'live', 599, 'usd', 'refunded', 599, 0, '1999-12-31 23:59:59+00',
+              '2000-01-02 23:59:59+00', NULL),
+             ($1 || '_disputed', 'live', 599, 'usd', 'disputed', 0, 0, '2000-01-02 12:00:00+00',
+              NULL, '2000-01-02 13:00:00+00'),
+             ($1 || '_old_dispute', 'live', 599, 'usd', 'disputed', 0, 0, '1999-12-30 12:00:00+00',
+              NULL, '2000-01-01 00:00:00+00'),
+             ($1 || '_before', 'live', 599, 'usd', 'paid', 4, 4, '1999-12-31 23:59:59+00', NULL, NULL),
+             ($1 || '_after', 'live', 599, 'usd', 'paid', 2, 2, '2000-01-03 00:00:00+00', NULL, NULL),
+             ($1 || '_partial_then_full', 'live', 599, 'usd', 'refunded', 599, 100,
+              '2000-01-02 06:00:00+00', '2000-01-05 00:00:00+00', NULL),
+             ($1 || '_stale_partial', 'live', 599, 'usd', 'paid', 300, 0, '2000-01-02 08:00:00+00',
+              NULL, NULL),
+             ($1 || '_test', 'test', 599, 'usd', 'paid', 0, 0, '2000-01-01 12:00:00+00', NULL, NULL)`,
           [`pi_funnel_${id}`]
         );
 
@@ -259,14 +351,14 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
           counts: [
             { day: "2000-01-01", metric: "adult_offer_visit", campaign: "youtube", count: 2 },
             { day: "2000-01-01", metric: "checkout_created", campaign: "", count: 3 },
-            { day: "2000-01-02", metric: "account_created", campaign: "", count: 4 }
+            { day: "2000-01-02", metric: "account_created", campaign: "", count: 7 }
           ],
           summary: {
-            grossPurchases: 3,
-            netPurchases: 1,
+            grossPurchases: 5,
+            netPurchases: 2,
             refundedCount: 1,
-            disputedCount: 1,
-            refundedCents: 600
+            disputedCount: 2,
+            refundedCents: 1000
           }
         });
       }, adminPool);
