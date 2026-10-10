@@ -1,0 +1,74 @@
+-- 0036: Account erasure removes the Classroom Membership authority versions.
+-- Apply with DATABASE_ADMIN_URL after migration 0035. Do not apply from app startup.
+--
+-- Problem: account deletion runs as the runtime role. Migration 0015 revokes
+-- every runtime privilege on classroom_authority_versions. The deletion store
+-- deletes from that table directly, so each account deletion fails with
+-- "permission denied" and rolls back. No account can be erased.
+--
+-- Fix: a SECURITY DEFINER function deletes the Classroom Membership versions
+-- of one Explorer as the table owner. The function accepts only the Explorer
+-- of the current tenant context, the same trust the RLS policies of migration
+-- 0014 use. The function returns TRUE when no Membership version of that
+-- Explorer remains. It runs before the Classroom Memberships are deleted,
+-- because the Membership rows are the only link from a version to the Explorer.
+--
+-- The function pins search_path to pg_catalog, pg_temp. Every table name in
+-- the body is schema-qualified, as in migration 0034. A NULL Explorer id or
+-- an unset tenant context is refused too.
+--
+-- Rollback (an agent never runs it): drop the function. The deletion store
+-- from before 0036 then fails as described above.
+
+BEGIN;
+
+-- A non-superuser can give an object only to an owner with CREATE on the
+-- schema. 0014 revokes that privilege, so this file grants it for the
+-- ownership transfer and revokes it again before COMMIT.
+GRANT CREATE ON SCHEMA public TO echo_maze_tenant_owner;
+
+CREATE OR REPLACE FUNCTION erase_membership_authority_versions(
+  p_clerk_user_id TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  IF p_clerk_user_id IS NULL OR p_clerk_user_id IS DISTINCT FROM
+     NULLIF(current_setting('echo_maze.explorer_id', true), '') THEN
+    RAISE EXCEPTION 'Membership authority erasure needs the Explorer tenant context.';
+  END IF;
+
+  DELETE FROM public.classroom_authority_versions AS authority
+  WHERE authority.entity_type = 'membership'
+    AND authority.entity_id IN (
+      SELECT membership.clerk_membership_id
+      FROM public.classroom_memberships AS membership
+      WHERE membership.clerk_user_id = p_clerk_user_id
+    );
+
+  RETURN NOT EXISTS (
+    SELECT 1 FROM public.classroom_authority_versions AS authority
+    WHERE authority.entity_type = 'membership'
+      AND authority.entity_id IN (
+        SELECT membership.clerk_membership_id
+        FROM public.classroom_memberships AS membership
+        WHERE membership.clerk_user_id = p_clerk_user_id
+      )
+  );
+END;
+$$;
+
+ALTER FUNCTION erase_membership_authority_versions(TEXT)
+  OWNER TO echo_maze_tenant_owner;
+
+REVOKE ALL ON FUNCTION erase_membership_authority_versions(TEXT)
+  FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION erase_membership_authority_versions(TEXT)
+  TO echo_maze_runtime;
+
+REVOKE CREATE ON SCHEMA public FROM echo_maze_tenant_owner;
+
+COMMIT;

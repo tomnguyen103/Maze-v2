@@ -3259,21 +3259,7 @@ async function resolveLifetimeReturn() {
     url.searchParams.delete("membership");
     removeCheckoutParameters(url);
     lifetimeView.showMembership();
-    // "Not now" falls through to the normal Run entry. A close that already
-    // resumed the saved Run (Unlock with access active) starts nothing more.
-    // The listener stays while a resume runs, so a failed resume that reopens
-    // the dialog keeps "Not now" working.
-    const offerFirstLight = firstLightEntryPending;
-    const enterOnClose = () => {
-      // The close event is queued, so a dialog that reopened since then wins.
-      if (lifetimeUnlockResumed || elements.lifetimeDialog.open) {
-        return;
-      }
-      elements.lifetimeDialog.removeEventListener("close", enterOnClose);
-      firstLightEntryPending = offerFirstLight;
-      void initializeRunEntry();
-    };
-    elements.lifetimeDialog.addEventListener("close", enterOnClose);
+    enterRunOnLifetimeClose();
     return false;
   }
   const sessionId = url.searchParams.get("session_id");
@@ -3282,6 +3268,7 @@ async function resolveLifetimeReturn() {
     lifetimeView.showMembership(
       "Checkout canceled. Nothing was charged. Your Run is still saved."
     );
+    enterRunOnLifetimeClose();
     return false;
   }
   if (
@@ -3294,6 +3281,7 @@ async function resolveLifetimeReturn() {
       "Checkout could not be confirmed. Your Run is still saved.",
       "error"
     );
+    enterRunOnLifetimeClose();
     return false;
   }
   try {
@@ -3308,8 +3296,33 @@ async function resolveLifetimeReturn() {
       "Payment confirmation is taking longer than expected. Try again; your saved Run is safe.",
       "error"
     );
+    enterRunOnLifetimeClose();
     return false;
   }
+}
+
+/**
+ * "Not now" on a Lifetime return falls through to the normal Run entry. A
+ * close that already resumed the saved Run (Unlock with access active) starts
+ * nothing more. The listener stays while a resume runs, so a failed resume
+ * that reopens the dialog keeps "Not now" working. The close removes the
+ * Checkout parameters and the pending Checkout Session, so neither the Run
+ * entry nor a later Unlock retries a failed confirm.
+ */
+function enterRunOnLifetimeClose() {
+  const offerFirstLight = firstLightEntryPending;
+  const enterOnClose = () => {
+    // The close event is queued, so a dialog that reopened since then wins.
+    if (lifetimeUnlockResumed || elements.lifetimeDialog.open) {
+      return;
+    }
+    elements.lifetimeDialog.removeEventListener("close", enterOnClose);
+    pendingLifetimeSessionId = "";
+    removeCheckoutParameters(new URL(window.location.href));
+    firstLightEntryPending = offerFirstLight;
+    void initializeRunEntry();
+  };
+  elements.lifetimeDialog.addEventListener("close", enterOnClose);
 }
 
 /** @param {string} sessionId */

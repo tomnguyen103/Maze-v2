@@ -74,17 +74,12 @@ export function createUserDeletionStore(pool) {
            WHERE split_part(key, ':user:', 2) = $1`,
           [userId]
         );
-        // Ordered before the Membership rows are gone: this table records a
-        // Membership by its Clerk membership id, so the join is the only way
-        // back to the Explorer.
-        await client.query(
-          `DELETE FROM classroom_authority_versions AS authority
-           WHERE authority.entity_type = 'membership'
-             AND authority.entity_id IN (
-               SELECT membership.clerk_membership_id
-               FROM classroom_memberships AS membership
-               WHERE membership.clerk_user_id = $1
-             )`,
+        // Ordered before the Classroom Membership rows are gone: this table
+        // records a Membership by its Clerk membership id, so the join is the only way
+        // back to the Explorer. The runtime has no privilege on the table, so
+        // a definer function (migration 0036) deletes and checks the rows.
+        const authority = await client.query(
+          "SELECT erase_membership_authority_versions($1) AS erased",
           [userId]
         );
         await client.query(
@@ -182,16 +177,8 @@ export function createUserDeletionStore(pool) {
                  SELECT 1 FROM rate_limit_counters
                  WHERE split_part(key, ':user:', 2) = $1
                ) AS rate_limit_counters_deleted,
-               NOT EXISTS (
-                 SELECT 1 FROM classroom_authority_versions AS authority
-                 WHERE authority.entity_type = 'membership'
-                   AND authority.entity_id IN (
-                     SELECT membership.clerk_membership_id
-                     FROM classroom_memberships AS membership
-                     WHERE membership.clerk_user_id = $1
-                   )
-               ) AS classroom_authority_versions_deleted`,
-          [userId, deletedUserHash(userId)]
+               $3::BOOLEAN AS classroom_authority_versions_deleted`,
+          [userId, deletedUserHash(userId), authority.rows?.[0]?.erased === true]
         );
         if (!deletionVerified(verification.rows?.[0])) {
           throw new Error("Account deletion verification failed.");

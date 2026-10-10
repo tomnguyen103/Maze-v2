@@ -71,6 +71,7 @@ For Vercel, connect the Neon project and apply the migrations in order:
 33. `db/migrations/0033_funnel_counts.sql`
 34. `db/migrations/0034_funnel_counter_shards.sql`
 35. `db/migrations/0035_financial_fact_partial_refunds.sql`
+36. `db/migrations/0036_erase_membership_authority_versions.sql`
 
 Apply migration 0032 before the release that writes Financial Facts. Without
 the table, every Lifetime paid, refund and dispute webhook and every Checkout
@@ -78,8 +79,12 @@ confirmation rolls back, and Stripe retries the webhooks.
 
 Apply migration 0035 before the release that writes partial refunded cents.
 Without the column, every Lifetime paid, refund and dispute webhook and every
-Checkout confirmation rolls back, and Stripe retries the webhooks. Apply
-migrations 0033 through 0035 with `DATABASE_ADMIN_URL` too. They change tables
+Checkout confirmation rolls back, and Stripe retries the webhooks.
+
+Apply migration 0036 before the release that erases accounts through the
+definer function. Without the function, every account deletion rolls back.
+
+Apply migrations 0033 through 0036 with `DATABASE_ADMIN_URL` too. They change tables
 and definer functions that the application login must not own.
 
 Migrations 0012 through 0026 are the exception to the single-credential setup.

@@ -734,6 +734,80 @@ test("US-03.1 opens membership from the owner link, then Not now enters the Run"
   ).toBeVisible();
 });
 
+for (const [name, path] of [
+  ["a canceled Checkout", "/play?checkout=canceled"],
+  ["an invalid Checkout return", "/play?checkout=success&session_id=bad"],
+  // Signed out, so the confirm fails and the return stays retryable.
+  ["a failed confirm", "/play?checkout=success&session_id=cs_test_return"]
+]) {
+  test(`US-03.5 enters the Run after Not now on ${name}`, async ({ page }) => {
+    await page.goto(path);
+    await expectGameReady(page);
+
+    await expect(
+      page.getByRole("heading", { name: "Unlock every future Run" })
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Not now" }).click();
+    await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Choose a Practice Intention" })
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.has("checkout")).toBe(false);
+  });
+}
+
+test("US-03.5 Unlock after Not now on a failed confirm opens a new Checkout", async ({
+  page
+}) => {
+  await installSignedInQuestPlayer(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "echo-maze:active-run:v1",
+      JSON.stringify({
+        version: 1,
+        seed: "STONE-VAULT-07",
+        levelId: "maze-master",
+        labyrinthNumber: 6
+      })
+    );
+    const { client } = Reflect.get(window, "__echoMazePlayerDependencies");
+    Reflect.set(window, "__echoMazeCheckouts", 0);
+    client.getRunAccessConfig = async () => ({ enforcementEnabled: true });
+    // The saved Run has no free Run left, so its resume reopens the gate.
+    client.authorizeRun = async () => ({
+      allowed: false,
+      duplicate: false,
+      freeRunsRemaining: 0,
+      state: "free"
+    });
+    client.createLifetimeCheckout = async () => {
+      Reflect.set(
+        window,
+        "__echoMazeCheckouts",
+        Number(Reflect.get(window, "__echoMazeCheckouts")) + 1
+      );
+      return { state: "lifetime_active" };
+    };
+  });
+  // No confirm stub, so the Checkout Session confirm fails.
+  await page.goto("/play?checkout=success&session_id=cs_test_return");
+  await expectGameReady(page);
+  await expect(page.locator("#lifetime-status")).toContainText(
+    "Payment confirmation is taking longer than expected."
+  );
+
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator("#lifetime-status")).toHaveText(/No free Runs|^$/);
+  await expect(page.locator("#lifetime-dialog")).toBeVisible();
+
+  // A fresh Checkout, not a retry of the dead Checkout Session.
+  await page.getByRole("button", { name: /Unlock lifetime access/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, "__echoMazeCheckouts")))
+    .toBe(1);
+});
+
 test("US-03.1 resumes the saved Run once when Unlock finds access already active", async ({
   page
 }) => {

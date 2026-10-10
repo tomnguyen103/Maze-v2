@@ -1,4 +1,4 @@
--- Migration ledger check: one row per migration 0018 to 0035 with `present`
+-- Migration ledger check: one row per migration 0018 to 0036 with `present`
 -- true when the database holds the object that migration creates.
 --
 -- The check reads the system catalog only. It writes nothing, and the
@@ -102,7 +102,9 @@ FROM (
   ('0035_financial_fact_partial_refunds.sql',
     EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
       WHERE attrelid = to_regclass('public.financial_facts')
-        AND attname = 'partial_refunded_cents' AND NOT attisdropped))
+        AND attname = 'partial_refunded_cents' AND NOT attisdropped)),
+  ('0036_erase_membership_authority_versions.sql',
+    to_regprocedure('public.erase_membership_authority_versions(text)') IS NOT NULL)
 ) AS ledger (migration, present)
 ORDER BY migration;
 

@@ -86,7 +86,9 @@ describe("TM-11 — the deletion store cannot drift behind the schema", () => {
     const deleted = [
       ...store.matchAll(/DELETE FROM (\w+)/g)
     ].map((match) => match[1]);
-    expect(deleted.length).toBeGreaterThanOrEqual(8);
+    // Seven direct deletes; the eighth table goes through the definer
+    // function that the next test checks.
+    expect(deleted.length).toBeGreaterThanOrEqual(7);
 
     const verification = store.slice(store.indexOf("AS tombstone_present"));
     /** @type {string[]} */
@@ -95,5 +97,19 @@ describe("TM-11 — the deletion store cannot drift behind the schema", () => {
       if (!verification.includes(`FROM ${table}`)) unverified.push(table);
     }
     expect(unverified).toEqual([]);
+  });
+
+  it("erases the Membership authority versions through a checked definer function", () => {
+    // The runtime has no privilege on `classroom_authority_versions`, so the
+    // store calls the migration 0036 function. The function deletes the rows,
+    // and its result feeds the verification query.
+    const definer = readFileSync(
+      root + "db/migrations/0036_erase_membership_authority_versions.sql",
+      "utf8"
+    );
+    expect(definer).toContain("DELETE FROM public.classroom_authority_versions");
+    expect(definer).toMatch(/RETURN NOT EXISTS \(\s*SELECT 1 FROM public\.classroom_authority_versions/);
+    expect(store).toContain("SELECT erase_membership_authority_versions($1) AS erased");
+    expect(store).toContain("$3::BOOLEAN AS classroom_authority_versions_deleted");
   });
 });

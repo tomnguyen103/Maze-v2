@@ -125,7 +125,7 @@ function factTable(initial) {
               ? row.refunded_cents
               : refundedCents,
         refunded_at: status === "refunded" && row.status !== "refunded" ? "now" : row.refunded_at,
-        disputed_at: status === "disputed" && row.status !== "disputed" ? "now" : row.disputed_at,
+        disputed_at: status === "disputed" ? (row.disputed_at ?? "now") : row.disputed_at,
         status,
         refunded_cents: refundedCents,
         provider_event_created: eventCreated
@@ -276,6 +276,20 @@ describe("Financial Fact transitions", () => {
 
     await transitionFact(table.client, factEvent({ eventCreated: 300, requestedState: "active" }));
     expect(table.read()).toMatchObject({ status: "paid", provider_event_created: 300 });
+  });
+
+  it("US-02.10 keeps the first dispute day when a won dispute is disputed again", async () => {
+    const table = factTable({ ...PAID_FACT, disputed_at: "first-day", provider_event_created: 300 });
+
+    await expect(
+      transitionFact(table.client, factEvent({ eventCreated: 400, requestedState: "disputed" }))
+    ).resolves.toBe("processed");
+
+    expect(table.read()).toMatchObject({ status: "disputed", disputed_at: "first-day" });
+    const update = table.client.query.mock.calls.find(([sql]) => String(sql).includes("UPDATE financial_facts"));
+    expect(String(update?.[0]).replace(/\s+/g, " ")).toContain(
+      "disputed_at = CASE WHEN $2 = 'disputed' THEN COALESCE(disputed_at, NOW()) ELSE disputed_at END"
+    );
   });
 
   it("US-02.7 records the partial refunded cents of a paid fact and none for a refunded fact", async () => {
