@@ -1,6 +1,6 @@
 # Running the database and object-store test lanes
 
-Nine test files — 24 tests — need a live PostgreSQL database, and one needs an
+Ten test files — 27 tests — need a live PostgreSQL database, and one needs an
 object store. They are written as `describe.runIf(...)`, so with the environment
 absent they report as skipped and the suite still exits 0.
 
@@ -10,7 +10,7 @@ nowhere while every gate run reported green. The A+ audit filed it as `T-02`.
 
 ## What changed
 
-- `npm test` still runs with no database, and still reports those 24 as
+- `npm test` still runs with no database, and still reports those 27 as
   skipped — but `scripts/vitest-test-count.json` now pins `skipped`, so the
   count cannot grow silently. Moving a test from executed to skipped fails the
   gate.

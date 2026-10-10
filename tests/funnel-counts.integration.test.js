@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import { normalizeDatabaseConnectionString } from "../server/database.js";
 import { createFunnelStore } from "../server/funnel-store.js";
 
@@ -133,6 +133,41 @@ describe.runIf(runIntegration)("Funnel Counts on PostgreSQL", () => {
         await countOf(connection, "adult_offer_visit", "parent@example.test")
       ).toBe(0);
     });
+  });
+
+  it("US-01.1 keeps four open transactions from dropping a count on one key", async () => {
+    // Each connection stays in its own open transaction, as the write that
+    // fires a bump does. Before migration 0034 the second bump waited for the
+    // 200 ms lock timeout and warned.
+    const connections = Array.from(
+      { length: 4 },
+      () => new Client({ connectionString: normalizeDatabaseConnectionString(databaseUrl) })
+    );
+    /** @type {string[]} */
+    const warnings = [];
+    /** @type {number[]} */
+    const elapsed = [];
+    try {
+      for (const connection of connections) {
+        await connection.connect();
+        connection.on("notice", (notice) => warnings.push(String(notice.message)));
+        await connection.query("BEGIN");
+      }
+      for (const connection of connections) {
+        const started = performance.now();
+        await connection.query("SELECT count_adult_offer_visit('youtube')");
+        elapsed.push(performance.now() - started);
+      }
+    } finally {
+      for (const connection of connections) {
+        await connection.query("ROLLBACK").catch(() => undefined);
+        await connection.end();
+      }
+    }
+
+    expect(warnings.filter((message) => /funnel count dropped/.test(message))).toEqual([]);
+    // Well under the 200 ms lock wait of bump_funnel_count.
+    expect(Math.max(...elapsed)).toBeLessThan(150);
   });
 
   it("US-08.1 denies the runtime a direct counter write", async () => {
