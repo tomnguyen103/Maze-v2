@@ -71,7 +71,7 @@ their own fixture rows, and `tests/classroom-rls.integration.test.js` asserts
 denial by attempting cross-tenant reads.
 
 Migrations `0001` through `0017` are applied to the live database;
-`0018` through `0033` are not. A scratch database for this lane should have the
+`0018` through `0034` are not. A scratch database for this lane should have the
 full migration set applied, or the newer tables the lanes touch will not exist.
 
 ## What this does not cover

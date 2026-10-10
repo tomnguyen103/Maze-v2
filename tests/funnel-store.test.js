@@ -76,6 +76,21 @@ describe("Funnel store report", () => {
     expect(pool.calls[1]?.sql).toContain("billing_mode = $3");
   });
 
+  it("US-10.1 sums the shards of each day, step and Campaign Code", async () => {
+    const pool = fakePool([[], []]);
+
+    await createFunnelStore(pool).report({
+      from: "2026-10-01",
+      to: "2026-10-07",
+      mode: "live"
+    });
+
+    const sql = pool.calls[0]?.sql ?? "";
+    expect(sql).toContain("SUM(count) AS count");
+    expect(sql).toContain("GROUP BY day, metric, campaign");
+    expect(sql).toContain("ORDER BY day, metric, campaign");
+  });
+
   it("US-10.1 reports zero totals for a range with no facts", async () => {
     const pool = fakePool([[], [{}]]);
 

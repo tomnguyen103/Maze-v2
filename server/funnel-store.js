@@ -27,10 +27,12 @@ export function createFunnelStore(pool) {
      */
     async report({ from, to, mode }) {
       const counts = await pool.query(
-        `SELECT to_char(day, 'YYYY-MM-DD') AS day, metric, campaign, count
+        `SELECT to_char(day, 'YYYY-MM-DD') AS day, metric, campaign,
+                SUM(count) AS count
          FROM funnel_counts
          WHERE day BETWEEN $1::date AND $2::date
            AND mode IN ('', $3)
+         GROUP BY day, metric, campaign
          ORDER BY day, metric, campaign`,
         [from, to, mode]
       );

@@ -130,6 +130,12 @@ describe("Migration ledger check", () => {
         /to_regclass\('public\.lifetime_purchases_one_open_per_player_mode_idx'\)\s+AND indisvalid\)/,
         /to_regclass\('public\.lifetime_purchases_one_open_per_player_idx'\) IS NULL/
       ]
+    ],
+    [
+      "0034_funnel_counter_shards.sql",
+      [
+        /attrelid = to_regclass\('public\.funnel_counts'\)\s+AND attname = 'shard' AND NOT attisdropped/
+      ]
     ]
   ];
 
@@ -161,7 +167,7 @@ describe("Migration ledger check", () => {
 
   it("US-05.5 names a new migration file that has no ledger row", () => {
     expect(
-      filesWithoutRow([...migrations, "0034_future_change.sql"], rows)
-    ).toEqual(["0034_future_change.sql"]);
+      filesWithoutRow([...migrations, "0035_future_change.sql"], rows)
+    ).toEqual(["0035_future_change.sql"]);
   });
 });

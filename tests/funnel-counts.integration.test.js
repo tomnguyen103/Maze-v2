@@ -234,6 +234,11 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
              ('2000-01-02', 'account_created', '', '', 4),
              ('2000-01-03', 'account_created', '', '', 9)`
         );
+        // A second shard of an existing key: the report sums it (4 + 3 = 7).
+        await connection.query(
+          `INSERT INTO funnel_counts (day, metric, campaign, mode, shard, count)
+           VALUES ('2000-01-02', 'account_created', '', '', 3, 3)`
+        );
         const id = randomUUID();
         await connection.query(
           `INSERT INTO financial_facts (
@@ -259,7 +264,7 @@ describe.runIf(runIntegration && Boolean(adminDatabaseUrl))(
           counts: [
             { day: "2000-01-01", metric: "adult_offer_visit", campaign: "youtube", count: 2 },
             { day: "2000-01-01", metric: "checkout_created", campaign: "", count: 3 },
-            { day: "2000-01-02", metric: "account_created", campaign: "", count: 4 }
+            { day: "2000-01-02", metric: "account_created", campaign: "", count: 7 }
           ],
           summary: {
             grossPurchases: 3,
