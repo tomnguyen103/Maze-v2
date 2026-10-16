@@ -748,7 +748,6 @@ kbd {
 
 .title-block {
   display: flex;
-  order: 1;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3) var(--space-4);

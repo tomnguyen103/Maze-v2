@@ -155,56 +155,6 @@
     <main class="play-workbench">
       <section class="play-grid" aria-label="Echo Maze game">
         <article class="labyrinth-panel" id="labyrinth" tabindex="-1">
-          <div class="title-block" aria-label="Title block">
-            <div class="quest-card">
-              <div class="status-deck__heading">
-                <span class="section-label" id="quest-level-name">Trail Scout</span>
-                <span class="run-state" id="run-state">Exploring</span>
-              </div>
-              <p class="quest-stage" id="quest-stage">
-                Labyrinth 1 of 20 · Foundation
-              </p>
-              <p
-                class="quest-sync-status"
-                id="quest-sync-status"
-                data-state="local"
-                role="status"
-                aria-live="polite"
-              >
-                Device save
-              </p>
-            </div>
-
-            <div class="player-console" aria-label="Player status">
-              <button class="player-console__identity" id="player-button" type="button">
-                <span class="player-swatch" aria-hidden="true"></span>
-                <span>
-                  <small>Explorer</small>
-                  <strong id="player-name">Guest</strong>
-                </span>
-              </button>
-              <dl class="player-score">
-                <div>
-                  <dt>Score</dt>
-                  <dd id="player-score">0</dd>
-                </div>
-                <div>
-                  <dt>Global max</dt>
-                  <dd id="global-max-score">—</dd>
-                </div>
-              </dl>
-              <button class="scoreboard-button control-button" id="scoreboard-button" type="button">
-                Top 10
-              </button>
-            </div>
-
-            <button class="seed-copy" id="seed-copy" type="button">
-              <span class="section-label">Seed</span>
-              <strong id="seed-value"></strong>
-              <span class="seed-copy__hint" id="seed-copy-hint">Copy Echo Postcard</span>
-            </button>
-          </div>
-
           <div class="readout" aria-label="Run readout">
             <dl class="run-metrics">
               <div>
@@ -320,6 +270,56 @@
             <summary>Why this works</summary>
             <div class="echo-lens__content" id="echo-lens-content"></div>
           </details>
+
+          <div class="title-block" aria-label="Title block">
+            <div class="quest-card">
+              <div class="status-deck__heading">
+                <span class="section-label" id="quest-level-name">Trail Scout</span>
+                <span class="run-state" id="run-state">Exploring</span>
+              </div>
+              <p class="quest-stage" id="quest-stage">
+                Labyrinth 1 of 20 · Foundation
+              </p>
+              <p
+                class="quest-sync-status"
+                id="quest-sync-status"
+                data-state="local"
+                role="status"
+                aria-live="polite"
+              >
+                Device save
+              </p>
+            </div>
+
+            <div class="player-console" aria-label="Player status">
+              <button class="player-console__identity" id="player-button" type="button">
+                <span class="player-swatch" aria-hidden="true"></span>
+                <span>
+                  <small>Explorer</small>
+                  <strong id="player-name">Guest</strong>
+                </span>
+              </button>
+              <dl class="player-score">
+                <div>
+                  <dt>Score</dt>
+                  <dd id="player-score">0</dd>
+                </div>
+                <div>
+                  <dt>Global max</dt>
+                  <dd id="global-max-score">—</dd>
+                </div>
+              </dl>
+              <button class="scoreboard-button control-button" id="scoreboard-button" type="button">
+                Top 10
+              </button>
+            </div>
+
+            <button class="seed-copy" id="seed-copy" type="button">
+              <span class="section-label">Seed</span>
+              <strong id="seed-value"></strong>
+              <span class="seed-copy__hint" id="seed-copy-hint">Copy Echo Postcard</span>
+            </button>
+          </div>
         </article>
 
         <aside class="intel-deck chart-notes" aria-label="Chart notes">
