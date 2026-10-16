@@ -3802,7 +3802,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
   await expect(ringButton).toBeVisible();
   await expect(ringButton).toBeEnabled();
   for (const action of await page
-    .locator(".arena-actions button:visible")
+    .locator(".action-rail button:visible")
     .all()) {
     const fit = await action.evaluate((element) => {
       const bounds = element.getBoundingClientRect();
@@ -5529,7 +5529,7 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
   );
   expect(overflow, `overflow sources: ${overflowSources.join(", ")}`).toBeLessThanOrEqual(1);
 
-  const heading = await page.locator(".status-deck__heading").boundingBox();
+  const heading = await page.locator(".title-block__heading").boundingBox();
   const syncStatus = await page.locator("#quest-sync-status").boundingBox();
   const metrics = await page.locator(".run-metrics").boundingBox();
   if (!heading || !syncStatus || !metrics) {

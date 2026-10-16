@@ -537,7 +537,7 @@ a:hover {
 
 /* Action rail */
 
-.arena-actions {
+.action-rail {
   display: flex;
   min-height: 3.2rem;
   padding-top: var(--space-3);
@@ -755,14 +755,14 @@ kbd {
   border-top: 1px solid var(--color-line);
 }
 
-.quest-card {
+.title-block__quest {
   display: grid;
   min-width: 0;
   flex: 1 1 14rem;
   gap: var(--space-1);
 }
 
-.status-deck__heading,
+.title-block__heading,
 .dialog-heading {
   display: flex;
   align-items: center;
@@ -770,7 +770,7 @@ kbd {
   gap: var(--space-3);
 }
 
-.status-deck__heading {
+.title-block__heading {
   justify-content: flex-start;
 }
 
@@ -941,7 +941,7 @@ kbd {
 
 /* Chart notes */
 
-.intel-deck {
+.chart-notes {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -950,13 +950,13 @@ kbd {
   background: var(--color-panel);
 }
 
-.intel-deck > * {
+.chart-notes > * {
   margin: 0;
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-line-soft);
 }
 
-.intel-deck > :first-child {
+.chart-notes > :first-child {
   border-top: 0;
 }
 
@@ -1533,7 +1533,7 @@ body[data-run-mode="first-light"] .play-workbench {
     width: min(100%, 40dvh, 28rem);
   }
 
-  .arena-actions {
+  .action-rail {
     display: grid;
     min-height: 0;
     grid-template-areas: "pad pause" "pad pulse";
@@ -1613,17 +1613,17 @@ body[data-run-mode="first-light"] .play-workbench {
     font-size: var(--text-label);
   }
 
-  .intel-deck {
+  .chart-notes {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
-  .intel-deck > :nth-child(2) {
+  .chart-notes > :nth-child(2) {
     border-top: 0;
     border-left: 1px solid var(--color-line-soft);
   }
 
-  .intel-deck > .field-note {
+  .chart-notes > .field-note {
     grid-column: 1 / -1;
   }
 }
@@ -1652,7 +1652,7 @@ body[data-run-mode="first-light"] .play-workbench {
     white-space: nowrap;
   }
 
-  .status-deck__heading {
+  .title-block__heading {
     min-height: 1.5rem;
   }
 
@@ -1692,12 +1692,12 @@ body[data-run-mode="first-light"] .play-workbench {
     display: none;
   }
 
-  .intel-deck {
+  .chart-notes {
     display: flex;
     flex-direction: column;
   }
 
-  .intel-deck > :nth-child(2) {
+  .chart-notes > :nth-child(2) {
     border-top: 1px solid var(--color-line-soft);
     border-left: 0;
   }
@@ -1757,7 +1757,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   /* The d-pad needs its full width here, so the buttons take their own rows. */
-  .arena-actions {
+  .action-rail {
     grid-template-areas: "pad" "pause" "pulse";
     grid-template-columns: minmax(0, 1fr);
   }

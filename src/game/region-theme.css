@@ -19,7 +19,7 @@ body[data-region-theme="bellroot-summit"] {
   --region-hue: var(--region-bellroot);
 }
 
-body[data-region-theme] .quest-card {
+body[data-region-theme] .title-block__quest {
   --card-hue: var(--region-hue, var(--region-mosslight));
 }
 
