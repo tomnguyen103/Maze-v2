@@ -236,7 +236,7 @@ test.describe("layout redesign & edge viewports", () => {
       await expectGameReady(page);
 
       const frame = await page.locator("#canvas-frame").boundingBox();
-      const controls = await page.locator(".arena-actions").boundingBox();
+      const controls = await page.locator(".action-rail").boundingBox();
       if (!frame || !controls) {
         throw new Error("board or controls have no bounding box");
       }
