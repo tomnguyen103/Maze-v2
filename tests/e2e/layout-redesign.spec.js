@@ -102,7 +102,11 @@ test.describe("layout redesign & edge viewports", () => {
           pauseLeft: pauseRect.left,
           seedWidth: seedRect.width,
           pauseWidth: pauseRect.width,
-          collides: seedRect.right > pauseRect.left + 0.5
+          collides:
+            seedRect.right > pauseRect.left + 0.5 &&
+            seedRect.left < pauseRect.right - 0.5 &&
+            seedRect.bottom > pauseRect.top + 0.5 &&
+            seedRect.top < pauseRect.bottom - 0.5
         };
       });
       expect(arenaInfo?.collides ?? false, `Seed copy and pause button should not collide on ${vp.name}`).toBe(false);

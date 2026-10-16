@@ -333,28 +333,28 @@ function rgbOf(value) {
   return oklchToRgb(lightness / 100, chroma, hue);
 }
 
-/** Adopted values from the spec Palette table, light theme. */
-const FIELD_JOURNAL_LIGHT = {
-  "--color-paper": "oklch(97.5% 0.012 85)",
-  "--color-panel": "oklch(99% 0.006 85)",
-  "--color-ink": "oklch(24% 0.015 60)",
-  "--color-ink-muted": "oklch(42% 0.02 60)",
-  "--color-ink-faint": "oklch(50% 0.02 60)",
-  "--color-signal": "oklch(78% 0.15 75)",
-  "--color-signal-deep": "oklch(47% 0.11 65)",
-  "--color-accent-ink": "oklch(20% 0.03 60)"
+/** Adopted values from the design.md Palette table, light theme. */
+const PILOT_CHART_LIGHT = {
+  "--color-paper": "oklch(99% 0.004 95)",
+  "--color-panel": "oklch(100% 0 0)",
+  "--color-ink": "oklch(18% 0.012 250)",
+  "--color-ink-muted": "oklch(38% 0.014 250)",
+  "--color-ink-faint": "oklch(47% 0.014 250)",
+  "--color-signal": "oklch(70% 0.2 340)",
+  "--color-signal-deep": "oklch(47% 0.22 340)",
+  "--color-on-fill": "oklch(100% 0 0)"
 };
 
-/** Adopted values from the spec Palette table, Night theme. */
-const FIELD_JOURNAL_NIGHT = {
-  "--color-paper": "oklch(19% 0.012 65)",
-  "--color-panel": "oklch(23% 0.012 65)",
-  "--color-ink": "oklch(94% 0.012 85)",
-  "--color-ink-muted": "oklch(76% 0.015 80)",
-  "--color-ink-faint": "oklch(68% 0.015 80)",
-  "--color-signal": "oklch(78% 0.15 75)",
-  "--color-signal-deep": "oklch(82% 0.13 80)",
-  "--color-accent-ink": "oklch(20% 0.03 60)"
+/** Adopted values from the design.md Palette table, Night theme. */
+const PILOT_CHART_NIGHT = {
+  "--color-paper": "oklch(21% 0.012 250)",
+  "--color-panel": "oklch(23% 0.012 250)",
+  "--color-ink": "oklch(95% 0.006 95)",
+  "--color-ink-muted": "oklch(78% 0.01 250)",
+  "--color-ink-faint": "oklch(70% 0.01 250)",
+  "--color-signal": "oklch(70% 0.2 340)",
+  "--color-signal-deep": "oklch(78% 0.17 340)",
+  "--color-on-fill": "oklch(100% 0 0)"
 };
 
 const TEXT_PAIRS = [
@@ -362,11 +362,11 @@ const TEXT_PAIRS = [
   ["--color-ink", "--color-panel"],
   ["--color-ink-muted", "--color-paper"],
   ["--color-ink-faint", "--color-paper"],
-  ["--color-accent-ink", "--color-signal"],
-  ["--color-signal-deep", "--color-paper"]
+  ["--color-signal-deep", "--color-paper"],
+  ["--color-accent-ink", "--color-signal"]
 ];
 
-describe("US-01 — Field Journal palette tokens", () => {
+describe("US-01 — Pilot Chart palette tokens", () => {
   const css = source("tokens.css");
   const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
   const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
@@ -374,8 +374,8 @@ describe("US-01 — Field Journal palette tokens", () => {
   const systemNight = css.slice(systemNightStart, forcedNightStart);
   const forcedNight = css.slice(forcedNightStart);
 
-  it("sets the adopted Field Journal values in light (US-01.1)", () => {
-    for (const [name, value] of Object.entries(FIELD_JOURNAL_LIGHT)) {
+  it("sets the adopted Pilot Chart values in light (US-01.1)", () => {
+    for (const [name, value] of Object.entries(PILOT_CHART_LIGHT)) {
       expect(declared(lightBlock, name), name).toBe(value);
     }
   });
@@ -412,9 +412,22 @@ describe("US-01 — Field Journal palette tokens", () => {
   });
 
   it("gives the system and forced Night blocks the same palette values (US-01.4)", () => {
-    for (const [name, value] of Object.entries(FIELD_JOURNAL_NIGHT)) {
+    for (const [name, value] of Object.entries(PILOT_CHART_NIGHT)) {
       expect(declared(systemNight, name), name).toBe(value);
       expect(declared(forcedNight, name), name).toBe(value);
+    }
+  });
+
+  it("declares Night water screens for Echo surfaces and the Constellation bands (US-01.6)", () => {
+    // Engine 2 found the Night overrides removed: light fills under Night ink
+    // measured 1.02:1 on `.challenge-feedback` and 1.13:1 on the band captions.
+    for (const block of [systemNight, forcedNight]) {
+      for (const name of ["--color-echo-soft", "--color-band-1", "--color-band-2", "--color-band-3"]) {
+        const fill = declared(block, name);
+        expect(fill, name).toBeDefined();
+        expect(contrast(rgbOf(declared(block, "--color-ink")), rgbOf(fill)), name).toBeGreaterThan(4.5);
+        expect(contrast(rgbOf(declared(block, "--color-ink-muted")), rgbOf(fill)), name).toBeGreaterThan(4.5);
+      }
     }
   });
 
@@ -467,7 +480,7 @@ const SURFACE_SHEETS = [
   "src/learning/lantern-trail.css"
 ];
 
-describe("US-06 — dialogs and learning surfaces use Field Journal tokens", () => {
+describe("US-06 — dialogs and learning surfaces use Pilot Chart tokens", () => {
   const css = source("tokens.css");
   const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
   const forcedNightStart = css.indexOf(':root[data-theme="dark"]');

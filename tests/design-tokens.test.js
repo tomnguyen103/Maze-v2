@@ -78,30 +78,30 @@ describe("custom properties", () => {
   });
 });
 
-describe("Field Journal identity", () => {
+describe("Pilot Chart identity", () => {
   // Checked-out files may use CRLF on Windows; compare LF text only.
   const read = (/** @type {string} */ relative) =>
     readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
 
   /** Adopted palette values from the spec Palette table, light then Night. */
   const PALETTE_VALUES = [
-    "oklch(97.5% 0.012 85)",
-    "oklch(99% 0.006 85)",
-    "oklch(24% 0.015 60)",
-    "oklch(42% 0.02 60)",
-    "oklch(78% 0.15 75)",
-    "oklch(20% 0.03 60)",
-    "oklch(47% 0.11 65)",
-    "oklch(19% 0.012 65)",
-    "oklch(23% 0.012 65)",
-    "oklch(94% 0.012 85)",
-    "oklch(76% 0.015 80)",
-    "oklch(82% 0.13 80)"
+    "oklch(99% 0.004 95)",
+    "oklch(100% 0 0)",
+    "oklch(18% 0.012 250)",
+    "oklch(38% 0.014 250)",
+    "oklch(70% 0.2 340)",
+    "oklch(47% 0.22 340)",
+    "oklch(95.5% 0.022 232)",
+    "oklch(21% 0.012 250)",
+    "oklch(23% 0.012 250)",
+    "oklch(95% 0.006 95)",
+    "oklch(78% 0.01 250)",
+    "oklch(70% 0.2 340)"
   ];
 
-  it("names Field Journal as the design identity in design.md", () => {
+  it("names Pilot Chart as the design identity in design.md", () => {
     const design = read("design.md");
-    expect(design).toContain("Field Journal");
+    expect(design).toContain("Pilot Chart");
     expect(design).not.toMatch(/Journey system/);
   });
 
@@ -129,7 +129,8 @@ describe("Field Journal identity", () => {
   it("names the adopted type families and shape limits in design.md", () => {
     const design = read("design.md");
     for (const literal of [
-      "Bricolage Grotesque",
+      "Archivo",
+      "Atkinson Hyperlegible Next",
       "Geist Mono",
       "40px",
       "16px",
@@ -139,9 +140,11 @@ describe("Field Journal identity", () => {
     }
   });
 
-  it("defines Field Journal and no longer defines Journey in GLOSSARY.md", () => {
+  it("defines Pilot Chart and the play-screen terms in GLOSSARY.md", () => {
     const glossary = read("GLOSSARY.md");
-    expect(glossary).toMatch(/\*\*Field Journal\*\*:/);
+    for (const term of ["Pilot Chart", "Readout", "Action rail", "Title block", "Chart notes"]) {
+      expect(glossary).toMatch(new RegExp(`\\*\\*${term}\\*\\*:`));
+    }
     expect(glossary).not.toMatch(/\*\*Journey\*\*:/);
   });
 
@@ -166,7 +169,7 @@ describe("Field Journal identity", () => {
 });
 
 describe("shared base styles", () => {
-  // The shared sheet draws the Field Journal look only. No island or rope rule remains.
+  // The shared sheet draws the Pilot Chart look only. No island or rope rule remains.
   const daylight = readFileSync(root + "src/daylight.css", "utf8").replace(
     /\r\n/g,
     "\n"
@@ -216,8 +219,8 @@ describe("shared base styles", () => {
     expect(blurred).toEqual([]);
   });
 
-  it("fills the primary button with amber, not the legacy sky-deep token (US-01.3)", () => {
-    expect(rules(".primary-button")).toMatch(/--fill:\s*var\(--color-signal\);/);
+  it("fills the primary button with ink, not the legacy sky-deep token (US-01.3)", () => {
+    expect(rules(".primary-button")).toMatch(/--fill:\s*var\(--color-ink\);/);
     expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
   });
 

@@ -142,15 +142,35 @@ amber, Tideglass indigo, Bellroot pink. Atlas territories, Labyrinth tiles, and
 tinted cards on the admin and Classroom surfaces reuse it as decoration only.
 _Avoid_: Territory colour, status colour, difficulty colour
 
-**Field Journal**:
-The visual identity of every Echo Maze surface: ivory paper, charcoal ink,
-lantern amber actions, and drawn Atlas territories. It names presentation,
-never a game rule.
-_Avoid_: Journey, Theme (alone), skin, mode
+**Pilot Chart**:
+The visual identity of every Echo Maze surface: white chart paper, black ink,
+hatched ink walls, blue water screens, and magenta for lights only. It replaces the
+Field Journal identity. It names presentation, never a game rule.
+_Avoid_: Field Journal, Journey, Theme (alone), skin, mode
+
+**Readout**:
+The strip of live Run numbers above the board: Time, Moves, Echoes, Vitality,
+and the Warden mode. The Readout shows state. It holds no control.
+_Avoid_: HUD, stats bar, status deck
+
+**Action rail**:
+The strip under the board that holds Pause, the touch controls, and Pulse.
+Every control that acts on the Run sits in the Action rail.
+_Avoid_: toolbar, control bar, arena actions
+
+**Title block**:
+The chart-style block under the Action rail that names the Quest Level, the
+Labyrinth number and stage, the save state, the player console, and the seed.
+_Avoid_: header, run status, quest card
+
+**Chart notes**:
+The inset beside the board on a desktop, and under it on a phone, that holds
+the objective, the adventure log, the map marks legend, and the field note.
+_Avoid_: sidebar, intel deck, aside
 
 **Theme Choice**:
-An Explorer setting of light, dark, or system appearance for the Field
-Journal identity. It changes no Run, score, or progress.
+An Explorer setting of light, dark, or system appearance for the Pilot
+Chart identity. It changes no Run, score, or progress.
 _Avoid_: Palette, Region Theme
 
 **Warden Guild**:

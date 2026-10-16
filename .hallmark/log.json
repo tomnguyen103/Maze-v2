@@ -179,6 +179,23 @@
       "signature": "Fog physically recedes as the Explorer reveals the Labyrinth",
       "nav": "N5 Floating Pill",
       "footer": "Ft5 Statement"
+    },
+    {
+      "date": "2026-10-15",
+      "project": "Echo Maze",
+      "genre": "playful",
+      "theme": "Pilot Chart",
+      "macrostructure": "Workbench",
+      "signature": "Readout above the board, Action rail and Title block under it, Chart notes as ruled rows; white paper, blue water screens, magenta lights only",
+      "nav": "Wordmark, h1, control row, theme button on one chart title bar",
+      "footer": "None",
+      "fixes": [
+        "primary button fills with ink, not magenta",
+        "Pulse is the only magenta control",
+        "Readout numbers in Geist Mono with hairline dividers",
+        "no panel shadows"
+      ],
+      "stitch_note": "Pilot Chart replaces Field Journal. design.md is the locked reference; no Stitch comp was generated for this identity."
     }
   ]
 }
