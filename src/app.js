@@ -1,5 +1,5 @@
-import "@fontsource-variable/bricolage-grotesque";
-import "@fontsource-variable/geist";
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/atkinson-hyperlegible-next";
 import "@fontsource-variable/geist-mono";
 import "./daylight.css";
 

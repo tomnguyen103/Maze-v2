@@ -2389,7 +2389,7 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
     await page.locator(".access-question-preview").evaluate(
       (element) => getComputedStyle(element).fontFamily
     )
-  ).toContain("Geist");
+  ).toContain("Atkinson Hyperlegible Next");
   expect(
     await page.locator(".access-answer-preview strong").evaluate(
       (element) => getComputedStyle(element).lineHeight
@@ -2541,7 +2541,7 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
     await page.locator("#challenge-question").evaluate(
       (element) => getComputedStyle(element).fontFamily
     )
-  ).toContain("Geist");
+  ).toContain("Atkinson Hyperlegible Next");
 
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "32px";
@@ -5535,8 +5535,9 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
   if (!heading || !syncStatus || !metrics) {
     throw new Error("Expected status layout at 200 percent text.");
   }
+  // Pilot Chart order: the Readout sits above the board, the Title block below it.
+  expect(heading.y).toBeGreaterThanOrEqual(metrics.y + metrics.height);
   expect(syncStatus.y).toBeGreaterThanOrEqual(heading.y + heading.height);
-  expect(metrics.y).toBeGreaterThanOrEqual(syncStatus.y + syncStatus.height);
 });
 
 test("recovers the last movement and Pulse checkpoint behind an explicit Campfire choice", async ({
@@ -7101,15 +7102,15 @@ test("paints the browser bar with the stored Theme Choice and gives it back for 
       )
     );
   // The boot script paints both metas before the bundle runs.
-  expect(await barColors()).toEqual(["oklch(19% 0.012 65)", "oklch(19% 0.012 65)"]);
+  expect(await barColors()).toEqual(["oklch(21% 0.012 250)", "oklch(21% 0.012 250)"]);
 
   await chooseTrailScout(page);
   const button = page.locator("#theme-button");
   await expect(button).toHaveAttribute("data-choice", "dark");
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "system");
-  await expect.poll(barColors).toEqual(["oklch(97.5% 0.012 85)", "oklch(19% 0.012 65)"]);
+  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(21% 0.012 250)"]);
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "light");
-  await expect.poll(barColors).toEqual(["oklch(97.5% 0.012 85)", "oklch(97.5% 0.012 85)"]);
+  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(99% 0.004 95)"]);
 });
