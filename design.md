@@ -5,15 +5,15 @@ stitch-project: 3244739478942983822
 # Design - Echo Maze
 
 Echo Maze uses the Pilot Chart identity. The product looks like a nautical pilot chart
-on white chart paper. Land is buff, water is blue, every line and every word is black
-ink, and magenta marks only the lights: Pulse, the Signal Bell, and a caution. The
+on white chart paper. Walls are hatched ink, water is blue, every line and every word is
+black ink, and magenta marks only the lights. The
 Explorer reads the board the way a navigator reads a chart. Decoration supports reading
 and movement. It never competes with the Labyrinth or the Warden Question.
 
 ## Genre and atmosphere
 
-- **Genre**: pilot chart on white paper with black type, buff land, blue water, and
-  magenta lights.
+- **Genre**: pilot chart on white paper with black type, hatched ink walls, blue water,
+  and magenta lights.
 - **Atmosphere**: calm chart table, balanced (density 6, variance 5, motion 3).
 - **Surfaces**:
   - Landing: one free action, a real gameplay crop in a chart frame, and the price line.
@@ -39,15 +39,17 @@ values. The three water screens are literal values in each block, never aliases.
 | Signal (lights) | `oklch(70% 0.2 340)` | `oklch(70% 0.2 340)` |
 | Signal deep (text) | `oklch(47% 0.22 340)` | `oklch(78% 0.17 340)` |
 | Water 1 | `oklch(95.5% 0.022 232)` | `oklch(27% 0.035 232)` |
-| Land | `oklch(92% 0.045 85)` | `oklch(36% 0.04 85)` |
 
-- **Lights**: the Signal fill carries the Pulse button, the Signal Bell, and a caution.
-  Its label is accent ink. Nothing else is magenta.
+- **Lights**: the Signal fill carries the Pulse button, the Signal Bell, the Gate marks,
+  the active tab underline, the saved mark, the success log dot, the landing trail, and a
+  caution. The Pulse label is accent ink. Magenta never fills a text, a panel, or a
+  button other than Pulse.
 - **Action fill**: the primary button fills with ink and sets its label in paper.
 - **Water screens**: three blue screens, light to deep, rank the Readout, the Chart
   notes, and the Atlas bands. Each screen keeps ink and muted ink at 4.5:1.
 - **Region Hues**: the Atlas territories keep their five hues as restrained washes.
-- **Warden and Gate marks**: ink marks. No mark depends on colour alone.
+- **Warden marks**: ink marks. **Gate marks**: Signal lights. No mark depends on colour
+  alone.
 - **Theme**: the Theme Choice applies light, Night, or system. Every `theme-color` meta
   carries the paper colour of the active theme.
 
@@ -130,7 +132,7 @@ values. The three water screens are literal values in each block, never aliases.
 - Pill buttons.
 - Glass blur.
 - Nested cards.
-- Drop shadows on panels.
+- Drop shadows on the play screen panels.
 - Pure black (`#000000`).
 
 ## Invariants

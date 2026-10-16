@@ -144,7 +144,7 @@ _Avoid_: Territory colour, status colour, difficulty colour
 
 **Pilot Chart**:
 The visual identity of every Echo Maze surface: white chart paper, black ink,
-buff land, blue water screens, and magenta for lights only. It replaces the
+hatched ink walls, blue water screens, and magenta for lights only. It replaces the
 Field Journal identity. It names presentation, never a game rule.
 _Avoid_: Field Journal, Journey, Theme (alone), skin, mode
 

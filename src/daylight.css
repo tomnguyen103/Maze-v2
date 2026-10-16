@@ -356,7 +356,7 @@ a:hover {
   font-family: var(--font-display);
   font-size: var(--text-compact);
   font-stretch: 112%;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -610,7 +610,7 @@ html .trail-compass[hidden] {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-accent-ink);
-  border: 1px solid var(--color-signal);
+  border: 1px solid var(--color-signal-deep);
   border-radius: var(--radius-md);
   background: var(--color-signal);
   text-align: left;

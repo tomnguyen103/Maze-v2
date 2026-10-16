@@ -21,9 +21,6 @@
   /* Water screen at three strengths, land buff, coastline. */
   --color-water-1: oklch(95.5% 0.022 232);
   --color-water-2: oklch(90% 0.05 232);
-  --color-water-3: oklch(81% 0.09 232);
-  --color-land: oklch(92% 0.045 85);
-  --color-land-edge: oklch(18% 0.012 250);
 
   /* Magenta: lights and caution only. */
   --color-signal: oklch(70% 0.2 340);
@@ -168,6 +165,10 @@
     --color-paper-deep: oklch(17% 0.012 250);
     --color-stone: oklch(23% 0.012 250);
     --color-stone-raised: oklch(27% 0.035 232);
+    --color-echo-soft: oklch(27% 0.035 232);
+    --color-band-1: oklch(27% 0.035 232);
+    --color-band-2: oklch(34% 0.06 232);
+    --color-band-3: oklch(38% 0.08 232);
     --color-line: oklch(88% 0.008 95);
     --color-line-soft: oklch(34% 0.012 250);
     --color-panel: oklch(23% 0.012 250);
@@ -177,9 +178,6 @@
 
     --color-water-1: oklch(27% 0.035 232);
     --color-water-2: oklch(34% 0.06 232);
-    --color-water-3: oklch(44% 0.09 232);
-    --color-land: oklch(36% 0.04 85);
-    --color-land-edge: oklch(88% 0.008 95);
 
     --color-signal: oklch(70% 0.2 340);
     --color-signal-soft: oklch(30% 0.07 340);
@@ -229,6 +227,10 @@
   --color-paper-deep: oklch(17% 0.012 250);
   --color-stone: oklch(23% 0.012 250);
   --color-stone-raised: oklch(27% 0.035 232);
+  --color-echo-soft: oklch(27% 0.035 232);
+  --color-band-1: oklch(27% 0.035 232);
+  --color-band-2: oklch(34% 0.06 232);
+  --color-band-3: oklch(38% 0.08 232);
   --color-line: oklch(88% 0.008 95);
   --color-line-soft: oklch(34% 0.012 250);
   --color-panel: oklch(23% 0.012 250);
@@ -238,9 +240,6 @@
 
   --color-water-1: oklch(27% 0.035 232);
   --color-water-2: oklch(34% 0.06 232);
-  --color-water-3: oklch(44% 0.09 232);
-  --color-land: oklch(36% 0.04 85);
-  --color-land-edge: oklch(88% 0.008 95);
 
   --color-signal: oklch(70% 0.2 340);
   --color-signal-soft: oklch(30% 0.07 340);

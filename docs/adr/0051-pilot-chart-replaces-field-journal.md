@@ -14,7 +14,7 @@ the rank between the board, the controls, and the notes.
 ## Decision
 
 1. Every surface takes the Pilot Chart identity: white chart paper, black ink,
-   buff land, three blue water screens, and magenta for lights only. The
+   hatched ink walls, three blue water screens, and magenta for lights only. The
    palette lives in `tokens.css` and `design.md`.
 2. The play screen takes one reading order: Readout, board, Action rail, Title
    block, Chart notes. `GLOSSARY.md` defines the four terms.

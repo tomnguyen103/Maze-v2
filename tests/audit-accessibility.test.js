@@ -362,7 +362,8 @@ const TEXT_PAIRS = [
   ["--color-ink", "--color-panel"],
   ["--color-ink-muted", "--color-paper"],
   ["--color-ink-faint", "--color-paper"],
-  ["--color-signal-deep", "--color-paper"]
+  ["--color-signal-deep", "--color-paper"],
+  ["--color-accent-ink", "--color-signal"]
 ];
 
 describe("US-01 — Pilot Chart palette tokens", () => {
@@ -414,6 +415,19 @@ describe("US-01 — Pilot Chart palette tokens", () => {
     for (const [name, value] of Object.entries(PILOT_CHART_NIGHT)) {
       expect(declared(systemNight, name), name).toBe(value);
       expect(declared(forcedNight, name), name).toBe(value);
+    }
+  });
+
+  it("declares Night water screens for Echo surfaces and the Constellation bands (US-01.6)", () => {
+    // Engine 2 found the Night overrides removed: light fills under Night ink
+    // measured 1.02:1 on `.challenge-feedback` and 1.13:1 on the band captions.
+    for (const block of [systemNight, forcedNight]) {
+      for (const name of ["--color-echo-soft", "--color-band-1", "--color-band-2", "--color-band-3"]) {
+        const fill = declared(block, name);
+        expect(fill, name).toBeDefined();
+        expect(contrast(rgbOf(declared(block, "--color-ink")), rgbOf(fill)), name).toBeGreaterThan(4.5);
+        expect(contrast(rgbOf(declared(block, "--color-ink-muted")), rgbOf(fill)), name).toBeGreaterThan(4.5);
+      }
     }
   });
 
