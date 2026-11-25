@@ -263,6 +263,18 @@ describe("shared base styles", () => {
     expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
   });
 
+  it("defines no pill radius and no drop-shadow token (Pilot Chart)", () => {
+    // Tags use the 4px radius and surfaces use ink rules, so these tokens have no reader.
+    const found = [];
+    for (const relative of SHEETS.filter((path) => path.endsWith(".css"))) {
+      const css = readFileSync(root + relative, "utf8");
+      for (const token of ["--radius-pill", "--shadow-panel", "--shadow-signal"]) {
+        if (css.includes(token)) found.push(`${token} (${relative})`);
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
   it("sets body text to 16px (I6)", () => {
     expect(rules("body")).toMatch(/font-size:\s*1rem/);
   });

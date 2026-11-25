@@ -52,7 +52,6 @@
   --color-gate: oklch(58% 0.24 340);
   --color-gate-text: oklch(47% 0.22 340);
   --color-focus: oklch(46% 0.17 250);
-  --color-shadow: oklch(18% 0.012 250 / 14%);
   --color-overlay: oklch(18% 0.012 250 / 55%);
   --color-panel: oklch(100% 0 0);
   --color-on-fill: oklch(100% 0 0);
@@ -136,9 +135,6 @@
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.375rem;
-  --radius-pill: 9999px;
-
-  --shadow-panel: 0 8px 24px -8px var(--color-shadow);
 
   --duration-press: 120ms;
   --duration-reveal: 240ms;
@@ -170,7 +166,6 @@
     --color-line-soft: oklch(34% 0.012 250);
     --color-panel: oklch(23% 0.012 250);
     --color-nav: oklch(21% 0.03 250);
-    --color-shadow: oklch(5% 0.01 250 / 60%);
     --color-overlay: oklch(8% 0.012 250 / 80%);
 
     --color-water-1: oklch(27% 0.035 232);
@@ -237,7 +232,6 @@
   --color-line-soft: oklch(34% 0.012 250);
   --color-panel: oklch(23% 0.012 250);
   --color-nav: oklch(21% 0.03 250);
-  --color-shadow: oklch(5% 0.01 250 / 60%);
   --color-overlay: oklch(8% 0.012 250 / 80%);
 
   --color-water-1: oklch(27% 0.035 232);
