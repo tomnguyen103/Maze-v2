@@ -362,6 +362,7 @@ a:hover {
 }
 
 .labyrinth-panel {
+  --board-w: min(100%, max(16rem, calc(100dvh - 22rem)));
   width: 100%;
   min-width: 0;
   display: flex;
@@ -485,7 +486,7 @@ a:hover {
 /* The frame margin holds the Neatline ticks and the Grid reference. */
 .canvas-frame {
   position: relative;
-  width: min(100%, max(16rem, calc(100dvh - 19rem)));
+  width: var(--board-w);
   aspect-ratio: 1;
   margin-inline: auto;
   --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
@@ -717,14 +718,16 @@ kbd {
   font-weight: 700;
 }
 
-/* The ribbon is a paper band with an ink top rule. It overlays the board bottom inside the Neatline. */
+/* The ribbon is a reserved slot under the board: a paper band with an ink top rule that continues the Neatline bottom edge. */
 .event-ribbon {
-  position: absolute;
-  z-index: 2;
-  inset: auto var(--frame-pad) var(--frame-pad);
   display: flex;
-  min-height: 2.5rem;
-  padding: var(--space-2) var(--space-3);
+  width: var(--board-w);
+  height: 3rem; /* two label lines, so a long message never moves the page */
+  margin-inline: auto;
+  padding: var(--space-1) var(--space-3);
+  box-sizing: border-box;
+  overflow: hidden;
+  line-height: 1.25;
   align-items: center;
   justify-content: center;
   color: var(--color-ink);
@@ -1515,8 +1518,8 @@ body[data-run-mode="first-light"] .play-workbench {
     font-size: var(--text-label);
   }
 
-  .canvas-frame {
-    width: min(100%, max(40dvh, 6rem), 28rem);
+  .labyrinth-panel {
+    --board-w: min(100%, max(40dvh, 6rem), 28rem);
   }
 
   /* A touch player has no Q key; the hint only crowds the label. */
@@ -1599,8 +1602,8 @@ body[data-run-mode="first-light"] .play-workbench {
     max-width: 9rem;
   }
 
-  .canvas-frame {
-    width: min(100%, max(38dvh, 6rem), 26rem);
+  .labyrinth-panel {
+    --board-w: min(100%, max(38dvh, 6rem), 26rem);
   }
 
   .pulse-button small {
@@ -1636,8 +1639,8 @@ body[data-run-mode="first-light"] .play-workbench {
     width: 100%;
   }
 
-  .canvas-frame {
-    width: 100%;
+  .labyrinth-panel {
+    --board-w: 100%;
   }
 
   /* The frame sits 8px from the screen edge, so the ring offset shrinks to keep it inside the clip. */

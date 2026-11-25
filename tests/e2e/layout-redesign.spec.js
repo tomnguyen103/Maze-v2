@@ -341,7 +341,7 @@ test.describe("layout redesign & edge viewports", () => {
     { width: 375, height: 812 },
     { width: 1280, height: 800 }
   ]) {
-    test(`overlays the event ribbon on the board without a layout shift at ${vp.width}`, async ({ page }) => {
+    test(`reserves the event ribbon slot under the board without a layout shift at ${vp.width}`, async ({ page }) => {
       await page.setViewportSize(vp);
       await page.goto("/?seed=RIBBON-SHIFT&level=trail-scout");
       await expectGameReady(page);
@@ -369,13 +369,13 @@ test.describe("layout redesign & edge viewports", () => {
       expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
 
+      const maze = await page.locator("#maze-canvas").boundingBox();
       const frame = await page.locator("#canvas-frame").boundingBox();
       const band = await ribbon.boundingBox();
-      if (!frame || !band) throw new Error("Expected the board and the ribbon to render.");
-      expect(band.y, "ribbon sits on the board").toBeLessThan(frame.y + frame.height);
-      expect(band.y + band.height, "ribbon stays inside the board").toBeLessThanOrEqual(frame.y + frame.height);
-      expect(band.x).toBeGreaterThanOrEqual(frame.x);
-      expect(band.x + band.width).toBeLessThanOrEqual(frame.x + frame.width);
+      if (!maze || !frame || !band) throw new Error("Expected the board and the ribbon to render.");
+      expect(band.y, "ribbon sits below the maze").toBeGreaterThanOrEqual(maze.y + maze.height);
+      expect(band.x).toBeGreaterThanOrEqual(frame.x - 1);
+      expect(band.x + band.width).toBeLessThanOrEqual(frame.x + frame.width + 1);
       const rule = await ribbon.evaluate((el) => getComputedStyle(el).borderTopWidth);
       expect(parseFloat(rule), "ink top rule").toBeGreaterThan(0);
     });
