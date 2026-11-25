@@ -450,7 +450,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const color = gate.open
       ? gate.sealed
         ? palette.warden
-        : palette.explorer
+        : palette.light
       : palette.gate;
 
     // The Gate is a rounded arch door.
@@ -474,6 +474,11 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.moveTo(x + tile * 0.13 * scale, y - tile * 0.09 * scale);
       context.lineTo(x - tile * 0.13 * scale, y + tile * 0.17 * scale);
       context.stroke();
+      // The Gate Warden waits behind the seal: one small Signal light above the arch.
+      context.beginPath();
+      context.arc(x, y - half * 1.45, tile * 0.05 * scale, 0, Math.PI * 2);
+      context.fillStyle = palette.light;
+      context.fill();
     } else if (gate.open) {
       context.moveTo(x, y + tile * 0.18 * scale);
       context.lineTo(x, y - tile * 0.12 * scale);
@@ -513,7 +518,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.arc(source.x, source.y, tile * 0.18 * scale, 0, Math.PI * 2);
     context.fillStyle = palette.onFill;
     context.fill();
-    context.strokeStyle = palette.explorer;
+    context.strokeStyle = palette.light;
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -543,7 +548,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       y: (from.y + to.y) / 2
     };
     const scale = palette.markScale;
-    const color = bridge.open ? palette.explorer : palette.gate;
+    const color = bridge.open ? palette.light : palette.gate;
 
     context.save();
     context.strokeStyle = color;
@@ -598,7 +603,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const offsetX = horizontal ? 0 : offset;
     const offsetY = horizontal ? offset : 0;
     context.save();
-    context.strokeStyle = door.open ? palette.explorer : palette.gate;
+    context.strokeStyle = door.open ? palette.light : palette.gate;
     context.lineWidth = Math.max(2, tile * 0.065 * palette.markScale);
     context.lineCap = "round";
     context.setLineDash(door.open ? [] : [tile * 0.11, tile * 0.09]);
@@ -626,7 +631,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   function drawSignalBell(bell, tile) {
     const { x, y } = centerOf(bell, tile);
     const scale = palette.markScale;
-    const color = bell.spent ? palette.gate : palette.explorer;
+    const color = bell.spent ? palette.gate : palette.light;
     context.save();
     context.strokeStyle = color;
     context.fillStyle = palette.onFill;
@@ -665,6 +670,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const { x, y } = centerOf(warden, tile);
     const scale = palette.markScale;
     const radius = tile * 0.27 * scale;
+    // A dotted danger line rings the Warden, under its body.
+    context.beginPath();
+    context.arc(x, y, tile * 0.46 * scale, 0, Math.PI * 2);
+    context.setLineDash([Math.max(1, tile * 0.02), Math.max(2, tile * 0.05)]);
+    context.strokeStyle = palette.danger;
+    context.lineWidth = Math.max(1, tile * 0.02 * scale);
+    context.stroke();
+    context.setLineDash([]);
     // Each mode has its own silhouette: Patrol round, Hunt pointed,
     // Intercept chevron, Lured ringed.
     context.beginPath();
@@ -685,7 +698,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
-    context.strokeStyle = palette.night;
+    context.strokeStyle = palette.land;
     context.lineWidth = Math.max(1, tile * 0.025 * scale);
     context.lineJoin = "round";
     context.stroke();
@@ -697,9 +710,9 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.stroke();
     }
 
-    // Each mode keeps its own face too, so the mode never rests on shape alone.
-    context.fillStyle = palette.night;
-    context.strokeStyle = palette.night;
+    // Each mode keeps its own paper face too, so the mode never rests on shape alone.
+    context.fillStyle = palette.land;
+    context.strokeStyle = palette.land;
     context.lineCap = "round";
     context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
 

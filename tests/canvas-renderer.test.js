@@ -431,7 +431,7 @@ describe("Canvas renderer", () => {
     expect(faces).not.toContain(quiet.calls.join(" "));
   });
 
-  it("draws Echo numbers and Warden faces in the dark foreground", () => {
+  it("draws Echo numbers in the dark foreground and Warden faces in paper", () => {
     const { context, renderer } = stubCanvas();
     const run = questRun("WARDEN-FACES", "trail-scout", 9);
     /** @type {string[]} */
@@ -450,6 +450,7 @@ describe("Canvas renderer", () => {
       markFills.push(fillStyle);
     });
     document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
+    document.body.style.setProperty("--color-land", "rgb(11, 12, 13)");
     document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
 
     renderer.render({
@@ -467,7 +468,7 @@ describe("Canvas renderer", () => {
     expect(textFills).toEqual([["1", "rgb(7, 8, 9)"]]);
     const wardenBody = markFills.indexOf("rgb(200, 0, 0)");
     expect(wardenBody).toBeGreaterThan(-1);
-    expect(markFills[wardenBody + 1]).toBe("rgb(7, 8, 9)");
+    expect(markFills[wardenBody + 1]).toBe("rgb(11, 12, 13)");
   });
 
   it("writes the pause overlay text in the on-fill color", () => {
@@ -611,6 +612,54 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const dot = paints.find((paint) => paint.kind === "fill" && paint.style === "rgb(6, 6, 6)");
     expect(dot?.path).toHaveLength(1);
     expect(dot?.path[0].startsWith("arc(480.00,480.00,")).toBe(true);
+  });
+
+  it("US-02.1 rings each Warden with a dotted danger line and paints it only as a stroke", () => {
+    document.body.style.setProperty("--color-danger-line", "rgb(3, 3, 3)");
+    document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    /** @type {number[]} */
+    let dash = [];
+    /** @type {Array<number[]>} */
+    const dashAtStroke = [];
+    context.setLineDash = vi.fn((/** @type {number[]} */ pattern) => {
+      dash = pattern;
+    });
+    const stroke = context.stroke;
+    context.stroke = vi.fn(() => {
+      dashAtStroke.push(dash);
+      stroke();
+    });
+
+    renderer.render(
+      board({ revealed: ["1,1"], wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }] })
+    );
+
+    const strokes = paints.filter((paint) => paint.kind === "stroke");
+    const index = strokes.findIndex((paint) => paint.style === "rgb(3, 3, 3)");
+    expect(index).toBeGreaterThan(-1);
+    expect(strokes[index].path).toEqual(["arc(480.00,480.00,147.20,0.00,6.28)"]);
+    expect(dashAtStroke[index].length).toBeGreaterThan(0);
+    expect(dash).toEqual([]);
+    expect(paints.some((paint) => paint.kind === "fill" && paint.style === "rgb(3, 3, 3)")).toBe(false);
+  });
+
+  it("US-02.1 shows the Signal light only on the open sealed Gate and on lit states", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
+    const lightMarks = (/** @type {{ open: boolean, sealed?: boolean }} */ state) => {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, ...state } }));
+      return paints.filter((paint) => paint.style === "rgb(9, 9, 1)");
+    };
+
+    expect(lightMarks({ open: false })).toHaveLength(0);
+    expect(lightMarks({ open: true, sealed: false }).length).toBeGreaterThan(0);
+    const sealed = lightMarks({ open: true, sealed: true });
+    expect(sealed).toHaveLength(1);
+    expect(sealed[0].kind).toBe("fill");
   });
 
   it("US-01.1 gives every board mark a row, and the two Night blocks the same rows", () => {
