@@ -389,7 +389,9 @@ test.describe("layout redesign & edge viewports", () => {
   // The landing chart follows the Theme Choice; the OS scheme is only the fallback.
   for (const [os, choice] of [
     ["dark", "light"],
-    ["light", "dark"]
+    ["light", "dark"],
+    ["dark", "dark"],
+    ["light", "light"]
   ]) {
     test(`shows the ${choice} chart for a ${choice} Theme Choice on a ${os} OS`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
@@ -404,13 +406,15 @@ test.describe("layout redesign & edge viewports", () => {
     });
   }
 
-  test("falls back to the OS scheme for the landing chart when no Theme Choice is set", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/");
-    const visible = page.locator(".landing-hero__chart:visible");
-    await expect(visible).toHaveCount(1);
-    await expect(visible).toHaveAttribute("src", "/landing-chart-night.webp");
-  });
+  for (const os of ["dark", "light"]) {
+    test(`falls back to a ${os} OS scheme for the landing chart when no Theme Choice is set`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
+      await page.goto("/");
+      const visible = page.locator(".landing-hero__chart:visible");
+      await expect(visible).toHaveCount(1);
+      await expect(visible).toHaveAttribute("src", `/landing-chart-${os === "dark" ? "night" : "light"}.webp`);
+    });
+  }
 
   // Focus order: the pad comes before Pause and Pulse, as drawn.
   test("keeps the Action rail focus order equal to the visual order", async ({ page }) => {

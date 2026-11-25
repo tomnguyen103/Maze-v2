@@ -186,7 +186,7 @@ describe("US-03 and US-04 — the landing hero shows the demo, the price and one
   it("US-03.1 shows a gameplay crop with alt text and 4:3 size in both markups", () => {
     for (const markup of markups()) {
       expect(markup).toMatch(
-        /<img class="landing-hero__chart landing-hero__chart--light" src="\/landing-chart-light\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" loading="lazy">\s*<img class="landing-hero__chart landing-hero__chart--night" src="\/landing-chart-night\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" loading="lazy">/
+        /<img class="landing-hero__chart landing-hero__chart--light" src="\/landing-chart-light\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" fetchpriority="high">\s*<img class="landing-hero__chart landing-hero__chart--night" src="\/landing-chart-night\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" loading="lazy">/
       );
     }
   });
