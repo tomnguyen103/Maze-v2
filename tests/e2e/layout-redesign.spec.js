@@ -328,4 +328,11 @@ test.describe("layout redesign & edge viewports", () => {
     const tile = canvas.width / 13;
     expect(canvas.y + tile, "first tile bottom edge").toBeLessThanOrEqual(375);
   });
+
+  // The hidden attribute keeps the Classroom tab out of the header for a guest.
+  test("hides the Classroom tab for a guest", async ({ page }) => {
+    await page.goto("/?seed=BOARD-GUEST&level=trail-scout");
+    await expectGameReady(page);
+    await expect(page.locator("#classroom-link")).toBeHidden();
+  });
 });

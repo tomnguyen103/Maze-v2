@@ -258,7 +258,6 @@ a:hover {
   border-color: var(--color-ink-muted);
 }
 
-.command-bar__actions > [aria-current="page"],
 .command-bar__actions > [aria-pressed="true"]:hover {
   border-color: var(--color-ink);
 }
@@ -287,6 +286,10 @@ a:hover {
 .control-link:hover {
   background: var(--color-water-1);
   text-decoration: none;
+}
+
+.control-link[hidden] {
+  display: none;
 }
 
 .theme-button {
