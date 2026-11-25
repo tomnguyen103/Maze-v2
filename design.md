@@ -112,6 +112,9 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - The mobile breakpoint is 768px. On a portrait phone the board fills the width at 768px
   and below. The two-column play layout collapses at 48rem.
 - Buttons use a 4px radius. Panels use a 1px ink border and no shadow.
+- Tags and badges use a 4px radius and a 1px ink border. Class and Admin share the shell
+  bar, the ink borders, and the Button tiers.
+- `tokens.css` defines no pill radius and no drop-shadow token.
 - Headers are solid and opaque. A header has no blur and no translucent fill.
 - Dashboard tab strips use an underline. The active tab shows a Signal underline.
 
@@ -130,9 +133,14 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 ## Atlas
 
 - The Atlas draws five territories as inline SVG. Each territory fills with its Region
-  Hue wash.
-- Dashed trails join the landmarks. Landmark stamps mark each completed Labyrinth.
-- Gate flags mark each Gate Warden milestone.
+  Hue wash. The SVG uses `xMidYMid meet`, so the drawing fits its frame and never clips.
+- The status strip and the toolbar are ruled rows above the map. The pressed toggle fills
+  with ink.
+- Landmarks are Stamps: a circled number, dashed when ahead, filled with ink when
+  complete, and outlined when current. A Gate Warden milestone fills with Signal deep.
+- Fossil, sigil, and state tags are 4px-radius tags with an ink outline. They are not pills.
+- At 58rem and below the map shows first. The landmark detail is a bottom sheet pinned
+  inside the dialog, and its height is at most 20rem or 40dvh.
 - Any two territory fills differ. Each fill keeps 3:1 against the Atlas ground.
 - An unknown Region id draws the neutral wash.
 
@@ -161,7 +169,9 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - **Title block**: a corner block with two rules. The Labyrinth number sets in Archivo.
   The level and ruleset set in body type. The seed and date share one caption line.
 - **Scale bar**: the Quest Level ladder on the landing.
-- **Ruled ledger**: hairline rows, tabular numbers, and a running head per band.
+- **Ruled ledger**: one 1px ink rule per row, tabular numbers, and a running head per
+  band. Records seeds and counts set in Geist Mono. The Journal and Replay pages use the
+  same rows.
 - **Stamps**: a circled number per completed Labyrinth. It is filled when complete and
   dashed when ahead. A Signal flag marks a Gate Warden.
 - **Compass rose**: one, on the landing only.
@@ -197,7 +207,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - Red on the board.
 - Headline eyebrows and middle-dot meta strings.
 - Unicode glyphs as icons.
-- Pill buttons.
+- Pill buttons and pill tags.
 - Glass blur.
 - Nested cards.
 - Drop shadows on the play screen panels.
