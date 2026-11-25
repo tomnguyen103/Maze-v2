@@ -1733,6 +1733,9 @@ window.addEventListener("resize", () => {
   renderer.render(run);
 });
 
+// The Grid reference measures its labels, so it repaints once Geist Mono has loaded.
+void document.fonts?.ready.then(() => renderer.render(run));
+
 window.addEventListener("online", () => {
   void loadOfflineContinuityBridge()
     .then((bridge) => bridge.online())

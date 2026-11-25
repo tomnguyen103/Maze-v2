@@ -100,6 +100,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
 
   /** The Fog fills flat when no tile context exists. */
   function fogFill() {
+    // High contrast paints the Fog flat: no stipple.
+    if (palette.strong) return palette.fog;
     const unit = devicePixel();
     const side = FOG_TILE * unit;
     return (
@@ -131,13 +133,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
    * @param {number} tile
    */
   function traceTile(row, col, tile) {
-    const left = Math.floor(col * tile);
-    const top = Math.floor(row * tile);
+    // The edges round like the coastline edges, so no land strip shows on the water side.
+    const left = Math.round(col * tile);
+    const top = Math.round(row * tile);
     context.rect(
       left,
       top,
-      Math.ceil((col + 1) * tile) - left,
-      Math.ceil((row + 1) * tile) - top
+      Math.round((col + 1) * tile) - left,
+      Math.round((row + 1) * tile) - top
     );
   }
 
@@ -333,16 +336,23 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     neat.stroke();
     neat.fillStyle = palette.ink;
     neat.font = `${10 * deviceRatio}px ${palette.fontMono}`;
+    // Every tick stays. Label every k-th line, with k the smallest step whose pitch fits the widest label.
+    const labelWidth = neat.measureText(String(size)).width + 2 * unit;
+    const step = [1, 2, 5, 10].find((candidate) => (candidate * side) / size >= labelWidth) ?? 10;
+    const labelled = (/** @type {number} */ index) =>
+      index === 0 || index === size - 1 || (index % step === 0 && size - 1 - index >= step);
     // Column letters sit centred above the top ticks. Row numbers end right at the left ticks.
     neat.textAlign = "center";
     neat.textBaseline = "bottom";
     for (let index = 0; index < size; index += 1) {
+      if (!labelled(index)) continue;
       const middle = ((index + 0.5) * side) / size;
       neat.fillText(String.fromCharCode(65 + index), left + middle, top - unit - tick - gap);
     }
     neat.textAlign = "right";
     neat.textBaseline = "middle";
     for (let index = 0; index < size; index += 1) {
+      if (!labelled(index)) continue;
       const middle = ((index + 0.5) * side) / size;
       neat.fillText(String(index + 1), left - unit - tick - gap, top + middle);
     }
@@ -432,7 +442,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
    */
   function drawCoastline(run, revealed, tile) {
     const size = run.labyrinth.length;
-    const width = Math.max(1, Math.round(tile * 0.06));
+    // High contrast doubles the line.
+    const width = Math.max(1, Math.round(tile * 0.06)) * (palette.strong ? 2 : 1);
     // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
     // Along the edge, the ends sit on whole pixels.
     const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
@@ -516,7 +527,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.stroke();
 
     context.save();
-    context.fillStyle = palette.night;
+    context.fillStyle = palette.echoText;
     context.font =
       `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
@@ -552,6 +563,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
 
     context.beginPath();
     if (gate.open && gate.sealed) {
+      // The arch fill is white in every theme, so the X takes the night ink, not the Night-light Warden ink.
+      context.strokeStyle = palette.night;
       context.moveTo(x - tile * 0.13 * scale, y - tile * 0.09 * scale);
       context.lineTo(x + tile * 0.13 * scale, y + tile * 0.17 * scale);
       context.moveTo(x + tile * 0.13 * scale, y - tile * 0.09 * scale);
@@ -571,7 +584,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.stroke();
     } else {
       context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
-      context.fillStyle = palette.onFill;
+      context.fillStyle = palette.land;
       context.fill();
       context.fillRect(
         x - tile * 0.025 * scale,
@@ -755,7 +768,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const radius = tile * 0.27 * scale;
     // A dotted danger line rings the Warden, under its body.
     context.beginPath();
-    context.arc(x, y, tile * 0.46 * scale, 0, Math.PI * 2);
+    context.arc(x, y, Math.min(tile * 0.46 * scale, tile * 0.48), 0, Math.PI * 2);
     context.setLineDash([Math.max(1, tile * 0.02), Math.max(2, tile * 0.05)]);
     context.strokeStyle = palette.danger;
     context.lineWidth = Math.max(1, tile * 0.02 * scale);
@@ -895,6 +908,7 @@ function readPalette() {
     coastline: color("--color-coastline", FALLBACK_PALETTE.coastline),
     danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
+    echoText: color("--color-board-echo-text", FALLBACK_PALETTE.echoText),
     boardInk: color("--color-board-ink", FALLBACK_PALETTE.boardInk),
     explorer: color("--color-board-explorer", FALLBACK_PALETTE.explorer),
     explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
@@ -914,6 +928,7 @@ function readPalette() {
     onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
+    strong: document.documentElement.dataset.accessContrast === "strong",
     warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
   };
 }
@@ -925,6 +940,7 @@ const FALLBACK_PALETTE = {
   coastline: "oklch(18% 0.012 250)",
   danger: "oklch(18% 0.012 250)",
   echo: "oklch(52% 0.17 250)",
+  echoText: "oklch(100% 0 0)",
   explorer: "oklch(46% 0.17 250)",
   explorerDisc: "oklch(99% 0.004 95)",
   explorerRing: "oklch(18% 0.012 250)",

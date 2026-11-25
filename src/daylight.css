@@ -62,6 +62,7 @@ body {
   --color-board-gate: var(--board-gate);
   --color-board-light: var(--board-gate);
   --color-board-echo: var(--board-echo);
+  --color-board-echo-text: var(--board-echo-text);
 }
 
 :root[data-playground-palette="twilight"] {

@@ -98,6 +98,7 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
       neatTexts.push({ text, x, y, align: neatContext.textAlign, baseline: neatContext.textBaseline });
     }),
     font: "",
+    measureText: vi.fn((/** @type {string} */ text) => ({ width: text.length * 6 })),
     lineTo: vi.fn(() => neatPaths.push("lineTo")),
     lineWidth: 0,
     moveTo: vi.fn(() => neatPaths.push("moveTo")),
@@ -320,6 +321,13 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-echo", "--color-passage", 3],
   ["--color-board-light", "--color-passage", 3],
   ["--color-fog-dot", "--color-fog", 3],
+  // The Fog dots carry the known/unknown edge, because the Fog fill is close to the Passage.
+  ["--color-fog-dot", "--color-passage", 3],
+  // The Echo pair number sits on the Echo fill.
+  ["--color-board-echo-text", "--color-board-echo", 4.5],
+  // The closed Gate keyhole is paper-coloured and the sealed Gate X is night ink: each reads on its own fill.
+  ["--color-land", "--color-board-gate", 3],
+  ["--color-night-deep", "--color-on-fill", 3],
   // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
   ["--color-board-explorer", DISC, 3],
   ["--color-board-explorer-ring", DISC, 4.5],
@@ -399,6 +407,7 @@ function board(overrides) {
 describe("Canvas renderer", () => {
   afterEach(() => {
     document.body.removeAttribute("style");
+    document.documentElement.removeAttribute("data-access-contrast");
   });
 
   it("draws numbered Echo Bridge pairs through Fog", () => {
@@ -651,7 +660,7 @@ describe("Canvas renderer", () => {
     context.fill = vi.fn(() => {
       markFills.push(fillStyle);
     });
-    document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
+    document.body.style.setProperty("--color-board-echo-text", "rgb(7, 8, 9)");
     document.body.style.setProperty("--color-land", "rgb(11, 12, 13)");
     document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
 
@@ -685,6 +694,118 @@ describe("Canvas renderer", () => {
     expect(neat.labels).toEqual(["A", "B", "1", "2"]);
     expect(neat.fonts.every((font) => font.startsWith("10px "))).toBe(true);
     expect(neat.overlay.width).toBe(676);
+  });
+
+  it("US-02.1 draws the Echo pair number in the Echo text token", () => {
+    document.body.style.setProperty("--color-board-echo-text", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
+    const { context, renderer } = stubCanvas();
+    let fillStyle = "";
+    Object.defineProperty(context, "fillStyle", {
+      get: () => fillStyle,
+      set: (value) => {
+        fillStyle = value;
+      }
+    });
+    /** @type {string[]} */
+    const textStyles = [];
+    context.fillText = vi.fn(() => textStyles.push(fillStyle));
+
+    renderer.render(board({ revealed: ["1,1"], echoes: [{ row: 1, col: 1, collected: false }] }));
+
+    expect(textStyles).toEqual(["rgb(1, 2, 3)"]);
+  });
+
+  it("US-02.1 draws the closed Gate keyhole in the land colour, not the on-fill white", () => {
+    document.body.style.setProperty("--color-land", "rgb(11, 12, 13)");
+    document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, open: false } }));
+
+    const fills = paints.filter((paint) => paint.kind === "fill");
+    expect(fills.some((paint) => paint.style === "rgb(11, 12, 13)" && paint.path[0].startsWith("arc("))).toBe(true);
+    expect(fills.some((paint) => paint.style === "rgb(250, 250, 250)")).toBe(false);
+  });
+
+  it("US-02.1 draws the sealed Gate X in the night ink, not the Warden ink", () => {
+    document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
+    document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, open: true, sealed: true } }));
+
+    const cross = paints.filter((paint) => paint.kind === "stroke" && paint.path[0].startsWith("moveTo("));
+    expect(cross).toHaveLength(1);
+    expect(cross[0].style).toBe("rgb(7, 8, 9)");
+  });
+
+  it("US-02.1 clamps the Warden danger ring inside its tile at the large mark scale", () => {
+    document.body.style.setProperty("--maze-mark-scale", "1.22");
+    document.body.style.setProperty("--color-danger-line", "rgb(3, 3, 3)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["1,1"], wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }] }));
+
+    const ring = paints.find((paint) => paint.kind === "stroke" && paint.style === "rgb(3, 3, 3)");
+    const radius = Number(ring?.path[0].match(/^arc\([^,]+,[^,]+,([^,]+),/)?.[1]);
+    expect(radius).toBeLessThanOrEqual(320 * 0.48 + 0.005);
+    expect(radius).toBeGreaterThan(0);
+  });
+
+  it("US-03.1 labels every index on a wide board and every k-th index on a narrow one", () => {
+    const wide = stubCanvas({ width: 640, neatline: true });
+    wide.renderer.render(board({ revealed: ["0,0"] }));
+    expect(wide.neat.labels).toEqual(["A", "B", "1", "2"]);
+
+    const labyrinth = Array.from({ length: 23 }, () => Array.from({ length: 23 }, () => 0));
+    const narrow = stubCanvas({ width: 114, neatline: true });
+    narrow.renderer.render(board({ labyrinth, revealed: ["0,0"] }));
+    // Pitch is about 5px and the label 14px, so k is 5. The first and the last index stay labelled.
+    expect(narrow.neat.labels.filter((text) => /^\d+$/.test(text)).map(Number)).toEqual([1, 6, 11, 16, 23]);
+    expect(narrow.neat.labels.filter((text) => /^[A-Z]$/.test(text))).toEqual(["A", "F", "K", "P", "W"]);
+    // Every tick stays: 24 lines on four edges.
+    expect(narrow.neat.paths.filter((step) => step === "moveTo")).toHaveLength(4 * 24);
+  });
+
+  it("US-01.2 doubles the Coastline and fills the Fog flat in high contrast", () => {
+    /** @param {boolean} strong */
+    const measure = (strong) => {
+      if (strong) document.documentElement.dataset.accessContrast = "strong";
+      const { context, renderer, tiles } = stubCanvas();
+      /** @type {number[]} */
+      const widths = [];
+      const stroke = context.stroke;
+      context.stroke = vi.fn(() => {
+        widths.push(/** @type {{ lineWidth: number }} */ (/** @type {unknown} */ (context)).lineWidth);
+        stroke();
+      });
+      renderer.render(board({ revealed: ["0,0", "0,1"] }));
+      document.documentElement.removeAttribute("data-access-contrast");
+      return { coast: widths[0], fogTile: tiles.some((tile) => tile.width === 8) };
+    };
+
+    const normal = measure(false);
+    const strong = measure(true);
+    expect(strong.coast).toBe(normal.coast * 2);
+    expect(normal.fogTile).toBe(true);
+    expect(strong.fogTile).toBe(false);
+  });
+
+  it("US-01.2 snaps land fills to the coastline edges at a fractional tile size", () => {
+    const labyrinth = Array.from({ length: 23 }, (_, row) =>
+      Array.from({ length: 23 }, (_, col) => (row === 0 && col === 1 ? 1 : 0))
+    );
+    const { context, renderer } = stubCanvas({ width: 160 });
+    const paints = recordPaints(context);
+
+    renderer.render(board({ labyrinth, revealed: ["0,0", "0,1"] }));
+
+    // 320 / 23 = 13.91: the wall at column 1 spans 14 to 28, the rounded coastline edges.
+    expect(paints.some((paint) => paint.kind === "fill" && paint.path.includes("rect(14.00,0.00,14.00,14.00)"))).toBe(true);
   });
 
   it("US-03.1 skips the Neatline when the frame has no overlay canvas", () => {

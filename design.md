@@ -42,7 +42,7 @@ values. The three water screens are literal values in each block, never aliases.
 
 ### Board marks
 
-Each mark names its token in `tokens.css` and the ground it sits on. Non-text marks reach 3:1 against that ground. Text reaches 4.5:1.
+Each mark names its token in `tokens.css` and the ground it sits on. Non-text marks reach 3:1 against that ground. Text reaches 4.5:1. The Fog fill stays close to the Passage, so the Fog dot carries the known/unknown edge at 3:1 against the Passage.
 
 | Mark | Light | Night | Ground |
 | :-- | :-- | :-- | :-- |
@@ -50,12 +50,13 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 | Hatch | `oklch(18% 0.012 250 / 30%)` | `oklch(95% 0.006 95 / 30%)` | Land |
 | Coastline | Ink | Ink | Passage and Land |
 | Passage (water) | `oklch(95.5% 0.022 232)` | `oklch(32% 0.04 232)` | Land |
-| Fog | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` | Passage |
-| Fog dot | `oklch(18% 0.012 250 / 80%)` | `oklch(95% 0.006 95 / 70%)` | Fog |
+| Fog | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` | none (the Fog dot marks the edge) |
+| Fog dot | `oklch(18% 0.012 250 / 80%)` | `oklch(95% 0.006 95 / 70%)` | Fog and Passage |
 | Explorer | `oklch(46% 0.17 250)` | `oklch(74% 0.13 250)` | Land |
 | Explorer ring | Ink | Ink | Passage |
 | Warden and Danger line | Ink | Ink | Passage |
 | Echo | `oklch(52% 0.17 250)` | `oklch(74% 0.13 250)` | Passage |
+| Echo number | `oklch(100% 0 0)` | `oklch(18% 0.012 250)` | Echo |
 | Gate | `oklch(58% 0.24 340)` | `oklch(70% 0.2 340)` | Passage |
 | Signal light on the board | Gate | Signal | Passage |
 
