@@ -181,35 +181,6 @@ const BOARD_ROWS = [
   "--color-board-light"
 ];
 
-/** Non-text pairs from the spec: a mark must reach 3:1 against the ground it sits on. */
-const BOARD_PAIRS = [
-  ["--color-coastline", "--color-passage"],
-  ["--color-coastline", "--color-land"],
-  ["--color-board-explorer-ring", "--color-passage"],
-  ["--color-board-warden", "--color-passage"],
-  ["--color-danger-line", "--color-passage"],
-  ["--color-board-gate", "--color-passage"],
-  ["--color-board-echo", "--color-passage"],
-  ["--color-board-light", "--color-passage"],
-  ["--color-explorer", "--color-land"]
-];
-
-/**
- * Reads a token as oklab and follows `var()` inside the scope first, then the light scope.
- * @param {string} scope
- * @param {string} name
- * @returns {number[]}
- */
-function boardColor(scope, name) {
-  let value;
-  try {
-    value = canvasToken(scope, name);
-  } catch {
-    value = canvasToken(LIGHT, name);
-  }
-  return value.startsWith("var(") ? boardColor(scope, value.slice(4, -1)) : oklabOf(value);
-}
-
 /**
  * Parses an `oklch(L% C H)` value into oklab [L, a, b].
  * @param {string} value
@@ -228,25 +199,122 @@ function oklabOf(value) {
 
 const unit = (/** @type {number} */ value) => Math.min(1, Math.max(0, value));
 
+const daylightCss = readFileSync(resolve(process.cwd(), "src/daylight.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+/**
+ * Reads every `--name: value;` row of a CSS block into a map.
+ * @param {string} block
+ * @returns {Map<string, string>}
+ */
+function declarationsOf(block) {
+  return new Map([...block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((hit) => [hit[1], hit[2].trim()]));
+}
+
+/**
+ * Reads the rows of every daylight.css rule whose selector list holds `selector`, in file order.
+ * @param {string} selector
+ */
+function daylightScope(selector) {
+  /** @type {Map<string, string>} */
+  const rows = new Map();
+  for (const rule of daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!rule[1].split(",").some((part) => part.trim() === selector)) continue;
+    for (const [name, value] of declarationsOf(rule[2])) rows.set(name, value);
+  }
+  return rows;
+}
+
+const LIGHT_TOKENS = declarationsOf(LIGHT);
+const THEMES = /** @type {Record<string, Map<string, string>>} */ ({
+  light: LIGHT_TOKENS,
+  night: new Map([...LIGHT_TOKENS, ...declarationsOf(NIGHT_EXPLICIT)])
+});
+const MODES = /** @type {Record<string, string | null>} */ ({
+  default: null,
+  twilight: ':root[data-playground-palette="twilight"]',
+  "sea-glass": ':root[data-playground-palette="sea-glass"]',
+  dusk: ':root[data-playground-palette="dusk"]',
+  strong: ':root[data-access-contrast="strong"]'
+});
+const EXPLORER_PALETTES = /** @type {Record<string, string | null>} */ ({
+  default: null,
+  sunset: ':root[data-explorer-palette="sunset"]',
+  violet: ':root[data-explorer-palette="violet"]',
+  gold: ':root[data-explorer-palette="gold"]'
+});
+const DISC = "--color-board-explorer-disc";
+
+/**
+ * Resolves a token through `var()` to an oklab colour with its alpha.
+ * @param {Map<string, string>} tokens
+ * @param {string} name
+ * @returns {{ lab: number[], alpha: number }}
+ */
+function resolveColor(tokens, name) {
+  const value = tokens.get(name);
+  if (value === undefined) throw new Error(`missing token ${name}`);
+  const reference = value.match(/^var\((--[\w-]+)\)$/);
+  if (reference) return resolveColor(tokens, reference[1]);
+  const [color, alpha] = value.split(" / ");
+  return {
+    lab: oklabOf(alpha ? `${color})` : color),
+    alpha: alpha ? Number.parseFloat(alpha) / 100 : 1
+  };
+}
+
 /** @param {number[]} lab */
-function relativeLuminance([L, a, b]) {
+function gammaRgb([L, a, b]) {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  const red = unit(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
-  const green = unit(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
-  const blue = unit(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  ].map((channel) => {
+    const linear = unit(channel);
+    return linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055;
+  });
+}
+
+/** @param {number[]} rgb */
+function luminanceOf(rgb) {
+  const [red, green, blue] = rgb.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  );
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 /**
- * @param {number[]} first
- * @param {number[]} second
+ * Contrast of a mark over an opaque ground. A translucent mark blends in gamma sRGB, as a canvas does.
+ * @param {{ lab: number[], alpha: number }} mark
+ * @param {{ lab: number[], alpha: number }} ground
  */
-function contrastRatio(first, second) {
-  const [light, dark] = [relativeLuminance(first), relativeLuminance(second)].sort((x, y) => y - x);
+function contrastOver(mark, ground) {
+  const under = gammaRgb(ground.lab);
+  const blended = gammaRgb(mark.lab).map((channel, index) => channel * mark.alpha + under[index] * (1 - mark.alpha));
+  const [light, dark] = [luminanceOf(blended), luminanceOf(under)].sort((x, y) => y - x);
   return (light + 0.05) / (dark + 0.05);
 }
+
+/** Board contrast pairs: a mark, the ground it sits on, and its floor in default and strong modes. */
+const BOARD_PAIRS = /** @type {const} */ ([
+  ["--color-coastline", "--color-passage", 3],
+  ["--color-coastline", "--color-land", 3],
+  ["--color-board-explorer-ring", "--color-passage", 3],
+  ["--color-board-warden", "--color-passage", 3],
+  ["--color-danger-line", "--color-passage", 3],
+  ["--color-board-gate", "--color-passage", 3],
+  ["--color-board-echo", "--color-passage", 3],
+  ["--color-board-light", "--color-passage", 3],
+  ["--color-fog-dot", "--color-fog", 3],
+  // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
+  ["--color-explorer", DISC, 3],
+  ["--color-board-explorer-ring", DISC, 3],
+  // Pulse is a wash, so it needs only to show.
+  ["--color-pulse", "--color-passage", 1.2],
+  ["--color-pulse", "--color-land", 1.2]
+]);
 
 /**
  * Records every fill and stroke with its paint style and the path behind it.
@@ -849,6 +917,22 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(dot?.path[0].startsWith("arc(480.00,480.00,")).toBe(true);
   });
 
+  it("US-02.1 fills the Explorer disc with the theme paper token, not the on-fill colour", () => {
+    document.body.style.setProperty("--color-board-explorer-disc", "rgb(8, 8, 8)");
+    document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 }, revealed: ["1,1"] }));
+
+    const disc = paints.find((paint) => paint.kind === "fill" && paint.style === "rgb(8, 8, 8)");
+    expect(disc?.path).toEqual(["arc(480.00,480.00,102.40,0.00,6.28)"]);
+    const onFillArcs = paints.filter(
+      (paint) => paint.style === "rgb(250, 250, 250)" && paint.path.includes("arc(480.00,480.00,102.40,0.00,6.28)")
+    );
+    expect(onFillArcs).toHaveLength(0);
+  });
+
   it("US-02.1 rings each Warden with a dotted danger line and paints it only as a stroke", () => {
     document.body.style.setProperty("--color-danger-line", "rgb(3, 3, 3)");
     document.body.style.setProperty("--color-board-warden", "rgb(200, 0, 0)");
@@ -912,15 +996,78 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(rows(NIGHT_SYSTEM)).toEqual(rows(NIGHT_EXPLICIT));
   });
 
-  it("US-01.2 keeps every board mark at 3:1 against the passage or the land in light and Night", () => {
-    for (const scope of SCOPES) {
-      for (const [mark, ground] of BOARD_PAIRS) {
-        expect(
-          contrastRatio(boardColor(scope, mark), boardColor(scope, ground)),
-          `${mark} on ${ground}`
-        ).toBeGreaterThanOrEqual(3);
+  it("US-01.2 keeps every board mark at its floor in each theme, mode and Explorer palette", () => {
+    /** @type {string[]} */
+    const failures = [];
+    for (const [theme, base] of Object.entries(THEMES)) {
+      for (const [mode, modeSelector] of Object.entries(MODES)) {
+        for (const [palette, paletteSelector] of Object.entries(EXPLORER_PALETTES)) {
+          const tokens = new Map([
+            ...base,
+            ...(modeSelector ? daylightScope(modeSelector) : []),
+            ...(paletteSelector ? daylightScope(paletteSelector) : [])
+          ]);
+          for (const [mark, ground, floor] of BOARD_PAIRS) {
+            // Strong contrast lifts every pair on the passage and the land to 4.5:1.
+            const needed = mode === "strong" && floor === 3 && ground !== DISC ? 4.5 : floor;
+            const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
+            if (ratio < needed) {
+              failures.push(`${theme}/${mode}/${palette}: ${mark} on ${ground} ${ratio.toFixed(2)} < ${needed}`);
+            }
+          }
+        }
       }
     }
+    expect(failures).toEqual([]);
+  });
+
+  it("US-01.2 keeps the Pulse wash translucent and the coastline opaque in each theme and mode", () => {
+    for (const base of Object.values(THEMES)) {
+      for (const selector of Object.values(MODES)) {
+        const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
+        const { alpha } = resolveColor(tokens, "--color-pulse");
+        expect(alpha).toBeGreaterThanOrEqual(0.2);
+        expect(alpha).toBeLessThanOrEqual(0.4);
+        expect(resolveColor(tokens, "--color-coastline").alpha).toBe(1);
+      }
+    }
+  });
+
+  it("US-01.3 makes every fallback palette colour equal the resolved light token", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/game/canvas-renderer.js"), "utf8");
+    const fallbackBlock = source.match(/const FALLBACK_PALETTE = \{([^}]*)\};/)?.[1] ?? "";
+    const fallbacks = new Map(
+      [...fallbackBlock.matchAll(/(\w+): "([^"]*)"/g)].map((hit) => [hit[1], hit[2]])
+    );
+    const reads = [...source.matchAll(/(\w+): color\("(--[\w-]+)", FALLBACK_PALETTE\.(\w+)\)/g)];
+    /** @param {string} name @returns {string} */
+    const resolveRaw = (name) => {
+      const value = LIGHT_TOKENS.get(name) ?? "";
+      const reference = value.match(/^var\((--[\w-]+)\)$/);
+      return reference ? resolveRaw(reference[1]) : value;
+    };
+
+    expect(reads.length).toBeGreaterThan(10);
+    for (const [, key, token, fallbackKey] of reads) {
+      expect(fallbackKey).toBe(key);
+      // Font stacks are not colours, so they stay out of this parity.
+      if (key.startsWith("font")) continue;
+      expect(fallbacks.get(key), `${key} fallback vs ${token}`).toBe(resolveRaw(token));
+    }
+    expect([...fallbacks.keys()].sort()).toEqual(reads.map((hit) => hit[1]).sort());
+  });
+
+  it("US-03.1 draws the board focus ring on the frame edge and not on the canvas", () => {
+    const ruleOf = (/** @type {string} */ selector) =>
+      [...daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((rule) =>
+        rule[1].split(",").some((part) => part.trim() === selector)
+      )?.[2] ?? "";
+
+    expect(ruleOf("#maze-canvas:focus-visible")).toMatch(/outline:\s*none/);
+    expect(ruleOf("#maze-canvas:focus")).toMatch(/outline:\s*none/);
+    const frame = ruleOf(".canvas-frame:has(#maze-canvas:focus-visible)");
+    expect(frame).toMatch(/outline:\s*0\.2rem solid var\(--color-focus\)/);
+    expect(frame).toMatch(/outline-offset:\s*0\.2rem/);
   });
 
   it("US-08.1 leaves the passage colour to the canvas tokens, so no Region theme tints it", () => {

@@ -41,51 +41,49 @@ body {
   --color-explorer-bright: var(--color-explorer-gold-bright);
 }
 
+/* A forced mode paints a light passage in every theme, so its marks keep the light ink. */
+:root[data-playground-palette="twilight"],
+:root[data-playground-palette="sea-glass"],
+:root[data-playground-palette="dusk"],
+:root[data-access-contrast="strong"] {
+  --color-land: var(--board-paper);
+  --color-hatch: var(--board-hatch);
+  --color-fog-dot: var(--board-fog-dot);
+  --color-coastline: var(--board-ink);
+  --color-board-warden: var(--board-ink);
+  --color-danger-line: var(--board-ink);
+  --color-board-explorer-ring: var(--board-ring);
+  --color-board-gate: var(--board-gate);
+  --color-board-light: var(--board-gate);
+  --color-board-echo: var(--board-echo);
+}
+
 :root[data-playground-palette="twilight"] {
   --color-fog: var(--twilight-fog);
   --color-fog-soft: var(--twilight-fog-soft);
-  --color-fog-grid: var(--twilight-fog-grid);
   --color-passage: var(--twilight-passage);
-  --color-wall: var(--twilight-wall);
-  --color-wall-grid: var(--twilight-wall-grid);
-  --color-wall-mark: var(--twilight-wall-mark);
-  --color-grid: var(--twilight-grid);
   --color-pulse: var(--twilight-pulse);
 }
 
 :root[data-playground-palette="sea-glass"] {
   --color-fog: var(--sea-glass-fog);
   --color-fog-soft: var(--sea-glass-fog-soft);
-  --color-fog-grid: var(--sea-glass-fog-grid);
   --color-passage: var(--sea-glass-passage);
-  --color-wall: var(--sea-glass-wall);
-  --color-wall-grid: var(--sea-glass-wall-grid);
-  --color-wall-mark: var(--sea-glass-wall-mark);
-  --color-grid: var(--sea-glass-grid);
   --color-pulse: var(--sea-glass-pulse);
 }
 
 :root[data-playground-palette="dusk"] {
   --color-fog: var(--dusk-fog);
   --color-fog-soft: var(--dusk-fog-soft);
-  --color-fog-grid: var(--dusk-fog-grid);
   --color-passage: var(--dusk-passage);
-  --color-wall: var(--dusk-wall);
-  --color-wall-grid: var(--dusk-wall-grid);
-  --color-wall-mark: var(--dusk-wall-mark);
-  --color-grid: var(--dusk-grid);
   --color-pulse: var(--dusk-pulse);
 }
 
 :root[data-access-contrast="strong"] {
   --color-fog: var(--access-fog);
   --color-fog-soft: var(--access-fog-soft);
-  --color-fog-grid: var(--access-fog-grid);
   --color-passage: var(--access-passage);
-  --color-wall: var(--access-wall);
-  --color-wall-grid: var(--access-wall-grid);
-  --color-wall-mark: var(--access-wall-mark);
-  --color-grid: var(--access-grid);
+  --color-pulse: var(--access-pulse);
 }
 
 :root[data-access-marks="large"] {
@@ -537,6 +535,17 @@ a:hover {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+/* The focus ring sits on the frame edge, outside the Neatline ticks and labels. */
+#maze-canvas:focus,
+#maze-canvas:focus-visible {
+  outline: none;
+}
+
+.canvas-frame:has(#maze-canvas:focus-visible) {
+  outline: 0.2rem solid var(--color-focus);
+  outline-offset: 0.2rem;
 }
 
 /* Action rail */

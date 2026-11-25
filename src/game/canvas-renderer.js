@@ -472,10 +472,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const scale = palette.markScale;
     const radius = tile * 0.32 * scale;
 
-    // A position fix is an ink ring on a paper disc, with a dot in the Explorer colour.
+    // A position fix is a ring on a paper disc, with a dot in the Explorer colour.
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = palette.onFill;
+    context.fillStyle = palette.explorerDisc;
     context.fill();
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.strokeStyle = palette.explorerRing;
@@ -889,6 +889,7 @@ function readPalette() {
     danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
     explorer: color("--color-explorer", FALLBACK_PALETTE.explorer),
+    explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
     explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
     fontMono: color("--font-utility", FALLBACK_PALETTE.fontMono),
@@ -916,6 +917,7 @@ const FALLBACK_PALETTE = {
   danger: "oklch(18% 0.012 250)",
   echo: "oklch(52% 0.17 250)",
   explorer: "oklch(46% 0.17 250)",
+  explorerDisc: "oklch(99% 0.004 95)",
   explorerRing: "oklch(18% 0.012 250)",
   fontBody: "Arial, sans-serif",
   fontMono: "monospace",
@@ -926,9 +928,9 @@ const FALLBACK_PALETTE = {
   ink: "oklch(18% 0.012 250)",
   land: "oklch(99% 0.004 95)",
   light: "oklch(58% 0.24 340)",
-  night: "oklch(16% 0.012 65)",
+  night: "oklch(18% 0.012 250)",
   onFill: "oklch(100% 0 0)",
   passage: "oklch(95.5% 0.022 232)",
-  pulse: "oklch(68.5% 0.169 237 / 30%)",
+  pulse: "oklch(52% 0.17 250 / 28%)",
   warden: "oklch(18% 0.012 250)"
 };

@@ -505,7 +505,7 @@
       90deg,
       var(--color-fog) 0 25%,
       var(--color-passage) 25% 50%,
-      var(--color-wall) 50% 75%,
+      var(--color-coastline) 50% 75%,
       var(--color-passage) 75%
     );
 }
