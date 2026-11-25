@@ -5,6 +5,7 @@ export default [
   {
     ignores: [
       ".codegraph/**",
+      ".scratch/**",
       ".vercel/**",
       "coverage/**",
       "design-system/**",
