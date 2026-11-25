@@ -377,8 +377,8 @@
   min-height: 2rem;
   padding-inline: var(--space-3);
   align-items: center;
-  border: 1px solid color-mix(in oklab, var(--color-signal) 44%, transparent);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--color-signal-soft);
   color: var(--color-ink);
   font: 600 var(--text-compact)/1 var(--font-body);
@@ -411,8 +411,8 @@
 
 .progress-card li {
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--color-stone);
   font-size: var(--text-label);
   font-weight: 600;

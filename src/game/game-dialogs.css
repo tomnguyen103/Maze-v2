@@ -35,17 +35,19 @@
 .scoreboard-dialog,
 .lifetime-dialog,
 .quest-conflict-dialog,
-.result-dialog {
+.result-dialog,
+.run-replay-dialog {
+  --dialog-pad: var(--space-6);
   width: min(36rem, calc(100% - 2rem));
   max-height: calc(100dvh - 2rem);
   margin: auto;
-  padding: var(--space-6);
+  padding: var(--dialog-pad);
   overflow-y: auto;
+  scroll-padding-block-start: 4rem;
   color: var(--color-ink);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-panel);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
 }
 
 .atlas-dialog::backdrop,
@@ -65,6 +67,34 @@
   background: var(--color-overlay);
 }
 
+/*
+ * Dialog anatomy. The header band holds the title and Close; the body scrolls;
+ * the footer is sticky and holds the primary action. A dialog that owns a
+ * footer has no bottom padding, so the footer sits flush on the panel edge.
+ */
+dialog > .dialog-heading,
+.level-dialog__header {
+  position: sticky;
+  z-index: 2;
+  /* Chromium measures sticky offsets from the scroller content box, so cancel the dialog padding. */
+  top: calc(-1 * var(--dialog-pad));
+  margin: calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad)) var(--space-4);
+  padding: var(--space-3) var(--dialog-pad);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-paper);
+}
+
+dialog > .dialog-heading h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+dialog > .dialog-heading > button {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+
 .dialog-intro,
 .journal-dialog > p,
 .practice-dialog > p,
@@ -76,7 +106,7 @@
 }
 
 .quest-conflict-dialog {
-  width: min(42rem, calc(100% - 2rem));
+  width: min(44rem, calc(100% - 2rem));
 }
 
 .quest-conflict-options {
@@ -94,7 +124,7 @@
   flex-direction: column;
   justify-content: space-between;
   gap: var(--space-3);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-panel);
 }
@@ -124,9 +154,9 @@
   margin: var(--space-5) 0;
   padding: var(--space-4);
   gap: var(--space-1);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
 }
 
 .daily-contract strong {
@@ -195,7 +225,7 @@
   display: grid;
   margin: var(--space-3) 0;
   padding: 0;
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
   list-style: none;
 }
 
@@ -211,7 +241,7 @@
   align-items: center;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: var(--space-2);
-  background: var(--color-paper-deep);
+  border-bottom: 1px solid var(--color-line-soft);
 }
 
 .daily-board__rank,
@@ -222,8 +252,10 @@
 }
 
 .daily-board__rank {
-  color: var(--color-signal-deep);
+  color: var(--color-ink);
+  font-size: 0.75rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .daily-board__username {
@@ -301,7 +333,6 @@
 
 .daily-dialog__actions {
   display: flex;
-  margin-top: var(--space-5);
   flex-wrap: wrap;
   gap: var(--space-2);
 }
@@ -311,7 +342,7 @@
 }
 
 .journal-dialog {
-  width: min(46rem, calc(100% - 2rem));
+  width: min(44rem, calc(100% - 2rem));
 }
 
 .journal-status {
@@ -328,11 +359,8 @@
 
 .journal-empty {
   margin: var(--space-5) 0;
-  padding: var(--space-6) var(--space-5);
-  border: 1.5px dashed var(--color-line-soft);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
-  text-align: center;
+  padding: var(--space-5) 0;
+  border-block: 1px solid var(--color-line);
 }
 
 .journal-empty strong,
@@ -361,7 +389,7 @@
 
 .journal-objectives {
   display: grid;
-  border-top: 1px solid var(--color-line-soft);
+  border-top: 1px solid var(--color-line);
 }
 
 .journal-objective {
@@ -384,7 +412,7 @@
 .journal-objective > div > p {
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-compact);
 }
 
 .journal-counts {
@@ -397,7 +425,9 @@
 }
 
 .journal-counts li {
-  font-size: 0.7rem;
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
 }
 
 .journal-practice {
@@ -413,7 +443,8 @@
 .journal-clear__warning {
   margin-top: var(--space-3);
   padding: var(--space-4);
-  border: 2px solid var(--color-warden);
+  border: 1px solid var(--color-warden);
+  border-radius: var(--radius-md);
   background: var(--color-warden-soft);
 }
 
@@ -428,7 +459,7 @@
 }
 
 .practice-dialog {
-  width: min(40rem, calc(100% - 2rem));
+  width: min(44rem, calc(100% - 2rem));
 }
 
 .practice-question {
@@ -443,23 +474,23 @@
 .practice-choices {
   display: grid;
   margin-bottom: var(--space-4);
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
 }
 
 .practice-choice {
   width: 100%;
   min-height: 3.75rem;
-  padding: var(--space-3);
-  border-color: var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
+  padding: var(--space-3) var(--space-2);
+  border-width: 0 0 1px;
+  border-color: var(--color-line);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   white-space: normal;
 }
 
 .practice-choice:hover:not(:disabled) {
-  border-color: var(--color-echo);
-  background: var(--color-echo-soft);
+  background: var(--color-water-1);
 }
 
 .practice-feedback {
@@ -486,9 +517,9 @@
   margin: 0 0 var(--space-4);
   padding: var(--space-3);
   gap: var(--space-2);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-stone-raised);
+  background: var(--color-water-1);
 }
 
 .access-maze-preview {
@@ -605,26 +636,24 @@
   min-width: 0;
   margin: 0;
   padding: 0;
-  gap: var(--space-2);
   border: 0;
+  border-top: 1px solid var(--color-line);
 }
 
 .access-setting {
   display: grid;
   min-width: 0;
-  min-height: 4.5rem;
-  padding: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-2);
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: var(--space-3);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-line-soft);
   cursor: pointer;
 }
 
 .access-setting:has(input:checked) {
-  background: var(--color-signal-glow);
+  background: var(--color-water-1);
 }
 
 .access-settings-preset {
@@ -632,7 +661,7 @@
   gap: var(--space-2);
   margin-block-start: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-stone);
 }
@@ -655,7 +684,7 @@
   width: 1.35rem;
   height: 1.35rem;
   margin: var(--space-1) 0 0;
-  accent-color: var(--color-signal-deep);
+  accent-color: var(--color-ink);
 }
 
 .access-setting strong,
@@ -725,7 +754,6 @@
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-md);
   background: var(--color-stone-raised);
-  box-shadow: 0 2px 8px -2px var(--color-shadow);
 }
 
 .lifetime-offer[hidden] {
@@ -859,7 +887,7 @@
   padding: var(--space-2);
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 1rem;
@@ -877,8 +905,7 @@
 }
 
 .palette-options input:checked + span {
-  border-color: var(--color-line);
-  background: var(--color-signal-glow);
+  background: var(--color-water-1);
   box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
@@ -979,17 +1006,17 @@
   display: grid;
   margin: var(--space-5) 0 0;
   padding: 0;
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
   list-style: none;
 }
 
 .run-records li {
   display: grid;
-  padding: var(--space-3);
+  padding: var(--space-3) 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  border-block: 1px solid var(--color-line-soft);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .run-records__actions {
@@ -1004,21 +1031,22 @@
 }
 
 .run-records strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .run-records span {
   margin-top: var(--space-1);
   color: var(--color-ink-muted);
-  font-size: 0.74rem;
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
-.run-records__empty {
-  padding: var(--space-6) var(--space-4);
-  border: 1.5px dashed var(--color-line-soft);
-  border-radius: var(--radius-lg);
+.run-records li.run-records__empty {
+  display: block;
+  padding: var(--space-5) 0;
   color: var(--color-ink-muted);
-  text-align: center;
 }
 
 .result-dialog__stats {
@@ -1040,8 +1068,7 @@
 }
 
 .level-dialog {
-  width: min(62rem, calc(100% - 2rem));
-  padding: var(--space-8);
+  width: min(44rem, calc(100% - 2rem));
 }
 
 :is(h2, h3, h4, .challenge-question)[tabindex="-1"]:is(:focus, :focus-visible) {
@@ -1067,7 +1094,6 @@
 
 .level-dialog__header {
   display: flex;
-  margin-bottom: var(--space-4);
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
@@ -1137,7 +1163,7 @@
 }
 
 #practice-intention-options {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .learning-deck-picker {
@@ -1167,35 +1193,30 @@
 .learning-deck-options {
   display: grid;
   margin-top: var(--space-3);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--color-line);
 }
 
 .learning-deck-option {
   display: grid;
   min-width: 0;
-  min-height: 5.75rem;
-  padding: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-2);
   grid-template-columns: auto minmax(0, 1fr);
   align-content: start;
-  gap: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
+  gap: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--color-line-soft);
   cursor: pointer;
-  transition:
-    background-color var(--duration-press) var(--ease-out),
-    box-shadow var(--duration-press) var(--ease-out);
+  transition: background-color var(--duration-press) var(--ease-out);
 }
 
 .learning-deck-option:has(input:checked) {
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-signal-deep);
+  background: var(--color-water-1);
+  box-shadow: inset 0 0 0 2px var(--color-line);
 }
 
 .learning-deck-option:hover:not(:has(input:checked)) {
-  background: var(--color-stone-raised);
+  background: var(--color-water-1);
 }
 
 .learning-deck-option:active {
@@ -1211,7 +1232,7 @@
   width: 1.1rem;
   height: 1.1rem;
   margin: var(--space-1) 0 0;
-  accent-color: var(--color-signal-deep);
+  accent-color: var(--color-ink);
 }
 
 .learning-deck-option strong {
@@ -1234,65 +1255,75 @@
 
 .level-cards {
   display: grid;
-  margin-top: var(--space-6);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+  margin-top: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--color-line);
 }
 
 .level-card {
-  position: relative;
-  display: flex;
+  display: grid;
   min-width: 0;
-  min-height: 15rem;
-  padding: var(--space-5);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  border-color: var(--color-line-soft);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-2);
+  grid-template-areas:
+    "badge badge"
+    "name size"
+    "body body"
+    "topics topics";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  border-width: 0 0 1px;
+  border-color: var(--color-line);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   white-space: normal;
 }
 
 .level-card:hover:not(:disabled) {
-  border-color: var(--color-signal);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-panel);
+  background: var(--color-water-1);
 }
 
+/* Featured is a left rule, not the ring a chosen Learning Deck carries. */
 .level-card--featured {
-  border-color: color-mix(in oklab, var(--color-signal) 44%, transparent);
-  background: var(--color-signal-soft);
+  box-shadow: inset 0.25rem 0 0 var(--color-line);
 }
 
 .level-card strong {
-  max-width: 9ch;
+  grid-area: name;
   font-family: var(--font-display);
-  font-size: clamp(1.55rem, 3vw, 2.2rem);
-  letter-spacing: -0.03em;
-  line-height: 0.98;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
-.level-card > span:not(.level-card__badge) {
+.level-card > .level-card__badge {
+  grid-area: badge;
+  justify-self: start;
+}
+
+.level-card > span:not(.level-card__badge, .level-card__topics) {
+  grid-area: body;
   color: var(--color-ink-muted);
   font-size: 0.86rem;
   line-height: 1.4;
 }
 
 .level-card > .level-card__topics {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-line-soft);
-  color: var(--color-ink);
+  grid-area: topics;
+  color: var(--color-ink-muted);
   font-size: 0.78rem;
   font-weight: 650;
 }
 
 .level-card small {
-  margin-top: auto;
+  grid-area: size;
   color: var(--color-ink);
-  font-size: 0.68rem;
+  font-family: var(--font-utility);
+  font-size: 0.75rem;
   line-height: 1.5;
+  white-space: nowrap;
 }
 
 .level-dialog__note {
@@ -1302,21 +1333,21 @@
 }
 
 .challenge-dialog {
-  width: min(40rem, calc(100% - 2rem));
-  padding: var(--space-8);
+  width: min(36rem, calc(100% - 2rem));
 }
 
 .challenge-dialog__crest {
   display: grid;
-  width: 3.4rem;
-  height: 3.4rem;
+  width: 3rem;
+  height: 3rem;
   margin-bottom: var(--space-4);
   place-items: center;
-  color: var(--color-signal-deep);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   font-weight: 800;
 }
 
@@ -1332,9 +1363,9 @@
 
 .challenge-feedback {
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in oklab, var(--color-echo) 40%, transparent);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-echo-soft);
+  background: var(--color-water-1);
   font-size: 1rem;
   font-weight: 620;
 }
@@ -1345,8 +1376,9 @@
 }
 
 .challenge-feedback.is-skipped {
-  border-color: color-mix(in oklab, var(--color-signal-deep) 40%, transparent);
-  background: var(--color-signal-glow);
+  border-color: var(--color-line);
+  background: var(--color-water-1);
+  box-shadow: inset 0.25rem 0 0 var(--color-ink-muted);
 }
 
 .challenge-question {
@@ -1370,9 +1402,9 @@
   margin: 0;
   padding: var(--space-3) var(--space-4);
   color: var(--color-ink);
-  border: 1px solid color-mix(in oklab, var(--color-signal-deep) 40%, transparent);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-signal-glow);
+  background: var(--color-water-1);
   font-size: var(--text-body);
 }
 
@@ -1390,27 +1422,27 @@
 
 .challenge-choices {
   display: grid;
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
 }
 
 .challenge-choice {
   display: grid;
   width: 100%;
   min-height: 3.75rem;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-2);
   grid-template-columns: 2.15rem minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
-  border-color: var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
+  border-width: 0 0 1px;
+  border-color: var(--color-line);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   white-space: normal;
 }
 
 .challenge-choice:hover:not(:disabled) {
-  border-color: var(--color-signal);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
 }
 
 .challenge-choice span {
@@ -1418,14 +1450,38 @@
   width: 2.15rem;
   height: 2.15rem;
   place-items: center;
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
-  background: var(--color-stone-raised);
   font-family: var(--font-body);
 }
 
 .challenge-choice strong {
   font-size: 1rem;
   line-height: 1.25;
+}
+
+/* A chosen answer carries an ink ring. The Practice buttons are disabled once answered, so the chosen state shows on them too. */
+.challenge-choice:active:not(:disabled),
+.practice-choice:active:not(:disabled),
+.practice-choice[aria-pressed="true"] {
+  background: var(--color-water-1);
+  box-shadow: inset 0 0 0 2px var(--color-line);
+}
+
+/* Hint and skip are text buttons: an underlined label, a 40px target, no box. */
+.challenge-support > .control-button,
+.challenge-skip > .control-button {
+  min-height: 2.5rem;
+  padding-inline: var(--space-1);
+  border-color: transparent;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.challenge-support > .control-button:hover:not(:disabled),
+.challenge-skip > .control-button:hover:not(:disabled) {
+  background: var(--color-water-1);
 }
 
 .challenge-skip {
@@ -1477,27 +1533,33 @@
   font-size: 1rem;
 }
 
-@media (max-width: 58rem) {
-  .level-cards {
-    grid-template-columns: 1fr;
-  }
-
-  #practice-intention-options {
-    grid-template-columns: 1fr;
-  }
-
-  .learning-deck-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .level-card {
-    min-height: 0;
-  }
+/* Sticky footer: the primary action stays in view while the body scrolls. */
+:is(.access-settings-dialog, .daily-dialog, .first-light-dialog, .level-dialog, .quest-conflict-dialog) {
+  padding-bottom: 0;
+  scroll-padding-block-end: 5rem;
 }
 
-@media (max-width: 32rem) {
+:is(
+  .daily-dialog__actions,
+  .access-settings-actions,
+  .first-light-dialog__actions,
+  .level-dialog__step-actions,
+  .quest-conflict-dialog__actions
+) {
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
+  margin: var(--space-5) calc(-1 * var(--dialog-pad)) 0;
+  padding: var(--space-3) var(--dialog-pad);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
+}
+
+/* Under 768px a dialog is a full-height sheet. */
+@media (max-width: 48rem) {
   .atlas-dialog,
   .access-settings-dialog,
+  .first-light-dialog,
   .level-dialog,
   .daily-dialog,
   .challenge-dialog,
@@ -1509,29 +1571,87 @@
   .lifetime-dialog,
   .quest-conflict-dialog,
   .result-dialog {
-    padding: var(--space-4);
+    --dialog-pad: var(--space-4);
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
   }
 
-  .daily-dialog__actions,
+  .daily-dialog__actions > button,
+  .access-settings-actions > button,
+  .first-light-dialog__actions > button,
+  .level-dialog__step-actions > button,
+  .quest-conflict-dialog__actions > button {
+    flex: 1 1 auto;
+    white-space: normal;
+  }
+
+  .daily-dialog__actions > .primary-button:first-child,
+  .access-settings-actions > .primary-button:first-child,
+  .first-light-dialog__actions > .primary-button:first-child {
+    flex-basis: 100%;
+  }
+}
+
+/* quest-atlas.css pads the Atlas by --space-2 here; the header band bleeds by the same amount. */
+@media (max-width: 22rem) {
+  .atlas-dialog {
+    --dialog-pad: var(--space-2);
+  }
+}
+
+/* A phone sheet is a flex column, so the footer sits at the sheet bottom. */
+@media (max-width: 48rem) {
+  :is(.access-settings-dialog, .daily-dialog, .first-light-dialog, .level-dialog, .quest-conflict-dialog)[open],
+  .access-settings-dialog > form,
+  .level-dialog[data-step="1"] .level-dialog__step[data-step="1"],
+  .level-dialog[data-step="2"] .level-dialog__step[data-step="2"],
+  .level-dialog[data-step="3"] .level-dialog__step[data-step="3"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :is(.access-settings-dialog, .daily-dialog, .first-light-dialog, .level-dialog, .quest-conflict-dialog)[open] > *,
+  .access-settings-dialog > form > *,
+  .level-dialog__step > * {
+    flex-shrink: 0;
+  }
+
+  .access-settings-dialog > form,
+  .level-dialog__step {
+    flex-grow: 1;
+  }
+
+  :is(.daily-dialog__actions, .access-settings-actions, .first-light-dialog__actions, .level-dialog__step-actions, .quest-conflict-dialog__actions) {
+    margin-top: auto;
+  }
+}
+
+@media (max-width: 32rem) {
+  /* A phone row stacks the tile range under the name, so a long name has the full width. */
+  .level-card {
+    grid-template-areas:
+      "badge"
+      "name"
+      "size"
+      "body"
+      "topics";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .lifetime-dialog__actions,
-  .quest-conflict-dialog__actions,
   .result-dialog__actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .level-dialog__step-actions {
-    align-items: stretch;
-    flex-direction: column-reverse;
-  }
-
-  .learning-deck-options {
-    grid-template-columns: 1fr;
-  }
-
-  .first-light-dialog__actions button,
-  .level-dialog__step-actions button {
-    width: 100%;
+  .first-light-dialog__actions,
+  .level-dialog__step-actions,
+  .quest-conflict-dialog__actions {
+    flex-wrap: wrap;
   }
 
   .daily-board__heading {
@@ -1572,4 +1692,33 @@
   .quest-conflict-options {
     grid-template-columns: 1fr;
   }
+}
+
+/* The Workshop title has no wrapper, so the bare heading carries the header band. */
+.practice-dialog > h2 {
+  position: sticky;
+  z-index: 1;
+  top: calc(-1 * var(--dialog-pad));
+  margin: calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad)) var(--space-4);
+  padding: var(--space-3) var(--dialog-pad);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-paper);
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+/* One rule closes the goal list; the topic is plain muted text. */
+.practice-dialog .practice-catalog__tools {
+  border-top: 0;
+}
+
+.practice-dialog .practice-objective span {
+  padding: 0;
+  background: transparent;
+  font-weight: 400;
+}
+
+/* The empty Journal keeps its ink rule; the footer adds no second rule. */
+.journal-bands:has(.journal-empty) + .journal-clear {
+  border-top: 0;
 }

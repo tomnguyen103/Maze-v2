@@ -465,4 +465,29 @@ test.describe("layout redesign & edge viewports", () => {
       expect(pulse, "Pulse is a secondary button with the Pause fill").toBe(pause);
     });
   }
+
+  // Ticket 15: the dialog footer is sticky, so the primary action never scrolls out of view.
+  test("keeps the Daily primary action in the viewport at 375x812", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=DIALOG-ANATOMY&level=trail-scout");
+    await expectGameReady(page);
+    await page.locator("#daily-button").click();
+    await expect(page.locator("#daily-dialog")).toBeVisible();
+    // The board refresh replaces the list, so the fixture goes in after it settles.
+    await expect(page.locator("#daily-board-status")).not.toHaveAttribute("data-state", "loading");
+    // A full Verified Daily Board is the long case: the body scrolls and the footer must stay put.
+    await page.evaluate(() => {
+      const list = /** @type {HTMLElement} */ (document.querySelector("#daily-board-list"));
+      list.innerHTML = Array.from(
+        { length: 12 },
+        (_, i) =>
+          `<li><span class="daily-board__rank">${i + 1}</span><span class="daily-board__username">Explorer ${i + 1}</span><span class="daily-board__score">${900 - i * 7}</span><span class="daily-board__moves">${40 + i} moves</span></li>`
+      ).join("");
+    });
+    await expect(page.locator("#daily-board-list > li")).toHaveCount(12);
+    const box = await page.locator("#daily-start").boundingBox();
+    if (!box) throw new Error("Daily start button renders");
+    expect(box.y, "top edge inside the viewport").toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, "bottom edge inside the viewport").toBeLessThanOrEqual(812);
+  });
 });

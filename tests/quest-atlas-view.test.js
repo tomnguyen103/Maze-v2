@@ -55,6 +55,8 @@ describe("Echo Atlas view", () => {
     expect(document.querySelectorAll("[data-atlas-landmark]")).toHaveLength(20);
     expect(document.querySelector("[data-atlas-illustration]")
       ?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector("[data-atlas-illustration]")
+      ?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
     expect(document.querySelectorAll("[data-atlas-region-art]")).toHaveLength(5);
     expect(document.querySelector("[data-atlas-node='1'] [data-state-mark]")
       ?.getAttribute("data-state-mark")).toBe("stamp");
