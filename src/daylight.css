@@ -573,6 +573,16 @@ a:hover {
   font-weight: 700;
 }
 
+.direction-button__arrow {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .direction-button--up {
   grid-column: 2;
 }
