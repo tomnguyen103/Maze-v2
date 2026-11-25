@@ -350,9 +350,9 @@ a:hover {
 
 .play-grid {
   display: grid;
-  width: min(78rem, 100%);
+  width: min(76rem, 100%);
   margin-inline: auto;
-  grid-template-columns: minmax(0, 1fr) min(19rem, 40%);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   align-items: start;
   justify-content: center;
   gap: var(--space-4);
@@ -364,10 +364,6 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .section-label,
@@ -536,7 +532,7 @@ a:hover {
 /* The frame margin holds the Neatline ticks and the Grid reference. */
 .canvas-frame {
   position: relative;
-  width: min(100%, max(16rem, calc(100dvh - 23rem)), 36rem);
+  width: min(100%, max(16rem, calc(100dvh - 17rem)));
   aspect-ratio: 1;
   margin-inline: auto;
   padding: clamp(1.125rem, 2dvh, 1.25rem);
@@ -992,9 +988,6 @@ kbd {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .chart-notes > * {
@@ -1540,12 +1533,12 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .labyrinth-panel {
-    padding: var(--space-2) var(--space-3);
     gap: var(--space-2);
   }
 
+  /* One instrument line: the four metrics and the Warden mode share a row. */
   .readout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-2);
   }
 
@@ -1573,25 +1566,25 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .warden-readout {
-    display: flex;
     min-width: 0;
     grid-column: auto;
     grid-row: auto;
-    align-items: baseline;
-    gap: var(--space-2);
+    align-content: center;
     padding: var(--space-1) var(--space-2);
   }
 
+  .warden-readout .section-label {
+    letter-spacing: 0.02em;
+  }
+
   .warden-readout strong {
-    display: inline;
     margin: 0;
     font-family: var(--font-body);
     font-size: var(--text-label);
   }
 
   .warden-readout p {
-    margin: 0 0 0 auto;
-    text-align: right;
+    display: none;
   }
 
   .canvas-frame {
@@ -1736,8 +1729,15 @@ body[data-run-mode="first-light"] .play-workbench {
     font-size: var(--text-label);
   }
 
-  .warden-readout p {
-    display: none;
+  /* The label keeps its place for screen readers; the mark and the word fit the line. */
+  .warden-readout .section-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .seed-copy strong {
@@ -1779,10 +1779,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .play-grid {
     width: 100%;
-  }
-
-  .labyrinth-panel {
-    padding: var(--space-2) var(--space-1);
   }
 
   .canvas-frame {

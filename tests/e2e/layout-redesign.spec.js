@@ -265,4 +265,67 @@ test.describe("layout redesign & edge viewports", () => {
       }
     });
   }
+
+  // US-03.1: the board column owns 60-70% of the content width and the panel boxes are gone.
+  for (const vp of [
+    { width: 1280, height: 800 },
+    { width: 1920, height: 1080 }
+  ]) {
+    test(`board column owns 60-70% of the content width at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=BOARD-COLUMN&level=trail-scout");
+      await expectGameReady(page);
+
+      const layout = await page.evaluate(() => {
+        const box = (/** @type {string} */ selector) => document.querySelector(selector)?.getBoundingClientRect();
+        const style = (/** @type {string} */ selector) => {
+          const element = /** @type {HTMLElement} */ (document.querySelector(selector));
+          const computed = getComputedStyle(element);
+          return {
+            border: computed.borderTopWidth,
+            shadow: computed.boxShadow,
+            background: computed.backgroundColor
+          };
+        };
+        return {
+          grid: box(".play-grid")?.width ?? 0,
+          column: box(".labyrinth-panel")?.width ?? 0,
+          frame: box("#canvas-frame"),
+          panel: style(".labyrinth-panel"),
+          notes: style(".chart-notes")
+        };
+      });
+      const ratio = layout.column / layout.grid;
+      expect(ratio, "board column share of the content width").toBeGreaterThanOrEqual(0.6);
+      expect(ratio, "board column share of the content width").toBeLessThanOrEqual(0.7);
+      expect(layout.frame?.width, "board is square").toBeCloseTo(layout.frame?.height ?? 0, 0);
+      expect(layout.frame?.width, "board size comes from the column, not a fixed 432px").toBeGreaterThan(440);
+      for (const box of [layout.panel, layout.notes]) {
+        expect(box.border).toBe("0px");
+        expect(box.shadow).toBe("none");
+        expect(box.background).toBe("rgba(0, 0, 0, 0)");
+      }
+    });
+  }
+
+  // US-03.2: under 160px of chrome sit above the board on a phone.
+  test("keeps chrome above the board under 160px at 375", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=BOARD-CHROME&level=trail-scout");
+    await expectGameReady(page);
+    const frame = await page.locator("#canvas-frame").boundingBox();
+    expect(frame?.y, "chrome above the board").toBeLessThan(160);
+    expect(frame?.width, "board width").toBeGreaterThanOrEqual(375 * 0.9);
+  });
+
+  // Audit item U5: on a landscape phone the first board tile starts above the fold.
+  test("shows the first board tile without a scroll at 667x375", async ({ page }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await page.goto("/?seed=BOARD-FOLD&level=trail-scout");
+    await expectGameReady(page);
+    const canvas = await page.locator("#maze-canvas").boundingBox();
+    if (!canvas) throw new Error("canvas has no bounding box");
+    const tile = canvas.width / 13;
+    expect(canvas.y + tile, "first tile bottom edge").toBeLessThanOrEqual(375);
+  });
 });
