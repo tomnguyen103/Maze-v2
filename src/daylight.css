@@ -610,13 +610,18 @@ a:hover {
   gap: var(--space-2);
 }
 
-/* Wide shells set Pause and Pulse beside the pad, so the rail stays one pad tall. */
+/* Wide shells set Pause and Pulse beside the pad, so the rail stays one pad tall. Both buttons share one height. */
 @media (min-width: 48.0625rem) {
   .action-rail {
     grid-template-areas: "pad pause pulse";
-    grid-template-columns: auto minmax(0, 12rem) minmax(0, 12rem);
+    grid-template-columns: auto minmax(0, 10rem) minmax(0, 15rem);
     justify-content: start;
     gap: var(--space-3) var(--space-4);
+  }
+
+  .pause-button,
+  .pulse-button {
+    min-height: 3.75rem;
   }
 }
 
@@ -699,8 +704,11 @@ html .trail-compass[hidden] {
 }
 
 .pulse-button small {
+  overflow: hidden;
   margin-top: var(--space-1);
   color: var(--color-ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-compact);
   font-weight: 500;
 }
