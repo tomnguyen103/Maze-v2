@@ -335,4 +335,78 @@ test.describe("layout redesign & edge viewports", () => {
     await expectGameReady(page);
     await expect(page.locator("#classroom-link")).toBeHidden();
   });
+
+  // US-03.1: the event ribbon overlays the board bottom and shifts nothing.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`overlays the event ribbon on the board without a layout shift at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=RIBBON-SHIFT&level=trail-scout");
+      await expectGameReady(page);
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: { writeText: async () => {} }
+        });
+      });
+      const positions = () =>
+        page.evaluate(() =>
+          ["#canvas-frame", ".action-rail", ".title-block"].map((selector) => {
+            const rect = document.querySelector(selector)?.getBoundingClientRect();
+            return rect ? [rect.x, rect.y + window.scrollY, rect.width, rect.height] : null;
+          })
+        );
+      const before = await positions();
+      const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+
+      await page.locator("#seed-copy").click();
+      const ribbon = page.locator("#event-ribbon");
+      await expect(ribbon).toHaveClass(/is-visible/);
+      await expect(ribbon).toBeVisible();
+
+      expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
+
+      const frame = await page.locator("#canvas-frame").boundingBox();
+      const band = await ribbon.boundingBox();
+      if (!frame || !band) throw new Error("Expected the board and the ribbon to render.");
+      expect(band.y, "ribbon sits on the board").toBeLessThan(frame.y + frame.height);
+      expect(band.y + band.height, "ribbon stays inside the board").toBeLessThanOrEqual(frame.y + frame.height);
+      expect(band.x).toBeGreaterThanOrEqual(frame.x);
+      expect(band.x + band.width).toBeLessThanOrEqual(frame.x + frame.width);
+      const rule = await ribbon.evaluate((el) => getComputedStyle(el).borderTopWidth);
+      expect(parseFloat(rule), "ink top rule").toBeGreaterThan(0);
+    });
+  }
+
+  // Ticket 12: the Action rail keeps 48px direction buttons and 40px targets.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`sizes the Action rail targets at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=RAIL-SIZE&level=trail-scout");
+      await expectGameReady(page);
+      for (const direction of ["up", "left", "down", "right"]) {
+        const box = await page.locator(`.touch-controls [data-move='${direction}']`).boundingBox();
+        expect(box?.width, `${direction} width`).toBeGreaterThanOrEqual(48);
+        expect(box?.height, `${direction} height`).toBeGreaterThanOrEqual(48);
+      }
+      for (const selector of ["#pause-run", "#pulse-action"]) {
+        const box = await page.locator(selector).boundingBox();
+        expect(box?.width, `${selector} width`).toBeGreaterThanOrEqual(40);
+        expect(box?.height, `${selector} height`).toBeGreaterThanOrEqual(40);
+      }
+      const pulse = await page
+        .locator("#pulse-action")
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      const pause = await page
+        .locator("#pause-run")
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(pulse, "Pulse is a secondary button with the Pause fill").toBe(pause);
+    });
+  }
 });

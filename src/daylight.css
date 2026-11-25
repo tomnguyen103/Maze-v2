@@ -485,10 +485,11 @@ a:hover {
 /* The frame margin holds the Neatline ticks and the Grid reference. */
 .canvas-frame {
   position: relative;
-  width: min(100%, max(16rem, calc(100dvh - 17rem)));
+  width: min(100%, max(16rem, calc(100dvh - 19rem)));
   aspect-ratio: 1;
   margin-inline: auto;
-  padding: clamp(1.125rem, 2dvh, 1.25rem);
+  --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
+  padding: var(--frame-pad);
   background: var(--color-paper);
   isolation: isolate;
 }
@@ -534,27 +535,78 @@ a:hover {
 /* Action rail */
 
 .action-rail {
-  display: flex;
+  display: grid;
   min-height: 3.2rem;
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-line-soft);
-  flex-wrap: wrap;
+  grid-template-areas: "pad pause" "pad pulse";
+  grid-template-columns: auto minmax(0, 20rem);
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
 
+.pause-button {
+  grid-area: pause;
+  width: 100%;
+}
+
+/* One ink outline holds the four direction buttons. */
 .touch-controls {
-  display: none;
+  display: grid;
+  grid-area: pad;
+  padding: var(--space-1);
+  grid-template-columns: repeat(3, 3rem);
+  grid-template-rows: repeat(2, 3rem);
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.direction-button {
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.direction-button--up {
+  grid-column: 2;
+}
+
+.direction-button--left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.direction-button--down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.direction-button--right {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 .trail-actions {
   display: flex;
   min-width: 0;
-  align-items: center;
-  justify-content: flex-end;
+  grid-area: pulse;
+  flex-direction: column;
   gap: var(--space-2);
-  margin-left: auto;
+}
+
+/* Wide shells set Pause and Pulse beside the pad, so the rail stays one pad tall. */
+@media (min-width: 48.0625rem) {
+  .action-rail {
+    grid-template-areas: "pad pause pulse";
+    grid-template-columns: auto minmax(0, 12rem) minmax(0, 12rem);
+    justify-content: start;
+    gap: var(--space-3) var(--space-4);
+  }
 }
 
 .trail-compass {
@@ -564,6 +616,7 @@ a:hover {
 html[data-access-compass="trail"] .trail-compass {
   display: flex;
   width: 100%;
+  grid-column: 1 / -1;
   flex-direction: column;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -597,37 +650,16 @@ html .trail-compass[hidden] {
   display: none;
 }
 
-/* The Pulse is the chart's light: the one magenta fill on the play screen. */
+/* Pulse and the Bell are secondary buttons. The Signal ring on the count marks the light. */
 .pulse-button {
   display: grid;
-  width: min(15rem, 100%);
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-accent-ink);
-  border: 1px solid var(--color-signal-deep);
-  border-radius: var(--radius-md);
-  background: var(--color-signal);
   text-align: left;
   white-space: normal;
-  cursor: pointer;
-  transition:
-    background-color var(--duration-press) var(--ease-out),
-    transform var(--duration-press) var(--ease-out);
-}
-
-/* Beats the global button hover fill, which would otherwise turn Pulse grey. */
-.pulse-button:not(.bell-button):is(:hover, :active):not(:disabled) {
-  background: color-mix(in oklab, var(--color-signal) 90%, var(--color-paper));
-}
-
-.pulse-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.pulse-button:active:not(:disabled) {
-  transform: translateY(1px);
 }
 
 .pulse-button:disabled {
@@ -657,7 +689,7 @@ html .trail-compass[hidden] {
 
 .pulse-button small {
   margin-top: var(--space-1);
-  color: inherit;
+  color: var(--color-ink-muted);
   font-size: var(--text-compact);
   font-weight: 500;
 }
@@ -673,71 +705,41 @@ kbd {
   font-weight: 600;
 }
 
-.pulse-button kbd {
-  border-color: color-mix(in oklab, var(--color-accent-ink) 45%, transparent);
-  background: transparent;
-  color: inherit;
-}
-
 .pulse-button__count {
   display: grid;
   width: 1.5rem;
   height: 1.5rem;
   place-items: center;
-  color: var(--color-accent-ink);
+  border: 2px solid var(--color-signal-deep);
   border-radius: 50%;
-  background: var(--color-on-fill);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
 }
 
-/* The Signal Bell is the quiet partner of the Pulse button. */
-.bell-button {
-  color: var(--color-ink);
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-soft);
-}
-
-.bell-button kbd {
-  border-color: var(--color-line-soft);
-  background: var(--color-panel);
-}
-
+/* The ribbon is a paper band with an ink top rule. It overlays the board bottom inside the Neatline. */
 .event-ribbon {
-  display: flex;
+  position: absolute;
   z-index: 2;
-  overflow: hidden;
-  width: min(100%, 36rem);
-  max-width: 100%;
-  max-height: 0;
-  min-height: 0;
-  margin: 0 auto;
-  padding: 0 var(--space-3);
+  inset: auto var(--frame-pad) var(--frame-pad);
+  display: flex;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-3);
   align-items: center;
   justify-content: center;
   color: var(--color-ink);
-  border: 0 solid var(--color-signal-deep);
-  border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
   font-size: var(--text-label);
   font-weight: 650;
   text-align: center;
   opacity: 0;
-  transform: translateY(var(--space-2));
-  transition:
-    opacity var(--duration-reveal) var(--ease-out),
-    transform var(--duration-reveal) var(--ease-out);
+  transition: opacity var(--duration-reveal) var(--ease-out);
   pointer-events: none;
 }
 
 .event-ribbon.is-visible {
-  max-height: 5rem;
-  min-height: 2.75rem;
-  padding-block: var(--space-2);
-  border-width: 1px;
   opacity: 1;
-  transform: translateY(0);
 }
 
 /* Title block: the chart's corner block, below the rail. */
@@ -1491,7 +1493,11 @@ body[data-run-mode="first-light"] .play-workbench {
 
   /* The instrument line stays one row; the cells tighten. */
   .run-metrics div {
-    padding: var(--space-1) var(--space-2) var(--space-2);
+    padding: 0.125rem var(--space-2);
+  }
+
+  .run-metrics dt {
+    margin-bottom: 0;
   }
 
   .run-metrics dd {
@@ -1513,76 +1519,11 @@ body[data-run-mode="first-light"] .play-workbench {
     width: min(100%, max(40dvh, 6rem), 28rem);
   }
 
-  .action-rail {
-    display: grid;
-    min-height: 0;
-    grid-template-areas: "pad pause" "pad pulse";
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    align-items: center;
-    gap: var(--space-2) var(--space-3);
-  }
-
-  .pause-button {
-    grid-area: pause;
-    width: 100%;
-  }
-
-  .touch-controls {
-    display: grid;
-    grid-area: pad;
-    grid-template-columns: repeat(3, 2.8125rem);
-    grid-template-rows: repeat(2, 2.8125rem);
-    align-content: center;
-    justify-content: center;
-    gap: var(--space-2);
-  }
-
-  .direction-button {
-    width: 2.8125rem;
-    height: 2.8125rem;
-    padding: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-  }
-
-  .direction-button--up {
-    grid-column: 2;
-  }
-
-  .direction-button--left {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .direction-button--down {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .direction-button--right {
-    grid-column: 3;
-    grid-row: 2;
-  }
-
-  .trail-actions {
-    grid-area: pulse;
-    flex-direction: column;
-    margin-left: 0;
-  }
-
-  .pulse-button {
-    width: 100%;
-  }
-
   /* A touch player has no Q key; the hint only crowds the label. */
   @media (pointer: coarse) {
     .pulse-button kbd {
       display: none;
     }
-  }
-
-  html[data-access-compass="trail"] .trail-compass {
-    grid-column: 1 / -1;
   }
 
   .title-block {
@@ -1637,10 +1578,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .player-score {
     gap: var(--space-2);
-  }
-
-  .run-metrics div {
-    padding: var(--space-1) var(--space-2);
   }
 
   .run-metrics dd {
@@ -1718,10 +1655,14 @@ body[data-run-mode="first-light"] .play-workbench {
     max-width: 6.5rem;
   }
 
-  /* The d-pad needs its full width here, so the buttons take their own rows. */
+  /* The pad needs its full width here, so the buttons take their own rows. */
   .action-rail {
     grid-template-areas: "pad" "pause" "pulse";
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .touch-controls {
+    justify-self: center;
   }
 }
 
