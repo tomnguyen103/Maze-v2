@@ -335,7 +335,15 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-ink", "--color-land", 4.5],
   // Pulse is a wash, so it needs only to show.
   ["--color-pulse", "--color-passage", 1.2],
-  ["--color-pulse", "--color-land", 1.2]
+  ["--color-pulse", "--color-land", 1.2],
+  // The open Gate arrow strokes on the white arch fill, not on the Passage.
+  ["--color-board-light-on-fill", "--color-on-fill", 3]
+]);
+
+/** Strong mode paints the Fog flat, so the Fog edge alone separates known tiles from unknown ones. */
+const STRONG_ONLY_PAIRS = /** @type {const} */ ([
+  ["--color-fog", "--color-passage", 3],
+  ["--color-coastline", "--color-fog", 3]
 ]);
 
 /**
@@ -771,6 +779,29 @@ describe("Canvas renderer", () => {
     expect(narrow.neat.paths.filter((step) => step === "moveTo")).toHaveLength(4 * 24);
   });
 
+  it("US-03.1 labels a short board by its font height and keeps the first and last row", () => {
+    const labyrinth = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => 0));
+    // Pitch is 8px: the label is 8px wide but 10px tall, so every row cannot stay.
+    const small = stubCanvas({ width: 72, neatline: true });
+    small.renderer.render(board({ labyrinth, revealed: ["0,0"] }));
+    expect(small.neat.labels.filter((text) => /^\d+$/.test(text)).map(Number)).toEqual([1, 3, 5, 7, 9]);
+
+    const tiny = stubCanvas({ width: 20, neatline: true });
+    tiny.renderer.render(board({ labyrinth, revealed: ["0,0"] }));
+    const rows = tiny.neat.labels.filter((text) => /^\d+$/.test(text)).map(Number);
+    expect(rows[0]).toBe(1);
+    expect(rows.at(-1)).toBe(9);
+  });
+
+  it("US-02.1 strokes the open Gate arrow in the on-fill light token", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-board-light-on-fill", "rgb(7, 7, 2)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, open: true, sealed: false } }));
+    expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 2)")).toBe(true);
+  });
+
   it("US-01.2 doubles the Coastline and fills the Fog flat in high contrast", () => {
     /** @param {boolean} strong */
     const measure = (strong) => {
@@ -1157,6 +1188,8 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
             ...(paletteSelector ? daylightScope(paletteSelector) : [])
           ]);
           for (const [mark, ground, floor] of BOARD_PAIRS) {
+            // Strong mode paints the Fog flat with no dots, so the dot-on-Fog pair does not apply there.
+            if (mode === "strong" && ground === "--color-fog") continue;
             // Strong contrast lifts every pair on the passage and the land to 4.5:1.
             const needed = mode === "strong" && floor === 3 && ground !== DISC ? 4.5 : floor;
             const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
@@ -1167,6 +1200,14 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
         }
       }
     }
+    const strong = Object.entries(THEMES).flatMap(([theme, base]) => {
+      const tokens = new Map([...base, ...daylightScope(/** @type {string} */ (MODES.strong))]);
+      return STRONG_ONLY_PAIRS.map(([mark, ground, floor]) => {
+        const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
+        return ratio < floor ? `${theme}/strong: ${mark} on ${ground} ${ratio.toFixed(2)} < ${floor}` : "";
+      });
+    });
+    failures.push(...strong.filter(Boolean));
     expect(failures).toEqual([]);
   });
 

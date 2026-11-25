@@ -42,7 +42,7 @@ values. The three water screens are literal values in each block, never aliases.
 
 ### Board marks
 
-Each mark names its token in `tokens.css` and the ground it sits on. Non-text marks reach 3:1 against that ground. Text reaches 4.5:1. The Fog fill stays close to the Passage, so the Fog dot carries the known/unknown edge at 3:1 against the Passage.
+Each mark names its token in `tokens.css` and the ground it sits on. Non-text marks reach 3:1 against that ground. Text reaches 4.5:1. In the normal modes the Fog fill stays close to the Passage, so the Fog dot carries the known/unknown edge at 3:1 against the Passage. In strong contrast the Fog paints flat with no dot, so the Fog fill itself reaches 3:1 against the Passage.
 
 | Mark | Light | Night | Ground |
 | :-- | :-- | :-- | :-- |
@@ -59,6 +59,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 | Echo number | `oklch(100% 0 0)` | `oklch(18% 0.012 250)` | Echo |
 | Gate | `oklch(58% 0.24 340)` | `oklch(70% 0.2 340)` | Passage |
 | Signal light on the board | Gate | Signal | Passage |
+| Signal light on the arch fill | Gate | `oklch(58% 0.24 340)` | White arch fill |
 
 - **Lights**: the Signal fill carries the Pulse button, the Signal Bell, the Gate marks,
   the active tab underline, the saved mark, the success log dot, the landing trail, and a

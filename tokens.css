@@ -71,6 +71,7 @@
   --color-board-gate: var(--color-gate);
   --color-board-warden: var(--color-ink);
   --color-board-light: var(--color-gate);
+  --color-board-light-on-fill: var(--color-board-light);
   --color-board-explorer-ring: var(--color-ink);
   --color-board-explorer-disc: var(--color-paper);
   --color-board-explorer: var(--color-explorer);
@@ -91,7 +92,7 @@
   --board-gate: oklch(58% 0.24 340);
   --board-echo: oklch(52% 0.17 250);
   --board-echo-text: oklch(100% 0 0);
-  --access-fog: oklch(90% 0.02 232);
+  --access-fog: oklch(64% 0.02 232);
   --access-fog-soft: oklch(94% 0.015 232);
   --access-passage: oklch(100% 0 0);
   --access-pulse: oklch(52% 0.17 250 / 28%);
@@ -206,6 +207,8 @@
     --color-board-echo: oklch(74% 0.13 250);
     --color-board-echo-text: oklch(18% 0.012 250);
     --color-board-light: var(--color-signal);
+    /* The open Gate arrow strokes on the white arch: the Night Signal reads 2.95:1 there. */
+    --color-board-light-on-fill: oklch(58% 0.24 340);
     --color-board-explorer-ring: var(--color-ink);
     --color-danger-line: var(--color-ink);
     --color-pulse: oklch(74% 0.13 250 / 30%);
@@ -270,6 +273,8 @@
   --color-board-echo: oklch(74% 0.13 250);
   --color-board-echo-text: oklch(18% 0.012 250);
   --color-board-light: var(--color-signal);
+  /* The open Gate arrow strokes on the white arch: the Night Signal reads 2.95:1 there. */
+  --color-board-light-on-fill: oklch(58% 0.24 340);
   --color-board-explorer-ring: var(--color-ink);
   --color-danger-line: var(--color-ink);
   --color-pulse: oklch(74% 0.13 250 / 30%);

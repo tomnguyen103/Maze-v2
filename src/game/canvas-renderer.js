@@ -338,7 +338,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     neat.font = `${10 * deviceRatio}px ${palette.fontMono}`;
     // Every tick stays. Label every k-th line, with k the smallest step whose pitch fits the widest label.
     const labelWidth = neat.measureText(String(size)).width + 2 * unit;
-    const step = [1, 2, 5, 10].find((candidate) => (candidate * side) / size >= labelWidth) ?? 10;
+    const rowWidth = Math.max(labelWidth, 10 * deviceRatio);
+    const steps = [1, 2, 5, 10];
+    const fits = (/** @type {number} */ candidate) => (candidate * side) / size >= rowWidth;
+    const step = steps.find(fits) ?? steps[steps.length - 1];
     const labelled = (/** @type {number} */ index) =>
       index === 0 || index === size - 1 || (index % step === 0 && size - 1 - index >= step);
     // Column letters sit centred above the top ticks. Row numbers end right at the left ticks.
@@ -576,6 +579,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.fillStyle = palette.light;
       context.fill();
     } else if (gate.open) {
+      // The arrow sits on the white arch, so it takes the on-fill light.
+      context.strokeStyle = palette.lightOnFill;
       context.moveTo(x, y + tile * 0.18 * scale);
       context.lineTo(x, y - tile * 0.12 * scale);
       context.moveTo(x - tile * 0.1 * scale, y - tile * 0.02 * scale);
@@ -922,6 +927,7 @@ function readPalette() {
     ink: color("--color-ink", FALLBACK_PALETTE.ink),
     land: color("--color-land", FALLBACK_PALETTE.land),
     light: color("--color-board-light", FALLBACK_PALETTE.light),
+    lightOnFill: color("--color-board-light-on-fill", FALLBACK_PALETTE.lightOnFill),
     // A negative scale would make `arc` throw, so the scale keeps a positive floor.
     markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
     night: color("--color-night-deep", FALLBACK_PALETTE.night),
@@ -953,6 +959,7 @@ const FALLBACK_PALETTE = {
   ink: "oklch(18% 0.012 250)",
   land: "oklch(99% 0.004 95)",
   light: "oklch(58% 0.24 340)",
+  lightOnFill: "oklch(58% 0.24 340)",
   night: "oklch(18% 0.012 250)",
   onFill: "oklch(100% 0 0)",
   passage: "oklch(95.5% 0.022 232)",
