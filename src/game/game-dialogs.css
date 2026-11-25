@@ -357,11 +357,8 @@ dialog > .dialog-heading > button {
 
 .journal-empty {
   margin: var(--space-5) 0;
-  padding: var(--space-6) var(--space-5);
-  border: 1.5px dashed var(--color-line-soft);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
-  text-align: center;
+  padding: var(--space-5) 0;
+  border-block: 1px solid var(--color-line);
 }
 
 .journal-empty strong,
@@ -390,7 +387,7 @@ dialog > .dialog-heading > button {
 
 .journal-objectives {
   display: grid;
-  border-top: 1px solid var(--color-line-soft);
+  border-top: 1px solid var(--color-line);
 }
 
 .journal-objective {
@@ -413,7 +410,7 @@ dialog > .dialog-heading > button {
 .journal-objective > div > p {
   margin: 0;
   color: var(--color-ink-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-compact);
 }
 
 .journal-counts {
@@ -426,7 +423,9 @@ dialog > .dialog-heading > button {
 }
 
 .journal-counts li {
-  font-size: 0.7rem;
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
 }
 
 .journal-practice {
@@ -442,7 +441,8 @@ dialog > .dialog-heading > button {
 .journal-clear__warning {
   margin-top: var(--space-3);
   padding: var(--space-4);
-  border: 2px solid var(--color-warden);
+  border: 1px solid var(--color-warden);
+  border-radius: var(--radius-md);
   background: var(--color-warden-soft);
 }
 
@@ -1004,17 +1004,17 @@ dialog > .dialog-heading > button {
   display: grid;
   margin: var(--space-5) 0 0;
   padding: 0;
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
   list-style: none;
 }
 
 .run-records li {
   display: grid;
-  padding: var(--space-3);
+  padding: var(--space-3) 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  border-block: 1px solid var(--color-line-soft);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .run-records__actions {
@@ -1029,21 +1029,22 @@ dialog > .dialog-heading > button {
 }
 
 .run-records strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .run-records span {
   margin-top: var(--space-1);
   color: var(--color-ink-muted);
-  font-size: 0.74rem;
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
-.run-records__empty {
-  padding: var(--space-6) var(--space-4);
-  border: 1.5px dashed var(--color-line-soft);
-  border-radius: var(--radius-lg);
+.run-records li.run-records__empty {
+  display: block;
+  padding: var(--space-5) 0;
   color: var(--color-ink-muted);
-  text-align: center;
 }
 
 .result-dialog__stats {
