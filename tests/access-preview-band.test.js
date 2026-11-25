@@ -17,7 +17,7 @@ describe("Access preview band", () => {
 
   it("US-02.1 centres each coastline line on its band edge and hatches only the Land band", () => {
     for (const edge of [50, 75]) {
-      expect(rule).toContain(`var(--color-coastline) calc(${edge}% - 1px) calc(${edge}% + 1px)`);
+      expect(rule).toContain(`var(--color-coastline) calc(${edge}% - 0.5px) calc(${edge}% + 0.5px)`);
     }
     expect(rule.match(/var\(--color-coastline\)/g)).toHaveLength(2);
     expect(rule).toContain("var(--color-land) 50% 75%");

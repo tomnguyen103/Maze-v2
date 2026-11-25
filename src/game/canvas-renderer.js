@@ -667,13 +667,22 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
    * @param {number} tile
    */
   function strokeSignal(tile) {
+    strokeCasing(tile);
+    context.stroke();
+  }
+
+  /**
+   * Strokes only the casing of the current path. A composite mark casts every
+   * casing first, so no casing cuts an ink stroke of the same mark.
+   * @param {number} tile
+   */
+  function strokeCasing(tile) {
     const { lineWidth, strokeStyle } = context;
     context.strokeStyle = palette.casing;
     context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
     context.stroke();
     context.strokeStyle = strokeStyle;
     context.lineWidth = lineWidth;
-    context.stroke();
   }
 
   /** @param {EchoBridge} bridge @param {number} tile */
@@ -691,14 +700,35 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.strokeStyle = color;
     context.lineCap = "round";
     // The trail is one plain line: dashed while closed, solid once open.
-    context.lineWidth = Math.max(2, tile * 0.05 * scale);
-    context.setLineDash(
-      bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale]
-    );
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
-    strokeSignal(tile);
+    const lineDash = bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale];
+    const lineWidth = Math.max(2, tile * 0.05 * scale);
+    context.lineWidth = lineWidth;
+    const traceLine = () => {
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(to.x, to.y);
+    };
+    const traceCross = () => {
+      context.beginPath();
+      context.moveTo(midpoint.x - tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
+      context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
+    };
+    // Casing first under the line and the X, then the line ink, then the X ink.
+    context.setLineDash(lineDash);
+    traceLine();
+    strokeCasing(tile);
+    if (!bridge.open) {
+      context.setLineDash([]);
+      context.lineWidth = Math.max(2, tile * 0.06 * scale);
+      traceCross();
+      strokeCasing(tile);
+      context.lineWidth = lineWidth;
+      context.setLineDash(lineDash);
+    }
+    traceLine();
+    context.stroke();
     context.setLineDash([]);
     context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
     for (const endpoint of [from, to]) {
@@ -710,12 +740,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     }
     if (!bridge.open) {
       context.lineWidth = Math.max(2, tile * 0.06 * scale);
-      context.beginPath();
-      context.moveTo(midpoint.x - tile * 0.1, midpoint.y - tile * 0.1);
-      context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
-      context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
-      context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
-      // A plain stroke: a casing would cut the dashed line the X sits on.
+      traceCross();
       context.stroke();
     }
     drawLabel(
@@ -775,13 +800,29 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.fillStyle = palette.onFill;
     context.lineWidth = Math.max(2, tile * 0.06 * scale);
     context.lineJoin = "round";
-    context.beginPath();
-    context.arc(x, y - tile * 0.04, tile * 0.2 * scale, Math.PI, 0);
-    context.lineTo(x + tile * 0.25 * scale, y + tile * 0.2 * scale);
-    context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
-    context.closePath();
+    const traceSlash = () => {
+      context.beginPath();
+      context.moveTo(x - tile * 0.22, y - tile * 0.22);
+      context.lineTo(x + tile * 0.22, y + tile * 0.24);
+    };
+    const traceBody = () => {
+      context.beginPath();
+      context.arc(x, y - tile * 0.04, tile * 0.2 * scale, Math.PI, 0);
+      context.lineTo(x + tile * 0.25 * scale, y + tile * 0.2 * scale);
+      context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
+      context.closePath();
+    };
+    // Casing first under the outline and the slash, then the outline ink, then the slash ink.
+    traceBody();
     context.fill();
-    strokeSignal(tile);
+    strokeCasing(tile);
+    if (bell.spent) {
+      context.lineCap = "round";
+      traceSlash();
+      strokeCasing(tile);
+    }
+    traceBody();
+    context.stroke();
     context.beginPath();
     context.arc(
       x,
@@ -793,11 +834,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.fillStyle = color;
     context.fill();
     if (bell.spent) {
-      context.lineCap = "round";
-      context.beginPath();
-      context.moveTo(x - tile * 0.22, y - tile * 0.22);
-      context.lineTo(x + tile * 0.22, y + tile * 0.24);
-      // A plain stroke: a casing would cut the bell outline the slash crosses.
+      traceSlash();
       context.stroke();
     }
     drawLabel(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04, tile, 0.12);

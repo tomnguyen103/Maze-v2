@@ -1298,33 +1298,42 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(255, 255, 255)")).toBe(false);
   });
 
-  it("US-01.2 strokes the closed-bridge X and the spent-bell slash plain, with no casing", () => {
+  it("US-01.2 casts the casing for the closed-bridge X and the spent-bell slash before every ink stroke of the mark", () => {
     document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
     document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
     document.body.style.setProperty("--color-board-casing", "rgb(250, 250, 250)");
-    /** @param {Partial<ReturnType<typeof board>>} marks */
-    const magentaStrokes = (marks) => {
+    const casing = "rgb(250, 250, 250)";
+    /** @param {Partial<ReturnType<typeof board>>} marks @param {boolean} strong */
+    const magentaStrokes = (marks, strong) => {
+      if (strong) document.documentElement.dataset.accessContrast = "strong";
       const { context, renderer } = stubCanvas();
       const paints = recordPaints(context);
       renderer.render(board({ revealed: ["1,1"], ...marks }));
+      document.documentElement.removeAttribute("data-access-contrast");
       return paints.filter(
-        (paint) => paint.kind === "stroke" && ["rgb(9, 9, 1)", "rgb(9, 9, 2)", "rgb(250, 250, 250)"].includes(paint.style)
+        (paint) => paint.kind === "stroke" && ["rgb(9, 9, 1)", "rgb(9, 9, 2)", casing].includes(paint.style)
       );
     };
 
-    const bridge = magentaStrokes({
-      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: false }]
-    });
-    const cross = bridge[bridge.length - 1];
-    expect(cross.path).toHaveLength(4);
-    expect(cross.style).toBe("rgb(9, 9, 2)");
-    expect(bridge[bridge.length - 2].style).toBe("rgb(9, 9, 2)");
-    expect(bridge[bridge.length - 2].path).not.toEqual(cross.path);
+    for (const strong of [false, true]) {
+      const bridge = magentaStrokes({
+        echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: false }]
+      }, strong);
+      const cross = bridge[bridge.length - 1];
+      expect(cross.style).toBe("rgb(9, 9, 2)");
+      expect(cross.path).toHaveLength(4);
+      const crossCasing = bridge.findIndex((paint) => paint.style === casing && paint.path.length === 4);
+      expect(crossCasing).toBeGreaterThanOrEqual(0);
+      expect(bridge[crossCasing].path).toEqual(cross.path);
+      const firstInk = bridge.findIndex((paint) => paint.style !== casing);
+      expect(crossCasing).toBeLessThan(firstInk);
 
-    const bell = magentaStrokes({ signalBells: [{ id: 0, row: 0, col: 1, spent: true }] });
-    // Casing and outline, then the slash on its own.
-    expect(bell.map((paint) => paint.style)).toEqual(["rgb(250, 250, 250)", "rgb(9, 9, 2)", "rgb(9, 9, 2)"]);
-    expect(bell[2].path).toHaveLength(2);
+      const bell = magentaStrokes({ signalBells: [{ id: 0, row: 0, col: 1, spent: true }] }, strong);
+      // Body casing, slash casing, then the outline ink and the slash ink.
+      expect(bell.map((paint) => paint.style)).toEqual([casing, casing, "rgb(9, 9, 2)", "rgb(9, 9, 2)"]);
+      expect(bell[1].path).toEqual(bell[3].path);
+      expect(bell[1].path).toHaveLength(2);
+    }
   });
 
   it("US-01.2 keeps the casing light on a forced light Fog and dark on the Night Fog", () => {
