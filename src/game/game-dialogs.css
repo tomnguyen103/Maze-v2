@@ -1596,7 +1596,45 @@ dialog > .dialog-heading > button {
   }
 }
 
+/* A phone sheet is a flex column, so the footer sits at the sheet bottom. */
+@media (max-width: 48rem) {
+  :is(.access-settings-dialog, .daily-dialog, .first-light-dialog, .level-dialog, .quest-conflict-dialog)[open],
+  .access-settings-dialog > form,
+  .level-dialog[data-step="1"] .level-dialog__step[data-step="1"],
+  .level-dialog[data-step="2"] .level-dialog__step[data-step="2"],
+  .level-dialog[data-step="3"] .level-dialog__step[data-step="3"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :is(.access-settings-dialog, .daily-dialog, .first-light-dialog, .level-dialog, .quest-conflict-dialog)[open] > *,
+  .access-settings-dialog > form > *,
+  .level-dialog__step > * {
+    flex-shrink: 0;
+  }
+
+  .access-settings-dialog > form,
+  .level-dialog__step {
+    flex-grow: 1;
+  }
+
+  :is(.daily-dialog__actions, .access-settings-actions, .first-light-dialog__actions, .level-dialog__step-actions, .quest-conflict-dialog__actions) {
+    margin-top: auto;
+  }
+}
+
 @media (max-width: 32rem) {
+  /* A phone row stacks the tile range under the name, so a long name has the full width. */
+  .level-card {
+    grid-template-areas:
+      "badge"
+      "name"
+      "size"
+      "body"
+      "topics";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .lifetime-dialog__actions,
   .result-dialog__actions {
     align-items: stretch;
