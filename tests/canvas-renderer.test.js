@@ -10,9 +10,9 @@ import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number }} [options]
+ * @param {{ width?: number, neatline?: boolean }} [options]
  */
-function stubCanvas({ width = 640 } = {}) {
+function stubCanvas({ width = 640, neatline = false } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -67,11 +67,57 @@ function stubCanvas({ width = 640 } = {}) {
     tiles.push(tile);
     return /** @type {never} */ (tile);
   };
+  // The Neatline overlay sits beside the canvas inside an 18 pixel margin.
+  /** @type {string[]} */
+  const neatLabels = [];
+  /** @type {string[]} */
+  const neatFonts = [];
+  /** @type {string[]} */
+  const neatPaths = [];
+  const neatContext = {
+    beginPath: vi.fn(() => neatPaths.push("beginPath")),
+    clearRect: vi.fn(),
+    fillStyle: "",
+    fillText: vi.fn((/** @type {string} */ text) => neatLabels.push(text)),
+    font: "",
+    lineTo: vi.fn(() => neatPaths.push("lineTo")),
+    lineWidth: 0,
+    moveTo: vi.fn(() => neatPaths.push("moveTo")),
+    stroke: vi.fn(() => neatPaths.push("stroke")),
+    strokeRect: vi.fn(() => neatPaths.push("strokeRect")),
+    strokeStyle: "",
+    textAlign: "",
+    textBaseline: ""
+  };
+  const overlay = { width: 0, height: 0, getContext: () => neatContext };
+  if (neatline) {
+    Object.defineProperty(neatContext, "font", {
+      get: () => neatFonts.at(-1) ?? "",
+      set: (value) => {
+        neatFonts.push(value);
+      }
+    });
+    Object.assign(canvas, {
+      getBoundingClientRect: () => ({ left: 18, top: 18, width, height: width }),
+      parentElement: {
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: width + 36 }),
+        querySelector: () => overlay
+      }
+    });
+  }
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
     createTile
   );
-  return { calls, context, fillRects, labels, renderer, tiles };
+  return {
+    calls,
+    context,
+    fillRects,
+    labels,
+    neat: { fonts: neatFonts, labels: neatLabels, overlay, paths: neatPaths },
+    renderer,
+    tiles
+  };
 }
 
 /** @param {string} seed @param {string} level @param {number} quest */
@@ -471,11 +517,33 @@ describe("Canvas renderer", () => {
     expect(markFills[wardenBody + 1]).toBe("rgb(11, 12, 13)");
   });
 
-  it("writes the pause overlay text in the on-fill color", () => {
+  it("US-03.1 draws the Neatline ticks and the Grid reference on the overlay canvas", () => {
+    const { neat, renderer } = stubCanvas({ neatline: true });
+
+    renderer.render(board({ revealed: ["0,0"] }));
+
+    // One 2px tick per tile line on all four edges, in one stroke, and one 1px border.
+    expect(neat.paths.filter((step) => step === "moveTo")).toHaveLength(4 * 3);
+    expect(neat.paths.filter((step) => step === "stroke")).toHaveLength(1);
+    expect(neat.paths.filter((step) => step === "strokeRect")).toHaveLength(1);
+    expect(neat.labels).toEqual(["A", "1", "B", "2"]);
+    expect(neat.fonts.every((font) => font.startsWith("10px "))).toBe(true);
+    expect(neat.overlay.width).toBe(676);
+  });
+
+  it("US-03.1 skips the Neatline when the board has no overlay canvas", () => {
+    const { renderer } = stubCanvas();
+
+    expect(() => renderer.render(board({ revealed: ["0,0"] }))).not.toThrow();
+  });
+
+  it("writes the pause text in ink on a paper band between two ink rules", () => {
     const { context, renderer } = stubCanvas();
     const run = questRun("PALETTE-REREAD", "bright-start", 1);
     /** @type {string[][]} */
     const textFills = [];
+    /** @type {Array<{ style: string, y: number, w: number, h: number }>} */
+    const bands = [];
     let fillStyle = "";
     Object.defineProperty(context, "fillStyle", {
       get: () => fillStyle,
@@ -484,11 +552,40 @@ describe("Canvas renderer", () => {
       }
     });
     context.fillText = vi.fn((text) => textFills.push([text, fillStyle]));
-    document.body.style.setProperty("--color-on-fill", "rgb(250, 251, 252)");
+    context.fillRect = vi.fn((_x, y, w, h) => {
+      bands.push({ style: fillStyle, y, w, h });
+    });
+    document.body.style.setProperty("--color-ink", "rgb(4, 4, 4)");
+    document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
+    document.body.style.setProperty("--color-overlay", "rgb(1, 1, 1)");
 
     renderer.render({ ...run, pulseVisible: [], revealed: [], status: "paused" });
 
-    expect(textFills).toContainEqual(["PAUSED", "rgb(250, 251, 252)"]);
+    expect(textFills).toContainEqual(["PAUSED", "rgb(4, 4, 4)"]);
+    expect(bands.some((band) => band.style === "rgb(1, 1, 1)")).toBe(false);
+    const paper = bands.find((band) => band.style === "rgb(250, 251, 252)" && band.w === 640);
+    expect(paper).toBeDefined();
+    expect(paper && paper.h).toBeLessThan(640 / 2);
+    const rules = bands.filter((band) => band.style === "rgb(4, 4, 4)" && band.w === 640);
+    expect(rules.map((rule) => rule.y)).toEqual([paper?.y, (paper?.y ?? 0) + (paper?.h ?? 0) - 1]);
+  });
+
+  it("US-02.1 puts the Signal light on the Gate Warden challenge band only", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    const lightOn = (/** @type {"gate-warden" | undefined} */ kind) => {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      renderer.render(
+        board({
+          challenge: { kind, wardenId: 0, question: null, attempt: 0, feedback: null, hintRevealed: false },
+          status: "challenge"
+        })
+      );
+      return paints.some((paint) => paint.style === "rgb(9, 9, 1)");
+    };
+
+    expect(lightOn("gate-warden")).toBe(true);
+    expect(lightOn(undefined)).toBe(false);
   });
 
   it("reads the canvas palette again on every frame", () => {

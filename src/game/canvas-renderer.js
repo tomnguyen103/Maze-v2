@@ -230,36 +230,111 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     drawExplorer(run.explorer, tile);
 
     if (run.status === "paused") {
-      context.fillStyle = palette.overlay;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.onFill;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
-      context.textAlign = "center";
+      const fontSize = Math.max(22, canvas.width * 0.045);
+      drawBand(fontSize * 2.6);
+      context.fillStyle = palette.ink;
+      context.font = `700 ${fontSize}px ${palette.fontBody}`;
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
     } else if (run.status === "challenge") {
-      context.fillStyle = palette.overlay;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.explorer;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
-      context.textAlign = "center";
+      const fontSize = Math.max(22, canvas.width * 0.045);
+      const subSize = Math.max(14, canvas.width * 0.022);
+      const gap = Math.max(28, canvas.width * 0.055);
+      const gateWarden = run.challenge?.kind === "gate-warden";
+      drawBand(gap + fontSize * 2.4);
+      const headingY = canvas.height / 2 - gap / 2;
+      context.fillStyle = palette.ink;
+      context.font = `700 ${fontSize}px ${palette.fontBody}`;
+      context.fillText(gateWarden ? "GATE WARDEN" : "WARDEN CHALLENGE", canvas.width / 2, headingY);
+      context.font = `500 ${subSize}px ${palette.fontBody}`;
       context.fillText(
-        run.challenge?.kind === "gate-warden"
-          ? "GATE WARDEN"
-          : "WARDEN CHALLENGE",
+        gateWarden ? "Break the seal with your answer." : "Your knowledge clears the path.",
         canvas.width / 2,
-        canvas.height / 2
+        headingY + gap
       );
-      context.fillStyle = palette.onFill;
-      context.font = `500 ${Math.max(14, canvas.width * 0.022)}px ${palette.fontBody}`;
-      context.fillText(
-        run.challenge?.kind === "gate-warden"
-          ? "Break the seal with your answer."
-          : "Your knowledge clears the path.",
-        canvas.width / 2,
-        canvas.height / 2 + Math.max(28, canvas.width * 0.055)
-      );
+      if (gateWarden) {
+        // The Signal light marks the Gate Warden only.
+        context.beginPath();
+        context.arc(canvas.width / 2, headingY - fontSize * 0.95, fontSize * 0.2, 0, Math.PI * 2);
+        context.fillStyle = palette.light;
+        context.fill();
+      }
     }
+    drawNeatline(size);
     context.restore();
+  }
+
+  /**
+   * A paper band across the board centre with an ink rule above and below.
+   * @param {number} height
+   */
+  function drawBand(height) {
+    const unit = devicePixel();
+    const top = Math.round((canvas.height - height) / 2);
+    const band = Math.round(height);
+    context.fillStyle = palette.land;
+    context.fillRect(0, top, canvas.width, band);
+    context.fillStyle = palette.ink;
+    context.fillRect(0, top, canvas.width, unit);
+    context.fillRect(0, top + band - unit, canvas.width, unit);
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+  }
+
+  /**
+   * The Neatline is a 1px ink border with one 2px tick per tile line, and the Grid
+   * reference labels the columns and rows. It draws on the overlay canvas in the
+   * board margin, so the maze tile maths stays the same.
+   * @param {number} size
+   */
+  function drawNeatline(size) {
+    const frame = canvas.parentElement;
+    const overlay = /** @type {HTMLCanvasElement | null | undefined} */ (
+      frame?.querySelector(".neatline-canvas")
+    );
+    const neat = overlay?.getContext("2d");
+    if (!frame || !overlay || !neat) return;
+    const frameBox = frame.getBoundingClientRect();
+    const box = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(frameBox.width * deviceRatio));
+    const height = Math.max(1, Math.round(frameBox.height * deviceRatio));
+    if (overlay.width !== width || overlay.height !== height) {
+      overlay.width = width;
+      overlay.height = height;
+    }
+    const unit = devicePixel();
+    const left = Math.round((box.left - frameBox.left) * deviceRatio);
+    const top = Math.round((box.top - frameBox.top) * deviceRatio);
+    const side = canvas.width;
+    const tick = 2 * unit;
+    const half = (unit % 2) / 2;
+    neat.clearRect(0, 0, width, height);
+    neat.strokeStyle = palette.ink;
+    neat.lineWidth = unit;
+    neat.strokeRect(left - unit / 2, top - unit / 2, side + unit, side + unit);
+    neat.beginPath();
+    for (let line = 0; line <= size; line += 1) {
+      const offset = Math.round((line * side) / size);
+      const x = left + offset + half;
+      const y = top + offset + half;
+      neat.moveTo(x, top - unit);
+      neat.lineTo(x, top - unit - tick);
+      neat.moveTo(x, top + side + unit);
+      neat.lineTo(x, top + side + unit + tick);
+      neat.moveTo(left - unit, y);
+      neat.lineTo(left - unit - tick, y);
+      neat.moveTo(left + side + unit, y);
+      neat.lineTo(left + side + unit + tick, y);
+    }
+    neat.stroke();
+    neat.fillStyle = palette.ink;
+    neat.font = `${10 * deviceRatio}px ${palette.fontMono}`;
+    neat.textAlign = "center";
+    neat.textBaseline = "middle";
+    for (let index = 0; index < size; index += 1) {
+      const middle = ((index + 0.5) * side) / size;
+      neat.fillText(String.fromCharCode(65 + index), left + middle, (top - unit - tick) / 2);
+      neat.fillText(String(index + 1), (left - unit - tick) / 2, top + middle);
+    }
   }
 
   /**
@@ -815,6 +890,7 @@ function readPalette() {
     explorer: color("--color-explorer", FALLBACK_PALETTE.explorer),
     explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
+    fontMono: color("--font-utility", FALLBACK_PALETTE.fontMono),
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
     fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
     gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
@@ -826,7 +902,6 @@ function readPalette() {
     markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
     night: color("--color-night-deep", FALLBACK_PALETTE.night),
     onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
-    overlay: color("--color-overlay", FALLBACK_PALETTE.overlay),
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
     transparent: "transparent",
@@ -843,6 +918,7 @@ const FALLBACK_PALETTE = {
   explorer: "oklch(46% 0.17 250)",
   explorerRing: "oklch(18% 0.012 250)",
   fontBody: "Arial, sans-serif",
+  fontMono: "monospace",
   fog: "oklch(99% 0.004 95)",
   fogDot: "oklch(18% 0.012 250 / 80%)",
   gate: "oklch(58% 0.24 340)",
@@ -853,7 +929,6 @@ const FALLBACK_PALETTE = {
   light: "oklch(58% 0.24 340)",
   night: "oklch(16% 0.012 65)",
   onFill: "oklch(100% 0 0)",
-  overlay: "oklch(20% 0.015 60 / 60%)",
   passage: "oklch(95.5% 0.022 232)",
   pulse: "oklch(68.5% 0.169 237 / 30%)",
   warden: "oklch(18% 0.012 250)"
