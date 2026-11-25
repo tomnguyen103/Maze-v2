@@ -159,6 +159,7 @@
     --dialog-pad: var(--space-4);
     width: calc(100% - var(--space-2));
     height: calc(100dvh - var(--space-2));
+    max-height: calc(100dvh - var(--space-2));
   }
 
   .run-replay-layout {
