@@ -567,6 +567,36 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(drawOnce()).toEqual(drawOnce());
   });
 
+  it("US-02.3 falls back to the Pilot Chart light values when every CSS variable is missing", () => {
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+    const size = run.labyrinth.length;
+    const revealed = run.labyrinth.flatMap((row, r) => row.map((_, c) => `${r},${c}`));
+
+    renderer.render({
+      ...run,
+      revealed,
+      wardens: [{ row: 0, col: 0, id: 0, mode: "patrol" }],
+      pulseVisible: []
+    });
+
+    const styles = new Set(paints.map((paint) => paint.style));
+    expect(size).toBeGreaterThan(1);
+    for (const style of [
+      "oklch(95.5% 0.022 232)",
+      "oklch(18% 0.012 250)",
+      "oklch(58% 0.24 340)",
+      "oklch(52% 0.17 250)",
+      "oklch(46% 0.17 250)"
+    ]) {
+      expect(styles, style).toContain(style);
+    }
+    for (const stale of ["oklch(98.5% 0.014 88)", "oklch(92% 0.018 85)", "oklch(58% 0.2 24)", "oklch(24% 0.015 60)"]) {
+      expect(styles, stale).not.toContain(stale);
+    }
+  });
+
   it("US-08.5 falls back to the built-in palette when a CSS variable is missing and still draws", () => {
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);

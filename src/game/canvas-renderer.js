@@ -131,7 +131,7 @@ export function createCanvasRenderer(canvas) {
     } else if (run.status === "challenge") {
       context.fillStyle = palette.overlay;
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.signal;
+      context.fillStyle = palette.explorer;
       context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
       context.fillText(
@@ -293,10 +293,12 @@ export function createCanvasRenderer(canvas) {
       y,
       tile * 0.72 * scale
     );
-    glow.addColorStop(0, palette.signalGlow);
+    glow.addColorStop(0, palette.explorer);
     glow.addColorStop(1, palette.transparent);
+    context.globalAlpha = 0.3;
     context.fillStyle = glow;
     context.fillRect(x - tile, y - tile, tile * 2, tile * 2);
+    context.globalAlpha = 1;
 
     // A white disc with a sky ring carries the Explorer flag.
     context.beginPath();
@@ -304,7 +306,7 @@ export function createCanvasRenderer(canvas) {
     context.fillStyle = palette.onFill;
     context.fill();
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
-    context.strokeStyle = palette.signal;
+    context.strokeStyle = palette.explorer;
     context.stroke();
 
     const poleX = x - radius * 0.28;
@@ -320,7 +322,7 @@ export function createCanvasRenderer(canvas) {
     context.lineTo(poleX + radius * 0.72, y - radius * 0.3);
     context.lineTo(poleX, y - radius * 0.04);
     context.closePath();
-    context.fillStyle = palette.signal;
+    context.fillStyle = palette.explorer;
     context.fill();
   }
 
@@ -363,7 +365,7 @@ export function createCanvasRenderer(canvas) {
     const color = gate.open
       ? gate.sealed
         ? palette.warden
-        : palette.signal
+        : palette.explorer
       : palette.gate;
 
     // The Gate is a rounded arch door.
@@ -426,7 +428,7 @@ export function createCanvasRenderer(canvas) {
     context.arc(source.x, source.y, tile * 0.18 * scale, 0, Math.PI * 2);
     context.fillStyle = palette.onFill;
     context.fill();
-    context.strokeStyle = palette.signal;
+    context.strokeStyle = palette.explorer;
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -456,7 +458,7 @@ export function createCanvasRenderer(canvas) {
       y: (from.y + to.y) / 2
     };
     const scale = palette.markScale;
-    const color = bridge.open ? palette.signal : palette.gate;
+    const color = bridge.open ? palette.explorer : palette.gate;
 
     context.save();
     context.strokeStyle = color;
@@ -511,7 +513,7 @@ export function createCanvasRenderer(canvas) {
     const offsetX = horizontal ? 0 : offset;
     const offsetY = horizontal ? offset : 0;
     context.save();
-    context.strokeStyle = door.open ? palette.signal : palette.gate;
+    context.strokeStyle = door.open ? palette.explorer : palette.gate;
     context.lineWidth = Math.max(2, tile * 0.065 * palette.markScale);
     context.lineCap = "round";
     context.setLineDash(door.open ? [] : [tile * 0.11, tile * 0.09]);
@@ -539,7 +541,7 @@ export function createCanvasRenderer(canvas) {
   function drawSignalBell(bell, tile) {
     const { x, y } = centerOf(bell, tile);
     const scale = palette.markScale;
-    const color = bell.spent ? palette.gate : palette.signal;
+    const color = bell.spent ? palette.gate : palette.explorer;
     context.save();
     context.strokeStyle = color;
     context.fillStyle = palette.onFill;
@@ -709,21 +711,27 @@ function readPalette() {
    */
   const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
   return {
+    coastline: color("--color-coastline", FALLBACK_PALETTE.coastline),
+    danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
+    explorer: color("--color-explorer", FALLBACK_PALETTE.explorer),
+    explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
+    fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
     fogGrid: color("--color-fog-grid", FALLBACK_PALETTE.fogGrid),
     gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
     grid: color("--color-grid", FALLBACK_PALETTE.grid),
+    hatch: color("--color-hatch", FALLBACK_PALETTE.hatch),
     ink: color("--color-ink", FALLBACK_PALETTE.ink),
+    land: color("--color-land", FALLBACK_PALETTE.land),
+    light: color("--color-board-light", FALLBACK_PALETTE.light),
     markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
     night: color("--color-night-deep", FALLBACK_PALETTE.night),
     onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
     overlay: color("--color-overlay", FALLBACK_PALETTE.overlay),
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
-    signal: color("--color-explorer", FALLBACK_PALETTE.signal),
-    signalGlow: color("--color-explorer-glow", FALLBACK_PALETTE.signalGlow),
     transparent: "transparent",
     wall: color("--color-wall", FALLBACK_PALETTE.wall),
     wallGrid: color("--color-wall-grid", FALLBACK_PALETTE.wallGrid),
@@ -733,23 +741,30 @@ function readPalette() {
 }
 
 // Used when a CSS variable is missing, so the board never paints with an empty style.
+// The values equal the light block of tokens.css.
 const FALLBACK_PALETTE = {
-  echo: "oklch(62% 0.17 237)",
+  coastline: "oklch(18% 0.012 250)",
+  danger: "oklch(18% 0.012 250)",
+  echo: "oklch(52% 0.17 250)",
+  explorer: "oklch(46% 0.17 250)",
+  explorerRing: "oklch(18% 0.012 250)",
   fontBody: "Arial, sans-serif",
-  fog: "oklch(92% 0.018 85)",
-  fogGrid: "oklch(40% 0.02 60 / 45%)",
-  gate: "oklch(54% 0.14 155)",
+  fog: "oklch(99% 0.004 95)",
+  fogDot: "oklch(18% 0.012 250 / 80%)",
+  fogGrid: "oklch(18% 0.012 250 / 40%)",
+  gate: "oklch(58% 0.24 340)",
   grid: "oklch(40% 0.02 60 / 45%)",
-  ink: "oklch(24% 0.015 60)",
+  hatch: "oklch(18% 0.012 250 / 30%)",
+  ink: "oklch(18% 0.012 250)",
+  land: "oklch(99% 0.004 95)",
+  light: "oklch(58% 0.24 340)",
   night: "oklch(16% 0.012 65)",
   onFill: "oklch(100% 0 0)",
   overlay: "oklch(20% 0.015 60 / 60%)",
-  passage: "oklch(98.5% 0.014 88)",
+  passage: "oklch(95.5% 0.022 232)",
   pulse: "oklch(68.5% 0.169 237 / 30%)",
-  signal: "oklch(55% 0.16 240)",
-  signalGlow: "oklch(55% 0.16 240 / 30%)",
-  wall: "oklch(30% 0.012 60)",
-  wallGrid: "oklch(20% 0.012 60 / 85%)",
-  wallMark: "oklch(48% 0.014 60 / 75%)",
-  warden: "oklch(58% 0.2 24)"
+  wall: "oklch(30% 0.03 85)",
+  wallGrid: "oklch(18% 0.012 250 / 85%)",
+  wallMark: "oklch(50% 0.04 85 / 75%)",
+  warden: "oklch(18% 0.012 250)"
 };
