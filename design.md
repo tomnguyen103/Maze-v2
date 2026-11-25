@@ -40,6 +40,25 @@ values. The three water screens are literal values in each block, never aliases.
 | Signal deep (text) | `oklch(47% 0.22 340)` | `oklch(78% 0.17 340)` |
 | Water 1 | `oklch(95.5% 0.022 232)` | `oklch(27% 0.035 232)` |
 
+### Board marks
+
+Each mark names its token in `tokens.css` and the ground it must reach 3:1 against.
+
+| Mark | Light | Night | Ground |
+| :-- | :-- | :-- | :-- |
+| Land | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` | none |
+| Hatch | `oklch(18% 0.012 250 / 30%)` | `oklch(95% 0.006 95 / 30%)` | Land |
+| Coastline | Ink | Ink | Passage and Land |
+| Passage (water) | `oklch(95.5% 0.022 232)` | `oklch(32% 0.04 232)` | Land |
+| Fog | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` | Passage |
+| Fog dot | `oklch(18% 0.012 250 / 80%)` | `oklch(95% 0.006 95 / 70%)` | Fog |
+| Explorer | `oklch(46% 0.17 250)` | `oklch(74% 0.13 250)` | Land |
+| Explorer ring | Ink | Ink | Passage |
+| Warden and Danger line | Ink | Ink | Passage |
+| Echo | `oklch(52% 0.17 250)` | `oklch(74% 0.13 250)` | Passage |
+| Gate | `oklch(58% 0.24 340)` | `oklch(70% 0.2 340)` | Passage |
+| Signal light on the board | Gate | Signal | Passage |
+
 - **Lights**: the Signal fill carries the Pulse button, the Signal Bell, the Gate marks,
   the active tab underline, the saved mark, the success log dot, the landing trail, and a
   caution. The Pulse label is accent ink. Magenta never fills a text, a panel, or a
@@ -59,6 +78,9 @@ values. The three water screens are literal values in each block, never aliases.
   water screens; accent ink on Signal; and the Signal deep text on paper.
 - Non-text parts reach at least 3:1: focus rings, control edges, walls against
   passages, and the Constellation tiles on the night ground.
+- The coastline pair: the Coastline in ink against the Passage and against the Land,
+  3:1 or more in light and Night. The coastline carries the wall edge. The hatch is
+  texture and carries no contrast duty.
 - A colour mix uses `in oklab`.
 
 ## Typography
@@ -70,9 +92,19 @@ values. The three water screens are literal values in each block, never aliases.
 - **Geist Mono**: the Readout numbers, seeds, code, and IDs only. Monospace never
   labels a control or a section.
 - **Section labels**: 12px, 700, uppercase, with wide tracking. A label names a group.
+- **Type floor**: 12px minimum for every text. Display tracking has two tokens:
+  `-0.02em` above 1.5rem and `0` below. The Grid reference is the one 10px mark and it
+  is board art, not text a reader must read.
 
 ## Shape and spacing
 
+- **Shell**: a 76rem container and a 64px bar with one ink hairline. The wordmark sits
+  left, the route name sits as a quiet tab, and the Theme Choice sits right. The shell
+  is the same on every route. The header tab strip replaces a Menu disclosure.
+- **Button tiers**: primary fills with ink, secondary outlines in ink, and tertiary is an
+  underlined text link. One size, one weight, 40px minimum height.
+- **Empty state**: a label, a heading, one sentence, one action, and one Signal light.
+  Records and Atlas draw the blank ruled page.
 - Use the 4-point spacing scale from `tokens.css` (`--space-1` to `--space-16`).
 - Touch targets are at least 40px by 40px. Controls keep 8px between them.
 - The mobile breakpoint is 768px. On a portrait phone the board fills the width at 768px
@@ -104,15 +136,43 @@ values. The three water screens are literal values in each block, never aliases.
 
 ## Labyrinth canvas
 
-- **Passage tiles**: chart paper with an ink hairline.
-- **Walls**: a hatched ink wall.
-- **Fog**: a stippled fog over unknown tiles.
+- **Passages**: water passages. Passage tiles fill with the Passage water colour and
+  merge into one water shape on hatched land.
+- **Land**: the Land colour with a hatch of 1px ink lines at 45 degrees and a 4px pitch,
+  drawn inside each merged wall run. Land has no tile outline.
+- **Coastline**: one ink line where water meets land.
+- **Fog**: 4 to 6% stipple coverage from an 8 by 8 pattern tile, over unknown tiles.
+- **Position fix**: the Explorer reads as a ringed mark, not a glowing disc.
+- **Danger line**: a dotted ink line around a Warden. Red never marks the board.
 - **Wardens**: four marks, each with its own silhouette.
   - Patrol: a round mark.
   - Hunt: a pointed mark.
   - Intercept: a chevron.
   - Lured: a ringed mark.
 - Maze geometry, rulesets, and `echo-bridges-v1` never change.
+
+## Chart devices
+
+- **Neatline**: 1px ink around the board with one 2px tick per tile. The Grid reference
+  sits outside the frame in 10px Geist Mono.
+- **Grid reference**: column letters and row numbers that name a tile.
+- **Title block**: a corner block with two rules. The Labyrinth number sets in Archivo.
+  The level and ruleset set in body type. The seed and date share one caption line.
+- **Scale bar**: the Quest Level ladder on the landing.
+- **Ruled ledger**: hairline rows, tabular numbers, and a running head per band.
+- **Stamps**: a circled number per completed Labyrinth. It is filled when complete and
+  dashed when ahead. A Signal flag marks a Gate Warden.
+- **Compass rose**: one, on the landing only.
+
+## Dialog anatomy
+
+- The scrim is 55% ink. The panel has a 1px ink border, a 4px radius, no shadow, and a
+  paper fill.
+- The header band holds the title in Archivo, a Geist Mono reference at right, and one
+  2.5rem close square.
+- The footer is sticky and holds one primary action.
+- Two widths: 36rem and 44rem. Under 768px a dialog is a full-height sheet.
+- A load state is an ink skeleton. A Signal dot is the only selected mark.
 
 ## Motion
 
@@ -128,7 +188,13 @@ values. The three water screens are literal values in each block, never aliases.
 - Magenta on anything that is not a light.
 - Italic accent words.
 - Labels that number sections 01, 02, or 03.
-- Monospace labels.
+- Monospace labels, except the Grid reference.
+- Signal-soft panel fills.
+- Glows on any mark or panel.
+- Rounded wall tiles.
+- Red on the board.
+- Headline eyebrows and middle-dot meta strings.
+- Unicode glyphs as icons.
 - Pill buttons.
 - Glass blur.
 - Nested cards.
@@ -145,7 +211,7 @@ values. The three water screens are literal values in each block, never aliases.
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |
-| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. |
+| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. |
 
 ## Canonical export
 

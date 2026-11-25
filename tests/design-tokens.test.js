@@ -148,6 +148,45 @@ describe("Pilot Chart identity", () => {
     expect(glossary).not.toMatch(/\*\*Journey\*\*:/);
   });
 
+  it("states the chart contract in design.md (US-01.1, US-01.2)", () => {
+    const design = read("design.md");
+    for (const literal of [
+      "Chart devices",
+      "Neatline",
+      "Grid reference",
+      "Scale bar",
+      "Ruled ledger",
+      "Stamps",
+      "Compass rose",
+      "76rem",
+      "64px",
+      "Button tiers",
+      "Empty state",
+      "12px minimum",
+      "water passages",
+      "coastline",
+      "oklch(95.5% 0.022 232)",
+      "oklch(32% 0.04 232)",
+      "oklch(18% 0.012 250 / 80%)",
+      "oklch(18% 0.012 250 / 30%)",
+      "oklch(21% 0.03 250)"
+    ]) {
+      expect(design, literal).toContain(literal);
+    }
+    expect(design).not.toContain("Passage tiles: chart paper with an ink hairline");
+  });
+
+  it("defines the chart device terms in GLOSSARY.md and records ADR 0052", () => {
+    const glossary = read("GLOSSARY.md");
+    for (const term of ["Neatline", "Grid reference", "Coastline", "Title block"]) {
+      expect(glossary).toMatch(new RegExp(`\\*\\*${term}\\*\\*:`));
+    }
+    const adr = read("docs/adr/0052-pilot-chart-board-contract.md");
+    for (const decision of ["water passages", "3:1", "Stitch", "Menu", "trail"]) {
+      expect(adr).toContain(decision);
+    }
+  });
+
   it("keeps the game-rule terms in GLOSSARY.md", () => {
     const glossary = read("GLOSSARY.md");
     for (const term of ["Labyrinth", "Warden Challenge", "Gate", "Region Hue"]) {
