@@ -116,18 +116,33 @@ export function securityHeaders({ clerkHost = null, production = false }) {
  * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} [env]
  */
 export function createSecurityHeadersMiddleware(env = process.env) {
-  const headers = securityHeaders({
-    clerkHost: clerkHostFromPublishableKey(
-      env.CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY
-    ),
-    production: env.NODE_ENV === "production" || env.VERCEL_ENV === "production"
-  });
+  const clerkHost = clerkHostFromPublishableKey(
+    env.CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY
+  );
+  const production =
+    env.NODE_ENV === "production" || env.VERCEL_ENV === "production";
+  const secureHeaders = securityHeaders({ clerkHost, production });
+  // `vite preview` runs a production build over plain HTTP. WebKit applies
+  // upgrade-insecure-requests to loopback, so the HTTPS-only headers go out
+  // on TLS requests only: a direct TLS socket, or a TLS proxy in front of
+  // `npm start`. A forged forwarded header only makes the response stricter.
+  const plainHeaders = securityHeaders({ clerkHost, production: false });
   /**
-   * @param {import("node:http").IncomingMessage} _request
+   * @param {import("node:http").IncomingMessage} request
    * @param {import("node:http").ServerResponse} response
    * @param {(() => void) | undefined} [next]
    */
-  return function securityHeadersMiddleware(_request, response, next) {
+  return function securityHeadersMiddleware(request, response, next) {
+    const socket = /** @type {{ encrypted?: boolean } | undefined} */ (
+      request.socket
+    );
+    const forwardedProto = String(
+      request.headers?.["x-forwarded-proto"] ?? ""
+    ).split(",")[0].trim().toLowerCase();
+    const headers =
+      socket?.encrypted || forwardedProto === "https"
+        ? secureHeaders
+        : plainHeaders;
     for (const [name, value] of Object.entries(headers)) {
       response.setHeader(name, value);
     }

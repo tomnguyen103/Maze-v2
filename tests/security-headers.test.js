@@ -252,7 +252,83 @@ describe("createSecurityHeadersMiddleware", () => {
     /** @type {Record<string, string>} */
     const applied = {};
     createSecurityHeadersMiddleware({ NODE_ENV: "production" })(
-      /** @type {never} */ ({}),
+      /** @type {never} */ ({ socket: { encrypted: true } }),
+      /** @type {never} */ ({
+        /**
+         * @param {string} name
+         * @param {string} value
+         */
+        setHeader(name, value) {
+          applied[name] = value;
+        }
+      }),
+      () => {}
+    );
+    expect(applied["strict-transport-security"]).toBe(
+      "max-age=31536000; includeSubDomains"
+    );
+  });
+
+  it("drops the HTTPS-only headers when a production build serves plain HTTP", () => {
+    // `vite preview` sets NODE_ENV=production on http://127.0.0.1. WebKit
+    // applies upgrade-insecure-requests to loopback, so every asset failed.
+    /** @type {Record<string, string>} */
+    const applied = {};
+    createSecurityHeadersMiddleware({ NODE_ENV: "production" })(
+      /** @type {never} */ ({ socket: {} }),
+      /** @type {never} */ ({
+        /**
+         * @param {string} name
+         * @param {string} value
+         */
+        setHeader(name, value) {
+          applied[name] = value;
+        }
+      }),
+      () => {}
+    );
+    expect(applied["content-security-policy"]).not.toContain(
+      "upgrade-insecure-requests"
+    );
+    expect(applied["strict-transport-security"]).toBeUndefined();
+    expect(applied["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("keeps the HTTPS-only headers behind a TLS proxy", () => {
+    /** @type {Record<string, string>} */
+    const applied = {};
+    createSecurityHeadersMiddleware({ NODE_ENV: "production" })(
+      /** @type {never} */ ({
+        socket: {},
+        headers: { "x-forwarded-proto": "HTTPS" }
+      }),
+      /** @type {never} */ ({
+        /**
+         * @param {string} name
+         * @param {string} value
+         */
+        setHeader(name, value) {
+          applied[name] = value;
+        }
+      }),
+      () => {}
+    );
+    expect(applied["content-security-policy"]).toContain(
+      "upgrade-insecure-requests"
+    );
+    expect(applied["strict-transport-security"]).toBe(
+      "max-age=31536000; includeSubDomains"
+    );
+  });
+
+  it("keeps the HTTPS-only headers on a TLS socket whatever the forwarded proto", () => {
+    /** @type {Record<string, string>} */
+    const applied = {};
+    createSecurityHeadersMiddleware({ NODE_ENV: "production" })(
+      /** @type {never} */ ({
+        socket: { encrypted: true },
+        headers: { "x-forwarded-proto": "http" }
+      }),
       /** @type {never} */ ({
         /**
          * @param {string} name
