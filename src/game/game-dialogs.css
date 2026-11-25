@@ -370,7 +370,7 @@ dialog > .dialog-heading > button {
 }
 
 .records-empty h3,
-.journal-empty-action h3 {
+.journal-empty-heading {
   margin: 0 0 var(--space-2);
   font-family: var(--font-display);
   font-size: 1.5rem;
@@ -387,12 +387,34 @@ dialog > .dialog-heading > button {
   margin: 0;
 }
 
+.journal-empty-heading,
 .journal-empty-action {
   display: none;
 }
 
-.journal-dialog:has(.journal-empty) .journal-empty-action {
+/* The empty Journal draws one panel: the heading, the main.js note, and the action. */
+.journal-body:has(.journal-empty) {
+  margin: var(--space-5) 0;
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.journal-body:has(.journal-empty) .journal-empty-heading,
+.journal-body:has(.journal-empty) .journal-empty-action {
   display: block;
+}
+
+.journal-body:has(.journal-empty) .journal-empty {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* The heading carries the lead line, so the main.js copy of it is hidden. */
+.journal-body:has(.journal-empty) .journal-empty strong {
+  display: none;
 }
 
 .records-dialog:has(.run-records__empty) .records-empty {
@@ -1785,6 +1807,6 @@ dialog > .dialog-heading > button {
 }
 
 /* The empty Journal keeps its ink rule; the footer adds no second rule. */
-.journal-bands:has(.journal-empty) + .journal-clear {
+.journal-body:has(.journal-empty) + .journal-clear {
   border-top: 0;
 }
