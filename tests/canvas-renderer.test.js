@@ -10,7 +10,7 @@ import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean }} [options]
+ * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context" }} [options]
  */
 function stubCanvas({ width = 640, neatline = false } = {}) {
   /** @type {string[]} */
@@ -74,22 +74,36 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
   const neatFonts = [];
   /** @type {string[]} */
   const neatPaths = [];
+  /** @type {Array<{ text: string, x: number, y: number, align: string, baseline: string }>} */
+  const neatTexts = [];
+  /** @type {number[][]} */
+  const neatRects = [];
   const neatContext = {
     beginPath: vi.fn(() => neatPaths.push("beginPath")),
     clearRect: vi.fn(),
     fillStyle: "",
-    fillText: vi.fn((/** @type {string} */ text) => neatLabels.push(text)),
+    fillText: vi.fn((/** @type {string} */ text, /** @type {number} */ x, /** @type {number} */ y) => {
+      neatLabels.push(text);
+      neatTexts.push({ text, x, y, align: neatContext.textAlign, baseline: neatContext.textBaseline });
+    }),
     font: "",
     lineTo: vi.fn(() => neatPaths.push("lineTo")),
     lineWidth: 0,
     moveTo: vi.fn(() => neatPaths.push("moveTo")),
     stroke: vi.fn(() => neatPaths.push("stroke")),
-    strokeRect: vi.fn(() => neatPaths.push("strokeRect")),
+    strokeRect: vi.fn((/** @type {number[]} */ ...rect) => {
+      neatPaths.push("strokeRect");
+      neatRects.push(rect);
+    }),
     strokeStyle: "",
     textAlign: "",
     textBaseline: ""
   };
-  const overlay = { width: 0, height: 0, getContext: () => neatContext };
+  const overlay = {
+    width: 0,
+    height: 0,
+    getContext: () => (neatline === "no-context" ? null : neatContext)
+  };
   if (neatline) {
     Object.defineProperty(neatContext, "font", {
       get: () => neatFonts.at(-1) ?? "",
@@ -101,7 +115,7 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
       getBoundingClientRect: () => ({ left: 18, top: 18, width, height: width }),
       parentElement: {
         getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: width + 36 }),
-        querySelector: () => overlay
+        querySelector: () => (neatline === "no-overlay" ? null : overlay)
       }
     });
   }
@@ -114,7 +128,7 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
     context,
     fillRects,
     labels,
-    neat: { fonts: neatFonts, labels: neatLabels, overlay, paths: neatPaths },
+    neat: { context: neatContext, fonts: neatFonts, labels: neatLabels, overlay, paths: neatPaths, rects: neatRects, texts: neatTexts },
     renderer,
     tiles
   };
@@ -430,7 +444,7 @@ describe("Canvas renderer", () => {
     expect(labels).toContain("SPENT");
   });
 
-  it("scales passage coordinate markers by capped device pixel ratio", () => {
+  it("US-02.1 draws a passage as one water square with no dot at its centre", () => {
     const originalDpr = window.devicePixelRatio;
     try {
       window.devicePixelRatio = 2;
@@ -443,12 +457,60 @@ describe("Canvas renderer", () => {
         revealed: ["0,0", "0,1", "1,1"]
       });
 
-      expect(
-        fillRects.filter((call) => call.w === 3 && call.h === 3).length
-      ).toBeGreaterThan(0);
+      // Only the Fog fill is a rectangle call; a centre dot would add a small one.
+      expect(fillRects.filter((call) => call.w < 10)).toEqual([]);
     } finally {
       window.devicePixelRatio = originalDpr;
     }
+  });
+
+  it("US-02.1 paints the Pulse layer after the land, so the land cannot hide it", () => {
+    document.body.style.setProperty("--color-pulse", "rgb(9, 9, 9)");
+    document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: [], pulseVisible: ["0,0", "1,1"] }));
+
+    const order = paints.map((paint) => paint.style);
+    expect(order).toContain("rgb(9, 9, 9)");
+    expect(order.indexOf("rgb(9, 9, 9)")).toBeGreaterThan(order.indexOf("rgb(250, 251, 252)"));
+  });
+
+  it("US-02.3 keeps the Fog and hatch patterns in step when the device ratio changes", () => {
+    const originalDpr = window.devicePixelRatio;
+    try {
+      const { renderer, tiles } = stubCanvas();
+      const run = board({ revealed: ["0,0", "0,1"] });
+
+      window.devicePixelRatio = 1;
+      renderer.render(run);
+      window.devicePixelRatio = 2;
+      renderer.render(run);
+
+      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16, 12]);
+    } finally {
+      window.devicePixelRatio = originalDpr;
+    }
+  });
+
+  it("US-02.3 clamps a negative mark scale so every mark still draws", () => {
+    document.body.style.setProperty("--maze-mark-scale", "-2");
+    const { context, renderer } = stubCanvas();
+    // A real canvas throws IndexSizeError for a negative radius.
+    /** @type {Record<string, unknown>} */ (context).arc = vi.fn((/** @type {number} */ _x, /** @type {number} */ _y, /** @type {number} */ radius) => {
+      if (radius < 0) throw new RangeError("negative radius");
+    });
+
+    expect(() =>
+      renderer.render(
+        board({
+          explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+          revealed: ["1,1"],
+          wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }]
+        })
+      )
+    ).not.toThrow();
   });
 
   it("gives each Warden mode its own drawn face", () => {
@@ -526,15 +588,88 @@ describe("Canvas renderer", () => {
     expect(neat.paths.filter((step) => step === "moveTo")).toHaveLength(4 * 3);
     expect(neat.paths.filter((step) => step === "stroke")).toHaveLength(1);
     expect(neat.paths.filter((step) => step === "strokeRect")).toHaveLength(1);
-    expect(neat.labels).toEqual(["A", "1", "B", "2"]);
+    expect(neat.labels).toEqual(["A", "B", "1", "2"]);
     expect(neat.fonts.every((font) => font.startsWith("10px "))).toBe(true);
     expect(neat.overlay.width).toBe(676);
   });
 
-  it("US-03.1 skips the Neatline when the board has no overlay canvas", () => {
-    const { renderer } = stubCanvas();
+  it("US-03.1 skips the Neatline when the frame has no overlay canvas", () => {
+    const { calls, neat, renderer } = stubCanvas({ neatline: "no-overlay" });
 
     expect(() => renderer.render(board({ revealed: ["0,0"] }))).not.toThrow();
+    expect(calls).toContain("fill");
+    expect(neat.context.clearRect).not.toHaveBeenCalled();
+    expect(neat.context.fillText).not.toHaveBeenCalled();
+  });
+
+  it("US-03.1 skips the Neatline when the overlay canvas has no 2D context", () => {
+    const { calls, neat, renderer } = stubCanvas({ neatline: "no-context" });
+
+    expect(() => renderer.render(board({ revealed: ["0,0"] }))).not.toThrow();
+    expect(calls).toContain("fill");
+    expect(neat.context.clearRect).not.toHaveBeenCalled();
+    expect(neat.overlay.width).toBe(0);
+  });
+
+  it("US-03.1 sizes the Neatline from the board box when the backing store clamps to 320", () => {
+    const { neat, renderer } = stubCanvas({ neatline: true, width: 200 });
+
+    renderer.render(board({ revealed: ["0,0"] }));
+
+    // The box is 200 CSS pixels at device ratio 1, left and top 18: border 1px wider on each side.
+    expect(neat.rects).toEqual([[17.5, 17.5, 201, 201]]);
+    expect(neat.overlay.width).toBe(236);
+  });
+
+  it("US-03.1 labels the columns centred above and the rows right-aligned left of the ticks", () => {
+    const { neat, renderer } = stubCanvas({ neatline: true });
+
+    renderer.render(board({ revealed: ["0,0"] }));
+
+    // Box 640, left and top 18, tile 320, tick 2, gap 2: tick ends at 15, labels end 2 beyond.
+    expect(neat.texts).toEqual([
+      { text: "A", x: 178, y: 13, align: "center", baseline: "bottom" },
+      { text: "B", x: 498, y: 13, align: "center", baseline: "bottom" },
+      { text: "1", x: 13, y: 178, align: "right", baseline: "middle" },
+      { text: "2", x: 13, y: 498, align: "right", baseline: "middle" }
+    ]);
+  });
+
+  it("US-03.1 labels a 15 by 15 board with 15 letters and 15 numbers, all inside the frame", () => {
+    const { neat, renderer } = stubCanvas({ neatline: true });
+    const labyrinth = Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => 0));
+
+    renderer.render(board({ labyrinth, revealed: [] }));
+
+    const letters = neat.texts.filter((label) => label.baseline === "bottom");
+    const numbers = neat.texts.filter((label) => label.baseline === "middle");
+    expect(letters.map((label) => label.text).join("")).toBe("ABCDEFGHIJKLMNO");
+    expect(numbers.map((label) => label.text)).toEqual(
+      Array.from({ length: 15 }, (_, index) => String(index + 1))
+    );
+    // Tile 640 / 15; the centre of tile 7 sits at 18 + 7.5 * 640 / 15 = 338.
+    expect(letters[7].x).toBeCloseTo(338, 5);
+    expect(numbers[14].y).toBeCloseTo(18 + (14.5 * 640) / 15, 5);
+    for (const label of neat.texts) {
+      expect(label.x).toBeGreaterThan(0);
+      expect(label.y).toBeGreaterThan(0);
+    }
+  });
+
+  it("US-03.1 keeps the Neatline canvas inside the canvas frame beside the maze canvas", () => {
+    const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
+    const markup = html.slice(html.indexOf(">", html.indexOf("<body")) + 1);
+    document.body.innerHTML = markup.replace(/<script[\s\S]*?<\/script>/g, "");
+    // The play view lives inside a template, so the search covers each template content too.
+    const scopes = [document, ...[...document.querySelectorAll("template")].map((t) => t.content)];
+    const maze = scopes.map((scope) => scope.querySelector("#maze-canvas")).find(Boolean);
+
+    try {
+      expect(maze?.parentElement?.classList.contains("canvas-frame")).toBe(true);
+      expect(maze?.parentElement?.querySelectorAll(":scope > canvas.neatline-canvas")).toHaveLength(1);
+    } finally {
+      document.body.innerHTML = "";
+    }
   });
 
   it("writes the pause text in ink on a paper band between two ink rules", () => {
@@ -676,6 +811,9 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
     // tile 320 * 0.06 = 19.2, rounded to 19 device pixels.
     expect(widths).toContain(19);
+    // An odd width sits on a half pixel across the edge; the ends sit on whole pixels; caps are butt.
+    expect(points.every(([x, y]) => (x === 320.5 && Number.isInteger(y)) || (y === 320.5 && Number.isInteger(x)))).toBe(true);
+    expect(/** @type {Record<string, unknown>} */ (context).lineCap).toBe("butt");
   });
 
   it("US-02.1 paints the Explorer as an ink ring on a paper disc with an Explorer dot", () => {

@@ -190,14 +190,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
         }
       }
     }
+    drawLand(wallCells, tile);
     if (pulseCells.length > 0) {
-      // One path keeps the translucent Pulse layer from doubling where tiles touch.
+      // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
       context.beginPath();
       for (const [row, col] of pulseCells) traceTile(row, col, tile);
       context.fillStyle = palette.pulse;
       context.fill();
     }
-    drawLand(wallCells, tile);
     drawCoastline(run, revealed, tile);
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
@@ -304,8 +304,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const unit = devicePixel();
     const left = Math.round((box.left - frameBox.left) * deviceRatio);
     const top = Math.round((box.top - frameBox.top) * deviceRatio);
-    const side = canvas.width;
+    // The board box in device pixels. The backing store clamps to 320 and cannot size the Neatline.
+    const side = Math.round(box.width * deviceRatio);
     const tick = 2 * unit;
+    const gap = 2 * unit;
     const half = (unit % 2) / 2;
     neat.clearRect(0, 0, width, height);
     neat.strokeStyle = palette.ink;
@@ -328,12 +330,18 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     neat.stroke();
     neat.fillStyle = palette.ink;
     neat.font = `${10 * deviceRatio}px ${palette.fontMono}`;
+    // Column letters sit centred above the top ticks. Row numbers end right at the left ticks.
     neat.textAlign = "center";
+    neat.textBaseline = "bottom";
+    for (let index = 0; index < size; index += 1) {
+      const middle = ((index + 0.5) * side) / size;
+      neat.fillText(String.fromCharCode(65 + index), left + middle, top - unit - tick - gap);
+    }
+    neat.textAlign = "right";
     neat.textBaseline = "middle";
     for (let index = 0; index < size; index += 1) {
       const middle = ((index + 0.5) * side) / size;
-      neat.fillText(String.fromCharCode(65 + index), left + middle, (top - unit - tick) / 2);
-      neat.fillText(String(index + 1), (left - unit - tick) / 2, top + middle);
+      neat.fillText(String(index + 1), left - unit - tick - gap, top + middle);
     }
   }
 
@@ -393,17 +401,6 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     traceTile(row, col, tile);
     context.fillStyle = palette.passage;
     context.fill();
-    if ((row + col) % 2 === 0) {
-      context.fillStyle = palette.grid;
-      const markerSize = 1.5 * deviceRatio;
-      const offset = markerSize * 0.5;
-      context.fillRect(
-        col * tile + tile * 0.5 - offset,
-        row * tile + tile * 0.5 - offset,
-        markerSize,
-        markerSize
-      );
-    }
   }
 
   /**
@@ -433,8 +430,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   function drawCoastline(run, revealed, tile) {
     const size = run.labyrinth.length;
     const width = Math.max(1, Math.round(tile * 0.06));
-    // An odd width centres on a half pixel so the stroke fills whole device pixels.
-    const snap = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
+    // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
+    // Along the edge, the ends sit on whole pixels and meet the tile corners exactly.
+    const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
+    const along = (/** @type {number} */ edge) => Math.round(edge);
     context.beginPath();
     let edges = 0;
     for (let row = 0; row < size; row += 1) {
@@ -447,11 +446,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
           if (run.labyrinth[nRow][nCol] === 1 || !revealed.has(`${nRow},${nCol}`)) continue;
           const edgeRow = dRow === 0 ? row : row + (dRow > 0 ? 1 : 0);
           const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
-          context.moveTo(snap(edgeCol * tile), snap(edgeRow * tile));
           if (dCol === 0) {
-            context.lineTo(snap((edgeCol + 1) * tile), snap(edgeRow * tile));
+            const y = across(edgeRow * tile);
+            context.moveTo(along(edgeCol * tile), y);
+            context.lineTo(along((edgeCol + 1) * tile), y);
           } else {
-            context.lineTo(snap(edgeCol * tile), snap((edgeRow + 1) * tile));
+            const x = across(edgeCol * tile);
+            context.moveTo(x, along(edgeRow * tile));
+            context.lineTo(x, along((edgeRow + 1) * tile));
           }
           edges += 1;
         }
@@ -460,9 +462,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     if (edges === 0) return;
     context.strokeStyle = palette.coastline;
     context.lineWidth = width;
-    context.lineCap = "square";
-    context.stroke();
     context.lineCap = "butt";
+    context.stroke();
   }
 
   /** @param {Explorer} explorer @param {number} tile */
@@ -894,17 +895,16 @@ function readPalette() {
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
     fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
     gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
-    grid: color("--color-grid", FALLBACK_PALETTE.grid),
     hatch: color("--color-hatch", FALLBACK_PALETTE.hatch),
     ink: color("--color-ink", FALLBACK_PALETTE.ink),
     land: color("--color-land", FALLBACK_PALETTE.land),
     light: color("--color-board-light", FALLBACK_PALETTE.light),
-    markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
+    // A negative scale would make `arc` throw, so the scale keeps a positive floor.
+    markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
     night: color("--color-night-deep", FALLBACK_PALETTE.night),
     onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
-    transparent: "transparent",
     warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
   };
 }
@@ -922,7 +922,6 @@ const FALLBACK_PALETTE = {
   fog: "oklch(99% 0.004 95)",
   fogDot: "oklch(18% 0.012 250 / 80%)",
   gate: "oklch(58% 0.24 340)",
-  grid: "oklch(40% 0.02 60 / 45%)",
   hatch: "oklch(18% 0.012 250 / 30%)",
   ink: "oklch(18% 0.012 250)",
   land: "oklch(99% 0.004 95)",
