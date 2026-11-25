@@ -14,14 +14,15 @@ function button(id) {
   return /** @type {HTMLButtonElement} */ (document.getElementById(id));
 }
 
-function openWorkshop() {
+/** @param {"play" | "journal" | "atlas"} origin */
+function openWorkshop(origin) {
   const onNavigate = vi.fn();
   const view = createLanternTrailView({ onNavigate });
   const trigger = button("trigger");
   view.show({
     levelId: "bright-start",
     difficultyBand: "foundation",
-    origin: "journal",
+    origin,
     trigger
   });
   return { onNavigate, trigger };
@@ -36,24 +37,21 @@ describe("Lantern Trail Workshop header Close", () => {
     );
   });
 
-  it("closes to the same origin as the footer Close button", () => {
-    const header = openWorkshop();
+  // Atlas is neither the default origin nor the Workshop Journal button target.
+  it("closes the header Close to the Workshop origin", () => {
+    const { onNavigate, trigger } = openWorkshop("atlas");
     button("practice-header-close").click();
-    expect(header.onNavigate).toHaveBeenCalledExactlyOnceWith(
-      "journal",
-      header.trigger
-    );
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith("atlas", trigger);
+  });
 
-    const footer = openWorkshop();
+  it("closes the footer Close to the same origin", () => {
+    const { onNavigate, trigger } = openWorkshop("atlas");
     button("practice-close").click();
-    expect(footer.onNavigate).toHaveBeenCalledExactlyOnceWith(
-      "journal",
-      footer.trigger
-    );
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith("atlas", trigger);
   });
 
   it("hides the header Close in the Tactics Lab and shows it after the trail clears", () => {
-    openWorkshop();
+    openWorkshop("journal");
     const headerClose = button("practice-header-close");
     expect(headerClose.hidden).toBe(false);
 
