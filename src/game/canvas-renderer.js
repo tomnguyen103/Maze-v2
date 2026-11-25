@@ -28,14 +28,79 @@
  * }} SignalBell
  */
 
+/** The Fog tile is 8 by 8 pixels at one device pixel per tile pixel. */
+const FOG_TILE = 8;
+/** Three one-pixel dots in the 8 by 8 tile give 4.7 percent coverage. */
+const FOG_DOTS = [
+  [1, 1],
+  [5, 3],
+  [2, 6]
+];
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @returns {OffscreenCanvas | HTMLCanvasElement}
+ */
+function createDetachedCanvas(width, height) {
+  if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(width, height);
+  const tile = document.createElement("canvas");
+  tile.width = width;
+  tile.height = height;
+  return tile;
+}
+
 /**
  * @param {HTMLCanvasElement} canvas
+ * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  */
-export function createCanvasRenderer(canvas) {
+export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) {
   const context = getCanvasContext(canvas);
 
   let palette = readPalette();
   let deviceRatio = 1;
+  /** @type {{ key: string, pattern: CanvasPattern | null } | null} */
+  let fogPattern = null;
+
+  /** One pattern per palette and device ratio. Without a tile context the Fog fills flat. */
+  function fogFill() {
+    const unit = Math.max(1, Math.round(deviceRatio));
+    const key = `${palette.fog}|${palette.fogDot}|${unit}`;
+    if (fogPattern?.key !== key) {
+      const side = FOG_TILE * unit;
+      const tile = createTile(side, side);
+      const tileContext = /** @type {CanvasRenderingContext2D | null} */ (tile.getContext("2d"));
+      let pattern = null;
+      if (tileContext) {
+        tileContext.fillStyle = palette.fog;
+        tileContext.fillRect(0, 0, side, side);
+        tileContext.fillStyle = palette.fogDot;
+        for (const [x, y] of FOG_DOTS) {
+          tileContext.fillRect(x * unit, y * unit, unit, unit);
+        }
+        pattern = context.createPattern(tile, "repeat");
+      }
+      fogPattern = { key, pattern };
+    }
+    return fogPattern.pattern ?? palette.fog;
+  }
+
+  /**
+   * Traces one tile with edges on whole pixels, so adjacent tiles leave no seam.
+   * @param {number} row
+   * @param {number} col
+   * @param {number} tile
+   */
+  function traceTile(row, col, tile) {
+    const left = Math.floor(col * tile);
+    const top = Math.floor(row * tile);
+    context.rect(
+      left,
+      top,
+      Math.ceil((col + 1) * tile) - left,
+      Math.ceil((row + 1) * tile) - top
+    );
+  }
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
@@ -68,28 +133,27 @@ export function createCanvasRenderer(canvas) {
     // Each frame starts from the default line, text, and fill state.
     context.save();
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = palette.fog;
+    context.fillStyle = fogFill();
     context.fillRect(0, 0, canvas.width, canvas.height);
-    drawFogGrid(size, tile, revealed);
 
+    /** @type {Array<[number, number]>} */
+    const pulseCells = [];
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         const key = `${row},${col}`;
         if (!revealed.has(key)) continue;
         drawKnownTile(run.labyrinth[row][col] === 1, row, col, tile);
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
-          const inset = tile * 0.035;
-          traceRoundedRect(
-            col * tile + inset,
-            row * tile + inset,
-            tile - inset * 2,
-            tile - inset * 2,
-            tile * 0.24
-          );
-          context.fillStyle = palette.pulse;
-          context.fill();
+          pulseCells.push([row, col]);
         }
       }
+    }
+    if (pulseCells.length > 0) {
+      // One path keeps the translucent Pulse layer from doubling where tiles touch.
+      context.beginPath();
+      for (const [row, col] of pulseCells) traceTile(row, col, tile);
+      context.fillStyle = palette.pulse;
+      context.fill();
     }
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
@@ -211,15 +275,11 @@ export function createCanvasRenderer(canvas) {
     const inset = tile * 0.02;
     const side = tile - inset * 2;
     if (isPassage) {
-      // A passage is an ivory paper tile with an ink hairline.
-      traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
+      // A passage is a square of water.
+      context.beginPath();
+      traceTile(row, col, tile);
       context.fillStyle = palette.passage;
       context.fill();
-      context.strokeStyle = palette.ink;
-      context.lineWidth = Math.max(1, tile * 0.015);
-      context.globalAlpha = 0.5;
-      context.stroke();
-      context.globalAlpha = 1;
       if ((row + col) % 2 === 0) {
         context.fillStyle = palette.grid;
         const markerSize = 1.5 * deviceRatio;
@@ -253,31 +313,6 @@ export function createCanvasRenderer(canvas) {
     context.lineWidth = Math.max(1, tile * 0.03);
     context.lineCap = "butt";
     context.stroke();
-  }
-
-  /** @param {number} size @param {number} tile @param {Set<string>} revealed */
-  function drawFogGrid(size, tile, revealed) {
-    // Unseen ground is plain paper with one ink dot per cell. A hash of the
-    // cell places each dot, so the stipple looks hand-set and draws the same
-    // every time. One fill keeps the translucent dots rasterizing once.
-    const dot = Math.max(1.25, tile * 0.05);
-    const reach = tile - dot;
-    context.beginPath();
-    for (let row = 0; row < size; row += 1) {
-      for (let col = 0; col < size; col += 1) {
-        if (!revealed.has(`${row},${col}`)) {
-          const hash = Math.imul((row * 73856093) ^ (col * 19349663), 2654435761) >>> 0;
-          context.rect(
-            col * tile + ((hash % 1000) / 1000) * reach,
-            row * tile + (((hash >>> 10) % 1000) / 1000) * reach,
-            dot,
-            dot
-          );
-        }
-      }
-    }
-    context.fillStyle = palette.fogGrid;
-    context.fill();
   }
 
   /** @param {Explorer} explorer @param {number} tile */
@@ -719,7 +754,6 @@ function readPalette() {
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
     fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
-    fogGrid: color("--color-fog-grid", FALLBACK_PALETTE.fogGrid),
     gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
     grid: color("--color-grid", FALLBACK_PALETTE.grid),
     hatch: color("--color-hatch", FALLBACK_PALETTE.hatch),
@@ -751,7 +785,6 @@ const FALLBACK_PALETTE = {
   fontBody: "Arial, sans-serif",
   fog: "oklch(99% 0.004 95)",
   fogDot: "oklch(18% 0.012 250 / 80%)",
-  fogGrid: "oklch(18% 0.012 250 / 40%)",
   gate: "oklch(58% 0.24 340)",
   grid: "oklch(40% 0.02 60 / 45%)",
   hatch: "oklch(18% 0.012 250 / 30%)",

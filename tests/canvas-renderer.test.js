@@ -28,6 +28,7 @@ function stubCanvas({ width = 640 } = {}) {
     beginPath: record("beginPath"),
     clearRect: vi.fn(),
     closePath: record("closePath"),
+    createPattern: vi.fn(() => ({ pattern: true })),
     createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
     fill: record("fill"),
     fillRect: vi.fn((x, y, w, h) => {
@@ -51,10 +52,26 @@ function stubCanvas({ width = 640 } = {}) {
     height: 640,
     width: 640
   };
+  /** @type {Array<{ width: number, height: number, fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
+  const tiles = [];
+  const createTile = (/** @type {number} */ tileWidth, /** @type {number} */ tileHeight) => {
+    /** @type {Array<{ style: string, x: number, y: number, w: number, h: number }>} */
+    const fills = [];
+    const tileContext = {
+      fillStyle: "",
+      fillRect(/** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
+        fills.push({ style: tileContext.fillStyle, x, y, w, h });
+      }
+    };
+    const tile = { width: tileWidth, height: tileHeight, fills, getContext: () => tileContext };
+    tiles.push(tile);
+    return /** @type {never} */ (tile);
+  };
   const renderer = createCanvasRenderer(
-    /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas))
+    /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
+    createTile
   );
-  return { calls, context, fillRects, labels, renderer };
+  return { calls, context, fillRects, labels, renderer, tiles };
 }
 
 /** @param {string} seed @param {string} level @param {number} quest */
@@ -253,19 +270,72 @@ describe("Canvas renderer", () => {
     );
   });
 
-  it("stipples the whole Fog as one filled path", () => {
-    const { calls, context, renderer } = stubCanvas();
+  it("US-02.1 fills the whole Fog from one pattern, built once per palette", () => {
+    const { context, renderer } = stubCanvas();
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
-    const size = run.labyrinth.length;
+    /** @type {unknown[]} */
+    const fogFills = [];
+    let fillStyle = /** @type {unknown} */ ("");
+    Object.defineProperty(context, "fillStyle", {
+      get: () => fillStyle,
+      set: (value) => {
+        fillStyle = value;
+      }
+    });
+    context.fillRect = vi.fn((_x, _y, w) => {
+      if (w === 640) fogFills.push(fillStyle);
+    });
 
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
+    renderer.render({ ...run, pulseVisible: [], revealed: [] });
 
-    expect(calls.slice(1, size * size + 3)).toEqual([
-      "beginPath",
-      ...Array(size * size).fill("rect"),
-      "fill"
-    ]);
-    expect(context.rect).toHaveBeenCalledTimes(size * size);
+    expect(context.createPattern).toHaveBeenCalledTimes(1);
+    expect(context.rect).not.toHaveBeenCalled();
+    expect(fogFills).toEqual([{ pattern: true }, { pattern: true }]);
+  });
+
+  it("US-02.2 builds an integer pixel Fog tile with 4 to 6 percent dots at each device ratio", () => {
+    const original = window.devicePixelRatio;
+    try {
+      for (const ratio of [1, 2]) {
+        window.devicePixelRatio = ratio;
+        const { renderer, tiles } = stubCanvas();
+        renderer.render(questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9));
+
+        expect(tiles).toHaveLength(1);
+        const [tile] = tiles;
+        expect(tile.width).toBe(8 * ratio);
+        expect(tile.height).toBe(8 * ratio);
+        const dots = tile.fills.filter((fill) => fill.w < tile.width);
+        const coverage =
+          dots.reduce((sum, fill) => sum + fill.w * fill.h, 0) / (tile.width * tile.height);
+        expect(coverage).toBeGreaterThanOrEqual(0.04);
+        expect(coverage).toBeLessThanOrEqual(0.06);
+      }
+    } finally {
+      window.devicePixelRatio = original;
+    }
+  });
+
+  it("US-02.4 records identical calls for two renders of one Run", () => {
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+    const record = () => {
+      const { calls, renderer } = stubCanvas();
+      renderer.render({ ...run, revealed: ["0,0", "0,1"], pulseVisible: ["1,1"] });
+      return calls;
+    };
+
+    expect(record()).toEqual(record());
+  });
+
+  it("US-02.1 draws every Pulse cell under one translucent path", () => {
+    document.body.style.setProperty("--color-pulse", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["0,0"], pulseVisible: ["0,1", "1,0", "1,1"] }));
+
+    expect(paints.filter((paint) => paint.style === "rgb(9, 9, 9)")).toHaveLength(1);
   });
 
   it("restores the canvas state after each frame", () => {
@@ -420,27 +490,15 @@ describe("Canvas renderer", () => {
   });
 
   it("reads the canvas palette again on every frame", () => {
-    const { context, renderer } = stubCanvas();
+    const { renderer, tiles } = stubCanvas();
     const run = questRun("PALETTE-REREAD", "bright-start", 1);
-    /** @type {string[]} */
-    const fogFills = [];
-    let fillStyle = "";
-    Object.defineProperty(context, "fillStyle", {
-      get: () => fillStyle,
-      set: (value) => {
-        fillStyle = value;
-      }
-    });
-    context.fillRect = vi.fn((_x, _y, w) => {
-      if (w === 640) fogFills.push(fillStyle);
-    });
 
     document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
     document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
 
-    expect(fogFills).toEqual(["rgb(1, 2, 3)", "rgb(4, 5, 6)"]);
+    expect(tiles.map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)", "rgb(4, 5, 6)"]);
   });
 });
 
@@ -449,10 +507,9 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.removeAttribute("style");
   });
 
-  it("US-08.1 draws an ivory passage with an ink hairline, a hatched charcoal wall and stippled fog", () => {
+  it("US-08.1 draws a square water passage and a hatched charcoal wall", () => {
     for (const name of [
       "--color-fog",
-      "--color-fog-grid",
       "--color-ink",
       "--color-passage",
       "--color-wall",
@@ -473,7 +530,11 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(paints).toContainEqual(
       expect.objectContaining({ kind: "fill", style: canvasToken(LIGHT, "--color-passage") })
     );
-    expect(paints).toContainEqual(
+    const water = paints.find(
+      (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-passage")
+    );
+    expect(water?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
+    expect(paints).not.toContainEqual(
       expect.objectContaining({ kind: "stroke", style: canvasToken(LIGHT, "--color-ink") })
     );
     expect(paints).toContainEqual(
@@ -481,9 +542,6 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     );
     expect(paints).toContainEqual(
       expect.objectContaining({ kind: "stroke", style: canvasToken(LIGHT, "--color-wall-mark") })
-    );
-    expect(paints).toContainEqual(
-      expect.objectContaining({ kind: "fill", style: canvasToken(LIGHT, "--color-fog-grid") })
     );
   });
 
