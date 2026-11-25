@@ -533,7 +533,7 @@
   .atlas-viewport {
     padding: 0;
     border: 0;
-    scroll-padding-block-end: 44dvh;
+    scroll-padding-block-end: 34dvh;
   }
 
   .atlas-regions,
@@ -554,7 +554,7 @@
     inset-inline: calc(var(--space-1) + 1px);
     bottom: calc(var(--space-1) + 1px);
     z-index: 1;
-    max-height: min(20rem, 40dvh);
+    max-height: min(16rem, 32dvh);
     flex-direction: column;
     overflow: auto;
     border-width: 1px 0 0;
@@ -589,7 +589,7 @@
 
 @media (max-width: 30rem) {
   .atlas-toolbar .control-button {
-    flex: 1 1 8rem;
+    flex: 1 1 6rem;
     white-space: nowrap;
   }
 

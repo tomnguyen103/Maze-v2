@@ -140,7 +140,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
   complete, and outlined when current. A Gate Warden milestone fills with Signal deep.
 - Fossil, sigil, and state tags are 4px-radius tags with an ink outline. They are not pills.
 - At 58rem and below the map shows first. The landmark detail is a bottom sheet pinned
-  inside the dialog, and its height is at most 20rem or 40dvh.
+  inside the dialog, and its height is at most 16rem or 32dvh.
 - Any two territory fills differ. Each fill keeps 3:1 against the Atlas ground.
 - An unknown Region id draws the neutral wash.
 
