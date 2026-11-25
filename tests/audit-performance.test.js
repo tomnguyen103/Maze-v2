@@ -55,7 +55,7 @@ describe("WP-02 — the landing LCP text paints before any JS runs", () => {
     const html = source("index.html");
     const gameRoot = html.slice(html.indexOf('<div id="game-root">'));
     const beforeTemplate = gameRoot.slice(0, gameRoot.indexOf("<template"));
-    expect(beforeTemplate).toContain('<h1 id="landing-title">Recover every Echo. Find the Gate.</h1>');
+    expect(beforeTemplate).toContain('<h1 id="landing-title">Echo Maze: recover every Echo, find the Gate.</h1>');
     expect(beforeTemplate).toContain(
       'href="/play" id="landing-primary-action"'
     );
