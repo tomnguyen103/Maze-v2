@@ -8,3 +8,7 @@
 # SQL migrations are asserted against multi-line text in the test suite, so
 # they must check out with LF on every platform.
 *.sql text eol=lf
+
+# Vitest fails to parse a shebang line that ends in CRLF, so scripts that
+# tests import must check out with LF on every platform.
+scripts/*.mjs text eol=lf

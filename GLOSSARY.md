@@ -163,6 +163,20 @@ The chart-style block under the Action rail that names the Quest Level, the
 Labyrinth number and stage, the save state, the player console, and the seed.
 _Avoid_: header, run status, quest card
 
+**Neatline**:
+The 1px ink frame around the board. It carries one 2px tick per tile and the
+Grid reference outside it.
+_Avoid_: border, board frame
+
+**Grid reference**:
+The column letters and row numbers outside the Neatline that name a tile.
+_Avoid_: axis labels, coordinates
+
+**Coastline**:
+The single ink line where a water passage meets hatched land. It carries the wall
+edge at 3:1 against both grounds.
+_Avoid_: wall outline, shoreline
+
 **Chart notes**:
 The inset beside the board on a desktop, and under it on a phone, that holds
 the objective, the adventure log, the map marks legend, and the field note.

@@ -28,14 +28,119 @@
  * }} SignalBell
  */
 
+/** The Fog tile is 8 by 8 pixels at one device pixel per tile pixel. */
+const FOG_TILE = 8;
+/** The hatch tile is 6 backing-store pixels square, so the 45 degree pitch is about 4 device pixels at every ratio. */
+const HATCH_TILE = 6;
+/** Row and column steps to the four neighbours of a cell. */
+const NEIGHBOURS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1]
+];
+/** Three one-pixel dots in the 8 by 8 tile give 4.7 percent coverage. */
+const FOG_DOTS = [
+  [1, 1],
+  [5, 3],
+  [2, 6]
+];
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @returns {OffscreenCanvas | HTMLCanvasElement}
+ */
+function createDetachedCanvas(width, height) {
+  if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(width, height);
+  const tile = document.createElement("canvas");
+  tile.width = width;
+  tile.height = height;
+  return tile;
+}
+
 /**
  * @param {HTMLCanvasElement} canvas
+ * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  */
-export function createCanvasRenderer(canvas) {
+export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) {
   const context = getCanvasContext(canvas);
 
   let palette = readPalette();
   let deviceRatio = 1;
+  /** @type {Map<string, CanvasPattern | null>} */
+  const patterns = new Map();
+
+  /**
+   * One pattern per paint and device pixel size. Without a tile context the caller gets null.
+   * @param {string} key
+   * @param {number} side
+   * @param {(tileContext: CanvasRenderingContext2D) => void} paint
+   */
+  function cachedPattern(key, side, paint) {
+    if (!patterns.has(key)) {
+      const tile = createTile(side, side);
+      // Software raster: a GPU tile and a CPU tile round translucent dots differently, which shows after a reload.
+      const tileContext = /** @type {CanvasRenderingContext2D | null} */ (
+        tile.getContext("2d", { willReadFrequently: true })
+      );
+      let pattern = null;
+      if (tileContext) {
+        paint(tileContext);
+        pattern = context.createPattern(tile, "repeat");
+      }
+      patterns.set(key, pattern);
+    }
+    return patterns.get(key) ?? null;
+  }
+
+  function devicePixel() {
+    return Math.max(1, Math.round(deviceRatio));
+  }
+
+  /** The Fog fills flat when no tile context exists. */
+  function fogFill() {
+    // High contrast paints the Fog flat: no stipple.
+    if (palette.strong) return palette.fog;
+    const unit = devicePixel();
+    const side = FOG_TILE * unit;
+    return (
+      cachedPattern(`fog|${palette.fog}|${palette.fogDot}|${unit}`, side, (tileContext) => {
+        tileContext.fillStyle = palette.fog;
+        tileContext.fillRect(0, 0, side, side);
+        tileContext.fillStyle = palette.fogDot;
+        for (const [x, y] of FOG_DOTS) tileContext.fillRect(x * unit, y * unit, unit, unit);
+      }) ?? palette.fog
+    );
+  }
+
+  /** The hatch is one backing-store pixel ink line at 45 degrees, with no device ratio factor. */
+  function hatchFill() {
+    return cachedPattern(`hatch|${palette.hatch}`, HATCH_TILE, (tileContext) => {
+      tileContext.fillStyle = palette.hatch;
+      for (let i = 0; i < HATCH_TILE; i += 1) {
+        tileContext.fillRect(i, HATCH_TILE - 1 - i, 1, 1);
+      }
+    });
+  }
+
+  /**
+   * Traces one tile with edges on whole pixels, so adjacent tiles leave no seam.
+   * @param {number} row
+   * @param {number} col
+   * @param {number} tile
+   */
+  function traceTile(row, col, tile) {
+    // The edges round like the coastline edges, so no land strip shows on the water side.
+    const left = Math.round(col * tile);
+    const top = Math.round(row * tile);
+    context.rect(
+      left,
+      top,
+      Math.round((col + 1) * tile) - left,
+      Math.round((row + 1) * tile) - top
+    );
+  }
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
@@ -68,29 +173,36 @@ export function createCanvasRenderer(canvas) {
     // Each frame starts from the default line, text, and fill state.
     context.save();
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = palette.fog;
+    context.fillStyle = fogFill();
     context.fillRect(0, 0, canvas.width, canvas.height);
-    drawFogGrid(size, tile, revealed);
 
+    /** @type {Array<[number, number]>} */
+    const pulseCells = [];
+    /** @type {Array<[number, number]>} */
+    const wallCells = [];
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         const key = `${row},${col}`;
         if (!revealed.has(key)) continue;
-        drawKnownTile(run.labyrinth[row][col] === 1, row, col, tile);
+        if (run.labyrinth[row][col] === 1) {
+          wallCells.push([row, col]);
+        } else {
+          drawPassage(row, col, tile);
+        }
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
-          const inset = tile * 0.035;
-          traceRoundedRect(
-            col * tile + inset,
-            row * tile + inset,
-            tile - inset * 2,
-            tile - inset * 2,
-            tile * 0.24
-          );
-          context.fillStyle = palette.pulse;
-          context.fill();
+          pulseCells.push([row, col]);
         }
       }
     }
+    drawLand(wallCells, tile);
+    if (pulseCells.length > 0) {
+      // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
+      context.beginPath();
+      for (const [row, col] of pulseCells) traceTile(row, col, tile);
+      context.fillStyle = palette.pulse;
+      context.fill();
+    }
+    drawCoastline(run, revealed, tile);
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
       drawGate(run.gate, tile);
@@ -122,36 +234,129 @@ export function createCanvasRenderer(canvas) {
     drawExplorer(run.explorer, tile);
 
     if (run.status === "paused") {
-      context.fillStyle = palette.overlay;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.onFill;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
-      context.textAlign = "center";
+      const fontSize = Math.max(22, canvas.width * 0.045);
+      drawBand(fontSize * 2.6);
+      context.fillStyle = palette.boardInk;
+      context.font = `700 ${fontSize}px ${palette.fontBody}`;
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
     } else if (run.status === "challenge") {
-      context.fillStyle = palette.overlay;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = palette.signal;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
-      context.textAlign = "center";
+      const fontSize = Math.max(22, canvas.width * 0.045);
+      const subSize = Math.max(14, canvas.width * 0.022);
+      const gap = Math.max(28, canvas.width * 0.055);
+      const gateWarden = run.challenge?.kind === "gate-warden";
+      drawBand(gap + fontSize * 2.4);
+      const headingY = canvas.height / 2 - gap / 2;
+      context.fillStyle = palette.boardInk;
+      context.font = `700 ${fontSize}px ${palette.fontBody}`;
+      context.fillText(gateWarden ? "GATE WARDEN" : "WARDEN CHALLENGE", canvas.width / 2, headingY);
+      context.font = `500 ${subSize}px ${palette.fontBody}`;
       context.fillText(
-        run.challenge?.kind === "gate-warden"
-          ? "GATE WARDEN"
-          : "WARDEN CHALLENGE",
+        gateWarden ? "Break the seal with your answer." : "Your knowledge clears the path.",
         canvas.width / 2,
-        canvas.height / 2
+        headingY + gap
       );
-      context.fillStyle = palette.onFill;
-      context.font = `500 ${Math.max(14, canvas.width * 0.022)}px ${palette.fontBody}`;
-      context.fillText(
-        run.challenge?.kind === "gate-warden"
-          ? "Break the seal with your answer."
-          : "Your knowledge clears the path.",
-        canvas.width / 2,
-        canvas.height / 2 + Math.max(28, canvas.width * 0.055)
-      );
+      if (gateWarden) {
+        // The Signal light marks the Gate Warden only.
+        context.beginPath();
+        context.arc(canvas.width / 2, headingY - fontSize * 0.95, fontSize * 0.2, 0, Math.PI * 2);
+        context.fillStyle = palette.light;
+        context.fill();
+      }
     }
+    drawNeatline(size);
     context.restore();
+  }
+
+  /**
+   * A paper band across the board centre with an ink rule above and below.
+   * @param {number} height
+   */
+  function drawBand(height) {
+    const unit = devicePixel();
+    const top = Math.round((canvas.height - height) / 2);
+    const band = Math.round(height);
+    context.fillStyle = palette.land;
+    context.fillRect(0, top, canvas.width, band);
+    context.fillStyle = palette.boardInk;
+    context.fillRect(0, top, canvas.width, unit);
+    context.fillRect(0, top + band - unit, canvas.width, unit);
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+  }
+
+  /**
+   * The Neatline is a 1px ink border with one 2px tick per tile line, and the Grid
+   * reference labels the columns and rows. It draws on the overlay canvas in the
+   * board margin, so the maze tile maths stays the same.
+   * @param {number} size
+   */
+  function drawNeatline(size) {
+    const frame = canvas.parentElement;
+    const overlay = /** @type {HTMLCanvasElement | null | undefined} */ (
+      frame?.querySelector(".neatline-canvas")
+    );
+    const neat = overlay?.getContext("2d");
+    if (!frame || !overlay || !neat) return;
+    const frameBox = frame.getBoundingClientRect();
+    const box = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(frameBox.width * deviceRatio));
+    const height = Math.max(1, Math.round(frameBox.height * deviceRatio));
+    if (overlay.width !== width || overlay.height !== height) {
+      overlay.width = width;
+      overlay.height = height;
+    }
+    const unit = devicePixel();
+    const left = Math.round((box.left - frameBox.left) * deviceRatio);
+    const top = Math.round((box.top - frameBox.top) * deviceRatio);
+    // The board box in device pixels. The backing store clamps to 320 and cannot size the Neatline.
+    const side = Math.round(box.width * deviceRatio);
+    const tick = 2 * unit;
+    const gap = 2 * unit;
+    const half = (unit % 2) / 2;
+    neat.clearRect(0, 0, width, height);
+    neat.strokeStyle = palette.ink;
+    neat.lineWidth = unit;
+    neat.strokeRect(left - unit / 2, top - unit / 2, side + unit, side + unit);
+    neat.beginPath();
+    for (let line = 0; line <= size; line += 1) {
+      const offset = Math.round((line * side) / size);
+      const x = left + offset + half;
+      const y = top + offset + half;
+      neat.moveTo(x, top - unit);
+      neat.lineTo(x, top - unit - tick);
+      neat.moveTo(x, top + side + unit);
+      neat.lineTo(x, top + side + unit + tick);
+      neat.moveTo(left - unit, y);
+      neat.lineTo(left - unit - tick, y);
+      neat.moveTo(left + side + unit, y);
+      neat.lineTo(left + side + unit + tick, y);
+    }
+    neat.stroke();
+    neat.fillStyle = palette.ink;
+    neat.font = gridFont(10 * deviceRatio);
+    // Every tick stays. Label every k-th line, with k the smallest step whose pitch fits the widest label.
+    const labelWidth = neat.measureText(String(size)).width + 2 * unit;
+    const rowWidth = Math.max(labelWidth, 10 * deviceRatio);
+    const steps = [1, 2, 5, 10];
+    const fits = (/** @type {number} */ candidate) => (candidate * side) / size >= rowWidth;
+    const step = steps.find(fits) ?? steps[steps.length - 1];
+    const labelled = (/** @type {number} */ index) =>
+      index === 0 || index === size - 1 || (index % step === 0 && size - 1 - index >= step);
+    // Column letters sit centred above the top ticks. Row numbers end right at the left ticks.
+    neat.textAlign = "center";
+    neat.textBaseline = "bottom";
+    for (let index = 0; index < size; index += 1) {
+      if (!labelled(index)) continue;
+      const middle = ((index + 0.5) * side) / size;
+      neat.fillText(String.fromCharCode(65 + index), left + middle, top - unit - tick - gap);
+    }
+    neat.textAlign = "right";
+    neat.textBaseline = "middle";
+    for (let index = 0; index < size; index += 1) {
+      if (!labelled(index)) continue;
+      const middle = ((index + 0.5) * side) / size;
+      neat.fillText(String(index + 1), left - unit - tick - gap, top + middle);
+    }
   }
 
   /**
@@ -200,127 +405,123 @@ export function createCanvasRenderer(canvas) {
   }
 
   /**
-   * @param {boolean} isPassage
+   * A passage is a square of water.
    * @param {number} row
    * @param {number} col
    * @param {number} tile
    */
-  function drawKnownTile(isPassage, row, col, tile) {
-    const x = col * tile;
-    const y = row * tile;
-    const inset = tile * 0.02;
-    const side = tile - inset * 2;
-    if (isPassage) {
-      // A passage is an ivory paper tile with an ink hairline.
-      traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
-      context.fillStyle = palette.passage;
-      context.fill();
-      context.strokeStyle = palette.ink;
-      context.lineWidth = Math.max(1, tile * 0.015);
-      context.globalAlpha = 0.5;
-      context.stroke();
-      context.globalAlpha = 1;
-      if ((row + col) % 2 === 0) {
-        context.fillStyle = palette.grid;
-        const markerSize = 1.5 * deviceRatio;
-        const offset = markerSize * 0.5;
-        context.fillRect(
-          x + tile * 0.5 - offset,
-          y + tile * 0.5 - offset,
-          markerSize,
-          markerSize
-        );
-      }
-      return;
-    }
-    // A wall is a charcoal block hatched with diagonal ink strokes.
-    traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
-    context.fillStyle = palette.wall;
-    context.fill();
-    context.strokeStyle = palette.wallGrid;
-    context.lineWidth = Math.max(1, tile * 0.02);
-    context.stroke();
+  function drawPassage(row, col, tile) {
     context.beginPath();
-    for (const step of [0.35, 0.7, 1.05, 1.4]) {
-      // Each stroke runs along x + y = step * side inside the block.
-      const reach = step * side;
-      const start = Math.min(reach, side);
-      const end = Math.max(reach - side, 0);
-      context.moveTo(x + inset + start, y + inset + reach - start);
-      context.lineTo(x + inset + end, y + inset + reach - end);
-    }
-    context.strokeStyle = palette.wallMark;
-    context.lineWidth = Math.max(1, tile * 0.03);
-    context.lineCap = "butt";
-    context.stroke();
+    traceTile(row, col, tile);
+    context.fillStyle = palette.passage;
+    context.fill();
   }
 
-  /** @param {number} size @param {number} tile @param {Set<string>} revealed */
-  function drawFogGrid(size, tile, revealed) {
-    // Unseen ground is plain paper with one ink dot per cell. A hash of the
-    // cell places each dot, so the stipple looks hand-set and draws the same
-    // every time. One fill keeps the translucent dots rasterizing once.
-    const dot = Math.max(1.25, tile * 0.05);
-    const reach = tile - dot;
+  /**
+   * Known walls are paper land with one ink hatch, each layer from one path.
+   * @param {Array<[number, number]>} cells
+   * @param {number} tile
+   */
+  function drawLand(cells, tile) {
+    if (cells.length === 0) return;
     context.beginPath();
+    for (const [row, col] of cells) traceTile(row, col, tile);
+    context.fillStyle = palette.land;
+    context.fill();
+    const hatch = hatchFill();
+    if (hatch) {
+      context.fillStyle = hatch;
+      context.fill();
+    }
+  }
+
+  /**
+   * One ink stroke along every edge where known land meets a known passage.
+   * @param {GameRun} run
+   * @param {Set<string>} revealed
+   * @param {number} tile
+   */
+  function drawCoastline(run, revealed, tile) {
+    const size = run.labyrinth.length;
+    // High contrast doubles the line.
+    const width = Math.max(1, Math.round(tile * 0.06)) * (palette.strong ? 2 : 1);
+    // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
+    // Along the edge, the ends sit on whole pixels.
+    const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
+    // An end that meets a crossing stroke reaches its far side, so a land corner has no notch. A free end stops on the edge.
+    // An odd stroke covers floor(w/2) pixels before the edge and ceil(w/2) pixels after it.
+    const reachStart = Math.floor(width / 2);
+    const reachEnd = Math.ceil(width / 2);
+    const along = (/** @type {number} */ edge) => Math.round(edge);
+    /** @param {number} row @param {number} col */
+    const kindAt = (row, col) =>
+      row < 0 || col < 0 || row >= size || col >= size || !revealed.has(`${row},${col}`)
+        ? -1
+        : run.labyrinth[row][col] === 1
+          ? 1
+          : 0;
+    /** An edge lies between one known wall and one known passage. */
+    const isEdge = (/** @type {number} */ rowA, /** @type {number} */ colA, /** @type {number} */ rowB, /** @type {number} */ colB) =>
+      kindAt(rowA, colA) + kindAt(rowB, colB) === 1 && kindAt(rowA, colA) >= 0 && kindAt(rowB, colB) >= 0;
+    // Row line r and column line c meet at corner (r, c). A stroke reaches past a corner only where a crossing stroke meets it.
+    const meetsAcross = (/** @type {number} */ lineRow, /** @type {number} */ lineCol, /** @type {boolean} */ horizontal) =>
+      horizontal
+        ? isEdge(lineRow - 1, lineCol - 1, lineRow - 1, lineCol) || isEdge(lineRow, lineCol - 1, lineRow, lineCol)
+        : isEdge(lineRow - 1, lineCol - 1, lineRow, lineCol - 1) || isEdge(lineRow - 1, lineCol, lineRow, lineCol);
+    context.beginPath();
+    let edges = 0;
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
-        if (!revealed.has(`${row},${col}`)) {
-          const hash = Math.imul((row * 73856093) ^ (col * 19349663), 2654435761) >>> 0;
-          context.rect(
-            col * tile + ((hash % 1000) / 1000) * reach,
-            row * tile + (((hash >>> 10) % 1000) / 1000) * reach,
-            dot,
-            dot
-          );
+        if (run.labyrinth[row][col] !== 1 || !revealed.has(`${row},${col}`)) continue;
+        for (const [dRow, dCol] of NEIGHBOURS) {
+          const nRow = row + dRow;
+          const nCol = col + dCol;
+          if (nRow < 0 || nCol < 0 || nRow >= size || nCol >= size) continue;
+          if (run.labyrinth[nRow][nCol] === 1 || !revealed.has(`${nRow},${nCol}`)) continue;
+          const edgeRow = dRow === 0 ? row : row + (dRow > 0 ? 1 : 0);
+          const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
+          if (dCol === 0) {
+            const y = across(edgeRow * tile);
+            const start = meetsAcross(edgeRow, edgeCol, true) ? reachStart : 0;
+            const end = meetsAcross(edgeRow, edgeCol + 1, true) ? reachEnd : 0;
+            context.moveTo(along(edgeCol * tile) - start, y);
+            context.lineTo(along((edgeCol + 1) * tile) + end, y);
+          } else {
+            const x = across(edgeCol * tile);
+            const start = meetsAcross(edgeRow, edgeCol, false) ? reachStart : 0;
+            const end = meetsAcross(edgeRow + 1, edgeCol, false) ? reachEnd : 0;
+            context.moveTo(x, along(edgeRow * tile) - start);
+            context.lineTo(x, along((edgeRow + 1) * tile) + end);
+          }
+          edges += 1;
         }
       }
     }
-    context.fillStyle = palette.fogGrid;
-    context.fill();
+    if (edges === 0) return;
+    context.strokeStyle = palette.coastline;
+    context.lineWidth = width;
+    context.lineCap = "butt";
+    context.stroke();
   }
 
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
     const scale = palette.markScale;
-    const radius = tile * 0.3 * scale;
-    const glow = context.createRadialGradient(
-      x,
-      y,
-      0,
-      x,
-      y,
-      tile * 0.72 * scale
-    );
-    glow.addColorStop(0, palette.signalGlow);
-    glow.addColorStop(1, palette.transparent);
-    context.fillStyle = glow;
-    context.fillRect(x - tile, y - tile, tile * 2, tile * 2);
+    const radius = tile * 0.32 * scale;
 
-    // A white disc with a sky ring carries the Explorer flag.
+    // A position fix is a ring on a paper disc, with a dot in the Explorer colour.
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = palette.onFill;
+    context.fillStyle = palette.explorerDisc;
     context.fill();
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
-    context.strokeStyle = palette.signal;
+    context.strokeStyle = palette.explorerRing;
     context.stroke();
 
-    const poleX = x - radius * 0.28;
     context.beginPath();
-    context.moveTo(poleX, y + radius * 0.52);
-    context.lineTo(poleX, y - radius * 0.55);
-    context.lineWidth = Math.max(1.5, tile * 0.04 * scale);
-    context.lineCap = "round";
-    context.strokeStyle = palette.night;
-    context.stroke();
-    context.beginPath();
-    context.moveTo(poleX, y - radius * 0.55);
-    context.lineTo(poleX + radius * 0.72, y - radius * 0.3);
-    context.lineTo(poleX, y - radius * 0.04);
-    context.closePath();
-    context.fillStyle = palette.signal;
+    context.arc(x, y, radius * 0.38, 0, Math.PI * 2);
+    context.fillStyle = palette.explorer;
     context.fill();
   }
 
@@ -346,7 +547,7 @@ export function createCanvasRenderer(canvas) {
     context.stroke();
 
     context.save();
-    context.fillStyle = palette.night;
+    context.fillStyle = palette.echoText;
     context.font =
       `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
@@ -363,7 +564,7 @@ export function createCanvasRenderer(canvas) {
     const color = gate.open
       ? gate.sealed
         ? palette.warden
-        : palette.signal
+        : palette.light
       : palette.gate;
 
     // The Gate is a rounded arch door.
@@ -382,12 +583,24 @@ export function createCanvasRenderer(canvas) {
 
     context.beginPath();
     if (gate.open && gate.sealed) {
+      // The arch fill is white in every theme, so the X takes the night ink, not the Night-light Warden ink.
+      context.strokeStyle = palette.night;
       context.moveTo(x - tile * 0.13 * scale, y - tile * 0.09 * scale);
       context.lineTo(x + tile * 0.13 * scale, y + tile * 0.17 * scale);
       context.moveTo(x + tile * 0.13 * scale, y - tile * 0.09 * scale);
       context.lineTo(x - tile * 0.13 * scale, y + tile * 0.17 * scale);
       context.stroke();
+      // The Gate Warden waits behind the seal: one small Signal light above the arch.
+      context.beginPath();
+      const lightRadius = tile * 0.05 * scale;
+      // The light stays inside the Gate tile at the large mark scale.
+      const lightRise = Math.min(half * 1.45, tile * 0.5 - lightRadius);
+      context.arc(x, y - lightRise, lightRadius, 0, Math.PI * 2);
+      context.fillStyle = palette.light;
+      context.fill();
     } else if (gate.open) {
+      // The arrow sits on the white arch, so it takes the on-fill light.
+      context.strokeStyle = palette.lightOnFill;
       context.moveTo(x, y + tile * 0.18 * scale);
       context.lineTo(x, y - tile * 0.12 * scale);
       context.moveTo(x - tile * 0.1 * scale, y - tile * 0.02 * scale);
@@ -396,7 +609,7 @@ export function createCanvasRenderer(canvas) {
       context.stroke();
     } else {
       context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
-      context.fillStyle = palette.onFill;
+      context.fillStyle = palette.land;
       context.fill();
       context.fillRect(
         x - tile * 0.025 * scale,
@@ -426,7 +639,7 @@ export function createCanvasRenderer(canvas) {
     context.arc(source.x, source.y, tile * 0.18 * scale, 0, Math.PI * 2);
     context.fillStyle = palette.onFill;
     context.fill();
-    context.strokeStyle = palette.signal;
+    context.strokeStyle = palette.light;
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -447,6 +660,31 @@ export function createCanvasRenderer(canvas) {
     context.restore();
   }
 
+  /**
+   * Strokes the current path over a wider casing in the board casing token, so
+   * a Signal line keeps 3:1 against the Fog. Light themes cast a light casing
+   * that is faint on the Passage; Night casts night ink.
+   * @param {number} tile
+   */
+  function strokeSignal(tile) {
+    strokeCasing(tile);
+    context.stroke();
+  }
+
+  /**
+   * Strokes only the casing of the current path. A composite mark casts every
+   * casing first, so no casing cuts an ink stroke of the same mark.
+   * @param {number} tile
+   */
+  function strokeCasing(tile) {
+    const { lineWidth, strokeStyle } = context;
+    context.strokeStyle = palette.casing;
+    context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
+    context.stroke();
+    context.strokeStyle = strokeStyle;
+    context.lineWidth = lineWidth;
+  }
+
   /** @param {EchoBridge} bridge @param {number} tile */
   function drawEchoBridge(bridge, tile) {
     const from = centerOf(bridge.from, tile);
@@ -456,19 +694,40 @@ export function createCanvasRenderer(canvas) {
       y: (from.y + to.y) / 2
     };
     const scale = palette.markScale;
-    const color = bridge.open ? palette.signal : palette.gate;
+    const color = bridge.open ? palette.light : palette.gate;
 
     context.save();
     context.strokeStyle = color;
     context.lineCap = "round";
     // The trail is one plain line: dashed while closed, solid once open.
-    context.lineWidth = Math.max(2, tile * 0.05 * scale);
-    context.setLineDash(
-      bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale]
-    );
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
+    const lineDash = bridge.open ? [] : [tile * 0.16 * scale, tile * 0.13 * scale];
+    const lineWidth = Math.max(2, tile * 0.05 * scale);
+    context.lineWidth = lineWidth;
+    const traceLine = () => {
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(to.x, to.y);
+    };
+    const traceCross = () => {
+      context.beginPath();
+      context.moveTo(midpoint.x - tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
+      context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
+      context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
+    };
+    // Casing first under the line and the X, then the line ink, then the X ink.
+    context.setLineDash(lineDash);
+    traceLine();
+    strokeCasing(tile);
+    if (!bridge.open) {
+      context.setLineDash([]);
+      context.lineWidth = Math.max(2, tile * 0.06 * scale);
+      traceCross();
+      strokeCasing(tile);
+      context.lineWidth = lineWidth;
+      context.setLineDash(lineDash);
+    }
+    traceLine();
     context.stroke();
     context.setLineDash([]);
     context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
@@ -477,15 +736,11 @@ export function createCanvasRenderer(canvas) {
       context.arc(endpoint.x, endpoint.y, tile * 0.12 * scale, 0, Math.PI * 2);
       context.fillStyle = palette.onFill;
       context.fill();
-      context.stroke();
+      strokeSignal(tile);
     }
     if (!bridge.open) {
       context.lineWidth = Math.max(2, tile * 0.06 * scale);
-      context.beginPath();
-      context.moveTo(midpoint.x - tile * 0.1, midpoint.y - tile * 0.1);
-      context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
-      context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
-      context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
+      traceCross();
       context.stroke();
     }
     drawLabel(
@@ -511,7 +766,7 @@ export function createCanvasRenderer(canvas) {
     const offsetX = horizontal ? 0 : offset;
     const offsetY = horizontal ? offset : 0;
     context.save();
-    context.strokeStyle = door.open ? palette.signal : palette.gate;
+    context.strokeStyle = door.open ? palette.light : palette.gate;
     context.lineWidth = Math.max(2, tile * 0.065 * palette.markScale);
     context.lineCap = "round";
     context.setLineDash(door.open ? [] : [tile * 0.11, tile * 0.09]);
@@ -522,7 +777,7 @@ export function createCanvasRenderer(canvas) {
         from.y + offsetY * direction
       );
       context.lineTo(to.x + offsetX * direction, to.y + offsetY * direction);
-      context.stroke();
+      strokeSignal(tile);
     }
     context.setLineDash([]);
     drawLabel(
@@ -539,34 +794,48 @@ export function createCanvasRenderer(canvas) {
   function drawSignalBell(bell, tile) {
     const { x, y } = centerOf(bell, tile);
     const scale = palette.markScale;
-    const color = bell.spent ? palette.gate : palette.signal;
+    const color = bell.spent ? palette.gate : palette.light;
     context.save();
     context.strokeStyle = color;
     context.fillStyle = palette.onFill;
     context.lineWidth = Math.max(2, tile * 0.06 * scale);
     context.lineJoin = "round";
-    context.beginPath();
-    context.arc(x, y - tile * 0.04, tile * 0.2 * scale, Math.PI, 0);
-    context.lineTo(x + tile * 0.25 * scale, y + tile * 0.2 * scale);
-    context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.beginPath();
-    context.arc(
-      x,
-      y + tile * 0.27 * scale,
-      tile * 0.06 * scale,
-      0,
-      Math.PI * 2
-    );
-    context.fillStyle = color;
-    context.fill();
-    if (bell.spent) {
-      context.lineCap = "round";
+    const traceSlash = () => {
       context.beginPath();
       context.moveTo(x - tile * 0.22, y - tile * 0.22);
       context.lineTo(x + tile * 0.22, y + tile * 0.24);
+    };
+    const traceBody = () => {
+      context.beginPath();
+      context.arc(x, y - tile * 0.04, tile * 0.2 * scale, Math.PI, 0);
+      context.lineTo(x + tile * 0.25 * scale, y + tile * 0.2 * scale);
+      context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
+      context.closePath();
+    };
+    const traceClapper = (/** @type {number} */ extra) => {
+      context.beginPath();
+      context.arc(x, y + tile * 0.27 * scale, tile * 0.06 * scale + extra, 0, Math.PI * 2);
+    };
+    // Casing first under the outline, the clapper and the slash, then the outline ink, the clapper ink, the slash ink.
+    traceBody();
+    context.fill();
+    strokeCasing(tile);
+    // The clapper hangs on bare Fog: its casing disc grows by the margin strokeCasing adds per side.
+    traceClapper(Math.max(1, tile * 0.02 * scale));
+    context.fillStyle = palette.casing;
+    context.fill();
+    if (bell.spent) {
+      context.lineCap = "round";
+      traceSlash();
+      strokeCasing(tile);
+    }
+    traceBody();
+    context.stroke();
+    traceClapper(0);
+    context.fillStyle = color;
+    context.fill();
+    if (bell.spent) {
+      traceSlash();
       context.stroke();
     }
     drawLabel(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04, tile, 0.12);
@@ -578,6 +847,14 @@ export function createCanvasRenderer(canvas) {
     const { x, y } = centerOf(warden, tile);
     const scale = palette.markScale;
     const radius = tile * 0.27 * scale;
+    // A dotted danger line rings the Warden, under its body.
+    context.beginPath();
+    context.arc(x, y, Math.min(tile * 0.46 * scale, tile * 0.48), 0, Math.PI * 2);
+    context.setLineDash([Math.max(1, tile * 0.02), Math.max(2, tile * 0.05)]);
+    context.strokeStyle = palette.danger;
+    context.lineWidth = Math.max(1, tile * 0.02 * scale);
+    context.stroke();
+    context.setLineDash([]);
     // Each mode has its own silhouette: Patrol round, Hunt pointed,
     // Intercept chevron, Lured ringed.
     context.beginPath();
@@ -598,7 +875,7 @@ export function createCanvasRenderer(canvas) {
     context.closePath();
     context.fillStyle = palette.warden;
     context.fill();
-    context.strokeStyle = palette.night;
+    context.strokeStyle = palette.land;
     context.lineWidth = Math.max(1, tile * 0.025 * scale);
     context.lineJoin = "round";
     context.stroke();
@@ -610,9 +887,9 @@ export function createCanvasRenderer(canvas) {
       context.stroke();
     }
 
-    // Each mode keeps its own face too, so the mode never rests on shape alone.
-    context.fillStyle = palette.night;
-    context.strokeStyle = palette.night;
+    // Each mode keeps its own paper face too, so the mode never rests on shape alone.
+    context.fillStyle = palette.land;
+    context.strokeStyle = palette.land;
     context.lineCap = "round";
     context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
 
@@ -679,7 +956,30 @@ export function createCanvasRenderer(canvas) {
     context.fill();
   }
 
-  return { render, resize };
+  /**
+   * @param {number} size The font shorthand of the Grid labels.
+   * @param {string} [family]
+   */
+  function gridFont(size, family = palette.fontMono) {
+    return `${size}px ${family}`;
+  }
+
+  /**
+   * Resolves when the Grid font and the body font have settled, loaded or failed. `fonts.ready` and `loadingdone` miss a lazy load on some engines.
+   * The tokens are read at call time, so a theme change before the call reaches the load.
+   * @returns {Promise<void>}
+   */
+  async function loadFonts() {
+    if (!document.fonts) return;
+    const { fontBody, fontMono } = readPalette();
+    await Promise.allSettled([
+      document.fonts.load(gridFont(10, fontMono)),
+      document.fonts.load(`700 10px ${fontBody}`),
+      document.fonts.load(`500 10px ${fontBody}`)
+    ]);
+  }
+
+  return { loadFonts, render, resize };
 }
 
 /** @param {{ row: number, col: number }} position @param {number} tile */
@@ -709,47 +1009,61 @@ function readPalette() {
    */
   const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
   return {
+    coastline: color("--color-coastline", FALLBACK_PALETTE.coastline),
+    danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
+    echoText: color("--color-board-echo-text", FALLBACK_PALETTE.echoText),
+    boardInk: color("--color-board-ink", FALLBACK_PALETTE.boardInk),
+    casing: color("--color-board-casing", FALLBACK_PALETTE.casing),
+    explorer: color("--color-board-explorer", FALLBACK_PALETTE.explorer),
+    explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
+    explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
+    fontMono: color("--font-utility", FALLBACK_PALETTE.fontMono),
     fog: color("--color-fog", FALLBACK_PALETTE.fog),
-    fogGrid: color("--color-fog-grid", FALLBACK_PALETTE.fogGrid),
+    fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
     gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
-    grid: color("--color-grid", FALLBACK_PALETTE.grid),
+    hatch: color("--color-hatch", FALLBACK_PALETTE.hatch),
     ink: color("--color-ink", FALLBACK_PALETTE.ink),
-    markScale: Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1,
+    land: color("--color-land", FALLBACK_PALETTE.land),
+    light: color("--color-board-light", FALLBACK_PALETTE.light),
+    lightOnFill: color("--color-board-light-on-fill", FALLBACK_PALETTE.lightOnFill),
+    // A negative scale would make `arc` throw, so the scale keeps a positive floor.
+    markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
     night: color("--color-night-deep", FALLBACK_PALETTE.night),
     onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
-    overlay: color("--color-overlay", FALLBACK_PALETTE.overlay),
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
-    signal: color("--color-explorer", FALLBACK_PALETTE.signal),
-    signalGlow: color("--color-explorer-glow", FALLBACK_PALETTE.signalGlow),
-    transparent: "transparent",
-    wall: color("--color-wall", FALLBACK_PALETTE.wall),
-    wallGrid: color("--color-wall-grid", FALLBACK_PALETTE.wallGrid),
-    wallMark: color("--color-wall-mark", FALLBACK_PALETTE.wallMark),
+    strong: document.documentElement.dataset.accessContrast === "strong",
     warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
   };
 }
 
 // Used when a CSS variable is missing, so the board never paints with an empty style.
+// The values equal the light block of tokens.css.
 const FALLBACK_PALETTE = {
-  echo: "oklch(62% 0.17 237)",
+  boardInk: "oklch(18% 0.012 250)",
+  casing: "oklch(100% 0 0)",
+  coastline: "oklch(18% 0.012 250)",
+  danger: "oklch(18% 0.012 250)",
+  echo: "oklch(52% 0.17 250)",
+  echoText: "oklch(100% 0 0)",
+  explorer: "oklch(46% 0.17 250)",
+  explorerDisc: "oklch(99% 0.004 95)",
+  explorerRing: "oklch(18% 0.012 250)",
   fontBody: "Arial, sans-serif",
-  fog: "oklch(92% 0.018 85)",
-  fogGrid: "oklch(40% 0.02 60 / 45%)",
-  gate: "oklch(54% 0.14 155)",
-  grid: "oklch(40% 0.02 60 / 45%)",
-  ink: "oklch(24% 0.015 60)",
-  night: "oklch(16% 0.012 65)",
+  fontMono: "monospace",
+  fog: "oklch(99% 0.004 95)",
+  fogDot: "oklch(18% 0.012 250 / 80%)",
+  gate: "oklch(58% 0.24 340)",
+  hatch: "oklch(18% 0.012 250 / 30%)",
+  ink: "oklch(18% 0.012 250)",
+  land: "oklch(99% 0.004 95)",
+  light: "oklch(58% 0.24 340)",
+  lightOnFill: "oklch(58% 0.24 340)",
+  night: "oklch(18% 0.012 250)",
   onFill: "oklch(100% 0 0)",
-  overlay: "oklch(20% 0.015 60 / 60%)",
-  passage: "oklch(98.5% 0.014 88)",
-  pulse: "oklch(68.5% 0.169 237 / 30%)",
-  signal: "oklch(55% 0.16 240)",
-  signalGlow: "oklch(55% 0.16 240 / 30%)",
-  wall: "oklch(30% 0.012 60)",
-  wallGrid: "oklch(20% 0.012 60 / 85%)",
-  wallMark: "oklch(48% 0.014 60 / 75%)",
-  warden: "oklch(58% 0.2 24)"
+  passage: "oklch(95.5% 0.022 232)",
+  pulse: "oklch(52% 0.17 250 / 28%)",
+  warden: "oklch(18% 0.012 250)"
 };
