@@ -1,9 +1,4 @@
 /* The First Light Tutorial dialog loads with the game chunk, not with the landing. */
-.first-light-dialog {
-  width: min(42rem, calc(100% - 2rem));
-  padding: var(--space-8);
-}
-
 .first-light-dialog h2 {
   min-width: 0;
   margin: var(--space-2) 0 0;
@@ -23,32 +18,29 @@
 }
 
 .first-light-route {
-  display: flex;
-  margin: var(--space-6) 0;
+  display: grid;
+  margin: var(--space-5) 0;
   padding: 0;
-  align-items: stretch;
-  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
   list-style: none;
 }
 
 .first-light-route li {
   display: grid;
   min-width: 0;
-  min-height: 6rem;
-  padding: var(--space-3);
-  flex: 1 1 0;
-  align-content: center;
-  gap: var(--space-1);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone-raised);
+  min-height: 2.5rem;
+  padding: var(--space-3) var(--space-2);
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-line-soft);
 }
 
 .first-light-route strong {
   min-width: 0;
   font-family: var(--font-display);
-  font-size: 1.3rem;
-  letter-spacing: -0.035em;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -63,16 +55,15 @@
   margin: 0;
   padding: var(--space-3) var(--space-4);
   color: var(--color-ink);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
   font-size: var(--text-body);
   line-height: 1.5;
 }
 
 .first-light-dialog__actions {
   display: flex;
-  margin-top: var(--space-5);
   align-items: center;
   gap: var(--space-2);
 }
@@ -80,25 +71,4 @@
 .first-light-dialog__actions button {
   min-height: 2.75rem;
   white-space: nowrap;
-}
-
-@media (max-width: 32rem) {
-  .first-light-dialog {
-    padding: var(--space-4);
-  }
-
-  .first-light-dialog__actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .first-light-route {
-    flex-wrap: wrap;
-    gap: var(--space-1);
-  }
-
-  .first-light-route li {
-    padding: var(--space-2);
-    flex: 1 1 5.5rem;
-  }
 }
