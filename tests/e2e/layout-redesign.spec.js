@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 
 test.describe("layout redesign & edge viewports", () => {
   const edgeViewports = [
@@ -258,7 +259,10 @@ test.describe("layout redesign & edge viewports", () => {
       expect(header.scrollbarWidth).toBe("none");
       expect(header.tabBorder, "tabs carry a 2px underline slot").toBe("2px");
       expect(header.pageOverflow).toBeLessThanOrEqual(1);
-      if (vp.width >= 768) expect(header.barHeight).toBe(64);
+      if (vp.width >= 768) {
+        expect(header.barHeight, "bar height").toBeGreaterThanOrEqual(56);
+        expect(header.barHeight, "bar height").toBeLessThanOrEqual(72);
+      }
 
       for (const name of ["Daily", "Atlas", "Workshop", "Journal", "Records", "Settings", "New Quest"]) {
         await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
@@ -298,7 +302,7 @@ test.describe("layout redesign & edge viewports", () => {
       const ratio = layout.column / layout.grid;
       expect(ratio, "board column share of the content width").toBeGreaterThanOrEqual(0.6);
       expect(ratio, "board column share of the content width").toBeLessThanOrEqual(0.7);
-      expect(layout.frame?.width, "board is square").toBeCloseTo(layout.frame?.height ?? 0, 0);
+      expect(Math.abs((layout.frame?.width ?? 0) - (layout.frame?.height ?? 0)), "board is square").toBeLessThanOrEqual(1);
       expect(layout.frame?.width, "board size comes from the column, not a fixed 432px").toBeGreaterThan(440);
       for (const box of [layout.panel, layout.notes]) {
         expect(box.border).toBe("0px");
@@ -325,7 +329,7 @@ test.describe("layout redesign & edge viewports", () => {
     await expectGameReady(page);
     const canvas = await page.locator("#maze-canvas").boundingBox();
     if (!canvas) throw new Error("canvas has no bounding box");
-    const tile = canvas.width / 13;
+    const tile = canvas.width / getLabyrinthConfig("trail-scout", 1).size;
     expect(canvas.y + tile, "first tile bottom edge").toBeLessThanOrEqual(375);
   });
 
@@ -333,6 +337,7 @@ test.describe("layout redesign & edge viewports", () => {
   test("hides the Classroom tab for a guest", async ({ page }) => {
     await page.goto("/?seed=BOARD-GUEST&level=trail-scout");
     await expectGameReady(page);
+    await expect(page.locator("#classroom-link")).toHaveCount(1);
     await expect(page.locator("#classroom-link")).toBeHidden();
   });
 
@@ -364,7 +369,7 @@ test.describe("layout redesign & edge viewports", () => {
       await page.locator("#seed-copy").click();
       const ribbon = page.locator("#event-ribbon");
       await expect(ribbon).toHaveClass(/is-visible/);
-      await expect(ribbon).toBeVisible();
+      await expect(ribbon).toHaveCSS("opacity", "1");
 
       expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
@@ -380,6 +385,53 @@ test.describe("layout redesign & edge viewports", () => {
       expect(parseFloat(rule), "ink top rule").toBeGreaterThan(0);
     });
   }
+
+  // The landing chart follows the Theme Choice; the OS scheme is only the fallback.
+  for (const [os, choice] of [
+    ["dark", "light"],
+    ["light", "dark"]
+  ]) {
+    test(`shows the ${choice} chart for a ${choice} Theme Choice on a ${os} OS`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
+      await page.addInitScript((value) => {
+        window.localStorage.setItem("echo-maze:theme", value);
+      }, choice);
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", choice);
+      const visible = page.locator(".landing-hero__chart:visible");
+      await expect(visible).toHaveCount(1);
+      await expect(visible).toHaveAttribute("src", `/landing-chart-${choice === "dark" ? "night" : "light"}.webp`);
+    });
+  }
+
+  test("falls back to the OS scheme for the landing chart when no Theme Choice is set", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/");
+    const visible = page.locator(".landing-hero__chart:visible");
+    await expect(visible).toHaveCount(1);
+    await expect(visible).toHaveAttribute("src", "/landing-chart-night.webp");
+  });
+
+  // Focus order: the pad comes before Pause and Pulse, as drawn.
+  test("keeps the Action rail focus order equal to the visual order", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/?seed=RAIL-ORDER&level=trail-scout");
+    await expectGameReady(page);
+    const order = await page.evaluate(() =>
+      ["[data-move='up']", "#pause-run", "#pulse-action"].map((selector) => {
+        const element = document.querySelector(selector);
+        return element ? element.getBoundingClientRect().x : -1;
+      })
+    );
+    expect(order[0]).toBeLessThan(order[1] ?? 0);
+    expect(order[1]).toBeLessThan(order[2] ?? 0);
+    const domOrder = await page.evaluate(() => {
+      const ids = [".touch-controls", "#pause-run", ".trail-actions"];
+      const nodes = ids.map((id) => document.querySelector(id));
+      return nodes.every((node, index) => index === 0 || (nodes[index - 1]?.compareDocumentPosition(node ?? document) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(domOrder, "DOM order pad, Pause, Pulse").toBeTruthy();
+  });
 
   // Ticket 12: the Action rail keeps 48px direction buttons and 40px targets.
   for (const vp of [

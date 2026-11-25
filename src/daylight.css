@@ -258,6 +258,10 @@ a:hover {
   border-color: var(--color-ink-muted);
 }
 
+.command-bar .command-bar__actions > [aria-pressed="true"] {
+  border-color: var(--color-ink);
+}
+
 .command-bar__actions > [aria-pressed="true"]:hover {
   border-color: var(--color-ink);
 }
@@ -569,8 +573,6 @@ a:hover {
   width: 3rem;
   height: 3rem;
   padding: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
 }
 
 .direction-button__arrow {
@@ -1043,6 +1045,11 @@ kbd {
   display: none;
 }
 
+/* Strong contrast: the ruled rows take the full line token. */
+:root[data-access-contrast="strong"] :is(.chart-notes > *, .story-log li, .legend li) {
+  border-top-color: var(--color-line);
+}
+
 .legend-mark {
   display: inline-block;
   width: 0.78rem;
@@ -1505,6 +1512,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .labyrinth-panel {
+    --board-w: min(100%, max(40dvh, 6rem), 28rem);
     gap: var(--space-2);
   }
 
@@ -1530,10 +1538,6 @@ body[data-run-mode="first-light"] .play-workbench {
     margin: 0;
     font-family: var(--font-body);
     font-size: var(--text-label);
-  }
-
-  .labyrinth-panel {
-    --board-w: min(100%, max(40dvh, 6rem), 28rem);
   }
 
   /* A touch player has no Q key; the hint only crowds the label. */
@@ -1568,7 +1572,8 @@ body[data-run-mode="first-light"] .play-workbench {
 
 @media (max-width: 32rem) {
   .command-bar__actions > * {
-    min-width: max(2.8125rem, max-content);
+    width: max-content;
+    min-width: 2.8125rem;
     font-size: var(--text-compact);
   }
 
@@ -1948,11 +1953,31 @@ body[data-run-mode="first-light"] .play-workbench {
   background: var(--color-water-1);
 }
 
-.landing-hero__frame img {
+.landing-hero__chart {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* The chart follows the Theme Choice; the OS scheme decides only when no choice is set. */
+.landing-hero__chart--night,
+:root[data-theme="dark"] .landing-hero__chart--light {
+  display: none;
+}
+
+:root[data-theme="dark"] .landing-hero__chart--night {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .landing-hero__chart--light {
+    display: none;
+  }
+
+  :root:not([data-theme]) .landing-hero__chart--night {
+    display: block;
+  }
 }
 
 .landing-hero__legend {
@@ -1990,7 +2015,7 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .landing-hero__legend li:nth-child(2)::before {
   border: 1px solid var(--color-ink);
-  background: var(--color-accent-ink);
+  background: var(--color-ink);
 }
 
 .landing-hero__legend li:nth-child(3)::before {
@@ -2003,7 +2028,7 @@ body[data-run-mode="first-light"] .play-workbench {
   background: radial-gradient(circle, var(--color-explorer) 0 40%, transparent 45%);
 }
 
-/* The course line sits between the chart and the legend, in document order via flex order. */
+/* The course line follows the chart in the DOM; flex order moves it out of document order, to sit above the legend. */
 .landing-hero__trail {
   order: 2;
   width: 100%;
