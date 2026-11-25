@@ -88,6 +88,51 @@ function canvasToken(scope, name) {
   return hit[1].trim();
 }
 
+const SCOPES = [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT];
+
+/** Every token a board mark reads, one row per mark (design.md palette rows). */
+const BOARD_ROWS = [
+  "--color-land",
+  "--color-hatch",
+  "--color-coastline",
+  "--color-passage",
+  "--color-fog",
+  "--color-fog-dot",
+  "--color-board-explorer-ring",
+  "--color-danger-line",
+  "--color-board-warden",
+  "--color-board-light"
+];
+
+/** Non-text pairs from the spec: a mark must reach 3:1 against the ground it sits on. */
+const BOARD_PAIRS = [
+  ["--color-coastline", "--color-passage"],
+  ["--color-coastline", "--color-land"],
+  ["--color-board-explorer-ring", "--color-passage"],
+  ["--color-board-warden", "--color-passage"],
+  ["--color-danger-line", "--color-passage"],
+  ["--color-board-gate", "--color-passage"],
+  ["--color-board-echo", "--color-passage"],
+  ["--color-board-light", "--color-passage"],
+  ["--color-explorer", "--color-land"]
+];
+
+/**
+ * Reads a token as oklab and follows `var()` inside the scope first, then the light scope.
+ * @param {string} scope
+ * @param {string} name
+ * @returns {number[]}
+ */
+function boardColor(scope, name) {
+  let value;
+  try {
+    value = canvasToken(scope, name);
+  } catch {
+    value = canvasToken(LIGHT, name);
+  }
+  return value.startsWith("var(") ? boardColor(scope, value.slice(4, -1)) : oklabOf(value);
+}
+
 /**
  * Parses an `oklch(L% C H)` value into oklab [L, a, b].
  * @param {string} value
@@ -442,21 +487,28 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     );
   });
 
-  it("US-08.1 keeps the wall at 3:1 against the passage in light and Night", () => {
-    for (const scope of [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT]) {
-      const passage = oklabOf(canvasToken(scope, "--color-passage"));
-      const wall = oklabOf(canvasToken(scope, "--color-wall"));
-      expect(contrastRatio(wall, passage)).toBeGreaterThanOrEqual(3);
+  it("US-01.1 gives every board mark a row, and the two Night blocks the same rows", () => {
+    for (const scope of SCOPES) {
+      for (const name of BOARD_ROWS) {
+        expect(() => canvasToken(scope, name), name).not.toThrow();
+      }
+      expect(canvasToken(scope, "--color-board-warden")).toBe("var(--color-ink)");
+      const hatch = Number(canvasToken(scope, "--color-hatch").match(/ \/ (\d+)%\)$/)?.[1]);
+      expect(hatch).toBeGreaterThanOrEqual(28);
+      expect(hatch).toBeLessThanOrEqual(34);
     }
+    const rows = (/** @type {string} */ scope) =>
+      [...scope.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((hit) => `${hit[1]}: ${hit[2]}`).sort();
+    expect(rows(NIGHT_SYSTEM)).toEqual(rows(NIGHT_EXPLICIT));
   });
 
-  it("US-08.1 keeps the Gate, Warden and Echo marks at 3:1 against the passage in light and Night", () => {
-    for (const scope of [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT]) {
-      const passage = oklabOf(canvasToken(scope, "--color-passage"));
-      for (const name of ["--color-board-gate", "--color-board-warden", "--color-board-echo"]) {
-        const value = canvasToken(scope, name);
-        const mark = oklabOf(value.startsWith("var(") ? canvasToken(LIGHT, value.slice(4, -1)) : value);
-        expect(contrastRatio(mark, passage)).toBeGreaterThanOrEqual(3);
+  it("US-01.2 keeps every board mark at 3:1 against the passage or the land in light and Night", () => {
+    for (const scope of SCOPES) {
+      for (const [mark, ground] of BOARD_PAIRS) {
+        expect(
+          contrastRatio(boardColor(scope, mark), boardColor(scope, ground)),
+          `${mark} on ${ground}`
+        ).toBeGreaterThanOrEqual(3);
       }
     }
   });
