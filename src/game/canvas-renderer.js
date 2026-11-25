@@ -436,8 +436,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
     // Along the edge, the ends sit on whole pixels.
     const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
-    // Each end reaches half the width, rounded up, past the tile corner. A convex land corner then has no notch.
-    const reach = Math.ceil(width / 2);
+    // Each end meets the far side of the crossing stroke, so a land corner has no notch and no nub.
+    // An odd stroke covers floor(w/2) pixels before the edge and ceil(w/2) pixels after it.
+    const reachStart = Math.floor(width / 2);
+    const reachEnd = Math.ceil(width / 2);
     const along = (/** @type {number} */ edge) => Math.round(edge);
     context.beginPath();
     let edges = 0;
@@ -453,12 +455,12 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
           const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
           if (dCol === 0) {
             const y = across(edgeRow * tile);
-            context.moveTo(along(edgeCol * tile) - reach, y);
-            context.lineTo(along((edgeCol + 1) * tile) + reach, y);
+            context.moveTo(along(edgeCol * tile) - reachStart, y);
+            context.lineTo(along((edgeCol + 1) * tile) + reachEnd, y);
           } else {
             const x = across(edgeCol * tile);
-            context.moveTo(x, along(edgeRow * tile) - reach);
-            context.lineTo(x, along((edgeRow + 1) * tile) + reach);
+            context.moveTo(x, along(edgeRow * tile) - reachStart);
+            context.lineTo(x, along((edgeRow + 1) * tile) + reachEnd);
           }
           edges += 1;
         }

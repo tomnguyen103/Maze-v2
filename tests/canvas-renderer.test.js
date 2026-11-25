@@ -896,18 +896,19 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(coast[0].path.every((step) => !step.startsWith("arc"))).toBe(true);
     // The wall (0,0) borders the passage (0,1) at x = 320 and the passage (1,0) at y = 320.
     const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
-    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. The half width, rounded up, is 10.
+    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. Centred on 320.5, it covers 311..330.
     expect(widths).toContain(19);
-    const reach = 10;
+    const reachStart = 9;
+    const reachEnd = 10;
     // An odd width sits on a half pixel across the edge and the ends sit on whole pixels.
     expect(points.every(([x, y]) => (x === 320.5 && Number.isInteger(y)) || (y === 320.5 && Number.isInteger(x)))).toBe(true);
-    // Each end passes the tile corner by the half width. The corner square of the two strokes has no notch.
+    // Each end stops at the far side of the crossing stroke: no notch and no 1px nub.
     const horizontal = points.filter(([, y]) => y === 320.5).map(([x]) => x);
     const vertical = points.filter(([x]) => x === 320.5).map(([, y]) => y);
-    expect(Math.min(...horizontal)).toBe(0 - reach);
-    expect(Math.max(...horizontal)).toBe(320 + reach);
-    expect(Math.min(...vertical)).toBe(0 - reach);
-    expect(Math.max(...vertical)).toBe(320 + reach);
+    expect(Math.min(...horizontal)).toBe(0 - reachStart);
+    expect(Math.max(...horizontal)).toBe(320 + reachEnd);
+    expect(Math.min(...vertical)).toBe(0 - reachStart);
+    expect(Math.max(...vertical)).toBe(320 + reachEnd);
     expect(/** @type {Record<string, unknown>} */ (context).lineCap).toBe("butt");
   });
 
