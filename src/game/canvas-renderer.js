@@ -394,44 +394,19 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
     const scale = palette.markScale;
-    const radius = tile * 0.3 * scale;
-    const glow = context.createRadialGradient(
-      x,
-      y,
-      0,
-      x,
-      y,
-      tile * 0.72 * scale
-    );
-    glow.addColorStop(0, palette.explorer);
-    glow.addColorStop(1, palette.transparent);
-    context.globalAlpha = 0.3;
-    context.fillStyle = glow;
-    context.fillRect(x - tile, y - tile, tile * 2, tile * 2);
-    context.globalAlpha = 1;
+    const radius = tile * 0.32 * scale;
 
-    // A white disc with a sky ring carries the Explorer flag.
+    // A position fix is an ink ring on a paper disc, with a dot in the Explorer colour.
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.fillStyle = palette.onFill;
     context.fill();
     context.lineWidth = Math.max(2, tile * 0.08 * scale);
-    context.strokeStyle = palette.explorer;
+    context.strokeStyle = palette.explorerRing;
     context.stroke();
 
-    const poleX = x - radius * 0.28;
     context.beginPath();
-    context.moveTo(poleX, y + radius * 0.52);
-    context.lineTo(poleX, y - radius * 0.55);
-    context.lineWidth = Math.max(1.5, tile * 0.04 * scale);
-    context.lineCap = "round";
-    context.strokeStyle = palette.night;
-    context.stroke();
-    context.beginPath();
-    context.moveTo(poleX, y - radius * 0.55);
-    context.lineTo(poleX + radius * 0.72, y - radius * 0.3);
-    context.lineTo(poleX, y - radius * 0.04);
-    context.closePath();
+    context.arc(x, y, radius * 0.38, 0, Math.PI * 2);
     context.fillStyle = palette.explorer;
     context.fill();
   }

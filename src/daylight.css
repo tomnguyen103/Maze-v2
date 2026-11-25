@@ -29,19 +29,16 @@ body {
 :root[data-explorer-palette="sunset"] {
   --color-explorer: var(--color-explorer-sunset);
   --color-explorer-bright: var(--color-explorer-sunset-bright);
-  --color-explorer-glow: var(--color-explorer-sunset-glow);
 }
 
 :root[data-explorer-palette="violet"] {
   --color-explorer: var(--color-explorer-violet);
   --color-explorer-bright: var(--color-explorer-violet-bright);
-  --color-explorer-glow: var(--color-explorer-violet-glow);
 }
 
 :root[data-explorer-palette="gold"] {
   --color-explorer: var(--color-explorer-gold);
   --color-explorer-bright: var(--color-explorer-gold-bright);
-  --color-explorer-glow: var(--color-explorer-gold-glow);
 }
 
 :root[data-playground-palette="twilight"] {

@@ -580,6 +580,39 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(widths).toContain(19);
   });
 
+  it("US-02.1 paints the Explorer as an ink ring on a paper disc with an Explorer dot", () => {
+    document.body.style.setProperty("--color-board-explorer-ring", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--color-explorer", "rgb(6, 6, 6)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    let lineWidth = 0;
+    /** @type {number[]} */
+    const ringWidths = [];
+    Object.defineProperty(context, "lineWidth", {
+      configurable: true,
+      get: () => lineWidth,
+      set: (value) => {
+        lineWidth = value;
+      }
+    });
+    const stroke = context.stroke;
+    context.stroke = vi.fn(() => {
+      ringWidths.push(lineWidth);
+      stroke();
+    });
+
+    renderer.render(board({ explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 }, revealed: ["1,1"] }));
+
+    expect(context.createRadialGradient).not.toHaveBeenCalled();
+    const ring = paints.find((paint) => paint.kind === "stroke" && paint.style === "rgb(5, 5, 5)");
+    // The 2x2 board has tile 320: the ring centres on 480,480 with radius 0.32 tile.
+    expect(ring?.path).toEqual(["arc(480.00,480.00,102.40,0.00,6.28)"]);
+    expect(ringWidths).toContain(25.6);
+    const dot = paints.find((paint) => paint.kind === "fill" && paint.style === "rgb(6, 6, 6)");
+    expect(dot?.path).toHaveLength(1);
+    expect(dot?.path[0].startsWith("arc(480.00,480.00,")).toBe(true);
+  });
+
   it("US-01.1 gives every board mark a row, and the two Night blocks the same rows", () => {
     for (const scope of SCOPES) {
       for (const name of BOARD_ROWS) {
