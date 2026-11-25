@@ -381,34 +381,25 @@ a:hover {
   text-transform: uppercase;
 }
 
-/* Readout: the live numbers sit directly above the board. */
+/* Readout: one ruled instrument line above the board. Ink rules divide the cells; no cards, no fills. */
 
 .readout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: 0 var(--space-3);
+  border-block: 1px solid var(--color-line);
 }
 
 .run-metrics {
   display: grid;
   margin: 0;
-  grid-column: 1 / 3;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-panel);
 }
 
 .run-metrics div {
   min-width: 0;
   padding: var(--space-2) var(--space-3);
-  border-right: 1px solid var(--color-line-soft);
-}
-
-.run-metrics div:last-child {
-  border-right: 0;
+  border-right: 1px solid var(--color-line);
 }
 
 .run-metrics dt {
@@ -425,58 +416,26 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* The pips repeat the Echoes and Vitality numbers, so the line drops them. */
 .meter-row {
-  display: grid;
-  margin-top: var(--space-2);
-  padding: 0 var(--space-1);
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-ink-muted);
+  display: none;
+}
+
+.readout .section-label,
+.run-metrics dt {
+  font-family: var(--font-body);
   font-size: var(--text-compact);
+  font-stretch: normal;
   font-weight: 600;
-}
-
-.echo-meter,
-.vitality-meter {
-  display: flex;
-  justify-content: flex-start;
-  gap: var(--space-1);
-}
-
-.echo-pip,
-.vitality-pip {
-  width: 1.35rem;
-  height: 0.5rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-  transition: background-color var(--duration-reveal) var(--ease-out);
-}
-
-.echo-pip.is-filled {
-  background: var(--color-echo);
-  border-color: var(--color-echo);
-}
-
-.vitality-pip.is-filled {
-  background: var(--color-warden);
-  border-color: var(--color-warden);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .warden-readout {
   display: grid;
   min-width: 10rem;
-  grid-column: 3;
-  grid-row: 1 / 3;
-  align-content: start;
+  align-content: center;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
-  transition:
-    background-color var(--duration-reveal) var(--ease-out),
-    border-color var(--duration-reveal) var(--ease-out);
 }
 
 .warden-readout strong {
@@ -489,19 +448,11 @@ a:hover {
   line-height: 1.1;
 }
 
-.warden-readout[data-mode="intercept"] {
-  border-color: var(--color-signal-deep);
-}
-
+/* A mode changes its mark, not its colour alone. */
 .warden-readout[data-mode="intercept"] strong {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
-}
-
-.warden-readout[data-mode="hunt"] {
-  border-color: var(--color-warden);
-  background: var(--color-warden-soft);
 }
 
 .warden-readout[data-mode="hunt"] strong {
@@ -513,21 +464,20 @@ a:hover {
   font-size: 0.8em;
 }
 
-.warden-readout[data-mode="lured"] {
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-soft);
-}
-
 .warden-readout[data-mode="lured"] strong::before {
   content: "))) " / "";
   font-size: 0.8em;
 }
 
+/* The guild line stays for screen readers; the instrument line shows the mode only. */
 .warden-readout p {
-  margin: var(--space-1) 0 0;
-  color: var(--color-ink-muted);
-  font-size: var(--text-compact);
-  line-height: 1.35;
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Board */
@@ -1539,55 +1489,24 @@ body[data-run-mode="first-light"] .play-workbench {
     gap: var(--space-2);
   }
 
-  /* One instrument line: the four metrics and the Warden mode share a row. */
-  .readout {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-2);
-  }
-
-  .run-metrics {
-    grid-column: auto;
-    border: 0;
-    border-bottom: 1px solid var(--color-line-soft);
-    border-radius: 0;
-  }
-
+  /* The instrument line stays one row; the cells tighten. */
   .run-metrics div {
     padding: var(--space-1) var(--space-2) var(--space-2);
-  }
-
-  .run-metrics dt {
-    letter-spacing: 0.04em;
   }
 
   .run-metrics dd {
     font-size: 1.05rem;
   }
 
-  .meter-row {
-    display: none;
-  }
-
   .warden-readout {
     min-width: 0;
-    grid-column: auto;
-    grid-row: auto;
-    align-content: center;
     padding: var(--space-1) var(--space-2);
-  }
-
-  .warden-readout .section-label {
-    letter-spacing: 0.02em;
   }
 
   .warden-readout strong {
     margin: 0;
     font-family: var(--font-body);
     font-size: var(--text-label);
-  }
-
-  .warden-readout p {
-    display: none;
   }
 
   .canvas-frame {
@@ -1724,10 +1643,6 @@ body[data-run-mode="first-light"] .play-workbench {
     padding: var(--space-1) var(--space-2);
   }
 
-  .run-metrics dt {
-    letter-spacing: 0.02em;
-  }
-
   .run-metrics dd {
     font-size: var(--text-label);
   }
@@ -1801,23 +1716,6 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .seed-copy strong {
     max-width: 6.5rem;
-  }
-
-  .run-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .run-metrics div {
-    border-bottom: 1px solid var(--color-line-soft);
-    border-right: 1px solid var(--color-line-soft);
-  }
-
-  .run-metrics div:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .run-metrics div:nth-last-child(-n+2) {
-    border-bottom: 0;
   }
 
   /* The d-pad needs its full width here, so the buttons take their own rows. */
