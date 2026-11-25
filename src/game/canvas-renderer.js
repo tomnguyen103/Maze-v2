@@ -661,13 +661,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   }
 
   /**
-   * Strokes the current path over a white casing, so a Signal line keeps 3:1
-   * where it crosses the Fog. On the white Passage the casing does not show.
+   * Strokes the current path over a wider casing in the board casing token, so
+   * a Signal line keeps 3:1 against the Fog. Light themes cast a light casing
+   * that is faint on the Passage; Night casts night ink.
    * @param {number} tile
    */
   function strokeSignal(tile) {
     const { lineWidth, strokeStyle } = context;
-    context.strokeStyle = palette.onFill;
+    context.strokeStyle = palette.casing;
     context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
     context.stroke();
     context.strokeStyle = strokeStyle;
@@ -714,7 +715,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
       context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
       context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
-      strokeSignal(tile);
+      // A plain stroke: a casing would cut the dashed line the X sits on.
+      context.stroke();
     }
     drawLabel(
       String(bridge.echoIndex + 1),
@@ -795,7 +797,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.beginPath();
       context.moveTo(x - tile * 0.22, y - tile * 0.22);
       context.lineTo(x + tile * 0.22, y + tile * 0.24);
-      strokeSignal(tile);
+      // A plain stroke: a casing would cut the bell outline the slash crosses.
+      context.stroke();
     }
     drawLabel(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04, tile, 0.12);
     context.restore();
@@ -915,20 +918,30 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.fill();
   }
 
-  /** @param {number} size The font shorthand of the Grid labels. */
-  function gridFont(size) {
-    return `${size}px ${palette.fontMono}`;
+  /**
+   * @param {number} size The font shorthand of the Grid labels.
+   * @param {string} [family]
+   */
+  function gridFont(size, family = palette.fontMono) {
+    return `${size}px ${family}`;
   }
 
   /**
-   * Resolves when the Grid label font has loaded. `fonts.ready` and `loadingdone` miss a lazy load on some engines.
-   * @returns {Promise<unknown>}
+   * Resolves when the Grid font and the body font have settled, loaded or failed. `fonts.ready` and `loadingdone` miss a lazy load on some engines.
+   * The tokens are read at call time, so a theme change before the call reaches the load.
+   * @returns {Promise<void>}
    */
-  function loadGridFont() {
-    return document.fonts?.load(gridFont(10)) ?? Promise.resolve();
+  async function loadFonts() {
+    if (!document.fonts) return;
+    const { fontBody, fontMono } = readPalette();
+    await Promise.allSettled([
+      document.fonts.load(gridFont(10, fontMono)),
+      document.fonts.load(`700 10px ${fontBody}`),
+      document.fonts.load(`500 10px ${fontBody}`)
+    ]);
   }
 
-  return { loadGridFont, render, resize };
+  return { loadFonts, render, resize };
 }
 
 /** @param {{ row: number, col: number }} position @param {number} tile */
@@ -963,6 +976,7 @@ function readPalette() {
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
     echoText: color("--color-board-echo-text", FALLBACK_PALETTE.echoText),
     boardInk: color("--color-board-ink", FALLBACK_PALETTE.boardInk),
+    casing: color("--color-board-casing", FALLBACK_PALETTE.casing),
     explorer: color("--color-board-explorer", FALLBACK_PALETTE.explorer),
     explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
     explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
@@ -991,6 +1005,7 @@ function readPalette() {
 // The values equal the light block of tokens.css.
 const FALLBACK_PALETTE = {
   boardInk: "oklch(18% 0.012 250)",
+  casing: "oklch(100% 0 0)",
   coastline: "oklch(18% 0.012 250)",
   danger: "oklch(18% 0.012 250)",
   echo: "oklch(52% 0.17 250)",

@@ -320,6 +320,9 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-gate", "--color-passage", 3],
   ["--color-board-echo", "--color-passage", 3],
   ["--color-board-light", "--color-passage", 3],
+  // A Signal line strokes over its casing, so the line holds 3:1 against the casing in every mode.
+  ["--color-board-light", "--color-board-casing", 3],
+  ["--color-board-gate", "--color-board-casing", 3],
   ["--color-fog-dot", "--color-fog", 3],
   // The Fog dots carry the known/unknown edge, because the Fog fill is close to the Passage.
   ["--color-fog-dot", "--color-passage", 3],
@@ -1092,14 +1095,46 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(Math.max(...(ys ?? []))).toBe(320);
   });
 
-  it("US-03.1 loads the Grid label font with the shorthand the labels use", async () => {
-    document.body.style.setProperty("--font-utility", "Geist Mono");
+  it("US-03.1 loads the Grid and body fonts with the tokens read at call time", async () => {
+    document.body.style.setProperty("--font-utility", "Old Mono");
     const load = vi.fn(() => Promise.resolve([]));
     Object.defineProperty(document, "fonts", { configurable: true, value: { load } });
     try {
       const { renderer } = stubCanvas();
-      await renderer.loadGridFont();
+      document.body.style.setProperty("--font-utility", "Geist Mono");
+      document.body.style.setProperty("--font-body", "Geist");
+      await renderer.loadFonts();
       expect(load).toHaveBeenCalledWith("10px Geist Mono");
+      expect(load).toHaveBeenCalledWith("700 10px Geist");
+      expect(load).toHaveBeenCalledWith("500 10px Geist");
+      expect(load).not.toHaveBeenCalledWith("10px Old Mono");
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+    }
+  });
+
+  it("US-03.1 resolves once every font has settled, even when one load fails", async () => {
+    /** @type {Array<() => void>} */
+    const bodyLoads = [];
+    const load = vi.fn((/** @type {string} */ shorthand) => {
+      if (shorthand.startsWith("10px")) return Promise.reject(new Error("grid font failed"));
+      return new Promise((done) => {
+        bodyLoads.push(() => done([]));
+      });
+    });
+    Object.defineProperty(document, "fonts", { configurable: true, value: { load } });
+    try {
+      const { renderer } = stubCanvas();
+      let settled = false;
+      const loading = renderer.loadFonts().then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      expect(bodyLoads).toHaveLength(2);
+      for (const finish of bodyLoads) finish();
+      await loading;
+      expect(settled).toBe(true);
     } finally {
       Reflect.deleteProperty(document, "fonts");
     }
@@ -1205,11 +1240,12 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
   it("US-01.2 casts a white casing under each Signal line in every contrast mode", () => {
     document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
     document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
-    document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
+    document.body.style.setProperty("--color-on-fill", "rgb(240, 240, 240)");
+    document.body.style.setProperty("--color-board-casing", "rgb(250, 250, 250)");
     const magenta = ["rgb(9, 9, 1)", "rgb(9, 9, 2)"];
     const marks = {
-      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: false }],
-      signalBells: [{ id: 0, row: 0, col: 1, spent: true }],
+      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: true }],
+      signalBells: [{ id: 0, row: 0, col: 1, spent: false }],
       tideDoors: [{ id: 0, from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, open: false }]
     };
     /** @param {boolean} strong */
@@ -1240,6 +1276,67 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
         expect(casing.width).toBeGreaterThan(line.width);
       }
     }
+  });
+
+  it("US-01.2 casts the dark Night casing under a Signal line, never the white on-fill", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-on-fill", "rgb(255, 255, 255)");
+    document.body.style.setProperty("--color-board-casing", "rgb(20, 22, 30)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({
+      revealed: ["1,1"],
+      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: true }]
+    }));
+
+    const lines = paints.flatMap((paint, index) =>
+      paint.kind === "stroke" && paint.style === "rgb(9, 9, 1)" ? [index] : []
+    );
+    expect(lines.length).toBeGreaterThan(0);
+    for (const index of lines) expect(paints[index - 1].style).toBe("rgb(20, 22, 30)");
+    expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(255, 255, 255)")).toBe(false);
+  });
+
+  it("US-01.2 strokes the closed-bridge X and the spent-bell slash plain, with no casing", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
+    document.body.style.setProperty("--color-board-casing", "rgb(250, 250, 250)");
+    /** @param {Partial<ReturnType<typeof board>>} marks */
+    const magentaStrokes = (marks) => {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      renderer.render(board({ revealed: ["1,1"], ...marks }));
+      return paints.filter(
+        (paint) => paint.kind === "stroke" && ["rgb(9, 9, 1)", "rgb(9, 9, 2)", "rgb(250, 250, 250)"].includes(paint.style)
+      );
+    };
+
+    const bridge = magentaStrokes({
+      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: false }]
+    });
+    const cross = bridge[bridge.length - 1];
+    expect(cross.path).toHaveLength(4);
+    expect(cross.style).toBe("rgb(9, 9, 2)");
+    expect(bridge[bridge.length - 2].style).toBe("rgb(9, 9, 2)");
+    expect(bridge[bridge.length - 2].path).not.toEqual(cross.path);
+
+    const bell = magentaStrokes({ signalBells: [{ id: 0, row: 0, col: 1, spent: true }] });
+    // Casing and outline, then the slash on its own.
+    expect(bell.map((paint) => paint.style)).toEqual(["rgb(250, 250, 250)", "rgb(9, 9, 2)", "rgb(9, 9, 2)"]);
+    expect(bell[2].path).toHaveLength(2);
+  });
+
+  it("US-01.2 keeps the casing light on a forced light Fog and dark on the Night Fog", () => {
+    for (const [theme, base] of Object.entries(THEMES)) {
+      for (const [mode, selector] of Object.entries(MODES)) {
+        const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
+        const [lightness] = resolveColor(tokens, "--color-board-casing").lab;
+        if (theme === "night" && mode === "default") expect(lightness, `${theme}/${mode}`).toBeLessThan(0.3);
+        else expect(lightness, `${theme}/${mode}`).toBeGreaterThan(0.95);
+      }
+    }
+    expect(canvasToken(NIGHT_SYSTEM, "--color-board-casing")).toBe(canvasToken(NIGHT_EXPLICIT, "--color-board-casing"));
   });
 
   it("US-02.1 keeps the sealed Gate light inside its tile at the large mark scale", () => {

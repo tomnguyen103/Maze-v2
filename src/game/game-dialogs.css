@@ -505,10 +505,10 @@
     linear-gradient(
       90deg,
       transparent 0 calc(50% - 1px),
-      var(--color-coastline) calc(50% - 1px) 50%,
-      transparent 50% calc(75% - 1px),
-      var(--color-coastline) calc(75% - 1px) 75%,
-      transparent 75%
+      var(--color-coastline) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px) calc(75% - 1px),
+      var(--color-coastline) calc(75% - 1px) calc(75% + 1px),
+      transparent calc(75% + 1px)
     ),
     repeating-linear-gradient(45deg, var(--color-hatch) 0 1px, transparent 1px 4px) 66.667% 0 / 25% 100% no-repeat,
     linear-gradient(

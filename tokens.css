@@ -72,6 +72,8 @@
   --color-board-warden: var(--color-ink);
   --color-board-light: var(--color-gate);
   --color-board-light-on-fill: var(--color-board-light);
+  /* The casing under a Signal line: light paper on a light Fog, night ink on the Night Fog. */
+  --color-board-casing: oklch(100% 0 0);
   --color-board-explorer-ring: var(--color-ink);
   --color-board-explorer-disc: var(--color-paper);
   --color-board-explorer: var(--color-explorer);
@@ -209,6 +211,7 @@
     --color-board-light: var(--color-signal);
     /* The open Gate arrow strokes on the white arch: the Night Signal reads 2.95:1 there. */
     --color-board-light-on-fill: oklch(58% 0.24 340);
+    --color-board-casing: var(--color-night-deep);
     --color-board-explorer-ring: var(--color-ink);
     --color-danger-line: var(--color-ink);
     --color-pulse: oklch(74% 0.13 250 / 30%);
@@ -275,6 +278,7 @@
   --color-board-light: var(--color-signal);
   /* The open Gate arrow strokes on the white arch: the Night Signal reads 2.95:1 there. */
   --color-board-light-on-fill: oklch(58% 0.24 340);
+  --color-board-casing: var(--color-night-deep);
   --color-board-explorer-ring: var(--color-ink);
   --color-danger-line: var(--color-ink);
   --color-pulse: oklch(74% 0.13 250 / 30%);
