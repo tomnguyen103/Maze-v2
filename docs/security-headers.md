@@ -28,8 +28,10 @@ both places.** `tests/security-headers.test.js` covers the module and
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Production only |
 
 `Strict-Transport-Security` and `upgrade-insecure-requests` are emitted only when
-`NODE_ENV=production` or `VERCEL_ENV=production`. Sending them over plain local
-HTTP is pointless and breaks the dev server.
+`NODE_ENV=production` or `VERCEL_ENV=production`, and the request arrives over TLS.
+A request is TLS when its socket is encrypted or `X-Forwarded-Proto` is `https`.
+`vite preview` serves a production build over plain HTTP. WebKit applies
+`upgrade-insecure-requests` to loopback, so every asset request then fails.
 
 ## Content Security Policy
 
