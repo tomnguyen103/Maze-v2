@@ -21,8 +21,8 @@ export function renderLanding(root) {
     <main class="landing-page" id="landing-main">
       <section class="landing-hero" aria-labelledby="landing-title">
         <div class="landing-hero__copy">
-          <h1 id="landing-title">Echo Maze</h1>
-          <p>Recover every Echo, outsmart Wardens with knowledge, then find the Gate.</p>
+          <h1 id="landing-title">Recover every Echo. Find the Gate.</h1>
+          <p>Outsmart each Warden with knowledge, then escape through the Gate.</p>
           <div class="landing-hero__actions">
             <a class="primary-button" href="/play" id="landing-primary-action">Enter the Maze</a>
             <button class="control-button" id="landing-sign-in-hero" type="button">Sign in</button>
@@ -32,8 +32,17 @@ export function renderLanding(root) {
         </div>
         <figure class="landing-hero__figure">
           <div class="landing-hero__frame">
-            <img src="/landing-gameplay.webp" width="640" height="480" alt="Echo Maze board from above: ivory passages between hatched charcoal walls, with the Explorer marker, a blue ring with a flag, at the center." decoding="async">
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/landing-chart-night.webp">
+              <img src="/landing-chart-light.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix." decoding="async">
+            </picture>
           </div>
+          <ul class="landing-hero__legend" aria-label="Chart legend">
+            <li>Echo</li>
+            <li>Warden</li>
+            <li>Gate</li>
+            <li>You</li>
+          </ul>
           <svg class="landing-hero__trail" aria-hidden="true" focusable="false" viewBox="0 0 640 48"><path pathLength="1" d="M4 40C120 4 200 44 320 24S520 4 636 30"/></svg>
         </figure>
       </section>

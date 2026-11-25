@@ -1747,8 +1747,8 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .landing-hero h1 {
   margin-block: 0 var(--space-3);
-  font-size: clamp(3rem, 7vw, 5.25rem);
-  line-height: 0.92;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 0.98;
 }
 
 .landing-hero__copy > p:not(.section-label):not(.landing-auth-status):not(.landing-hero__price),
@@ -1799,23 +1799,34 @@ body[data-run-mode="first-light"] .play-workbench {
   list-style: none;
 }
 
+/* Scale bar: alternating ink and open segments with a tick at each division. */
 .landing-path ol {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .landing-path li {
+  position: relative;
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-5);
-  border-left: 1px solid var(--color-line-soft);
+  padding: var(--space-6) var(--space-4) var(--space-3);
+  border-left: 1px solid var(--color-ink);
 }
 
-.landing-path li:first-child {
-  border-left: 0;
+.landing-path li:last-child {
+  border-right: 1px solid var(--color-ink);
+}
+
+.landing-path li::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.5rem;
+  border-block: 1px solid var(--color-ink);
+}
+
+.landing-path li:nth-child(odd)::before {
+  background: var(--color-ink);
 }
 
 .landing-path strong,
@@ -1888,7 +1899,7 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-membership-preview .landing-membership-price {
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
   font-size: clamp(1.55rem, 3vw, 2.25rem);
   line-height: 1;
 }
@@ -1910,7 +1921,7 @@ body[data-run-mode="first-light"] .play-workbench {
 .landing-hero__price {
   margin: var(--space-4) 0 0;
   color: var(--color-ink);
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
   font-size: 1.1rem;
   font-weight: 600;
 }
@@ -1934,6 +1945,19 @@ body[data-run-mode="first-light"] .play-workbench {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.landing-hero__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  list-style: none;
 }
 
 .landing-hero__trail {
@@ -1974,18 +1998,26 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .landing-path li {
+    padding: var(--space-3) 0 var(--space-3) var(--space-5);
     border-left: 0;
-    border-top: 1px solid var(--color-line-soft);
   }
 
-  .landing-path li:first-child {
-    border-top: 0;
+  .landing-path li:last-child {
+    border-right: 0;
+  }
+
+  .landing-path li::before {
+    inset: 0 auto 0 0;
+    width: 0.5rem;
+    height: auto;
+    border-block: 0;
+    border-inline: 1px solid var(--color-ink);
   }
 }
 
 @media (max-width: 32rem) {
   .landing-hero h1 {
-    font-size: clamp(2.8rem, 16vw, 4.2rem);
+    font-size: clamp(2.1rem, 10vw, 3rem);
   }
 
   .landing-hero__actions {
