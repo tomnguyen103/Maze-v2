@@ -30,6 +30,15 @@
 
 /** The Fog tile is 8 by 8 pixels at one device pixel per tile pixel. */
 const FOG_TILE = 8;
+/** The hatch tile is 6 device pixels square per unit. */
+const HATCH_TILE = 6;
+/** Row and column steps to the four neighbours of a cell. */
+const NEIGHBOURS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1]
+];
 /** Three one-pixel dots in the 8 by 8 tile give 4.7 percent coverage. */
 const FOG_DOTS = [
   [1, 1],
@@ -59,30 +68,57 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
 
   let palette = readPalette();
   let deviceRatio = 1;
-  /** @type {{ key: string, pattern: CanvasPattern | null } | null} */
-  let fogPattern = null;
+  /** @type {Map<string, CanvasPattern | null>} */
+  const patterns = new Map();
 
-  /** One pattern per palette and device ratio. Without a tile context the Fog fills flat. */
-  function fogFill() {
-    const unit = Math.max(1, Math.round(deviceRatio));
-    const key = `${palette.fog}|${palette.fogDot}|${unit}`;
-    if (fogPattern?.key !== key) {
-      const side = FOG_TILE * unit;
+  /**
+   * One pattern per paint and device pixel size. Without a tile context the caller gets null.
+   * @param {string} key
+   * @param {number} side
+   * @param {(tileContext: CanvasRenderingContext2D) => void} paint
+   */
+  function cachedPattern(key, side, paint) {
+    if (!patterns.has(key)) {
       const tile = createTile(side, side);
       const tileContext = /** @type {CanvasRenderingContext2D | null} */ (tile.getContext("2d"));
       let pattern = null;
       if (tileContext) {
+        paint(tileContext);
+        pattern = context.createPattern(tile, "repeat");
+      }
+      patterns.set(key, pattern);
+    }
+    return patterns.get(key) ?? null;
+  }
+
+  function devicePixel() {
+    return Math.max(1, Math.round(deviceRatio));
+  }
+
+  /** The Fog fills flat when no tile context exists. */
+  function fogFill() {
+    const unit = devicePixel();
+    const side = FOG_TILE * unit;
+    return (
+      cachedPattern(`fog|${palette.fog}|${palette.fogDot}|${unit}`, side, (tileContext) => {
         tileContext.fillStyle = palette.fog;
         tileContext.fillRect(0, 0, side, side);
         tileContext.fillStyle = palette.fogDot;
-        for (const [x, y] of FOG_DOTS) {
-          tileContext.fillRect(x * unit, y * unit, unit, unit);
-        }
-        pattern = context.createPattern(tile, "repeat");
+        for (const [x, y] of FOG_DOTS) tileContext.fillRect(x * unit, y * unit, unit, unit);
+      }) ?? palette.fog
+    );
+  }
+
+  /** The hatch is one device-pixel ink line every 6 device pixels, at 45 degrees. */
+  function hatchFill() {
+    const unit = devicePixel();
+    const side = HATCH_TILE * unit;
+    return cachedPattern(`hatch|${palette.hatch}|${unit}`, side, (tileContext) => {
+      tileContext.fillStyle = palette.hatch;
+      for (let i = 0; i < HATCH_TILE; i += 1) {
+        tileContext.fillRect(i * unit, (HATCH_TILE - 1 - i) * unit, unit, unit);
       }
-      fogPattern = { key, pattern };
-    }
-    return fogPattern.pattern ?? palette.fog;
+    });
   }
 
   /**
@@ -138,11 +174,17 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
 
     /** @type {Array<[number, number]>} */
     const pulseCells = [];
+    /** @type {Array<[number, number]>} */
+    const wallCells = [];
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         const key = `${row},${col}`;
         if (!revealed.has(key)) continue;
-        drawKnownTile(run.labyrinth[row][col] === 1, row, col, tile);
+        if (run.labyrinth[row][col] === 1) {
+          wallCells.push([row, col]);
+        } else {
+          drawPassage(row, col, tile);
+        }
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
           pulseCells.push([row, col]);
         }
@@ -155,6 +197,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.fillStyle = palette.pulse;
       context.fill();
     }
+    drawLand(wallCells, tile);
+    drawCoastline(run, revealed, tile);
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
       drawGate(run.gate, tile);
@@ -264,55 +308,86 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   }
 
   /**
-   * @param {boolean} isPassage
+   * A passage is a square of water.
    * @param {number} row
    * @param {number} col
    * @param {number} tile
    */
-  function drawKnownTile(isPassage, row, col, tile) {
-    const x = col * tile;
-    const y = row * tile;
-    const inset = tile * 0.02;
-    const side = tile - inset * 2;
-    if (isPassage) {
-      // A passage is a square of water.
-      context.beginPath();
-      traceTile(row, col, tile);
-      context.fillStyle = palette.passage;
-      context.fill();
-      if ((row + col) % 2 === 0) {
-        context.fillStyle = palette.grid;
-        const markerSize = 1.5 * deviceRatio;
-        const offset = markerSize * 0.5;
-        context.fillRect(
-          x + tile * 0.5 - offset,
-          y + tile * 0.5 - offset,
-          markerSize,
-          markerSize
-        );
-      }
-      return;
-    }
-    // A wall is a charcoal block hatched with diagonal ink strokes.
-    traceRoundedRect(x + inset, y + inset, side, side, tile * 0.05);
-    context.fillStyle = palette.wall;
-    context.fill();
-    context.strokeStyle = palette.wallGrid;
-    context.lineWidth = Math.max(1, tile * 0.02);
-    context.stroke();
+  function drawPassage(row, col, tile) {
     context.beginPath();
-    for (const step of [0.35, 0.7, 1.05, 1.4]) {
-      // Each stroke runs along x + y = step * side inside the block.
-      const reach = step * side;
-      const start = Math.min(reach, side);
-      const end = Math.max(reach - side, 0);
-      context.moveTo(x + inset + start, y + inset + reach - start);
-      context.lineTo(x + inset + end, y + inset + reach - end);
+    traceTile(row, col, tile);
+    context.fillStyle = palette.passage;
+    context.fill();
+    if ((row + col) % 2 === 0) {
+      context.fillStyle = palette.grid;
+      const markerSize = 1.5 * deviceRatio;
+      const offset = markerSize * 0.5;
+      context.fillRect(
+        col * tile + tile * 0.5 - offset,
+        row * tile + tile * 0.5 - offset,
+        markerSize,
+        markerSize
+      );
     }
-    context.strokeStyle = palette.wallMark;
-    context.lineWidth = Math.max(1, tile * 0.03);
-    context.lineCap = "butt";
+  }
+
+  /**
+   * Known walls are paper land with one ink hatch, each layer from one path.
+   * @param {Array<[number, number]>} cells
+   * @param {number} tile
+   */
+  function drawLand(cells, tile) {
+    if (cells.length === 0) return;
+    context.beginPath();
+    for (const [row, col] of cells) traceTile(row, col, tile);
+    context.fillStyle = palette.land;
+    context.fill();
+    const hatch = hatchFill();
+    if (hatch) {
+      context.fillStyle = hatch;
+      context.fill();
+    }
+  }
+
+  /**
+   * One ink stroke along every edge where known land meets a known passage.
+   * @param {GameRun} run
+   * @param {Set<string>} revealed
+   * @param {number} tile
+   */
+  function drawCoastline(run, revealed, tile) {
+    const size = run.labyrinth.length;
+    const width = Math.max(1, Math.round(tile * 0.06));
+    // An odd width centres on a half pixel so the stroke fills whole device pixels.
+    const snap = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
+    context.beginPath();
+    let edges = 0;
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) {
+        if (run.labyrinth[row][col] !== 1 || !revealed.has(`${row},${col}`)) continue;
+        for (const [dRow, dCol] of NEIGHBOURS) {
+          const nRow = row + dRow;
+          const nCol = col + dCol;
+          if (nRow < 0 || nCol < 0 || nRow >= size || nCol >= size) continue;
+          if (run.labyrinth[nRow][nCol] === 1 || !revealed.has(`${nRow},${nCol}`)) continue;
+          const edgeRow = dRow === 0 ? row : row + (dRow > 0 ? 1 : 0);
+          const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
+          context.moveTo(snap(edgeCol * tile), snap(edgeRow * tile));
+          if (dCol === 0) {
+            context.lineTo(snap((edgeCol + 1) * tile), snap(edgeRow * tile));
+          } else {
+            context.lineTo(snap(edgeCol * tile), snap((edgeRow + 1) * tile));
+          }
+          edges += 1;
+        }
+      }
+    }
+    if (edges === 0) return;
+    context.strokeStyle = palette.coastline;
+    context.lineWidth = width;
+    context.lineCap = "square";
     context.stroke();
+    context.lineCap = "butt";
   }
 
   /** @param {Explorer} explorer @param {number} tile */
@@ -767,9 +842,6 @@ function readPalette() {
     passage: color("--color-passage", FALLBACK_PALETTE.passage),
     pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
     transparent: "transparent",
-    wall: color("--color-wall", FALLBACK_PALETTE.wall),
-    wallGrid: color("--color-wall-grid", FALLBACK_PALETTE.wallGrid),
-    wallMark: color("--color-wall-mark", FALLBACK_PALETTE.wallMark),
     warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
   };
 }
@@ -796,8 +868,5 @@ const FALLBACK_PALETTE = {
   overlay: "oklch(20% 0.015 60 / 60%)",
   passage: "oklch(95.5% 0.022 232)",
   pulse: "oklch(68.5% 0.169 237 / 30%)",
-  wall: "oklch(30% 0.03 85)",
-  wallGrid: "oklch(18% 0.012 250 / 85%)",
-  wallMark: "oklch(50% 0.04 85 / 75%)",
   warden: "oklch(18% 0.012 250)"
 };

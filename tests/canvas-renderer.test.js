@@ -302,7 +302,8 @@ describe("Canvas renderer", () => {
         const { renderer, tiles } = stubCanvas();
         renderer.render(questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9));
 
-        expect(tiles).toHaveLength(1);
+        // The Fog tile builds first; the land hatch tile builds second.
+        expect(tiles).toHaveLength(2);
         const [tile] = tiles;
         expect(tile.width).toBe(8 * ratio);
         expect(tile.height).toBe(8 * ratio);
@@ -507,42 +508,76 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.removeAttribute("style");
   });
 
-  it("US-08.1 draws a square water passage and a hatched charcoal wall", () => {
-    for (const name of [
-      "--color-fog",
-      "--color-ink",
-      "--color-passage",
-      "--color-wall",
-      "--color-wall-grid",
-      "--color-wall-mark"
-    ]) {
+  it("US-08.1 draws a square water passage and paper land with an ink hatch", () => {
+    for (const name of ["--color-fog", "--color-passage", "--color-land", "--color-hatch"]) {
       document.body.style.setProperty(name, canvasToken(LIGHT, name));
     }
-    const { context, renderer } = stubCanvas();
+    document.body.style.setProperty("--color-ink", canvasToken(LIGHT, "--color-ink"));
+    const { context, renderer, tiles } = stubCanvas();
     const paints = recordPaints(context);
 
-    renderer.render(board({ revealed: ["0,0", "0,1"] }));
+    renderer.render(board({ revealed: ["0,0", "0,1", "1,1"] }));
 
     const passage = oklabOf(canvasToken(LIGHT, "--color-passage"));
     expect(passage[0]).toBeGreaterThanOrEqual(0.95);
     expect(Math.hypot(passage[1], passage[2])).toBeLessThan(0.03);
-    expect(oklabOf(canvasToken(LIGHT, "--color-wall"))[0]).toBeLessThanOrEqual(0.4);
-    expect(paints).toContainEqual(
-      expect.objectContaining({ kind: "fill", style: canvasToken(LIGHT, "--color-passage") })
-    );
     const water = paints.find(
       (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-passage")
     );
-    expect(water?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
-    expect(paints).not.toContainEqual(
-      expect.objectContaining({ kind: "stroke", style: canvasToken(LIGHT, "--color-ink") })
+    expect(water?.path).toEqual(["rect(320.00,0.00,320.00,320.00)"]);
+    const land = paints.find(
+      (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-land")
     );
-    expect(paints).toContainEqual(
-      expect.objectContaining({ kind: "fill", style: canvasToken(LIGHT, "--color-wall") })
+    expect(land?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
+    const hatch = paints.find(
+      (paint) => paint !== land && paint.kind === "fill" && paint.path.join() === land?.path.join()
     );
-    expect(paints).toContainEqual(
-      expect.objectContaining({ kind: "stroke", style: canvasToken(LIGHT, "--color-wall-mark") })
-    );
+    expect(hatch).toBeDefined();
+    const hatchTile = tiles[1];
+    expect(hatchTile.width).toBe(6);
+    expect(hatchTile.fills).toHaveLength(6);
+    expect(hatchTile.fills.every((fill) => fill.style === canvasToken(LIGHT, "--color-hatch"))).toBe(true);
+    expect(hatchTile.fills.every((fill) => fill.x + fill.y === 5)).toBe(true);
+  });
+
+  it("US-02.1 strokes one coastline path of wall and passage edges in opaque ink", () => {
+    document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    let lineWidth = 0;
+    /** @type {number[]} */
+    const widths = [];
+    Object.defineProperty(context, "lineWidth", {
+      configurable: true,
+      get: () => lineWidth,
+      set: (value) => {
+        lineWidth = value;
+      }
+    });
+    const stroke = context.stroke;
+    context.stroke = vi.fn(() => {
+      widths.push(lineWidth);
+      stroke();
+    });
+
+    renderer.render(board({ revealed: ["0,0", "0,1", "1,0", "1,1"] }));
+
+    const coast = paints.filter((paint) => paint.style === "rgb(7, 7, 7)");
+    expect(coast).toHaveLength(1);
+    expect(coast[0].kind).toBe("stroke");
+    expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
+    expect(coast[0].path.every((step) => !step.startsWith("arc"))).toBe(true);
+    // The wall (0,0) borders the passage (0,1) at x = 320 and the passage (1,0) at y = 320.
+    const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+    for (const [x, y] of points) {
+      const near = (/** @type {number} */ value, /** @type {number} */ target) =>
+        Math.abs(value - target) <= 0.5;
+      const onVerticalEdge = near(x, 320) && (near(y, 0) || near(y, 320));
+      const onHorizontalEdge = near(y, 320) && (near(x, 0) || near(x, 320));
+      expect(onVerticalEdge || onHorizontalEdge, `${x},${y}`).toBe(true);
+    }
+    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels.
+    expect(widths).toContain(19);
   });
 
   it("US-01.1 gives every board mark a row, and the two Night blocks the same rows", () => {
@@ -668,7 +703,9 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       )
     ).not.toThrow();
     expect(paints.length).toBeGreaterThan(0);
-    expect(paints.every((paint) => paint.style.length > 0)).toBe(true);
-    expect(paints.some((paint) => paint.style.startsWith("oklch("))).toBe(true);
+    expect(
+      paints.every((paint) => typeof paint.style !== "string" || paint.style.length > 0)
+    ).toBe(true);
+    expect(paints.some((paint) => typeof paint.style === "string" && paint.style.startsWith("oklch("))).toBe(true);
   });
 });
