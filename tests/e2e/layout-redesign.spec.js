@@ -54,11 +54,12 @@ test.describe("layout redesign & edge viewports", () => {
       );
       expect(clippedLeft, `Play layout should not clip past the left edge on ${vp.name}`).toEqual([]);
 
+      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
       const actionsOverflow = await page.evaluate(() => {
         const actions = document.querySelector(".command-bar__actions");
-        return actions ? actions.scrollWidth - actions.clientWidth : 0;
+        return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
       });
-      expect(actionsOverflow, `Header actions should not scroll horizontally on ${vp.name}`).toBeLessThanOrEqual(1);
+      expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
 
       // Verify no buttons clip their content
       const clippedButtons = await page.evaluate(() => {
@@ -110,30 +111,6 @@ test.describe("layout redesign & edge viewports", () => {
         };
       });
       expect(arenaInfo?.collides ?? false, `Seed copy and pause button should not collide on ${vp.name}`).toBe(false);
-
-      // Verify command-bar h1 spans full width on medium/small viewports where banner wraps
-      if (vp.width <= 928 && vp.width >= 360) {
-        const headlineSpan = await page.evaluate(() => {
-          const h1 = document.querySelector(".command-bar h1");
-          const cmd = document.querySelector(".command-bar");
-          if (!h1 || !cmd) return null;
-          const h1Rect = h1.getBoundingClientRect();
-          const cmdRect = cmd.getBoundingClientRect();
-          const cmdStyle = window.getComputedStyle(cmd);
-          const isGrid = cmdStyle.display === "grid";
-          const expectedWidth = isGrid
-            ? cmdRect.width - (parseFloat(cmdStyle.paddingLeft) + parseFloat(cmdStyle.paddingRight))
-            : cmdRect.width;
-          return {
-            h1Width: Math.round(h1Rect.width),
-            expectedWidth: Math.round(expectedWidth),
-            diff: Math.abs(h1Rect.width - expectedWidth)
-          };
-        });
-        if (headlineSpan) {
-          expect(headlineSpan.diff, `Headline banner should span full grid width on ${vp.name}`).toBeLessThanOrEqual(2);
-        }
-      }
 
       // Verify run-metrics border integrity
       const metricsLayout = await page.evaluate(() => {
@@ -244,6 +221,48 @@ test.describe("layout redesign & edge viewports", () => {
       expect(controls.y, "controls start below the board").toBeGreaterThanOrEqual(
         frame.y + frame.height - 1
       );
+    });
+  }
+
+  // US-03.1 / US-03.3: the shell header is one ruled tab row.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`header is a ruled tab row with 40px targets at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=HEADER-ROW&level=trail-scout");
+      await expectGameReady(page);
+
+      const header = await page.evaluate(() => {
+        const bar = /** @type {HTMLElement} */ (document.querySelector(".command-bar"));
+        const tabs = /** @type {HTMLElement} */ (document.querySelector(".command-bar__actions"));
+        const targets = [...bar.querySelectorAll("button, a[href]")]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => {
+            const box = el.getBoundingClientRect();
+            return { id: el.id || el.textContent.trim(), width: box.width, height: box.height };
+          });
+        return {
+          barHeight: bar.getBoundingClientRect().height,
+          targets,
+          scrollbarWidth: getComputedStyle(tabs).scrollbarWidth,
+          tabBorder: getComputedStyle(/** @type {HTMLElement} */ (document.querySelector("#daily-button"))).borderBottomWidth,
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+      });
+      for (const target of header.targets) {
+        expect(target.width, `${target.id} width`).toBeGreaterThanOrEqual(40);
+        expect(target.height, `${target.id} height`).toBeGreaterThanOrEqual(40);
+      }
+      expect(header.scrollbarWidth).toBe("none");
+      expect(header.tabBorder, "tabs carry a 2px underline slot").toBe("2px");
+      expect(header.pageOverflow).toBeLessThanOrEqual(1);
+      if (vp.width >= 768) expect(header.barHeight).toBe(64);
+
+      for (const name of ["Daily", "Atlas", "Workshop", "Journal", "Records", "Settings", "New Quest"]) {
+        await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+      }
     });
   }
 });

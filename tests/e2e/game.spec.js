@@ -7102,14 +7102,14 @@ test("paints the browser bar with the stored Theme Choice and gives it back for 
       )
     );
   // The boot script paints both metas before the bundle runs.
-  expect(await barColors()).toEqual(["oklch(21% 0.012 250)", "oklch(21% 0.012 250)"]);
+  expect(await barColors()).toEqual(["oklch(21% 0.03 250)", "oklch(21% 0.03 250)"]);
 
   await chooseTrailScout(page);
   const button = page.locator("#theme-button");
   await expect(button).toHaveAttribute("data-choice", "dark");
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "system");
-  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(21% 0.012 250)"]);
+  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(21% 0.03 250)"]);
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "light");
   await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(99% 0.004 95)"]);
