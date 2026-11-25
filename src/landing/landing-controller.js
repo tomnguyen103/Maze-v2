@@ -43,7 +43,7 @@ export function renderLanding(root) {
             <li>Gate</li>
             <li>You</li>
           </ul>
-          <svg class="landing-hero__trail" aria-hidden="true" focusable="false" viewBox="0 0 640 48"><path pathLength="1" d="M4 40C120 4 200 44 320 24S520 4 636 30"/></svg>
+          <svg class="landing-hero__trail" aria-hidden="true" focusable="false" viewBox="0 0 640 48"><path pathLength="1" d="M4 40L180 14L380 34L636 10"/></svg>
         </figure>
       </section>
       <section class="landing-path" aria-labelledby="landing-path-title">

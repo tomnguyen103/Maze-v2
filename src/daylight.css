@@ -1731,12 +1731,11 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero {
-  min-height: min(42rem, calc(100svh - 7rem));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: clamp(var(--space-8), 7vw, var(--space-16));
-  padding-block: var(--space-8) var(--space-12);
+  padding-block: var(--space-8) var(--space-4);
 }
 
 .landing-hero__copy {
@@ -1935,8 +1934,9 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero__figure {
-  position: relative;
-  margin: 0 0 var(--space-8);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
 }
 
 /* Fixed 4:3 frame: a failed image still reserves its space, so nothing shifts. */
@@ -1956,6 +1956,7 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero__legend {
+  order: 3;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-5);
@@ -1968,17 +1969,17 @@ body[data-run-mode="first-light"] .play-workbench {
   list-style: none;
 }
 
+/* The course line sits between the chart and the legend, in document order via flex order. */
 .landing-hero__trail {
-  position: absolute;
-  left: 0;
-  bottom: calc(-1 * var(--space-6));
+  order: 2;
   width: 100%;
   height: 3rem;
+  margin-block: var(--space-3);
   overflow: visible;
   fill: none;
   stroke: var(--color-signal);
-  stroke-width: 3;
-  stroke-linecap: round;
+  stroke-width: 2;
+  stroke-linejoin: miter;
   pointer-events: none;
 }
 
@@ -1994,9 +1995,12 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 58rem) {
+  .landing-hero__trail {
+    stroke-width: 3.7;
+  }
+
   .landing-hero {
     grid-template-columns: 1fr;
-    min-height: 0;
   }
 
   .landing-path ol,
