@@ -30,7 +30,7 @@
 
 /** The Fog tile is 8 by 8 pixels at one device pixel per tile pixel. */
 const FOG_TILE = 8;
-/** The hatch tile is 6 device pixels square per unit. */
+/** The hatch tile is 6 backing-store pixels square, so the 45 degree pitch is about 4 device pixels at every ratio. */
 const HATCH_TILE = 6;
 /** Row and column steps to the four neighbours of a cell. */
 const NEIGHBOURS = [
@@ -114,14 +114,12 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     );
   }
 
-  /** The hatch is one device-pixel ink line every 6 device pixels, at 45 degrees. */
+  /** The hatch is one backing-store pixel ink line at 45 degrees, with no device ratio factor. */
   function hatchFill() {
-    const unit = devicePixel();
-    const side = HATCH_TILE * unit;
-    return cachedPattern(`hatch|${palette.hatch}|${unit}`, side, (tileContext) => {
+    return cachedPattern(`hatch|${palette.hatch}`, HATCH_TILE, (tileContext) => {
       tileContext.fillStyle = palette.hatch;
       for (let i = 0; i < HATCH_TILE; i += 1) {
-        tileContext.fillRect(i * unit, (HATCH_TILE - 1 - i) * unit, unit, unit);
+        tileContext.fillRect(i, HATCH_TILE - 1 - i, 1, 1);
       }
     });
   }
@@ -335,7 +333,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     }
     neat.stroke();
     neat.fillStyle = palette.ink;
-    neat.font = `${10 * deviceRatio}px ${palette.fontMono}`;
+    neat.font = gridFont(10 * deviceRatio);
     // Every tick stays. Label every k-th line, with k the smallest step whose pitch fits the widest label.
     const labelWidth = neat.measureText(String(size)).width + 2 * unit;
     const rowWidth = Math.max(labelWidth, 10 * deviceRatio);
@@ -450,11 +448,26 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
     // Along the edge, the ends sit on whole pixels.
     const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
-    // Each end meets the far side of the crossing stroke, so a land corner has no notch and no nub.
+    // An end that meets a crossing stroke reaches its far side, so a land corner has no notch. A free end stops on the edge.
     // An odd stroke covers floor(w/2) pixels before the edge and ceil(w/2) pixels after it.
     const reachStart = Math.floor(width / 2);
     const reachEnd = Math.ceil(width / 2);
     const along = (/** @type {number} */ edge) => Math.round(edge);
+    /** @param {number} row @param {number} col */
+    const kindAt = (row, col) =>
+      row < 0 || col < 0 || row >= size || col >= size || !revealed.has(`${row},${col}`)
+        ? -1
+        : run.labyrinth[row][col] === 1
+          ? 1
+          : 0;
+    /** An edge lies between one known wall and one known passage. */
+    const isEdge = (/** @type {number} */ rowA, /** @type {number} */ colA, /** @type {number} */ rowB, /** @type {number} */ colB) =>
+      kindAt(rowA, colA) + kindAt(rowB, colB) === 1 && kindAt(rowA, colA) >= 0 && kindAt(rowB, colB) >= 0;
+    // Row line r and column line c meet at corner (r, c). A stroke reaches past a corner only where a crossing stroke meets it.
+    const meetsAcross = (/** @type {number} */ lineRow, /** @type {number} */ lineCol, /** @type {boolean} */ horizontal) =>
+      horizontal
+        ? isEdge(lineRow - 1, lineCol - 1, lineRow - 1, lineCol) || isEdge(lineRow, lineCol - 1, lineRow, lineCol)
+        : isEdge(lineRow - 1, lineCol - 1, lineRow, lineCol - 1) || isEdge(lineRow - 1, lineCol, lineRow, lineCol);
     context.beginPath();
     let edges = 0;
     for (let row = 0; row < size; row += 1) {
@@ -469,12 +482,16 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
           const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
           if (dCol === 0) {
             const y = across(edgeRow * tile);
-            context.moveTo(along(edgeCol * tile) - reachStart, y);
-            context.lineTo(along((edgeCol + 1) * tile) + reachEnd, y);
+            const start = meetsAcross(edgeRow, edgeCol, true) ? reachStart : 0;
+            const end = meetsAcross(edgeRow, edgeCol + 1, true) ? reachEnd : 0;
+            context.moveTo(along(edgeCol * tile) - start, y);
+            context.lineTo(along((edgeCol + 1) * tile) + end, y);
           } else {
             const x = across(edgeCol * tile);
-            context.moveTo(x, along(edgeRow * tile) - reachStart);
-            context.lineTo(x, along((edgeRow + 1) * tile) + reachEnd);
+            const start = meetsAcross(edgeRow, edgeCol, false) ? reachStart : 0;
+            const end = meetsAcross(edgeRow + 1, edgeCol, false) ? reachEnd : 0;
+            context.moveTo(x, along(edgeRow * tile) - start);
+            context.lineTo(x, along((edgeRow + 1) * tile) + end);
           }
           edges += 1;
         }
@@ -644,19 +661,17 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   }
 
   /**
-   * Strokes the current path. Strong contrast first strokes a white casing, so
-   * a Signal line stays readable where it crosses the flat Fog.
+   * Strokes the current path over a white casing, so a Signal line keeps 3:1
+   * where it crosses the Fog. On the white Passage the casing does not show.
    * @param {number} tile
    */
   function strokeSignal(tile) {
-    if (palette.strong) {
-      const { lineWidth, strokeStyle } = context;
-      context.strokeStyle = palette.onFill;
-      context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
-      context.stroke();
-      context.strokeStyle = strokeStyle;
-      context.lineWidth = lineWidth;
-    }
+    const { lineWidth, strokeStyle } = context;
+    context.strokeStyle = palette.onFill;
+    context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
+    context.stroke();
+    context.strokeStyle = strokeStyle;
+    context.lineWidth = lineWidth;
     context.stroke();
   }
 
@@ -900,7 +915,20 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.fill();
   }
 
-  return { render, resize };
+  /** @param {number} size The font shorthand of the Grid labels. */
+  function gridFont(size) {
+    return `${size}px ${palette.fontMono}`;
+  }
+
+  /**
+   * Resolves when the Grid label font has loaded. `fonts.ready` and `loadingdone` miss a lazy load on some engines.
+   * @returns {Promise<unknown>}
+   */
+  function loadGridFont() {
+    return document.fonts?.load(gridFont(10)) ?? Promise.resolve();
+  }
+
+  return { loadGridFont, render, resize };
 }
 
 /** @param {{ row: number, col: number }} position @param {number} tile */

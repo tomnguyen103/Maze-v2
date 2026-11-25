@@ -15,9 +15,11 @@ error, so a direct `node -e "import(...)"` check hides the defect.
 ## Root cause
 
 The script starts with a `#!/usr/bin/env node` line. Git checks out the
-file with CRLF line endings. The Vite transform that Vitest uses removes
-the shebang text up to the LF and leaves the CR, which is not valid
-JavaScript.
+file with CRLF line endings. A throwaway check with the Vite SSR transform
+(the transform Vitest uses) shows the difference. With LF, the output keeps
+the `#!` line first. With CRLF, the output puts generated code before the
+`#!` line, so the `#!` line is no longer at the start of the module and
+the parser rejects it. This was observed, not traced into the Vite source.
 
 ## Fix
 

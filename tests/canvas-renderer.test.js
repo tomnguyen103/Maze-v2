@@ -599,7 +599,8 @@ describe("Canvas renderer", () => {
       window.devicePixelRatio = 2;
       renderer.render(run);
 
-      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16, 12]);
+      // The Fog tile scales with the device ratio. The hatch tile stays 6 backing-store pixels at every ratio.
+      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16]);
     } finally {
       window.devicePixelRatio = originalDpr;
     }
@@ -1014,7 +1015,9 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(hatch).toBeDefined();
     const hatchTile = tiles[1];
     expect(hatchTile.width).toBe(6);
+    expect(hatchTile.height).toBe(6);
     expect(hatchTile.fills).toHaveLength(6);
+    expect(hatchTile.fills.every((fill) => fill.w === 1 && fill.h === 1)).toBe(true);
     expect(hatchTile.fills.every((fill) => fill.style === canvasToken(LIGHT, "--color-hatch"))).toBe(true);
     expect(hatchTile.fills.every((fill) => fill.x + fill.y === 5)).toBe(true);
   });
@@ -1050,18 +1053,56 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
     // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. Centred on 320.5, it covers 311..330.
     expect(widths).toContain(19);
-    const reachStart = 9;
     const reachEnd = 10;
     // An odd width sits on a half pixel across the edge and the ends sit on whole pixels.
     expect(points.every(([x, y]) => (x === 320.5 && Number.isInteger(y)) || (y === 320.5 && Number.isInteger(x)))).toBe(true);
-    // Each end stops at the far side of the crossing stroke: no notch and no 1px nub.
+    // The joined end reaches the far side of the crossing stroke. The free ends stop on the edge.
     const horizontal = points.filter(([, y]) => y === 320.5).map(([x]) => x);
     const vertical = points.filter(([x]) => x === 320.5).map(([, y]) => y);
-    expect(Math.min(...horizontal)).toBe(0 - reachStart);
+    expect(Math.min(...horizontal)).toBe(0);
     expect(Math.max(...horizontal)).toBe(320 + reachEnd);
-    expect(Math.min(...vertical)).toBe(0 - reachStart);
+    expect(Math.min(...vertical)).toBe(0);
     expect(Math.max(...vertical)).toBe(320 + reachEnd);
     expect(/** @type {Record<string, unknown>} */ (context).lineCap).toBe("butt");
+  });
+
+  it("US-02.1 reaches past the ends of a coastline edge only at joined corners", () => {
+    document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    const labyrinth = Array.from({ length: 4 }, (_, row) =>
+      Array.from({ length: 4 }, (_, col) => (row === 1 && col === 1 ? 1 : 0))
+    );
+    const revealed = labyrinth.flatMap((cells, row) => cells.map((_, col) => `${row},${col}`));
+
+    renderer.render(board({ labyrinth, revealed }));
+
+    // The wall ring has four joined corners. Tile 160 gives width 10: reach 5 on each side.
+    const coast = paints.find((paint) => paint.style === "rgb(7, 7, 7)");
+    const top = coast?.path.filter((step) => /,160\.00\)$/.test(step)).map((step) => Number(step.match(/\(([\d.]+),/)?.[1]));
+    expect(top).toEqual([155, 325]);
+
+    // One wall edge with unknown tiles around it has free ends: no reach past the edge.
+    const lone = stubCanvas();
+    const lonePaints = recordPaints(lone.context);
+    lone.renderer.render(board({ revealed: ["0,0", "0,1"] }));
+    const loneCoast = lonePaints.find((paint) => paint.style === "rgb(7, 7, 7)");
+    const ys = loneCoast?.path.map((step) => Number(step.match(/,([\d.]+)\)$/)?.[1]));
+    expect(Math.min(...(ys ?? []))).toBe(0);
+    expect(Math.max(...(ys ?? []))).toBe(320);
+  });
+
+  it("US-03.1 loads the Grid label font with the shorthand the labels use", async () => {
+    document.body.style.setProperty("--font-utility", "Geist Mono");
+    const load = vi.fn(() => Promise.resolve([]));
+    Object.defineProperty(document, "fonts", { configurable: true, value: { load } });
+    try {
+      const { renderer } = stubCanvas();
+      await renderer.loadGridFont();
+      expect(load).toHaveBeenCalledWith("10px Geist Mono");
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+    }
   });
 
   it("US-02.1 paints the Explorer as an ink ring on a paper disc with an Explorer dot", () => {
@@ -1161,7 +1202,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(sealed[0].kind).toBe("fill");
   });
 
-  it("US-01.2 casts a white casing under each Signal line in strong contrast only", () => {
+  it("US-01.2 casts a white casing under each Signal line in every contrast mode", () => {
     document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
     document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
     document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
@@ -1188,16 +1229,16 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       return paints.filter((paint) => paint.kind === "stroke").map((paint, index) => ({ ...paint, width: widths[index] }));
     };
 
-    expect(strokes(false).some((paint) => paint.style === "rgb(250, 250, 250)")).toBe(false);
-    const strong = strokes(true);
-    const lines = strong.filter((paint) => magenta.includes(paint.style));
-    expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) {
-      const at = strong.indexOf(line);
-      const casing = strong[at - 1];
-      expect(casing.style).toBe("rgb(250, 250, 250)");
-      expect(casing.path).toEqual(line.path);
-      expect(casing.width).toBeGreaterThan(line.width);
+    for (const strong of [false, true]) {
+      const all = strokes(strong);
+      const lines = all.filter((paint) => magenta.includes(paint.style));
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) {
+        const casing = all[all.indexOf(line) - 1];
+        expect(casing.style).toBe("rgb(250, 250, 250)");
+        expect(casing.path).toEqual(line.path);
+        expect(casing.width).toBeGreaterThan(line.width);
+      }
     }
   });
 
@@ -1431,7 +1472,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     ).not.toThrow();
     expect(paints.length).toBeGreaterThan(0);
     expect(
-      paints.every((paint) => typeof paint.style !== "string" || paint.style.length > 0)
+      paints.every((paint) => (typeof paint.style === "string" ? paint.style.length > 0 : /** @type {{ pattern?: boolean }} */ (paint.style)?.pattern === true))
     ).toBe(true);
     expect(paints.some((paint) => typeof paint.style === "string" && paint.style.startsWith("oklch("))).toBe(true);
   });

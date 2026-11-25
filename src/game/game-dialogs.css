@@ -500,12 +500,22 @@
   justify-items: center;
   overflow: hidden;
   border: 1px solid var(--color-line);
+  /* Layers, top first: coastline edges, land hatch on the third band, then the four ground bands. */
   background:
+    linear-gradient(
+      90deg,
+      transparent 0 calc(50% - 1px),
+      var(--color-coastline) calc(50% - 1px) 50%,
+      transparent 50% calc(75% - 1px),
+      var(--color-coastline) calc(75% - 1px) 75%,
+      transparent 75%
+    ),
+    repeating-linear-gradient(45deg, var(--color-hatch) 0 1px, transparent 1px 4px) 66.667% 0 / 25% 100% no-repeat,
     linear-gradient(
       90deg,
       var(--color-fog) 0 25%,
       var(--color-passage) 25% 50%,
-      var(--color-coastline) 50% 75%,
+      var(--color-land) 50% 75%,
       var(--color-passage) 75%
     );
 }

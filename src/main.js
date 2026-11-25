@@ -1733,8 +1733,8 @@ window.addEventListener("resize", () => {
   renderer.render(run);
 });
 
-// Geist Mono loads lazily, so `fonts.ready` can resolve early. The Grid labels repaint on each font load.
-document.fonts?.addEventListener("loadingdone", () => renderer.render(run));
+// Geist Mono loads lazily and `fonts.ready` can resolve early, so the Grid labels repaint after their own font loads.
+void renderer.loadGridFont().then(() => renderer.render(run)).catch(() => {});
 
 window.addEventListener("online", () => {
   void loadOfflineContinuityBridge()
