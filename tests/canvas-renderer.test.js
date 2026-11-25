@@ -1161,6 +1161,61 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(sealed[0].kind).toBe("fill");
   });
 
+  it("US-01.2 casts a white casing under each Signal line in strong contrast only", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
+    document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
+    const magenta = ["rgb(9, 9, 1)", "rgb(9, 9, 2)"];
+    const marks = {
+      echoBridges: [{ echoIndex: 0, from: { row: 0, col: 0 }, to: { row: 1, col: 1 }, open: false }],
+      signalBells: [{ id: 0, row: 0, col: 1, spent: true }],
+      tideDoors: [{ id: 0, from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, open: false }]
+    };
+    /** @param {boolean} strong */
+    const strokes = (strong) => {
+      if (strong) document.documentElement.dataset.accessContrast = "strong";
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      /** @type {number[]} */
+      const widths = [];
+      const stroke = context.stroke;
+      context.stroke = vi.fn(() => {
+        widths.push(/** @type {{ lineWidth: number }} */ (/** @type {unknown} */ (context)).lineWidth);
+        stroke();
+      });
+      renderer.render(board({ revealed: ["1,1"], ...marks }));
+      document.documentElement.removeAttribute("data-access-contrast");
+      return paints.filter((paint) => paint.kind === "stroke").map((paint, index) => ({ ...paint, width: widths[index] }));
+    };
+
+    expect(strokes(false).some((paint) => paint.style === "rgb(250, 250, 250)")).toBe(false);
+    const strong = strokes(true);
+    const lines = strong.filter((paint) => magenta.includes(paint.style));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const at = strong.indexOf(line);
+      const casing = strong[at - 1];
+      expect(casing.style).toBe("rgb(250, 250, 250)");
+      expect(casing.path).toEqual(line.path);
+      expect(casing.width).toBeGreaterThan(line.width);
+    }
+  });
+
+  it("US-02.1 keeps the sealed Gate light inside its tile at the large mark scale", () => {
+    document.body.style.setProperty("--maze-mark-scale", "1.22");
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, open: true, sealed: true } }));
+
+    const light = paints.find((paint) => paint.kind === "fill" && paint.style === "rgb(9, 9, 1)");
+    const arc = /** @type {string} */ (light?.path[0] ?? "").match(/^arc\([\d.]+,([\d.]+),([\d.]+),/);
+    const [y, radius] = [Number(arc?.[1]), Number(arc?.[2])];
+    // The 2x2 board has 320 pixel tiles, so the Gate tile spans y 320 to 640.
+    expect(y - radius).toBeGreaterThanOrEqual(320);
+  });
+
   it("US-01.1 gives every board mark a row, and the two Night blocks the same rows", () => {
     for (const scope of SCOPES) {
       for (const name of BOARD_ROWS) {
@@ -1188,8 +1243,8 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
             ...(paletteSelector ? daylightScope(paletteSelector) : [])
           ]);
           for (const [mark, ground, floor] of BOARD_PAIRS) {
-            // Strong mode paints the Fog flat with no dots, so the dot-on-Fog pair does not apply there.
-            if (mode === "strong" && ground === "--color-fog") continue;
+            // Strong mode paints the Fog flat with no dots, so only the dot-on-Fog pair does not apply there.
+            if (mode === "strong" && mark === "--color-fog-dot") continue;
             // Strong contrast lifts every pair on the passage and the land to 4.5:1.
             const needed = mode === "strong" && floor === 3 && ground !== DISC ? 4.5 : floor;
             const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));

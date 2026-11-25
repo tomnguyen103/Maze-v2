@@ -575,7 +575,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.stroke();
       // The Gate Warden waits behind the seal: one small Signal light above the arch.
       context.beginPath();
-      context.arc(x, y - half * 1.45, tile * 0.05 * scale, 0, Math.PI * 2);
+      const lightRadius = tile * 0.05 * scale;
+      // The light stays inside the Gate tile at the large mark scale.
+      const lightRise = Math.min(half * 1.45, tile * 0.5 - lightRadius);
+      context.arc(x, y - lightRise, lightRadius, 0, Math.PI * 2);
       context.fillStyle = palette.light;
       context.fill();
     } else if (gate.open) {
@@ -640,6 +643,23 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.restore();
   }
 
+  /**
+   * Strokes the current path. Strong contrast first strokes a white casing, so
+   * a Signal line stays readable where it crosses the flat Fog.
+   * @param {number} tile
+   */
+  function strokeSignal(tile) {
+    if (palette.strong) {
+      const { lineWidth, strokeStyle } = context;
+      context.strokeStyle = palette.onFill;
+      context.lineWidth = lineWidth + 2 * Math.max(1, tile * 0.02 * palette.markScale);
+      context.stroke();
+      context.strokeStyle = strokeStyle;
+      context.lineWidth = lineWidth;
+    }
+    context.stroke();
+  }
+
   /** @param {EchoBridge} bridge @param {number} tile */
   function drawEchoBridge(bridge, tile) {
     const from = centerOf(bridge.from, tile);
@@ -662,7 +682,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.beginPath();
     context.moveTo(from.x, from.y);
     context.lineTo(to.x, to.y);
-    context.stroke();
+    strokeSignal(tile);
     context.setLineDash([]);
     context.lineWidth = Math.max(1.5, tile * 0.05 * scale);
     for (const endpoint of [from, to]) {
@@ -670,7 +690,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.arc(endpoint.x, endpoint.y, tile * 0.12 * scale, 0, Math.PI * 2);
       context.fillStyle = palette.onFill;
       context.fill();
-      context.stroke();
+      strokeSignal(tile);
     }
     if (!bridge.open) {
       context.lineWidth = Math.max(2, tile * 0.06 * scale);
@@ -679,7 +699,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.lineTo(midpoint.x + tile * 0.1, midpoint.y + tile * 0.1);
       context.moveTo(midpoint.x + tile * 0.1, midpoint.y - tile * 0.1);
       context.lineTo(midpoint.x - tile * 0.1, midpoint.y + tile * 0.1);
-      context.stroke();
+      strokeSignal(tile);
     }
     drawLabel(
       String(bridge.echoIndex + 1),
@@ -715,7 +735,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
         from.y + offsetY * direction
       );
       context.lineTo(to.x + offsetX * direction, to.y + offsetY * direction);
-      context.stroke();
+      strokeSignal(tile);
     }
     context.setLineDash([]);
     drawLabel(
@@ -744,7 +764,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
     context.closePath();
     context.fill();
-    context.stroke();
+    strokeSignal(tile);
     context.beginPath();
     context.arc(
       x,
@@ -760,7 +780,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.beginPath();
       context.moveTo(x - tile * 0.22, y - tile * 0.22);
       context.lineTo(x + tile * 0.22, y + tile * 0.24);
-      context.stroke();
+      strokeSignal(tile);
     }
     drawLabel(bell.spent ? "SPENT" : "RING", x, y + tile * 0.04, tile, 0.12);
     context.restore();
