@@ -55,7 +55,7 @@ describe("WP-02 — the landing LCP text paints before any JS runs", () => {
     const html = source("index.html");
     const gameRoot = html.slice(html.indexOf('<div id="game-root">'));
     const beforeTemplate = gameRoot.slice(0, gameRoot.indexOf("<template"));
-    expect(beforeTemplate).toContain('<h1 id="landing-title">Echo Maze</h1>');
+    expect(beforeTemplate).toContain('<h1 id="landing-title">Echo Maze: recover every Echo, find the Gate.</h1>');
     expect(beforeTemplate).toContain(
       'href="/play" id="landing-primary-action"'
     );
@@ -186,14 +186,16 @@ describe("US-03 and US-04 — the landing hero shows the demo, the price and one
   it("US-03.1 shows a gameplay crop with alt text and 4:3 size in both markups", () => {
     for (const markup of markups()) {
       expect(markup).toMatch(
-        /<img src="\/landing-gameplay\.webp" width="640" height="480" alt="[^"]{20,}" decoding="async">/
+        /<img class="landing-hero__chart landing-hero__chart--light" src="\/landing-chart-light\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" fetchpriority="high">\s*<img class="landing-hero__chart landing-hero__chart--night" src="\/landing-chart-night\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" loading="lazy">/
       );
     }
   });
 
   it("US-03.1 ships the gameplay crop at 40 KB or less", () => {
-    const crop = fileURLToPath(new URL("../public/landing-gameplay.webp", import.meta.url));
-    expect(statSync(crop).size).toBeLessThanOrEqual(40960);
+    for (const name of ["light", "night"]) {
+      const crop = fileURLToPath(new URL(`../public/landing-chart-${name}.webp`, import.meta.url));
+      expect(statSync(crop).size).toBeLessThanOrEqual(40960);
+    }
   });
 
   it("US-03.1 builds the price line from LIFETIME_PRICE_LABEL", () => {

@@ -347,7 +347,7 @@ const PILOT_CHART_LIGHT = {
 
 /** Adopted values from the design.md Palette table, Night theme. */
 const PILOT_CHART_NIGHT = {
-  "--color-paper": "oklch(21% 0.012 250)",
+  "--color-paper": "oklch(21% 0.03 250)",
   "--color-panel": "oklch(23% 0.012 250)",
   "--color-ink": "oklch(95% 0.006 95)",
   "--color-ink-muted": "oklch(78% 0.01 250)",

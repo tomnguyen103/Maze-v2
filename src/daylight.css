@@ -184,31 +184,18 @@ a:hover {
 .command-bar {
   position: relative;
   z-index: 5;
-  display: grid;
+  display: flex;
   min-height: 4rem;
-  padding: var(--space-2) max(var(--space-4), calc((100vw - 84rem) / 2));
-  grid-template-areas: "mark theme" "title title" "actions actions";
-  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 max(var(--space-4), calc((100vw - 76rem) / 2));
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: 0 var(--space-3);
   border-bottom: 1px solid var(--color-line);
   background: var(--color-nav);
 }
 
-@media (min-width: 85rem) {
-  .command-bar {
-    grid-template-areas: "mark title actions theme";
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-  }
-
-  .command-bar__actions {
-    justify-content: flex-end;
-  }
-}
-
 .wordmark {
   display: inline-flex;
-  grid-area: mark;
   min-height: 45px;
   align-items: center;
   color: var(--color-ink);
@@ -222,15 +209,15 @@ a:hover {
   white-space: nowrap;
 }
 
+/* The headline stays the page heading for screen readers; the Title block shows the stage. */
 .command-bar h1 {
-  min-width: 0;
-  margin: 0;
-  grid-area: title;
-  color: var(--color-ink-muted);
-  font-size: var(--text-label);
-  font-weight: 500;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .command-bar__actions,
@@ -243,9 +230,44 @@ a:hover {
   min-width: 0;
 }
 
+/* One ruled row of text tabs. The row scrolls sideways when it cannot fit; no scrollbar shows. */
 .command-bar__actions {
-  grid-area: actions;
-  justify-content: center;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.command-bar__actions::-webkit-scrollbar {
+  display: none;
+}
+
+.command-bar .command-bar__actions > * {
+  flex: none;
+  border-width: 0 0 2px;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: var(--space-3);
+}
+
+.command-bar__actions > :hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--color-ink-muted);
+}
+
+.command-bar .command-bar__actions > [aria-pressed="true"] {
+  border-color: var(--color-ink);
+}
+
+.command-bar__actions > [aria-pressed="true"]:hover {
+  border-color: var(--color-ink);
+}
+
+.command-bar__actions :focus-visible {
+  outline-offset: -0.2rem;
 }
 
 .control-button,
@@ -270,9 +292,12 @@ a:hover {
   text-decoration: none;
 }
 
+.control-link[hidden] {
+  display: none;
+}
+
 .theme-button {
   display: grid;
-  grid-area: theme;
   padding: 0;
   place-items: center;
   color: var(--color-ink);
@@ -332,24 +357,21 @@ a:hover {
 
 .play-grid {
   display: grid;
-  width: min(78rem, 100%);
+  width: min(76rem, 100%);
   margin-inline: auto;
-  grid-template-columns: minmax(0, 1fr) min(19rem, 40%);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   align-items: start;
   justify-content: center;
   gap: var(--space-4);
 }
 
 .labyrinth-panel {
+  --board-w: min(100%, max(16rem, calc(100dvh - 22rem)));
   width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .section-label,
@@ -364,34 +386,25 @@ a:hover {
   text-transform: uppercase;
 }
 
-/* Readout: the live numbers sit directly above the board. */
+/* Readout: one ruled instrument line above the board. Ink rules divide the cells; no cards, no fills. */
 
 .readout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: 0 var(--space-3);
+  border-block: 1px solid var(--color-line);
 }
 
 .run-metrics {
   display: grid;
   margin: 0;
-  grid-column: 1 / 3;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-panel);
 }
 
 .run-metrics div {
   min-width: 0;
   padding: var(--space-2) var(--space-3);
-  border-right: 1px solid var(--color-line-soft);
-}
-
-.run-metrics div:last-child {
-  border-right: 0;
+  border-right: 1px solid var(--color-line);
 }
 
 .run-metrics dt {
@@ -408,58 +421,26 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* The pips repeat the Echoes and Vitality numbers, so the line drops them. */
 .meter-row {
-  display: grid;
-  margin-top: var(--space-2);
-  padding: 0 var(--space-1);
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-ink-muted);
+  display: none;
+}
+
+.readout .section-label,
+.run-metrics dt {
+  font-family: var(--font-body);
   font-size: var(--text-compact);
+  font-stretch: normal;
   font-weight: 600;
-}
-
-.echo-meter,
-.vitality-meter {
-  display: flex;
-  justify-content: flex-start;
-  gap: var(--space-1);
-}
-
-.echo-pip,
-.vitality-pip {
-  width: 1.35rem;
-  height: 0.5rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-  transition: background-color var(--duration-reveal) var(--ease-out);
-}
-
-.echo-pip.is-filled {
-  background: var(--color-echo);
-  border-color: var(--color-echo);
-}
-
-.vitality-pip.is-filled {
-  background: var(--color-warden);
-  border-color: var(--color-warden);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .warden-readout {
   display: grid;
   min-width: 10rem;
-  grid-column: 3;
-  grid-row: 1 / 3;
-  align-content: start;
+  align-content: center;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
-  transition:
-    background-color var(--duration-reveal) var(--ease-out),
-    border-color var(--duration-reveal) var(--ease-out);
 }
 
 .warden-readout strong {
@@ -472,19 +453,11 @@ a:hover {
   line-height: 1.1;
 }
 
-.warden-readout[data-mode="intercept"] {
-  border-color: var(--color-signal-deep);
-}
-
+/* A mode changes its mark, not its colour alone. */
 .warden-readout[data-mode="intercept"] strong {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
-}
-
-.warden-readout[data-mode="hunt"] {
-  border-color: var(--color-warden);
-  background: var(--color-warden-soft);
 }
 
 .warden-readout[data-mode="hunt"] strong {
@@ -496,21 +469,20 @@ a:hover {
   font-size: 0.8em;
 }
 
-.warden-readout[data-mode="lured"] {
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-soft);
-}
-
 .warden-readout[data-mode="lured"] strong::before {
   content: "))) " / "";
   font-size: 0.8em;
 }
 
+/* The guild line stays for screen readers; the instrument line shows the mode only. */
 .warden-readout p {
-  margin: var(--space-1) 0 0;
-  color: var(--color-ink-muted);
-  font-size: var(--text-compact);
-  line-height: 1.35;
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Board */
@@ -518,10 +490,11 @@ a:hover {
 /* The frame margin holds the Neatline ticks and the Grid reference. */
 .canvas-frame {
   position: relative;
-  width: min(100%, max(16rem, calc(100dvh - 23rem)), 36rem);
+  width: var(--board-w);
   aspect-ratio: 1;
   margin-inline: auto;
-  padding: clamp(1.125rem, 2dvh, 1.25rem);
+  --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
+  padding: var(--frame-pad);
   background: var(--color-paper);
   isolation: isolate;
 }
@@ -567,27 +540,91 @@ a:hover {
 /* Action rail */
 
 .action-rail {
-  display: flex;
+  display: grid;
   min-height: 3.2rem;
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-line-soft);
-  flex-wrap: wrap;
+  grid-template-areas: "pad pause" "pad pulse";
+  grid-template-columns: auto minmax(0, 20rem);
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
 
+.pause-button {
+  grid-area: pause;
+  width: 100%;
+}
+
+/* One ink outline holds the four direction buttons. */
 .touch-controls {
-  display: none;
+  display: grid;
+  grid-area: pad;
+  padding: var(--space-1);
+  grid-template-columns: repeat(3, 3rem);
+  grid-template-rows: repeat(2, 3rem);
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.direction-button {
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+}
+
+.direction-button__arrow {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.direction-button--up {
+  grid-column: 2;
+}
+
+.direction-button--left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.direction-button--down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.direction-button--right {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 .trail-actions {
   display: flex;
   min-width: 0;
-  align-items: center;
-  justify-content: flex-end;
+  grid-area: pulse;
+  flex-direction: column;
   gap: var(--space-2);
-  margin-left: auto;
+}
+
+/* Wide shells set Pause and Pulse beside the pad, so the rail stays one pad tall. Both buttons share one height. */
+@media (min-width: 48.0625rem) {
+  .action-rail {
+    grid-template-areas: "pad pause pulse";
+    grid-template-columns: auto minmax(0, 10rem) minmax(0, 15rem);
+    justify-content: start;
+    gap: var(--space-3) var(--space-4);
+  }
+
+  .pause-button,
+  .pulse-button {
+    min-height: 3.75rem;
+  }
 }
 
 .trail-compass {
@@ -597,6 +634,7 @@ a:hover {
 html[data-access-compass="trail"] .trail-compass {
   display: flex;
   width: 100%;
+  grid-column: 1 / -1;
   flex-direction: column;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -630,37 +668,16 @@ html .trail-compass[hidden] {
   display: none;
 }
 
-/* The Pulse is the chart's light: the one magenta fill on the play screen. */
+/* Pulse and the Bell are secondary buttons. The Signal ring on the count marks the light. */
 .pulse-button {
   display: grid;
-  width: min(15rem, 100%);
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-accent-ink);
-  border: 1px solid var(--color-signal-deep);
-  border-radius: var(--radius-md);
-  background: var(--color-signal);
   text-align: left;
   white-space: normal;
-  cursor: pointer;
-  transition:
-    background-color var(--duration-press) var(--ease-out),
-    transform var(--duration-press) var(--ease-out);
-}
-
-/* Beats the global button hover fill, which would otherwise turn Pulse grey. */
-.pulse-button:not(.bell-button):is(:hover, :active):not(:disabled) {
-  background: color-mix(in oklab, var(--color-signal) 90%, var(--color-paper));
-}
-
-.pulse-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.pulse-button:active:not(:disabled) {
-  transform: translateY(1px);
 }
 
 .pulse-button:disabled {
@@ -689,8 +706,11 @@ html .trail-compass[hidden] {
 }
 
 .pulse-button small {
+  overflow: hidden;
   margin-top: var(--space-1);
-  color: inherit;
+  color: var(--color-ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-compact);
   font-weight: 500;
 }
@@ -706,89 +726,64 @@ kbd {
   font-weight: 600;
 }
 
-.pulse-button kbd {
-  border-color: color-mix(in oklab, var(--color-accent-ink) 45%, transparent);
-  background: transparent;
-  color: inherit;
-}
-
 .pulse-button__count {
   display: grid;
   width: 1.5rem;
   height: 1.5rem;
   place-items: center;
-  color: var(--color-accent-ink);
+  border: 2px solid var(--color-signal-deep);
   border-radius: 50%;
-  background: var(--color-on-fill);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
   font-weight: 700;
 }
 
-/* The Signal Bell is the quiet partner of the Pulse button. */
-.bell-button {
-  color: var(--color-ink);
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-soft);
-}
-
-.bell-button kbd {
-  border-color: var(--color-line-soft);
-  background: var(--color-panel);
-}
-
+/* The ribbon is a reserved slot under the board: a paper band with an ink top rule that continues the Neatline bottom edge. */
 .event-ribbon {
   display: flex;
-  z-index: 2;
+  width: var(--board-w);
+  height: 3rem; /* two label lines, so a long message never moves the page */
+  margin-inline: auto;
+  padding: var(--space-1) var(--space-3);
+  box-sizing: border-box;
   overflow: hidden;
-  width: min(100%, 36rem);
-  max-width: 100%;
-  max-height: 0;
-  min-height: 0;
-  margin: 0 auto;
-  padding: 0 var(--space-3);
+  line-height: 1.25;
   align-items: center;
   justify-content: center;
   color: var(--color-ink);
-  border: 0 solid var(--color-signal-deep);
-  border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
   font-size: var(--text-label);
   font-weight: 650;
   text-align: center;
   opacity: 0;
-  transform: translateY(var(--space-2));
-  transition:
-    opacity var(--duration-reveal) var(--ease-out),
-    transform var(--duration-reveal) var(--ease-out);
+  transition: opacity var(--duration-reveal) var(--ease-out);
   pointer-events: none;
 }
 
 .event-ribbon.is-visible {
-  max-height: 5rem;
-  min-height: 2.75rem;
-  padding-block: var(--space-2);
-  border-width: 1px;
   opacity: 1;
-  transform: translateY(0);
 }
 
 /* Title block: the chart's corner block, below the rail. */
 
+/* Two ink rules close the block; one hairline sets the name row apart from the Explorer and seed row. */
 .title-block {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-line);
+  gap: var(--space-1) var(--space-4);
+  padding-block: var(--space-3) var(--space-1);
+  border-block: 1px solid var(--color-line);
 }
 
 .title-block__quest {
   display: grid;
   min-width: 0;
-  flex: 1 1 14rem;
+  flex: 1 1 100%;
   gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-line-soft);
 }
 
 .title-block__heading,
@@ -803,13 +798,12 @@ kbd {
   justify-content: flex-start;
 }
 
+/* The run state is a caption after a hairline, not a chip. */
 .run-state {
   flex: 0 0 auto;
-  padding: var(--space-1) var(--space-2);
+  padding-left: var(--space-3);
   color: var(--color-ink);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
+  border-left: 1px solid var(--color-line);
   font-size: var(--text-compact);
   font-weight: 650;
 }
@@ -818,9 +812,9 @@ kbd {
   margin: 0;
   color: var(--color-ink);
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .quest-sync-status {
@@ -932,23 +926,26 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+/* The seed reads as a caption line on the block; the hint underline marks the action. */
 .seed-copy {
   display: inline-grid;
   min-width: 0;
+  min-height: 2.75rem;
   margin-left: auto;
-  padding: var(--space-2) var(--space-3);
+  padding: 0 var(--space-2);
   grid-template-columns: auto minmax(0, auto) auto;
   align-items: center;
   gap: var(--space-2);
-  border: 1px dashed var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   text-align: left;
   white-space: nowrap;
 }
 
-.seed-copy:hover:not(:disabled) {
-  border-style: solid;
+/* A mouse click leaves focus on the button; only keyboard focus draws the ring. */
+.seed-copy:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .seed-copy strong {
@@ -974,9 +971,6 @@ kbd {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .chart-notes > * {
@@ -986,7 +980,7 @@ kbd {
 }
 
 .chart-notes > :first-child {
-  border-top: 0;
+  border-top-color: var(--color-line);
 }
 
 .objective-copy {
@@ -996,12 +990,12 @@ kbd {
   line-height: 1.45;
 }
 
+/* Ruled rows: one hairline per entry, no bullets. The newest entry carries a 2px ink rule on its left. */
 .story-log {
   display: flex;
   flex-direction: column;
   margin: var(--space-2) 0 0;
   padding: 0;
-  gap: var(--space-2);
   list-style: none;
   max-height: 10rem;
   overflow-y: auto;
@@ -1009,36 +1003,22 @@ kbd {
 }
 
 .story-log li {
-  position: relative;
-  padding-left: var(--space-4);
+  padding: var(--space-2) 0 var(--space-2) var(--space-3);
   color: var(--color-ink-muted);
+  border-top: 1px solid var(--color-line-soft);
+  border-left: 2px solid transparent;
   font-family: var(--font-body);
   font-size: var(--text-label);
   line-height: 1.35;
 }
 
-.story-log li::before {
-  position: absolute;
-  top: 0.38rem;
-  left: 0;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--color-echo);
-  content: "";
+.story-log li:first-child {
+  border-top: 0;
 }
 
-.story-log li[data-kind="wrong-answer"]::before,
-.story-log li[data-kind="question-skipped-paid"]::before,
-.story-log li[data-kind="gate-warden-challenge"]::before,
-.story-log li[data-kind="defeated"]::before {
-  background: var(--color-warden);
-}
-
-.story-log li[data-kind="warden-defeated"]::before,
-.story-log li[data-kind="gate-warden-defeated"]::before,
-.story-log li[data-kind="escaped"]::before {
-  background: var(--color-signal);
+.story-log li:last-child {
+  color: var(--color-ink);
+  border-left-color: var(--color-ink);
 }
 
 .legend ul {
@@ -1046,14 +1026,16 @@ kbd {
   margin: var(--space-2) 0 0;
   padding: 0;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  column-gap: var(--space-4);
   list-style: none;
 }
 
 .legend li {
   display: flex;
+  padding-block: var(--space-2);
   align-items: center;
   gap: var(--space-2);
+  border-top: 1px solid var(--color-line-soft);
   color: var(--color-ink-muted);
   font-size: var(--text-compact);
   font-weight: 600;
@@ -1061,6 +1043,11 @@ kbd {
 
 .legend li[hidden] {
   display: none;
+}
+
+/* Strong contrast: the ruled rows take the full line token. */
+:root[data-access-contrast="strong"] :is(.chart-notes > *, .story-log li, .legend li) {
+  border-top-color: var(--color-line);
 }
 
 .legend-mark {
@@ -1176,8 +1163,6 @@ kbd {
 
 .field-note {
   color: var(--color-ink);
-  background: var(--color-water-1);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   font-size: var(--text-body);
   line-height: 1.4;
 }
@@ -1483,7 +1468,7 @@ body[data-run-mode="first-light"] .play-workbench {
 
 @media (max-width: 58rem) {
   .command-bar__actions > * {
-    padding-inline: var(--space-3);
+    padding-inline: var(--space-2);
   }
 
   .play-workbench {
@@ -1492,6 +1477,24 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 48rem) {
+  .command-bar {
+    min-height: 0;
+    padding: var(--space-3) var(--space-3) 0;
+    gap: 0 var(--space-2);
+  }
+
+  .wordmark {
+    margin-right: auto;
+  }
+
+  /* The tab row takes its own line; the trailing padding fades it by spacing only. */
+  .command-bar__actions {
+    order: 1;
+    flex: 1 0 100%;
+    padding-inline-end: var(--space-8);
+    justify-content: flex-start;
+  }
+
   .play-workbench {
     padding: var(--space-2);
     justify-content: flex-start;
@@ -1503,124 +1506,38 @@ body[data-run-mode="first-light"] .play-workbench {
     gap: var(--space-2);
   }
 
+  /* Stacked, the Title block's bottom rule already closes the column above the notes. */
+  .chart-notes > :first-child {
+    border-top: 0;
+  }
+
   .labyrinth-panel {
-    padding: var(--space-2) var(--space-3);
+    --board-w: min(100%, max(40dvh, 6rem), 28rem);
     gap: var(--space-2);
   }
 
-  .readout {
-    grid-template-columns: 1fr;
-    gap: var(--space-2);
-  }
-
-  .run-metrics {
-    grid-column: auto;
-    border: 0;
-    border-bottom: 1px solid var(--color-line-soft);
-    border-radius: 0;
-  }
-
+  /* The instrument line stays one row; the cells tighten. */
   .run-metrics div {
-    padding: var(--space-1) var(--space-2) var(--space-2);
+    padding: 0.125rem var(--space-2);
   }
 
   .run-metrics dt {
-    letter-spacing: 0.04em;
+    margin-bottom: 0;
   }
 
   .run-metrics dd {
     font-size: 1.05rem;
   }
 
-  .meter-row {
-    display: none;
-  }
-
   .warden-readout {
-    display: flex;
     min-width: 0;
-    grid-column: auto;
-    grid-row: auto;
-    align-items: baseline;
-    gap: var(--space-2);
     padding: var(--space-1) var(--space-2);
   }
 
   .warden-readout strong {
-    display: inline;
     margin: 0;
     font-family: var(--font-body);
     font-size: var(--text-label);
-  }
-
-  .warden-readout p {
-    margin: 0 0 0 auto;
-    text-align: right;
-  }
-
-  .canvas-frame {
-    width: min(100%, max(40dvh, 6rem), 28rem);
-  }
-
-  .action-rail {
-    display: grid;
-    min-height: 0;
-    grid-template-areas: "pad pause" "pad pulse";
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    align-items: center;
-    gap: var(--space-2) var(--space-3);
-  }
-
-  .pause-button {
-    grid-area: pause;
-    width: 100%;
-  }
-
-  .touch-controls {
-    display: grid;
-    grid-area: pad;
-    grid-template-columns: repeat(3, 2.8125rem);
-    grid-template-rows: repeat(2, 2.8125rem);
-    align-content: center;
-    justify-content: center;
-    gap: var(--space-2);
-  }
-
-  .direction-button {
-    width: 2.8125rem;
-    height: 2.8125rem;
-    padding: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-  }
-
-  .direction-button--up {
-    grid-column: 2;
-  }
-
-  .direction-button--left {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .direction-button--down {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .direction-button--right {
-    grid-column: 3;
-    grid-row: 2;
-  }
-
-  .trail-actions {
-    grid-area: pulse;
-    flex-direction: column;
-    margin-left: 0;
-  }
-
-  .pulse-button {
-    width: 100%;
   }
 
   /* A touch player has no Q key; the hint only crowds the label. */
@@ -1628,10 +1545,6 @@ body[data-run-mode="first-light"] .play-workbench {
     .pulse-button kbd {
       display: none;
     }
-  }
-
-  html[data-access-compass="trail"] .trail-compass {
-    grid-column: 1 / -1;
   }
 
   .title-block {
@@ -1658,13 +1571,9 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 32rem) {
-  .command-bar {
-    padding-inline: var(--space-2);
-  }
-
   .command-bar__actions > * {
-    min-width: max-content;
-    padding-inline: var(--space-2);
+    width: max-content;
+    min-width: 2.8125rem;
     font-size: var(--text-compact);
   }
 
@@ -1693,28 +1602,27 @@ body[data-run-mode="first-light"] .play-workbench {
     gap: var(--space-2);
   }
 
-  .run-metrics div {
-    padding: var(--space-1) var(--space-2);
-  }
-
-  .run-metrics dt {
-    letter-spacing: 0.02em;
-  }
-
   .run-metrics dd {
     font-size: var(--text-label);
   }
 
-  .warden-readout p {
-    display: none;
+  /* The label keeps its place for screen readers; the mark and the word fit the line. */
+  .warden-readout .section-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .seed-copy strong {
     max-width: 9rem;
   }
 
-  .canvas-frame {
-    width: min(100%, max(38dvh, 6rem), 26rem);
+  .labyrinth-panel {
+    --board-w: min(100%, max(38dvh, 6rem), 26rem);
   }
 
   .pulse-button small {
@@ -1751,11 +1659,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .labyrinth-panel {
-    padding: var(--space-2) var(--space-1);
-  }
-
-  .canvas-frame {
-    width: 100%;
+    --board-w: 100%;
   }
 
   /* The frame sits 8px from the screen edge, so the ring offset shrinks to keep it inside the clip. */
@@ -1773,27 +1677,14 @@ body[data-run-mode="first-light"] .play-workbench {
     max-width: 6.5rem;
   }
 
-  .run-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .run-metrics div {
-    border-bottom: 1px solid var(--color-line-soft);
-    border-right: 1px solid var(--color-line-soft);
-  }
-
-  .run-metrics div:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .run-metrics div:nth-last-child(-n+2) {
-    border-bottom: 0;
-  }
-
-  /* The d-pad needs its full width here, so the buttons take their own rows. */
+  /* The pad needs its full width here, so the buttons take their own rows. */
   .action-rail {
     grid-template-areas: "pad" "pause" "pulse";
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .touch-controls {
+    justify-self: center;
   }
 }
 
@@ -1845,12 +1736,11 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-hero {
-  min-height: min(42rem, calc(100svh - 7rem));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: clamp(var(--space-8), 7vw, var(--space-16));
-  padding-block: var(--space-8) var(--space-12);
+  padding-block: var(--space-8) var(--space-4);
 }
 
 .landing-hero__copy {
@@ -1869,8 +1759,8 @@ body[data-run-mode="first-light"] .play-workbench {
 
 .landing-hero h1 {
   margin-block: 0 var(--space-3);
-  font-size: clamp(3rem, 7vw, 5.25rem);
-  line-height: 0.92;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 0.98;
 }
 
 .landing-hero__copy > p:not(.section-label):not(.landing-auth-status):not(.landing-hero__price),
@@ -1921,23 +1811,34 @@ body[data-run-mode="first-light"] .play-workbench {
   list-style: none;
 }
 
+/* Scale bar: alternating ink and open segments with a tick at each division. */
 .landing-path ol {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
 }
 
 .landing-path li {
+  position: relative;
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-5);
-  border-left: 1px solid var(--color-line-soft);
+  padding: var(--space-6) var(--space-4) var(--space-3);
 }
 
-.landing-path li:first-child {
-  border-left: 0;
+.landing-path li::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.5rem;
+  border: 1px solid var(--color-ink);
+  border-inline-end: 0;
+}
+
+.landing-path li:last-child::before {
+  border-inline-end: 1px solid var(--color-ink);
+}
+
+.landing-path li:nth-child(odd)::before {
+  background: var(--color-ink);
 }
 
 .landing-path strong,
@@ -2010,7 +1911,7 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 .landing-membership-preview .landing-membership-price {
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
   font-size: clamp(1.55rem, 3vw, 2.25rem);
   line-height: 1;
 }
@@ -2032,14 +1933,15 @@ body[data-run-mode="first-light"] .play-workbench {
 .landing-hero__price {
   margin: var(--space-4) 0 0;
   color: var(--color-ink);
-  font-family: var(--font-utility);
+  font-family: var(--font-body);
   font-size: 1.1rem;
   font-weight: 600;
 }
 
 .landing-hero__figure {
-  position: relative;
-  margin: 0 0 var(--space-8);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
 }
 
 /* Fixed 4:3 frame: a failed image still reserves its space, so nothing shifts. */
@@ -2051,24 +1953,92 @@ body[data-run-mode="first-light"] .play-workbench {
   background: var(--color-water-1);
 }
 
-.landing-hero__frame img {
+.landing-hero__chart {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+/* The chart follows the Theme Choice; the OS scheme decides only when no choice is set. */
+.landing-hero__chart--night,
+:root[data-theme="dark"] .landing-hero__chart--light {
+  display: none;
+}
+
+:root[data-theme="dark"] .landing-hero__chart--night {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .landing-hero__chart--light {
+    display: none;
+  }
+
+  :root:not([data-theme]) .landing-hero__chart--night {
+    display: block;
+  }
+}
+
+.landing-hero__legend {
+  order: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  list-style: none;
+}
+
+.landing-hero__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Each key repeats its chart mark: Echo disc, Warden seal, Gate arch, Explorer fix. */
+.landing-hero__legend li::before {
+  content: "";
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+
+.landing-hero__legend li:nth-child(1)::before {
+  background: var(--color-echo);
+}
+
+.landing-hero__legend li:nth-child(2)::before {
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
+}
+
+.landing-hero__legend li:nth-child(3)::before {
+  border-radius: 50% 50% 0 0;
+  background: var(--color-gate);
+}
+
+.landing-hero__legend li:nth-child(4)::before {
+  border: 2px solid var(--color-ink);
+  background: radial-gradient(circle, var(--color-explorer) 0 40%, transparent 45%);
+}
+
+/* The course line follows the chart in the DOM; flex order moves it out of document order, to sit above the legend. */
 .landing-hero__trail {
-  position: absolute;
-  left: 0;
-  bottom: calc(-1 * var(--space-6));
+  order: 2;
   width: 100%;
   height: 3rem;
+  margin-block: var(--space-3);
   overflow: visible;
   fill: none;
   stroke: var(--color-signal);
-  stroke-width: 3;
-  stroke-linecap: round;
+  stroke-width: 2;
+  stroke-linejoin: miter;
   pointer-events: none;
 }
 
@@ -2084,9 +2054,12 @@ body[data-run-mode="first-light"] .play-workbench {
 }
 
 @media (max-width: 58rem) {
+  .landing-hero__trail {
+    stroke-width: 3.7;
+  }
+
   .landing-hero {
     grid-template-columns: 1fr;
-    min-height: 0;
   }
 
   .landing-path ol,
@@ -2096,18 +2069,21 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .landing-path li {
-    border-left: 0;
-    border-top: 1px solid var(--color-line-soft);
+    padding: var(--space-3) 0 var(--space-3) var(--space-5);
   }
 
-  .landing-path li:first-child {
-    border-top: 0;
+  .landing-path li::before {
+    inset: 0 auto 0 0;
+    width: 0.5rem;
+    height: auto;
+    border-block: 0;
+    border-inline: 1px solid var(--color-ink);
   }
 }
 
 @media (max-width: 32rem) {
   .landing-hero h1 {
-    font-size: clamp(2.8rem, 16vw, 4.2rem);
+    font-size: clamp(2.1rem, 10vw, 3rem);
   }
 
   .landing-hero__actions {

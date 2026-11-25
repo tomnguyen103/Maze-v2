@@ -92,7 +92,7 @@ describe("Pilot Chart identity", () => {
     "oklch(70% 0.2 340)",
     "oklch(47% 0.22 340)",
     "oklch(95.5% 0.022 232)",
-    "oklch(21% 0.012 250)",
+    "oklch(21% 0.03 250)",
     "oklch(23% 0.012 250)",
     "oklch(95% 0.006 95)",
     "oklch(78% 0.01 250)",

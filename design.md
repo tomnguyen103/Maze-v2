@@ -32,7 +32,7 @@ values. The three water screens are literal values in each block, never aliases.
 
 | Role | Light | Night |
 | :-- | :-- | :-- |
-| Paper | `oklch(99% 0.004 95)` | `oklch(21% 0.012 250)` |
+| Paper | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` |
 | Stone | `oklch(100% 0 0)` | `oklch(23% 0.012 250)` |
 | Ink | `oklch(18% 0.012 250)` | `oklch(95% 0.006 95)` |
 | Muted ink | `oklch(38% 0.014 250)` | `oklch(78% 0.01 250)` |

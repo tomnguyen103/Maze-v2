@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 
 test.describe("layout redesign & edge viewports", () => {
   const edgeViewports = [
@@ -54,11 +55,12 @@ test.describe("layout redesign & edge viewports", () => {
       );
       expect(clippedLeft, `Play layout should not clip past the left edge on ${vp.name}`).toEqual([]);
 
+      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
       const actionsOverflow = await page.evaluate(() => {
         const actions = document.querySelector(".command-bar__actions");
-        return actions ? actions.scrollWidth - actions.clientWidth : 0;
+        return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
       });
-      expect(actionsOverflow, `Header actions should not scroll horizontally on ${vp.name}`).toBeLessThanOrEqual(1);
+      expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
 
       // Verify no buttons clip their content
       const clippedButtons = await page.evaluate(() => {
@@ -110,30 +112,6 @@ test.describe("layout redesign & edge viewports", () => {
         };
       });
       expect(arenaInfo?.collides ?? false, `Seed copy and pause button should not collide on ${vp.name}`).toBe(false);
-
-      // Verify command-bar h1 spans full width on medium/small viewports where banner wraps
-      if (vp.width <= 928 && vp.width >= 360) {
-        const headlineSpan = await page.evaluate(() => {
-          const h1 = document.querySelector(".command-bar h1");
-          const cmd = document.querySelector(".command-bar");
-          if (!h1 || !cmd) return null;
-          const h1Rect = h1.getBoundingClientRect();
-          const cmdRect = cmd.getBoundingClientRect();
-          const cmdStyle = window.getComputedStyle(cmd);
-          const isGrid = cmdStyle.display === "grid";
-          const expectedWidth = isGrid
-            ? cmdRect.width - (parseFloat(cmdStyle.paddingLeft) + parseFloat(cmdStyle.paddingRight))
-            : cmdRect.width;
-          return {
-            h1Width: Math.round(h1Rect.width),
-            expectedWidth: Math.round(expectedWidth),
-            diff: Math.abs(h1Rect.width - expectedWidth)
-          };
-        });
-        if (headlineSpan) {
-          expect(headlineSpan.diff, `Headline banner should span full grid width on ${vp.name}`).toBeLessThanOrEqual(2);
-        }
-      }
 
       // Verify run-metrics border integrity
       const metricsLayout = await page.evaluate(() => {
@@ -244,6 +222,247 @@ test.describe("layout redesign & edge viewports", () => {
       expect(controls.y, "controls start below the board").toBeGreaterThanOrEqual(
         frame.y + frame.height - 1
       );
+    });
+  }
+
+  // US-03.1 / US-03.3: the shell header is one ruled tab row.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`header is a ruled tab row with 40px targets at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=HEADER-ROW&level=trail-scout");
+      await expectGameReady(page);
+
+      const header = await page.evaluate(() => {
+        const bar = /** @type {HTMLElement} */ (document.querySelector(".command-bar"));
+        const tabs = /** @type {HTMLElement} */ (document.querySelector(".command-bar__actions"));
+        const targets = [...bar.querySelectorAll("button, a[href]")]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => {
+            const box = el.getBoundingClientRect();
+            return { id: el.id || el.textContent.trim(), width: box.width, height: box.height };
+          });
+        return {
+          barHeight: bar.getBoundingClientRect().height,
+          targets,
+          scrollbarWidth: getComputedStyle(tabs).scrollbarWidth,
+          tabBorder: getComputedStyle(/** @type {HTMLElement} */ (document.querySelector("#daily-button"))).borderBottomWidth,
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+      });
+      for (const target of header.targets) {
+        expect(target.width, `${target.id} width`).toBeGreaterThanOrEqual(40);
+        expect(target.height, `${target.id} height`).toBeGreaterThanOrEqual(40);
+      }
+      expect(header.scrollbarWidth).toBe("none");
+      expect(header.tabBorder, "tabs carry a 2px underline slot").toBe("2px");
+      expect(header.pageOverflow).toBeLessThanOrEqual(1);
+      if (vp.width >= 768) {
+        expect(header.barHeight, "bar height").toBeGreaterThanOrEqual(56);
+        expect(header.barHeight, "bar height").toBeLessThanOrEqual(72);
+      }
+
+      for (const name of ["Daily", "Atlas", "Workshop", "Journal", "Records", "Settings", "New Quest"]) {
+        await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+      }
+    });
+  }
+
+  // US-03.1: the board column owns 60-70% of the content width and the panel boxes are gone.
+  for (const vp of [
+    { width: 1280, height: 800 },
+    { width: 1920, height: 1080 }
+  ]) {
+    test(`board column owns 60-70% of the content width at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=BOARD-COLUMN&level=trail-scout");
+      await expectGameReady(page);
+
+      const layout = await page.evaluate(() => {
+        const box = (/** @type {string} */ selector) => document.querySelector(selector)?.getBoundingClientRect();
+        const style = (/** @type {string} */ selector) => {
+          const element = /** @type {HTMLElement} */ (document.querySelector(selector));
+          const computed = getComputedStyle(element);
+          return {
+            border: computed.borderTopWidth,
+            shadow: computed.boxShadow,
+            background: computed.backgroundColor
+          };
+        };
+        return {
+          grid: box(".play-grid")?.width ?? 0,
+          column: box(".labyrinth-panel")?.width ?? 0,
+          frame: box("#canvas-frame"),
+          panel: style(".labyrinth-panel"),
+          notes: style(".chart-notes")
+        };
+      });
+      const ratio = layout.column / layout.grid;
+      expect(ratio, "board column share of the content width").toBeGreaterThanOrEqual(0.6);
+      expect(ratio, "board column share of the content width").toBeLessThanOrEqual(0.7);
+      expect(Math.abs((layout.frame?.width ?? 0) - (layout.frame?.height ?? 0)), "board is square").toBeLessThanOrEqual(1);
+      expect(layout.frame?.width, "board size comes from the column, not a fixed 432px").toBeGreaterThan(440);
+      for (const box of [layout.panel, layout.notes]) {
+        expect(box.border).toBe("0px");
+        expect(box.shadow).toBe("none");
+        expect(box.background).toBe("rgba(0, 0, 0, 0)");
+      }
+    });
+  }
+
+  // US-03.2: under 160px of chrome sit above the board on a phone.
+  test("keeps chrome above the board under 160px at 375", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=BOARD-CHROME&level=trail-scout");
+    await expectGameReady(page);
+    const frame = await page.locator("#canvas-frame").boundingBox();
+    expect(frame?.y, "chrome above the board").toBeLessThan(160);
+    expect(frame?.width, "board width").toBeGreaterThanOrEqual(375 * 0.9);
+  });
+
+  // Audit item U5: on a landscape phone the first board tile starts above the fold.
+  test("shows the first board tile without a scroll at 667x375", async ({ page }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await page.goto("/?seed=BOARD-FOLD&level=trail-scout");
+    await expectGameReady(page);
+    const canvas = await page.locator("#maze-canvas").boundingBox();
+    if (!canvas) throw new Error("canvas has no bounding box");
+    const tile = canvas.width / getLabyrinthConfig("trail-scout", 1).size;
+    expect(canvas.y + tile, "first tile bottom edge").toBeLessThanOrEqual(375);
+  });
+
+  // The hidden attribute keeps the Classroom tab out of the header for a guest.
+  test("hides the Classroom tab for a guest", async ({ page }) => {
+    await page.goto("/?seed=BOARD-GUEST&level=trail-scout");
+    await expectGameReady(page);
+    await expect(page.locator("#classroom-link")).toHaveCount(1);
+    await expect(page.locator("#classroom-link")).toBeHidden();
+  });
+
+  // US-03.1: the event ribbon overlays the board bottom and shifts nothing.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`reserves the event ribbon slot under the board without a layout shift at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=RIBBON-SHIFT&level=trail-scout");
+      await expectGameReady(page);
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: { writeText: async () => {} }
+        });
+      });
+      const positions = () =>
+        page.evaluate(() =>
+          ["#canvas-frame", ".action-rail", ".title-block"].map((selector) => {
+            const rect = document.querySelector(selector)?.getBoundingClientRect();
+            return rect ? [rect.x, rect.y + window.scrollY, rect.width, rect.height] : null;
+          })
+        );
+      const before = await positions();
+      const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+
+      await page.locator("#seed-copy").click();
+      const ribbon = page.locator("#event-ribbon");
+      await expect(ribbon).toHaveClass(/is-visible/);
+      await expect(ribbon).toHaveCSS("opacity", "1");
+
+      expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
+
+      const maze = await page.locator("#maze-canvas").boundingBox();
+      const frame = await page.locator("#canvas-frame").boundingBox();
+      const band = await ribbon.boundingBox();
+      if (!maze || !frame || !band) throw new Error("Expected the board and the ribbon to render.");
+      expect(band.y, "ribbon sits below the maze").toBeGreaterThanOrEqual(maze.y + maze.height);
+      expect(band.x).toBeGreaterThanOrEqual(frame.x - 1);
+      expect(band.x + band.width).toBeLessThanOrEqual(frame.x + frame.width + 1);
+      const rule = await ribbon.evaluate((el) => getComputedStyle(el).borderTopWidth);
+      expect(parseFloat(rule), "ink top rule").toBeGreaterThan(0);
+    });
+  }
+
+  // The landing chart follows the Theme Choice; the OS scheme is only the fallback.
+  for (const [os, choice] of [
+    ["dark", "light"],
+    ["light", "dark"],
+    ["dark", "dark"],
+    ["light", "light"]
+  ]) {
+    test(`shows the ${choice} chart for a ${choice} Theme Choice on a ${os} OS`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
+      await page.addInitScript((value) => {
+        window.localStorage.setItem("echo-maze:theme", value);
+      }, choice);
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", choice);
+      const visible = page.locator(".landing-hero__chart:visible");
+      await expect(visible).toHaveCount(1);
+      await expect(visible).toHaveAttribute("src", `/landing-chart-${choice === "dark" ? "night" : "light"}.webp`);
+    });
+  }
+
+  for (const os of ["dark", "light"]) {
+    test(`falls back to a ${os} OS scheme for the landing chart when no Theme Choice is set`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
+      await page.goto("/");
+      const visible = page.locator(".landing-hero__chart:visible");
+      await expect(visible).toHaveCount(1);
+      await expect(visible).toHaveAttribute("src", `/landing-chart-${os === "dark" ? "night" : "light"}.webp`);
+    });
+  }
+
+  // Focus order: the pad comes before Pause and Pulse, as drawn.
+  test("keeps the Action rail focus order equal to the visual order", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/?seed=RAIL-ORDER&level=trail-scout");
+    await expectGameReady(page);
+    const order = await page.evaluate(() =>
+      ["[data-move='up']", "#pause-run", "#pulse-action"].map((selector) => {
+        const element = document.querySelector(selector);
+        return element ? element.getBoundingClientRect().x : -1;
+      })
+    );
+    expect(order[0]).toBeLessThan(order[1] ?? 0);
+    expect(order[1]).toBeLessThan(order[2] ?? 0);
+    const domOrder = await page.evaluate(() => {
+      const ids = [".touch-controls", "#pause-run", ".trail-actions"];
+      const nodes = ids.map((id) => document.querySelector(id));
+      return nodes.every((node, index) => index === 0 || (nodes[index - 1]?.compareDocumentPosition(node ?? document) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(domOrder, "DOM order pad, Pause, Pulse").toBeTruthy();
+  });
+
+  // Ticket 12: the Action rail keeps 48px direction buttons and 40px targets.
+  for (const vp of [
+    { width: 375, height: 812 },
+    { width: 1280, height: 800 }
+  ]) {
+    test(`sizes the Action rail targets at ${vp.width}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("/?seed=RAIL-SIZE&level=trail-scout");
+      await expectGameReady(page);
+      for (const direction of ["up", "left", "down", "right"]) {
+        const box = await page.locator(`.touch-controls [data-move='${direction}']`).boundingBox();
+        expect(box?.width, `${direction} width`).toBeGreaterThanOrEqual(48);
+        expect(box?.height, `${direction} height`).toBeGreaterThanOrEqual(48);
+      }
+      for (const selector of ["#pause-run", "#pulse-action"]) {
+        const box = await page.locator(selector).boundingBox();
+        expect(box?.width, `${selector} width`).toBeGreaterThanOrEqual(40);
+        expect(box?.height, `${selector} height`).toBeGreaterThanOrEqual(40);
+      }
+      const pulse = await page
+        .locator("#pulse-action")
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      const pause = await page
+        .locator("#pause-run")
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(pulse, "Pulse is a secondary button with the Pause fill").toBe(pause);
     });
   }
 });

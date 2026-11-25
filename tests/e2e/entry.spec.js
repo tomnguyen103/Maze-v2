@@ -110,7 +110,7 @@ test("US-03.1 and US-03.2 show the crop, price and action at desktop and 390 by 
     await page.goto("/");
 
     const hero = page.locator(".landing-hero");
-    const crop = hero.locator(".landing-hero__frame img");
+    const crop = hero.locator(".landing-hero__frame img:visible");
     await expect(crop).toHaveAttribute("alt", /.{20,}/);
     await expect
       .poll(() => crop.evaluate((image) => /** @type {HTMLImageElement} */ (image).naturalWidth))
