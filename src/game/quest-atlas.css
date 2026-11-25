@@ -612,8 +612,12 @@
 
   /* Inline padding keeps the 0.2rem focus ring and offset inside the scroll box. */
   .atlas-toolbar {
+    max-width: none;
     margin-inline: calc(-1 * var(--space-2));
     padding-inline: var(--space-2);
+    /* The rule stays on the content edge, inside the padded scroll box. */
+    border-bottom: 0;
+    background: linear-gradient(var(--color-line), var(--color-line)) center bottom / calc(100% - 2 * var(--space-2)) 1px no-repeat;
     flex-wrap: nowrap;
     overflow-x: auto;
   }
