@@ -812,10 +812,18 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       context.lineTo(x - tile * 0.25 * scale, y + tile * 0.2 * scale);
       context.closePath();
     };
-    // Casing first under the outline and the slash, then the outline ink, then the slash ink.
+    const traceClapper = (/** @type {number} */ extra) => {
+      context.beginPath();
+      context.arc(x, y + tile * 0.27 * scale, tile * 0.06 * scale + extra, 0, Math.PI * 2);
+    };
+    // Casing first under the outline, the clapper and the slash, then the outline ink, the clapper ink, the slash ink.
     traceBody();
     context.fill();
     strokeCasing(tile);
+    // The clapper hangs on bare Fog: its casing disc grows by the margin strokeCasing adds per side.
+    traceClapper(Math.max(1, tile * 0.02 * scale));
+    context.fillStyle = palette.casing;
+    context.fill();
     if (bell.spent) {
       context.lineCap = "round";
       traceSlash();
@@ -823,14 +831,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     }
     traceBody();
     context.stroke();
-    context.beginPath();
-    context.arc(
-      x,
-      y + tile * 0.27 * scale,
-      tile * 0.06 * scale,
-      0,
-      Math.PI * 2
-    );
+    traceClapper(0);
     context.fillStyle = color;
     context.fill();
     if (bell.spent) {

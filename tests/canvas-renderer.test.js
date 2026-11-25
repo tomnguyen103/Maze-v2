@@ -1336,6 +1336,30 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
+  it("US-01.2 casts the clapper casing disc before the clapper ink and the bell outline ink, live and spent", () => {
+    document.body.style.setProperty("--color-board-light", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-board-gate", "rgb(9, 9, 2)");
+    document.body.style.setProperty("--color-board-casing", "rgb(250, 250, 250)");
+    const casing = "rgb(250, 250, 250)";
+    for (const [spent, ink] of /** @type {const} */ ([[false, "rgb(9, 9, 1)"], [true, "rgb(9, 9, 2)"]])) {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      renderer.render(board({ revealed: ["1,1"], signalBells: [{ id: 0, row: 0, col: 1, spent }] }));
+      const disc = paints.findIndex((paint) => paint.kind === "fill" && paint.style === casing);
+      const clapperInk = paints.findIndex((paint) => paint.kind === "fill" && paint.style === ink);
+      const outlineInk = paints.findIndex((paint) => paint.kind === "stroke" && paint.style === ink);
+      expect(disc).toBeGreaterThanOrEqual(0);
+      expect(disc).toBeLessThan(clapperInk);
+      expect(disc).toBeLessThan(outlineInk);
+      // The casing disc shares the clapper centre and is wider than the clapper ink.
+      const arc = (/** @type {string[]} */ path) => path[0].match(/arc\(([^)]*)\)/)?.[1].split(",").map(Number) ?? [];
+      const [dx, dy, dr] = arc(paints[disc].path);
+      const [cx, cy, cr] = arc(paints[clapperInk].path);
+      expect([dx, dy]).toEqual([cx, cy]);
+      expect(dr).toBeGreaterThan(cr);
+    }
+  });
+
   it("US-01.2 keeps the casing light on a forced light Fog and dark on the Night Fog", () => {
     for (const [theme, base] of Object.entries(THEMES)) {
       for (const [mode, selector] of Object.entries(MODES)) {
