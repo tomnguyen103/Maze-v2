@@ -357,10 +357,50 @@ dialog > .dialog-heading > button {
   gap: var(--space-5);
 }
 
-.journal-empty {
+.journal-empty,
+.records-empty {
   margin: var(--space-5) 0;
-  padding: var(--space-5) 0;
-  border-block: 1px solid var(--color-line);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.records-empty {
+  display: none;
+}
+
+.records-empty h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.records-empty p {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-muted);
+}
+
+.records-empty form,
+.journal-empty-action {
+  margin: 0;
+}
+
+.journal-empty-action {
+  display: none;
+}
+
+.journal-dialog:has(.journal-empty) .journal-empty-action {
+  display: block;
+}
+
+.records-dialog:has(.run-records__empty) .records-empty {
+  display: block;
+}
+
+.records-dialog:has(.run-records__empty) .run-records__head,
+.records-dialog:has(.run-records__empty) .run-records {
+  display: none;
 }
 
 .journal-empty strong,
@@ -373,7 +413,8 @@ dialog > .dialog-heading > button {
 .journal-empty strong {
   display: block;
   margin-bottom: var(--space-2);
-  font-size: 1.2rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
 }
 
 .journal-empty p {
@@ -1000,6 +1041,26 @@ dialog > .dialog-heading > button {
   grid-column: 2 / -1;
   color: var(--color-ink-muted);
   font-size: 0.88rem;
+}
+
+.run-records__head {
+  display: grid;
+  margin: var(--space-5) 0 0;
+  padding: var(--space-2) 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-ink-muted);
+  font-family: var(--font-utility);
+  font-size: var(--text-compact);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.run-records__head + .run-records {
+  margin-top: 0;
+  border-top: 0;
 }
 
 .run-records {
@@ -1631,6 +1692,23 @@ dialog > .dialog-heading > button {
 }
 
 @media (max-width: 32rem) {
+  /* A phone Run row stacks its actions under the Run text, so the text keeps the full width. */
+  .run-records__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .run-records__head span + span {
+    display: none;
+  }
+
+  .run-records li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .run-records__actions {
+    flex-wrap: wrap;
+  }
+
   /* A phone row stacks the tile range under the name, so a long name has the full width. */
   .level-card {
     grid-template-areas:
@@ -1692,19 +1770,6 @@ dialog > .dialog-heading > button {
   .quest-conflict-options {
     grid-template-columns: 1fr;
   }
-}
-
-/* The Workshop title has no wrapper, so the bare heading carries the header band. */
-.practice-dialog > h2 {
-  position: sticky;
-  z-index: 1;
-  top: calc(-1 * var(--dialog-pad));
-  margin: calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad)) var(--space-4);
-  padding: var(--space-3) var(--dialog-pad);
-  border-bottom: 1px solid var(--color-line);
-  background: var(--color-paper);
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
 }
 
 /* One rule closes the goal list; the topic is plain muted text. */

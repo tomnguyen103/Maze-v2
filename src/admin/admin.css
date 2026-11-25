@@ -10,7 +10,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-4);
-  border-bottom: 1px solid var(--color-line-soft);
+  border-bottom: 1px solid var(--color-line);
   background: var(--color-nav);
 }
 
@@ -34,8 +34,8 @@
   align-items: center;
   justify-self: start;
   grid-column: 1 / -1;
-  border: 1px solid var(--color-line-soft);
-  border-radius: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--color-panel);
   font: 650 0.84rem/1 var(--font-body);
   text-decoration: none;
@@ -43,8 +43,7 @@
 }
 
 .admin-command__exit:hover {
-  border-color: var(--color-signal);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
 }
 
 .admin-layout {

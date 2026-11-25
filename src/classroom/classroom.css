@@ -10,7 +10,7 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-5);
-  border-bottom: 1px solid var(--color-line-soft);
+  border-bottom: 1px solid var(--color-line);
   background: var(--color-nav);
 }
 
@@ -35,25 +35,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-.control-link {
-  display: inline-flex;
-  min-height: 2.8125rem;
-  padding: var(--space-3) var(--space-4);
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-line-soft);
-  border-radius: 0.5rem;
-  background: var(--color-panel);
-  font: 650 0.875rem/1 var(--font-body);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.control-link:hover {
-  border-color: var(--color-signal);
-  background: var(--color-signal-soft);
 }
 
 .classroom-workbench {

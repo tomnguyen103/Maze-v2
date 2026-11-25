@@ -56,6 +56,7 @@ export function createLanternTrailView({
     choices: required("practice-choices", HTMLElement),
     choose: required("practice-choose", HTMLButtonElement),
     close: required("practice-close", HTMLButtonElement),
+    headerClose: required("practice-header-close", HTMLButtonElement),
     completion: required("practice-completion", HTMLElement),
     completionCopy: required("practice-completion-copy", HTMLElement),
     dialog: required("practice-dialog", HTMLDialogElement),
@@ -136,6 +137,7 @@ export function createLanternTrailView({
     void openTacticsLab();
   });
   elements.close.addEventListener("click", () => closeTo(origin));
+  elements.headerClose.addEventListener("click", () => closeTo(origin));
   elements.journal.addEventListener("click", () => closeTo("journal"));
   elements.atlas.addEventListener("click", () => closeTo("atlas"));
   elements.dialog.addEventListener("close", () => {
@@ -246,6 +248,7 @@ export function createLanternTrailView({
     elements.journal.hidden = true;
     elements.atlas.hidden = true;
     elements.close.hidden = true;
+    elements.headerClose.hidden = true;
     try {
       if (!tacticsLabView) {
         tacticsLabView = createTacticsLabView({
@@ -412,6 +415,7 @@ export function createLanternTrailView({
     elements.journal.hidden = false;
     elements.atlas.hidden = false;
     elements.close.hidden = false;
+    elements.headerClose.hidden = false;
   }
 
   /** @param {ReturnType<typeof createLanternTrail>["questions"][number]} rawQuestion */

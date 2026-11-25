@@ -908,6 +908,9 @@
       </p>
       <p class="journal-status" id="journal-status" role="status" aria-live="polite"></p>
       <div class="journal-bands" id="journal-bands"></div>
+      <form class="journal-empty-action" method="dialog">
+        <button class="primary-button" type="submit">Return to Play</button>
+      </form>
       <div class="journal-clear">
         <button class="control-button" id="journal-clear" type="button">
           Clear Journal
@@ -933,7 +936,12 @@
       aria-labelledby="practice-title"
       aria-describedby="practice-promise practice-feedback"
     >
-      <h2 id="practice-title" tabindex="-1">Lantern Trail Workshop</h2>
+      <div class="dialog-heading">
+        <div>
+          <h2 id="practice-title" tabindex="-1">Lantern Trail Workshop</h2>
+        </div>
+        <button class="control-button" id="practice-header-close" type="button" aria-label="Close Workshop">Close</button>
+      </div>
       <p class="dialog-intro" id="practice-promise">
         No timer, score, Vitality, access, or Quest progress changes here.
       </p>
@@ -1085,7 +1093,15 @@
         Your five strongest finished attempts, saved on this device. Escapes rank
         first; defeats show Echo progress. Replay or share any seed.
       </p>
+      <div class="run-records__head" aria-hidden="true"><span>Run</span><span>Actions</span></div>
       <ol class="run-records" id="run-records"></ol>
+      <div class="records-empty">
+        <h3>No Runs on the chart yet</h3>
+        <p>Finish a Run and it lands here with its seed, ready to replay or share.</p>
+        <form method="dialog">
+          <button class="primary-button" type="submit">Return to Play</button>
+        </form>
+      </div>
     </dialog>
 
     <dialog class="player-dialog" id="player-dialog" aria-labelledby="player-dialog-title">
