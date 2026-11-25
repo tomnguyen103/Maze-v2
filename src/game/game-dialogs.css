@@ -369,7 +369,8 @@ dialog > .dialog-heading > button {
   display: none;
 }
 
-.records-empty h3 {
+.records-empty h3,
+.journal-empty-action h3 {
   margin: 0 0 var(--space-2);
   font-family: var(--font-display);
   font-size: 1.5rem;
