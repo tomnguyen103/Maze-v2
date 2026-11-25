@@ -110,6 +110,7 @@ export function createLanternTrailView({
         ? event.target.closest("button[data-practice-answer]")
         : null;
     if (!(button instanceof HTMLButtonElement) || !session) return;
+    button.setAttribute("aria-pressed", "true");
     resolveQuestion(
       button.dataset.practiceAnswer === currentQuestion().answerId
         ? "correct"

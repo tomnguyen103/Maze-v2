@@ -20,7 +20,7 @@ and movement. It never competes with the Labyrinth or the Warden Question.
   - Play: one reading order. The Readout sits above the board. The Action rail sits
     under it. The Title block sits under the rail. The Chart notes sit beside the board
     on a desktop and under it on a phone.
-  - Atlas: drawn territories with dashed trails and landmark stamps.
+  - Atlas: ruled Region cards with landmark stamps. The Region Hue shows as a swatch on each card.
   - Dialogs: one decision per view on a solid panel.
   - Admin and Class: solid headers and an underline tab strip.
 
@@ -68,7 +68,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - **Action fill**: the primary button fills with ink and sets its label in paper.
 - **Water screens**: three blue screens, light to deep, rank the Readout, the Chart
   notes, and the Atlas bands. Each screen keeps ink and muted ink at 4.5:1.
-- **Region Hues**: the Atlas territories keep their five hues as restrained washes.
+- **Region Hues**: each Region keeps its hue as the swatch on its Atlas card.
 - **Warden marks**: ink marks. **Gate marks**: Signal lights. No mark depends on colour
   alone.
 - **Theme**: the Theme Choice applies light, Night, or system. Every `theme-color` meta
@@ -132,8 +132,10 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 
 ## Atlas
 
-- The Atlas draws five territories as inline SVG. Each territory fills with its Region
-  Hue wash. The SVG uses `xMidYMid meet`, so the drawing fits its frame and never clips.
+- The Atlas shows the Region Hue as the swatch on each Region card. The territory SVG
+  stays in the markup but is not displayed (`display: none`), because the polygons read
+  as clip-art. The SVG keeps `xMidYMid meet` and its fills stay at 3:1, so it is safe to
+  show again.
 - The status strip and the toolbar are ruled rows above the map. The pressed toggle fills
   with ink.
 - Landmarks are Stamps: a circled number, dashed when ahead, filled with ink when

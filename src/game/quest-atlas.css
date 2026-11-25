@@ -91,7 +91,8 @@
 
 /* The SVG meets its frame, so no territory leaves it at any width. */
 .atlas-illustration {
-  /* The ruled region cards carry the map; the drawn territories and trails stay out of view. */
+  /* The ruled region cards carry the map. The drawing stays in the markup but is not displayed.
+     The territory rules below stay: the region-theme tests and the e2e Atlas case read them. */
   display: none;
   position: absolute;
   inset: 0;
@@ -385,7 +386,7 @@
   align-content: space-between;
   text-align: left;
   gap: var(--space-1);
-  border: 1px solid var(--color-line-soft);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-panel);
   color: var(--color-ink);
@@ -535,7 +536,15 @@
   .atlas-viewport {
     padding: 0;
     border: 0;
-    scroll-padding-block-end: 34dvh;
+  }
+
+  /* The dialog scrolls, so it keeps the fixed detail sheet off the last landmark. */
+  .atlas-dialog {
+    scroll-padding-block-end: calc(min(16rem, 32dvh) + var(--space-4));
+  }
+
+  .atlas-shell {
+    padding-bottom: calc(min(16rem, 32dvh) + var(--space-4));
   }
 
   .atlas-regions,
@@ -601,7 +610,10 @@
     bottom: 0;
   }
 
+  /* Inline padding keeps the 0.2rem focus ring and offset inside the scroll box. */
   .atlas-toolbar {
+    margin-inline: calc(-1 * var(--space-2));
+    padding-inline: var(--space-2);
     flex-wrap: nowrap;
     overflow-x: auto;
   }

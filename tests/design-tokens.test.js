@@ -268,7 +268,7 @@ describe("shared base styles", () => {
     const found = [];
     for (const relative of SHEETS.filter((path) => path.endsWith(".css"))) {
       const css = readFileSync(root + relative, "utf8");
-      for (const token of ["--radius-pill", "--shadow-panel", "--shadow-signal"]) {
+      for (const token of ["--radius-pill", "--shadow-panel", "--shadow-signal", "--color-shadow"]) {
         if (css.includes(token)) found.push(`${token} (${relative})`);
       }
     }
