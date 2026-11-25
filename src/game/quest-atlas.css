@@ -1,5 +1,4 @@
-/* Field Journal Atlas: five drawn territories, one landmark stamp and one Gate flag each. Colors come from tokens.css. */
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+/* Pilot Chart Atlas: five drawn territories, one stamp per Labyrinth, one Gate flag each. Ruled rows, 1px ink rules, no shadow, no pill. Colors come from tokens.css. */
 .atlas-dialog {
   position: fixed;
   inset: 0;
@@ -22,18 +21,28 @@
   font-size: var(--text-compact);
 }
 
+/* The status strip and the legend are ruled rows above the toolbar. */
+.atlas-dialog > .dialog-intro {
+  margin: 0;
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
 .atlas-legend {
-  margin: var(--space-2) 0 var(--space-5);
+  margin: 0 0 var(--space-3);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-line-soft);
   color: var(--color-ink-muted);
   font-size: var(--text-compact);
 }
 
 .atlas-regions {
+  position: relative;
+  z-index: 1;
   display: grid;
-  min-width: 56rem;
-  grid-template-columns: repeat(3, minmax(16rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
-  gap: var(--space-6);
+  gap: var(--space-4);
   transition: opacity var(--duration-reveal) var(--ease-out);
 }
 
@@ -46,42 +55,27 @@
 
 .atlas-toolbar {
   display: flex;
-  width: fit-content;
   max-width: 100%;
   grid-column: 1 / -1;
   flex-wrap: wrap;
   align-items: center;
-  padding: var(--space-1);
-  gap: var(--space-1);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone-raised);
-}
-
-.atlas-toolbar .control-button {
-  border-color: transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-}
-
-.atlas-toolbar .control-button:hover:not(:disabled, [aria-pressed="true"]) {
-  border-color: transparent;
-  background: var(--color-panel);
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .atlas-toolbar .control-button[aria-pressed="true"] {
-  color: var(--color-on-signal-deep);
-  border-color: var(--color-signal-deep);
-  background: var(--color-signal-deep);
+  color: var(--color-paper);
+  border-color: var(--color-ink);
+  background: var(--color-ink);
 }
 
 .atlas-viewport {
   min-width: 0;
-  min-height: 34rem;
-  padding: var(--space-6);
+  padding: var(--space-4);
   overflow: auto;
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
   touch-action: pan-x pan-y;
   overscroll-behavior: contain;
@@ -89,19 +83,19 @@
 
 .atlas-canvas {
   position: relative;
-  min-height: 30rem;
   transform-origin: center;
   transition:
     transform var(--duration-reveal) var(--ease-out),
     opacity var(--duration-reveal) var(--ease-out);
 }
 
+/* The SVG meets its frame, so no territory leaves it at any width. */
 .atlas-illustration {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  color: color-mix(in oklab, var(--color-ink-muted) 45%, transparent);
+  color: var(--color-ink-muted);
   pointer-events: none;
 }
 
@@ -152,19 +146,13 @@
   stroke-linejoin: round;
 }
 
-.atlas-regions {
-  position: relative;
-  z-index: 1;
-}
-
 .atlas-detail {
   min-width: 0;
   padding: var(--space-4);
   align-self: start;
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--color-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .atlas-detail h3 {
@@ -172,7 +160,7 @@
   margin: var(--space-1) 0 var(--space-2);
   font-family: var(--font-display);
   font-size: 1.5rem;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -202,19 +190,19 @@
 }
 
 .atlas-detail__note {
+  margin: 0;
   padding: var(--space-3);
-  border: 1px solid color-mix(in oklab, var(--color-signal) 40%, transparent);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  background: var(--color-signal-soft);
+  background: var(--color-water-1);
   font-weight: 600;
 }
 
-.atlas-detail__storylet {
+.atlas-detail__storylet,
+.atlas-detail__fossils {
   margin-top: var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone-raised);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
 }
 
 .atlas-detail__storylet h4 {
@@ -232,14 +220,6 @@
   color: var(--color-ink-muted);
   font-family: var(--font-utility);
   font-size: var(--text-compact);
-}
-
-.atlas-detail__fossils {
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-md);
-  background: var(--color-stone-raised);
 }
 
 .atlas-detail__fossils h4 {
@@ -260,15 +240,20 @@
   min-width: 0;
 }
 
-.atlas-fossil-stamp {
+/* A tag: ink outline, 4px radius, no fill. */
+.atlas-fossil-stamp,
+.atlas-landmark .atlas-node__fossil,
+.atlas-sigil {
   display: inline-block;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  color: var(--color-on-signal-deep);
-  background: var(--color-signal-deep);
-  font-family: var(--font-utility);
+  width: fit-content;
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
   font-size: var(--text-compact);
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .atlas-detail__fossil-list p {
@@ -294,21 +279,18 @@
   --territory: var(--region-windcall);
   grid-column: 2;
   grid-row: 1;
-  margin-top: var(--space-8);
 }
 
 .atlas-region:nth-child(3) {
   --territory: var(--region-sunspan);
   grid-column: 3;
   grid-row: 1;
-  margin-top: var(--space-2);
 }
 
 .atlas-region:nth-child(4) {
   --territory: var(--region-tideglass);
   grid-column: 2;
   grid-row: 2;
-  margin-top: var(--space-2);
 }
 
 .atlas-region:nth-child(5) {
@@ -318,7 +300,6 @@
 }
 
 .atlas-regions[data-view="list"] {
-  min-width: 0;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
@@ -326,40 +307,17 @@
 .atlas-regions[data-view="list"] .atlas-region {
   grid-column: 1;
   grid-row: auto;
-  margin-top: 0;
 }
 
 .atlas-region {
   position: relative;
   display: grid;
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-3);
   gap: var(--space-3);
-  border: 1px solid color-mix(in oklab, var(--territory, var(--region-windcall)) 44%, transparent);
-  border-radius: var(--radius-lg);
-  background: color-mix(in oklab, var(--territory, var(--region-windcall)) 9%, var(--color-panel));
-  box-shadow: 0 12px 28px -18px color-mix(in oklab, var(--territory, var(--region-windcall)) 80%, transparent);
-}
-
-.atlas-regions[data-view="map"] .atlas-region:not(:last-child)::after {
-  position: absolute;
-  width: var(--space-8);
-  border-top: 3px dotted color-mix(in oklab, var(--color-ink-muted) 55%, transparent);
-  content: "";
-  pointer-events: none;
-}
-
-.atlas-regions[data-view="map"] .atlas-region:nth-child(1)::after,
-.atlas-regions[data-view="map"] .atlas-region:nth-child(4)::after {
-  top: 50%;
-  right: calc(var(--space-8) * -1);
-}
-
-.atlas-regions[data-view="map"] .atlas-region:nth-child(2)::after,
-.atlas-regions[data-view="map"] .atlas-region:nth-child(3)::after {
-  bottom: calc(var(--space-6) * -1);
-  left: 50%;
-  transform: rotate(90deg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
 }
 
 .atlas-region__heading {
@@ -374,38 +332,34 @@
   gap: var(--space-2);
   font-family: var(--font-display);
   font-size: 1.25rem;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
+/* The Region Hue swatch carries an ink edge, so it reads on paper and on Night. */
 .atlas-region__heading h3::before {
   width: 0.75rem;
   height: 0.75rem;
   flex: none;
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
   background: var(--territory, var(--region-windcall));
   content: "";
 }
 
-.atlas-region__heading span,
-.atlas-sigil {
+.atlas-region__heading span {
   color: var(--color-ink-muted);
   font-size: var(--text-compact);
   line-height: 1.4;
 }
 
 .atlas-sigil {
-  width: fit-content;
   margin: 0;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--color-panel);
-  font-weight: 600;
 }
 
 .atlas-sigil[data-restored="true"] {
-  color: var(--color-on-signal-deep);
-  background: var(--color-signal-deep);
+  color: var(--color-paper);
+  background: var(--color-ink);
 }
 
 .atlas-nodes {
@@ -418,6 +372,7 @@
   list-style: none;
 }
 
+/* A landmark is a Stamp: a circled number, filled when complete and dashed when ahead. */
 .atlas-landmark {
   position: relative;
   display: grid;
@@ -440,7 +395,7 @@
 }
 
 .atlas-landmark:hover:not(:disabled) {
-  border-color: var(--territory, var(--color-signal));
+  border-color: var(--color-line);
 }
 
 .atlas-landmark:active {
@@ -453,8 +408,8 @@
 }
 
 .atlas-landmark[aria-pressed="true"] {
-  border-color: var(--color-signal-deep);
-  box-shadow: 0 0 0 1px var(--color-signal-deep);
+  border-color: var(--color-line);
+  box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
 .atlas-landmark:disabled {
@@ -462,61 +417,59 @@
   opacity: 0.58;
 }
 
-.atlas-landmark[data-state="error"] {
-  border-color: var(--color-warden);
-}
-
-.atlas-landmark[data-state="success"] {
-  border-color: var(--color-gate);
-}
-
 .atlas-landmark strong {
-  font-family: var(--font-utility);
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1.5px dashed var(--color-ink-muted);
+  border-radius: 50%;
+  font-family: var(--font-display);
   font-size: 1rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .atlas-landmark span {
   color: var(--color-ink-muted);
-  font-size: 0.7rem;
+  font-size: var(--text-compact);
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
+/* The state label keeps clear of the corner state mark. */
+.atlas-landmark > span:not([class]) {
+  padding-inline-end: var(--space-4);
+}
+
+/* The Gate flag: a Signal diamond on a Gate Warden milestone. */
 .atlas-landmark .atlas-node__milestone {
   position: absolute;
   top: var(--space-1);
   right: var(--space-1);
-  color: var(--color-warden);
-  font-size: 0.72rem;
+  color: var(--color-signal-deep);
+  font-size: var(--text-compact);
   line-height: 1;
 }
 
 .atlas-landmark .atlas-node__fossil {
-  display: inline-block;
-  width: fit-content;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  color: var(--color-on-signal-deep);
-  background: var(--color-signal-deep);
-  font-family: var(--font-utility);
-  font-size: 0.62rem;
-  font-weight: 700;
+  padding: 0 var(--space-1);
+  font-size: var(--text-compact);
 }
 
 .atlas-landmark .atlas-node__state-mark {
   position: absolute;
   right: var(--space-1);
   bottom: var(--space-1);
-  width: 0.72rem;
-  height: 0.72rem;
+  width: 0.75rem;
+  height: 0.75rem;
   border: 1.5px solid var(--color-ink-muted);
-  border-radius: 0.2rem;
+  border-radius: var(--radius-md);
   background: var(--color-panel);
 }
 
 .atlas-landmark .atlas-node__state-mark[data-state-mark="stamp"] {
-  border-radius: var(--radius-pill);
-  background: var(--color-echo-soft);
+  border-radius: 50%;
+  background: var(--color-ink);
 }
 
 .atlas-landmark .atlas-node__state-mark[data-state-mark="signal"] {
@@ -529,38 +482,38 @@
   border-style: dashed;
 }
 
-.atlas-landmark[data-state="completed"],
-.atlas-landmark[data-state="completed-milestone"] {
-  border-color: color-mix(in oklab, var(--color-gate) 55%, transparent);
-  background: var(--color-echo-soft);
+.atlas-landmark[data-state="completed"] strong,
+.atlas-landmark[data-state="completed-milestone"] strong {
+  color: var(--color-paper);
+  border-style: solid;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
 }
 
-.atlas-landmark[data-state="current"] {
-  border-color: var(--color-signal-deep);
+.atlas-landmark[data-state="current"],
+.atlas-landmark[aria-current="step"] {
+  border-color: var(--color-line);
+  border-width: 2px;
+  color: var(--color-ink);
 }
 
-.atlas-landmark[data-state="milestone"],
-.atlas-landmark[data-state="completed-milestone"] {
-  border-style: dashed;
-  border-width: 1.5px;
-  border-color: color-mix(in oklab, var(--color-warden) 55%, transparent);
+.atlas-landmark[data-state="current"] strong,
+.atlas-landmark[aria-current="step"] strong {
+  border-style: solid;
+  border-color: var(--color-ink);
 }
 
 .atlas-landmark[data-state="milestone"] strong,
 .atlas-landmark[data-state="completed-milestone"] strong {
-  color: var(--color-warden);
-}
-
-.atlas-landmark[data-state="completed-milestone"] strong,
-.atlas-landmark[aria-current="step"] strong {
-  color: var(--color-ink);
-}
-
-.atlas-landmark[aria-current="step"] {
   border-color: var(--color-signal-deep);
-  color: var(--color-ink);
-  background: var(--color-signal-soft);
-  box-shadow: 0 0 0 1px var(--color-signal-deep);
+}
+
+.atlas-landmark[data-state="milestone"] strong {
+  color: var(--color-signal-deep);
+}
+
+.atlas-landmark[data-state="completed-milestone"] strong {
+  background: var(--color-signal-deep);
 }
 
 @media (max-width: 58rem) {
@@ -578,14 +531,13 @@
   }
 
   .atlas-viewport {
-    min-height: 24rem;
-    padding: var(--space-3);
+    padding: 0;
+    border: 0;
     scroll-padding-block-end: 44dvh;
   }
 
   .atlas-regions,
   .atlas-regions[data-view="map"] {
-    min-width: 0;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-3);
   }
@@ -593,22 +545,20 @@
   .atlas-regions[data-view="map"] .atlas-region {
     grid-column: 1;
     grid-row: auto;
-    margin-top: 0;
   }
 
-  .atlas-regions[data-view="map"] .atlas-region:not(:last-child)::after {
-    display: none;
-  }
-
+  /* The detail is a bottom sheet under the map, so the map keeps the top of the screen. */
   .atlas-detail {
     position: fixed;
     display: flex;
-    inset-inline: max(var(--space-2), calc((100vw - 42rem) / 2));
-    bottom: var(--space-4);
+    inset-inline: calc(var(--space-1) + 1px);
+    bottom: calc(var(--space-1) + 1px);
     z-index: 1;
-    max-height: min(24rem, 40dvh);
+    max-height: min(20rem, 40dvh);
     flex-direction: column;
     overflow: auto;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
 
   .atlas-detail > button {

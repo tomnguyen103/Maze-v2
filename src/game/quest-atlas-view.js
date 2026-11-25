@@ -456,7 +456,7 @@ export function renderAtlasIllustrationMarkup(regionIds) {
       `<path class="atlas-illustration__gate" d="M${gx} ${gy + 30} V${gy} L${gx + 16} ${gy + 6} L${gx} ${gy + 12}"/>`
     ].join("");
   }).join("");
-  return `<svg class="atlas-illustration" data-atlas-illustration aria-hidden="true" viewBox="0 0 900 620" preserveAspectRatio="none"><path class="atlas-illustration__trail" d="M130 155 C250 70 330 210 440 145 S650 80 770 170 C690 270 585 305 500 385 S285 540 145 445"/>${territories}</svg>`;
+  return `<svg class="atlas-illustration" data-atlas-illustration aria-hidden="true" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"><path class="atlas-illustration__trail" d="M130 155 C250 70 330 210 440 145 S650 80 770 170 C690 270 585 305 500 385 S285 540 145 445"/>${territories}</svg>`;
 }
 
 function createAtlasIllustration() {
