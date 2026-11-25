@@ -42,7 +42,7 @@ values. The three water screens are literal values in each block, never aliases.
 
 ### Board marks
 
-Each mark names its token in `tokens.css` and the ground it must reach 3:1 against.
+Each mark names its token in `tokens.css` and the ground it sits on. Non-text marks reach 3:1 against that ground. Text reaches 4.5:1.
 
 | Mark | Light | Night | Ground |
 | :-- | :-- | :-- | :-- |
@@ -76,11 +76,11 @@ Each mark names its token in `tokens.css` and the ground it must reach 3:1 again
 
 - Text pairs reach at least 4.5:1 in light and Night: ink on paper, stone, and the
   water screens; accent ink on Signal; and the Signal deep text on paper.
-- Non-text parts reach at least 3:1: focus rings, control edges, walls against
-  passages, and the Constellation tiles on the night ground.
-- The coastline pair: the Coastline in ink against the Passage and against the Land,
-  3:1 or more in light and Night. The coastline carries the wall edge. The hatch is
-  texture and carries no contrast duty.
+- Non-text parts reach at least 3:1: focus rings, control edges, the Coastline against
+  the Passage and the Land, and the Constellation tiles on the night ground.
+- The coastline pair: the Coastline in ink reaches 3:1 or more against the Passage and
+  against the Land, in light and Night. The coastline marks the land edge. The hatch on
+  the Land is texture and carries no contrast duty.
 - A colour mix uses `in oklab`.
 
 ## Typography
@@ -138,10 +138,10 @@ Each mark names its token in `tokens.css` and the ground it must reach 3:1 again
 
 - **Passages**: water passages. Passage tiles fill with the Passage water colour and
   merge into one water shape on hatched land.
-- **Land**: the Land colour with a hatch of 1px ink lines at 45 degrees and a 4px pitch,
-  drawn inside each merged wall run. Land has no tile outline.
+- **Land**: the Land colour with a hatch of 1px ink lines at 45 degrees. The hatch pitch
+  is 4px, set in integer device pixels. The hatch is drawn inside each merged wall run. Land has no tile outline.
 - **Coastline**: one ink line where water meets land.
-- **Fog**: 4 to 6% stipple coverage from an 8 by 8 pattern tile, over unknown tiles.
+- **Fog**: 4 to 6% stipple coverage from an 8 by 8 pattern tile, over unknown tiles. Fog dots cover fog cells only.
 - **Position fix**: the Explorer reads as a ringed mark, not a glowing disc.
 - **Danger line**: a dotted ink line around a Warden. Red never marks the board.
 - **Wardens**: four marks, each with its own silhouette.
@@ -153,7 +153,7 @@ Each mark names its token in `tokens.css` and the ground it must reach 3:1 again
 
 ## Chart devices
 
-- **Neatline**: 1px ink around the board with one 2px tick per tile. The Grid reference
+- **Neatline**: 1px ink around the board with one 2px tick per tile line, so size + 1 ticks per side. The Grid reference
   sits outside the frame in 10px Geist Mono.
 - **Grid reference**: column letters and row numbers that name a tile.
 - **Title block**: a corner block with two rules. The Labyrinth number sets in Archivo.

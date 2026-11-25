@@ -1,14 +1,13 @@
 # Echo Maze premium UI rebuild: Pilot Chart, executed
 
 Status: plan, revision 1. Implementation starts only after the owner replies "approved".
-Date: 2026-11-24. Base commit `020c1ba` on `fix/swarm-audit-safe-fixes` (83 uncommitted files; this plan is not committed).
+Date: 2026-11-24. Base commit `020c1ba` on `fix/swarm-audit-safe-fixes`. This plan is committed.
 
 Sources: `design.md` (Pilot Chart contract), `tokens.css`, `docs/plans/rebuild-v3.md` §6 and P6 (status: plan, awaits "approved"), `GLOSSARY.md`, 90 baseline captures under `.scratch/premium-ui/baseline/` (15 surfaces × light and Night × 375, 1280, 1920 px), five surface critiques and one adversarial synthesis from a seven-agent audit (117 findings, 13 craft references), the impeccable detector (`detect.mjs --json src index.html` exits 0 today), and 13 reference sites read on 2026-11-24. A claim with no capture or code line carries `[code-only]`.
 
-Terms follow `GLOSSARY.md`: Explorer, Labyrinth, Run, Echo, Gate, Warden, Vitality, Pulse, Fog, Readout, Action rail, Title block, Chart notes, Theme Choice, Echo Atlas, Atlas Region, Region Hue, Pilot Chart, Daily Shared Labyrinth, Quest Level, First Light Tutorial, Lantern Journal, Tactics Lab, Run Record, Classroom. New terms this plan names: **Neatline** (the 1px ink frame around the board with tick marks per tile), **Grid reference** (column letters and row numbers outside the Neatline), **Chart device** (a Neatline, a tick border, a title block, a scale bar, a compass rose, a ruled ledger, or a stamp), **Ruled row** (a list row divided by a hairline, with no border box), **Button tier** (primary ink fill, secondary ink outline, tertiary underlined text link).
+Terms follow `GLOSSARY.md`: Explorer, Labyrinth, Run, Echo, Gate, Warden, Vitality, Pulse, Fog, Readout, Action rail, Title block, Chart notes, Theme Choice, Echo Atlas, Atlas Region, Region Hue, Pilot Chart, Daily Shared Labyrinth, Quest Level, First Light Tutorial, Lantern Journal, Tactics Lab, Run Record, Classroom. New terms this plan names: **Neatline** (the 1px ink frame around the board with tick marks per tile line), **Grid reference** (column letters and row numbers outside the Neatline), **Chart device** (a Neatline, a tick border, a title block, a scale bar, a compass rose, a ruled ledger, or a stamp), **Ruled row** (a list row divided by a hairline, with no border box), **Button tier** (primary ink fill, secondary ink outline, tertiary underlined text link).
 
-Review artifacts: the sample screens on the Design canvas at
-<https://claude.ai/artifact/UMbg8huQAwDXUsusNtdJk5> (§10).
+Review artifacts: the v2 sample boards (private canvas) (§10).
 
 ## 1. Verdict
 
@@ -91,7 +90,7 @@ Dropped on contradiction between critics: Pause placement, hatch as the sole wal
 
 Slice S-A writes these sections. The detector cannot check them, so each becomes a line in the capture receipt.
 
-- **Chart devices.** Neatline: 1px ink around the board, 2px tick marks per tile, Grid reference in 10px Geist Mono outside the frame. Title block: a corner block with two rules, Labyrinth number in Archivo, level and ruleset in body type, seed and date on one caption line. Scale bar: the Quest Level ladder on the landing. Ruled ledger: hairline rows, tabular numbers, running heads per band. Stamps: a circled number per completed Labyrinth, filled when complete, dashed when ahead, a Signal flag for a Gate Warden. One compass rose, on the landing only.
+- **Chart devices.** Neatline: 1px ink around the board, 2px tick marks per tile line, Grid reference in 10px Geist Mono outside the frame. Title block: a corner block with two rules, Labyrinth number in Archivo, level and ruleset in body type, seed and date on one caption line. Scale bar: the Quest Level ladder on the landing. Ruled ledger: hairline rows, tabular numbers, running heads per band. Stamps: a circled number per completed Labyrinth, filled when complete, dashed when ahead, a Signal flag for a Gate Warden. One compass rose, on the landing only.
 - **Palette rows.** Wall, Passage, Fog, Explorer, Echo, Danger line, Trail, light and Night, each with its contrast pair.
 - **Dialog anatomy.** Scrim 55% ink; panel 1px ink border, 4px radius, no shadow, paper fill; header band with the title in Archivo, a Geist Mono reference at right, one 2.5rem close square; sticky footer with one primary action; two widths, 36rem and 44rem; full-height sheet under 768px; ink skeleton for a load state; a Signal dot as the only selected mark.
 - **Shared shell.** 76rem container, 64px bar, one ink hairline, wordmark left, route name as a quiet tab, Theme Choice right, identical on every route.
@@ -147,7 +146,7 @@ Effort: S-A and S-B two to three days each; S-C two days; S-D one day; S-E two d
 
 ## 10. Review artifacts
 
-Design canvas: <https://claude.ai/artifact/UMbg8huQAwDXUsusNtdJk5>
+Design canvas: the v2 sample boards (private canvas)
 
 The v2 set (top of the canvas) replaces the v1 set after the owner's review of v1. Each v2 board is a chart plate: Neatline, Grid reference, hatched land, water passages, printed title cartouche, and a scale bar. v2 keeps the v1 copy and tokens and changes the structure.
 
