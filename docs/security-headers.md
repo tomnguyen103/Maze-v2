@@ -32,6 +32,8 @@ both places.** `tests/security-headers.test.js` covers the module and
 A request is TLS when its socket is encrypted or `X-Forwarded-Proto` is `https`.
 `vite preview` serves a production build over plain HTTP. WebKit applies
 `upgrade-insecure-requests` to loopback, so every asset request then fails.
+A TLS proxy in front of `npm start` must send `X-Forwarded-Proto: https`. Without
+that header, the server sends no HSTS and no `upgrade-insecure-requests`.
 
 ## Content Security Policy
 

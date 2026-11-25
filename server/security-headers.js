@@ -138,7 +138,7 @@ export function createSecurityHeadersMiddleware(env = process.env) {
     );
     const forwardedProto = String(
       request.headers?.["x-forwarded-proto"] ?? ""
-    ).split(",")[0].trim();
+    ).split(",")[0].trim().toLowerCase();
     const headers =
       socket?.encrypted || forwardedProto === "https"
         ? secureHeaders
