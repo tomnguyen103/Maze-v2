@@ -73,6 +73,8 @@
   --color-board-light: var(--color-gate);
   --color-board-explorer-ring: var(--color-ink);
   --color-board-explorer-disc: var(--color-paper);
+  --color-board-explorer: var(--color-explorer);
+  --color-board-ink: var(--color-ink);
   --color-danger-line: var(--color-ink);
   --color-board-echo: var(--color-echo);
   --color-pulse: oklch(52% 0.17 250 / 28%);
@@ -81,7 +83,10 @@
   --board-ink: oklch(18% 0.012 250);
   --board-hatch: oklch(18% 0.012 250 / 30%);
   --board-fog-dot: oklch(18% 0.012 250 / 80%);
-  --board-ring: oklch(54% 0.01 250);
+  --board-explorer: oklch(46% 0.17 250);
+  --board-explorer-sunset: oklch(56% 0.2 30);
+  --board-explorer-violet: oklch(50% 0.2 295);
+  --board-explorer-gold: oklch(62% 0.15 78);
   --board-gate: oklch(58% 0.24 340);
   --board-echo: oklch(52% 0.17 250);
   --access-fog: oklch(90% 0.02 232);

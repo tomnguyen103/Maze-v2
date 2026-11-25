@@ -28,20 +28,23 @@ body {
 
 :root[data-explorer-palette="sunset"] {
   --color-explorer: var(--color-explorer-sunset);
+  --board-explorer: var(--board-explorer-sunset);
   --color-explorer-bright: var(--color-explorer-sunset-bright);
 }
 
 :root[data-explorer-palette="violet"] {
   --color-explorer: var(--color-explorer-violet);
+  --board-explorer: var(--board-explorer-violet);
   --color-explorer-bright: var(--color-explorer-violet-bright);
 }
 
 :root[data-explorer-palette="gold"] {
   --color-explorer: var(--color-explorer-gold);
+  --board-explorer: var(--board-explorer-gold);
   --color-explorer-bright: var(--color-explorer-gold-bright);
 }
 
-/* A forced mode paints a light passage in every theme, so its marks keep the light ink. */
+/* A forced mode paints a light passage in every theme, so the marks, the Explorer disc and the overlay ink keep the light values. */
 :root[data-playground-palette="twilight"],
 :root[data-playground-palette="sea-glass"],
 :root[data-playground-palette="dusk"],
@@ -52,7 +55,10 @@ body {
   --color-coastline: var(--board-ink);
   --color-board-warden: var(--board-ink);
   --color-danger-line: var(--board-ink);
-  --color-board-explorer-ring: var(--board-ring);
+  --color-board-explorer-ring: var(--board-ink);
+  --color-board-explorer-disc: var(--board-paper);
+  --color-board-explorer: var(--board-explorer);
+  --color-board-ink: var(--board-ink);
   --color-board-gate: var(--board-gate);
   --color-board-light: var(--board-gate);
   --color-board-echo: var(--board-echo);
@@ -546,6 +552,14 @@ a:hover {
 .canvas-frame:has(#maze-canvas:focus-visible) {
   outline: 0.2rem solid var(--color-focus);
   outline-offset: 0.2rem;
+}
+
+/* A browser without :has() keeps a visible focus ring on the canvas itself. */
+@supports not selector(:has(*)) {
+  #maze-canvas:focus-visible {
+    outline: 0.2rem solid var(--color-focus);
+    outline-offset: 0;
+  }
 }
 
 /* Action rail */
@@ -1543,7 +1557,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .canvas-frame {
-    width: min(100%, 40dvh, 28rem);
+    width: min(100%, max(40dvh, 6rem), 28rem);
   }
 
   .action-rail {
@@ -1698,7 +1712,7 @@ body[data-run-mode="first-light"] .play-workbench {
   }
 
   .canvas-frame {
-    width: min(100%, 38dvh, 26rem);
+    width: min(100%, max(38dvh, 6rem), 26rem);
   }
 
   .pulse-button small {
@@ -1740,6 +1754,11 @@ body[data-run-mode="first-light"] .play-workbench {
 
   .canvas-frame {
     width: 100%;
+  }
+
+  /* The frame sits 8px from the screen edge, so the ring offset shrinks to keep it inside the clip. */
+  .canvas-frame:has(#maze-canvas:focus-visible) {
+    outline-offset: 0.1rem;
   }
 }
 

@@ -52,7 +52,7 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
     height: 640,
     width: 640
   };
-  /** @type {Array<{ width: number, height: number, fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
+  /** @type {Array<{ width: number, height: number, contextArgs: unknown[], fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
   const tiles = [];
   const createTile = (/** @type {number} */ tileWidth, /** @type {number} */ tileHeight) => {
     /** @type {Array<{ style: string, x: number, y: number, w: number, h: number }>} */
@@ -63,7 +63,18 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
         fills.push({ style: tileContext.fillStyle, x, y, w, h });
       }
     };
-    const tile = { width: tileWidth, height: tileHeight, fills, getContext: () => tileContext };
+    /** @type {unknown[]} */
+    const contextArgs = [];
+    const tile = {
+      width: tileWidth,
+      height: tileHeight,
+      fills,
+      contextArgs,
+      getContext: (/** @type {unknown[]} */ ...args) => {
+        contextArgs.push(...args);
+        return tileContext;
+      }
+    };
     tiles.push(tile);
     return /** @type {never} */ (tile);
   };
@@ -301,7 +312,8 @@ function contrastOver(mark, ground) {
 const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-coastline", "--color-passage", 3],
   ["--color-coastline", "--color-land", 3],
-  ["--color-board-explorer-ring", "--color-passage", 3],
+  // The ring is the board ink in every mode, so it reads at the text floor.
+  ["--color-board-explorer-ring", "--color-passage", 4.5],
   ["--color-board-warden", "--color-passage", 3],
   ["--color-danger-line", "--color-passage", 3],
   ["--color-board-gate", "--color-passage", 3],
@@ -309,8 +321,10 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-light", "--color-passage", 3],
   ["--color-fog-dot", "--color-fog", 3],
   // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
-  ["--color-explorer", DISC, 3],
-  ["--color-board-explorer-ring", DISC, 3],
+  ["--color-board-explorer", DISC, 3],
+  ["--color-board-explorer-ring", DISC, 4.5],
+  // The paused band and the challenge band write the board ink on the land.
+  ["--color-board-ink", "--color-land", 4.5],
   // Pulse is a wash, so it needs only to show.
   ["--color-pulse", "--color-passage", 1.2],
   ["--color-pulse", "--color-land", 1.2]
@@ -420,6 +434,18 @@ describe("Canvas renderer", () => {
     expect(context.createPattern).toHaveBeenCalledTimes(1);
     expect(context.rect).not.toHaveBeenCalled();
     expect(fogFills).toEqual([{ pattern: true }, { pattern: true }]);
+  });
+
+  it("US-02.4 paints each pattern tile on a software canvas, so a reload gives the same pixels", () => {
+    const { renderer, tiles } = stubCanvas();
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+
+    renderer.render({ ...run, pulseVisible: [], revealed: ["0,0"] });
+
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) {
+      expect(tile.contextArgs).toEqual(["2d", { willReadFrequently: true }]);
+    }
   });
 
   it("US-02.2 builds an integer pixel Fog tile with 4 to 6 percent dots at each device ratio", () => {
@@ -758,7 +784,7 @@ describe("Canvas renderer", () => {
     context.fillRect = vi.fn((_x, y, w, h) => {
       bands.push({ style: fillStyle, y, w, h });
     });
-    document.body.style.setProperty("--color-ink", "rgb(4, 4, 4)");
+    document.body.style.setProperty("--color-board-ink", "rgb(4, 4, 4)");
     document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
     document.body.style.setProperty("--color-overlay", "rgb(1, 1, 1)");
 
@@ -870,23 +896,24 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(coast[0].path.every((step) => !step.startsWith("arc"))).toBe(true);
     // The wall (0,0) borders the passage (0,1) at x = 320 and the passage (1,0) at y = 320.
     const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
-    for (const [x, y] of points) {
-      const near = (/** @type {number} */ value, /** @type {number} */ target) =>
-        Math.abs(value - target) <= 0.5;
-      const onVerticalEdge = near(x, 320) && (near(y, 0) || near(y, 320));
-      const onHorizontalEdge = near(y, 320) && (near(x, 0) || near(x, 320));
-      expect(onVerticalEdge || onHorizontalEdge, `${x},${y}`).toBe(true);
-    }
-    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels.
+    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. The half width, rounded up, is 10.
     expect(widths).toContain(19);
-    // An odd width sits on a half pixel across the edge; the ends sit on whole pixels; caps are butt.
+    const reach = 10;
+    // An odd width sits on a half pixel across the edge and the ends sit on whole pixels.
     expect(points.every(([x, y]) => (x === 320.5 && Number.isInteger(y)) || (y === 320.5 && Number.isInteger(x)))).toBe(true);
+    // Each end passes the tile corner by the half width. The corner square of the two strokes has no notch.
+    const horizontal = points.filter(([, y]) => y === 320.5).map(([x]) => x);
+    const vertical = points.filter(([x]) => x === 320.5).map(([, y]) => y);
+    expect(Math.min(...horizontal)).toBe(0 - reach);
+    expect(Math.max(...horizontal)).toBe(320 + reach);
+    expect(Math.min(...vertical)).toBe(0 - reach);
+    expect(Math.max(...vertical)).toBe(320 + reach);
     expect(/** @type {Record<string, unknown>} */ (context).lineCap).toBe("butt");
   });
 
   it("US-02.1 paints the Explorer as an ink ring on a paper disc with an Explorer dot", () => {
     document.body.style.setProperty("--color-board-explorer-ring", "rgb(5, 5, 5)");
-    document.body.style.setProperty("--color-explorer", "rgb(6, 6, 6)");
+    document.body.style.setProperty("--color-board-explorer", "rgb(6, 6, 6)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
     let lineWidth = 0;
@@ -1021,6 +1048,19 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(failures).toEqual([]);
   });
 
+  it("US-01.2 paints the Explorer disc in the forced light paper in every forced mode", () => {
+    for (const [theme, base] of Object.entries(THEMES)) {
+      for (const [mode, selector] of Object.entries(MODES)) {
+        const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
+        const expected = resolveColor(tokens, selector ? "--board-paper" : "--color-paper");
+        expect(resolveColor(tokens, DISC).lab, `${theme}/${mode}`).toEqual(expected.lab);
+        const ring = resolveColor(tokens, "--color-board-explorer-ring").lab;
+        const ink = resolveColor(tokens, selector ? "--board-ink" : "--color-ink").lab;
+        expect(ring, `${theme}/${mode} ring`).toEqual(ink);
+      }
+    }
+  });
+
   it("US-01.2 keeps the Pulse wash translucent and the coastline opaque in each theme and mode", () => {
     for (const base of Object.values(THEMES)) {
       for (const selector of Object.values(MODES)) {
@@ -1068,6 +1108,11 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const frame = ruleOf(".canvas-frame:has(#maze-canvas:focus-visible)");
     expect(frame).toMatch(/outline:\s*0\.2rem solid var\(--color-focus\)/);
     expect(frame).toMatch(/outline-offset:\s*0\.2rem/);
+  });
+
+  it("US-03.1 keeps a canvas focus ring in a browser without :has()", () => {
+    const fallback = daylightCss.match(/@supports not selector\(:has\(\*\)\)\s*\{\s*#maze-canvas:focus-visible\s*\{([^{}]*)\}/)?.[1] ?? "";
+    expect(fallback).toMatch(/outline:\s*0\.2rem solid var\(--color-focus\)/);
   });
 
   it("US-08.1 leaves the passage colour to the canvas tokens, so no Region theme tints it", () => {

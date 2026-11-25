@@ -80,7 +80,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   function cachedPattern(key, side, paint) {
     if (!patterns.has(key)) {
       const tile = createTile(side, side);
-      const tileContext = /** @type {CanvasRenderingContext2D | null} */ (tile.getContext("2d"));
+      // Software raster: a GPU tile and a CPU tile round translucent dots differently, which shows after a reload.
+      const tileContext = /** @type {CanvasRenderingContext2D | null} */ (
+        tile.getContext("2d", { willReadFrequently: true })
+      );
       let pattern = null;
       if (tileContext) {
         paint(tileContext);
@@ -232,7 +235,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     if (run.status === "paused") {
       const fontSize = Math.max(22, canvas.width * 0.045);
       drawBand(fontSize * 2.6);
-      context.fillStyle = palette.ink;
+      context.fillStyle = palette.boardInk;
       context.font = `700 ${fontSize}px ${palette.fontBody}`;
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
     } else if (run.status === "challenge") {
@@ -242,7 +245,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
       const gateWarden = run.challenge?.kind === "gate-warden";
       drawBand(gap + fontSize * 2.4);
       const headingY = canvas.height / 2 - gap / 2;
-      context.fillStyle = palette.ink;
+      context.fillStyle = palette.boardInk;
       context.font = `700 ${fontSize}px ${palette.fontBody}`;
       context.fillText(gateWarden ? "GATE WARDEN" : "WARDEN CHALLENGE", canvas.width / 2, headingY);
       context.font = `500 ${subSize}px ${palette.fontBody}`;
@@ -273,7 +276,7 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const band = Math.round(height);
     context.fillStyle = palette.land;
     context.fillRect(0, top, canvas.width, band);
-    context.fillStyle = palette.ink;
+    context.fillStyle = palette.boardInk;
     context.fillRect(0, top, canvas.width, unit);
     context.fillRect(0, top + band - unit, canvas.width, unit);
     context.textAlign = "center";
@@ -431,8 +434,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     const size = run.labyrinth.length;
     const width = Math.max(1, Math.round(tile * 0.06));
     // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
-    // Along the edge, the ends sit on whole pixels and meet the tile corners exactly.
+    // Along the edge, the ends sit on whole pixels.
     const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
+    // Each end reaches half the width, rounded up, past the tile corner. A convex land corner then has no notch.
+    const reach = Math.ceil(width / 2);
     const along = (/** @type {number} */ edge) => Math.round(edge);
     context.beginPath();
     let edges = 0;
@@ -448,12 +453,12 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
           const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
           if (dCol === 0) {
             const y = across(edgeRow * tile);
-            context.moveTo(along(edgeCol * tile), y);
-            context.lineTo(along((edgeCol + 1) * tile), y);
+            context.moveTo(along(edgeCol * tile) - reach, y);
+            context.lineTo(along((edgeCol + 1) * tile) + reach, y);
           } else {
             const x = across(edgeCol * tile);
-            context.moveTo(x, along(edgeRow * tile));
-            context.lineTo(x, along((edgeRow + 1) * tile));
+            context.moveTo(x, along(edgeRow * tile) - reach);
+            context.lineTo(x, along((edgeRow + 1) * tile) + reach);
           }
           edges += 1;
         }
@@ -888,7 +893,8 @@ function readPalette() {
     coastline: color("--color-coastline", FALLBACK_PALETTE.coastline),
     danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
     echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
-    explorer: color("--color-explorer", FALLBACK_PALETTE.explorer),
+    boardInk: color("--color-board-ink", FALLBACK_PALETTE.boardInk),
+    explorer: color("--color-board-explorer", FALLBACK_PALETTE.explorer),
     explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
     explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
     fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
@@ -913,6 +919,7 @@ function readPalette() {
 // Used when a CSS variable is missing, so the board never paints with an empty style.
 // The values equal the light block of tokens.css.
 const FALLBACK_PALETTE = {
+  boardInk: "oklch(18% 0.012 250)",
   coastline: "oklch(18% 0.012 250)",
   danger: "oklch(18% 0.012 250)",
   echo: "oklch(52% 0.17 250)",
