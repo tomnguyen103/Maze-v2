@@ -38,6 +38,16 @@ Active Run Recovery, Run Records, shared links, and replay.
 5. `windways-v1` stays known for replay, Active Run Recovery, Run Records, offline
    receipts, and shared links. Its generation keeps the legacy check, so each v1 seed
    replays exactly.
+   Amendment, 2026-11-26: v1 is replay-only for play.
+   - Restart and Retry rebuild the same seed on `windways-v2` with a new run ID
+     (`currentRunRuleset` in `src/game/run-ruleset.js`).
+   - Active Run Recovery drops a saved v1 Run when the Explorer can reach a tile
+     with no route to the Gate or an uncollected Echo (`explorerCanBeTrapped` in
+     `src/game/game-session.js`). A fresh v2 Run starts with a notice.
+   - A player's own v1 locator with no recovered Run also starts a fresh v2 Run
+     (`mustRestartOnCurrentRuleset` in `src/game/active-run-locator.js`).
+   - A recovered v1 Run with no such tile continues on v1.
+   - A shared link without the player's own run ID and a Run Record replay keep v1.
 6. `classic-v1`, `echo-hush-v1`, `echo-bridges-v1`, `tide-doors-v1`, and
    `warden-bells-v1` keep their revision. These rulesets add no one-way move, so the
    check never rejects their placement (item 3). `tests/twist-generation-golden.test.js`

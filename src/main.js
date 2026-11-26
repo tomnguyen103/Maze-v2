@@ -5,6 +5,7 @@ import "./game/first-light.css";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
+  mustRestartOnCurrentRuleset,
   saveActiveRunLocator
 } from "./game/active-run-locator.js";
 import {
@@ -47,6 +48,7 @@ import {
 } from "./game/run-action-log.js";
 import {
   CLASSIC_RULESET_REVISION,
+  currentRunRuleset,
   getClassicRunRuleset,
   getQuestRunRuleset,
   normalizeRunRuleset
@@ -2575,14 +2577,30 @@ async function startFreshRun(replaceRunIdentity = false) {
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
+    const storedRuleset = normalizeRunRuleset(
+      rulesetIdentityFromLocator(activeRunLocator),
+      labyrinthNumber
+    );
+    const ruleset = storedRuleset && currentRunRuleset(storedRuleset);
+    // A legacy revision can trap the Explorer (ADR 0053), so Restart and
+    // Retry rebuild the same seed on the current revision.
+    const upgrade = Boolean(
+      storedRuleset && ruleset && ruleset.revision !== storedRuleset.revision
+    );
     locator = {
       ...withRunAccessId(
-        replaceRunIdentity
+        replaceRunIdentity || upgrade
           ? {
               ...activeRunLocator,
               version: 3,
               runId: createRunAccessId(),
-              pending: false
+              pending: false,
+              ...(upgrade && ruleset
+                ? {
+                    atlasRegionId: ruleset.atlasRegionId,
+                    rulesetRevision: ruleset.revision
+                  }
+                : {})
             }
           : activeRunLocator
       ),
@@ -2646,6 +2664,28 @@ async function startSharedRun(
   const recoveredRun = canRecover
     ? await loadRecoveredRun(locator)
     : null;
+  // A share link without the player's own run ID keeps its legacy revision.
+  const ownRun =
+    typeof runId === "string" && activeRunLocator?.runId === runId;
+  if (ownRun && mustRestartOnCurrentRuleset(ruleset, recoveredRun)) {
+    if (recoveredRun) {
+      const cleared = activeRunRecoveryController?.clear();
+      if (cleared?.status === "unavailable") {
+        reportActiveRunRecoveryUnavailable();
+      }
+    }
+    const started = await startFreshRun(true);
+    if (started) {
+      const notice =
+        "This saved Run used an older Windway layout that could trap the Explorer. A fresh Run started.";
+      announce(notice);
+      showEvent(notice);
+    }
+    if (activeRunRecoveryUnavailableReported) {
+      reportActiveRunRecoveryUnavailable(true);
+    }
+    return started;
+  }
   if (!canRecover) {
     await beginActiveRunRecovery(locator);
   }

@@ -81,6 +81,22 @@ export function getQuestRunRuleset(labyrinthNumber) {
 }
 
 /**
+ * The revision that a new Run starts on for the same Atlas Region and Rules
+ * choice. A legacy Quest revision moves to the current one; Classic Rules and
+ * current revisions stay as they are (ADR 0053).
+ *
+ * @param {Readonly<{ atlasRegionId: string, revision: string, label: string }>} ruleset
+ */
+export function currentRunRuleset(ruleset) {
+  const legacy = LEGACY_QUEST_RULESETS.some(
+    (entry) =>
+      entry.atlasRegionId === ruleset.atlasRegionId &&
+      entry.revision === ruleset.revision
+  );
+  return legacy ? { ...QUEST_RULESETS[ruleset.atlasRegionId] } : ruleset;
+}
+
+/**
  * Missing ruleset identity is legacy Classic Rules. Present identity must
  * describe the exact Atlas Region implied by the Labyrinth Number.
  *
