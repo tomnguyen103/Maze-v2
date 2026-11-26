@@ -166,6 +166,38 @@ describe("Offline Continuity receipt route", () => {
     );
   });
 
+  it("binds the Run's own earlier revision, and the current one when none is sent (ADR 0053)", async () => {
+    const windwayRun = { ...RUN, labyrinthNumber: 5 };
+    const progress = { ...DEFAULT_QUEST_PROGRESS, labyrinthNumber: 5 };
+    /** @param {Record<string, unknown>} extra */
+    const issue = async (extra) => {
+      const harness = createHarness({ grant: windwayRun, questProgress: progress });
+      const result = response();
+      await harness.handler(
+        request({
+          ...windwayRun,
+          ...extra,
+          deviceInstallationNonce: "installation_nonce_01MOSS"
+        }),
+        result.output
+      );
+      return result;
+    };
+
+    const legacy = await issue({ rulesetRevision: "windways-v1" });
+    expect(legacy.output.statusCode).toBe(201);
+    expect(legacy.body().receipt.binding.rulesetRevision).toBe("windways-v1");
+
+    const current = await issue({});
+    expect(current.output.statusCode).toBe(201);
+    expect(current.body().receipt.binding.rulesetRevision).toBe("windways-v2");
+
+    for (const rulesetRevision of ["classic-v1", "echo-hush-v1", "windways-v9", 5]) {
+      const refused = await issue({ rulesetRevision });
+      expect(refused.output.statusCode).toBe(400);
+    }
+  });
+
   it("does not extend a receipt when the same Run is requested again", async () => {
     const harness = createHarness();
     const first = response();

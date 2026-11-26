@@ -45,6 +45,22 @@ const LEGACY_QUEST_RULESETS = Object.freeze([
 ]);
 const ATLAS_REGION_IDS = Object.freeze(Object.keys(QUEST_RULESETS));
 
+/**
+ * True for each Developing Region Twist revision, current or legacy. The
+ * Windways Twist is the Developing Region Twist (ADR 0053).
+ *
+ * @param {string} revision
+ */
+export function isWindwaysRevision(revision) {
+  return (
+    revision === QUEST_RULESETS.developing.revision ||
+    LEGACY_QUEST_RULESETS.some(
+      (legacy) =>
+        legacy.atlasRegionId === "developing" && legacy.revision === revision
+    )
+  );
+}
+
 /** @param {number} labyrinthNumber */
 export function getClassicRunRuleset(labyrinthNumber) {
   return {

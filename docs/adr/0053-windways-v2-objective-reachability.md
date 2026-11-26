@@ -26,17 +26,23 @@ Active Run Recovery, Run Records, shared links, and replay.
    A forward search from the start runs on Over. A reverse search from each objective
    runs on Under. The check accepts when each tile of the forward search reaches each
    objective on Under. A crossing only adds a move, so the check holds for each Echo
-   Bridge state and each Tide Door phase.
+   Bridge state and each Tide Door phase. A sealed Gate turns the last move into a
+   Gate Warden Challenge. The move returns when the Explorer defeats the Gate
+   Warden, so the bound holds.
 3. Windway, Echo Bridge, and Tide Door placement call the check. A Signal Bell adds
-   no move, so Warden Bells place no new edge and need no call.
+   no move, so Warden Bells place no new edge and need no call. The base Labyrinth
+   is one connected maze with two-way passages, so the check accepts every Echo
+   Bridge and Tide Door placement by construction. The call stays as the guard for
+   a later generator that is not connected.
 4. The Developing Region revision becomes `windways-v2`. New Runs start on v2.
 5. `windways-v1` stays known for replay, Active Run Recovery, Run Records, offline
    receipts, and shared links. Its generation keeps the legacy check, so each v1 seed
    replays exactly.
 6. `classic-v1`, `echo-hush-v1`, `echo-bridges-v1`, `tide-doors-v1`, and
-   `warden-bells-v1` keep their revision. The check never rejects a placement in these
-   rulesets on the measured seeds. `tests/twist-generation-golden.test.js` pins their
-   placement fingerprints, so a change fails the suite.
+   `warden-bells-v1` keep their revision. These rulesets add no one-way move, so the
+   check never rejects their placement (item 3). `tests/twist-generation-golden.test.js`
+   pins their placement fingerprints and the `windways-v2` fingerprints, so a change
+   fails the suite.
 7. Migration 0037 adds `windways-v2` to `score_entries_ruleset_partition_check`. The
    v1 and v2 scores keep separate partitions (ADR 0037).
 8. `design.md` invariant I3 names the v2 revision.
@@ -47,7 +53,11 @@ Active Run Recovery, Run Records, shared links, and replay.
   boards: Labyrinths 5 to 8, every Quest Level, 300 seeds each.
 - `tests/no-soft-lock.test.js` runs an exact search over position and mechanism state
   for every ruleset and board size, at least 300 seeds per group. It also pins the
-  `WINDWAY-TRAP-7` trap under v1 and its absence under v2.
+  `WINDWAY-TRAP-7` trap under v1 and its absence under v2. A second search runs
+  `applyAction` itself on each shipped configuration, so a change in the move rule
+  cannot pass on a copy of the rule.
+- An offline receipt binds the revision of its own Run. A v1 Run that starts before
+  the release still gets a v1 receipt after it.
 - Apply migration 0037 before a release that starts v2 Runs. Until then, each
   escaped v2 score insert fails the check.
 - The Tactics Lab drill for Windways uses `windways-v2`. The drill holds no persisted

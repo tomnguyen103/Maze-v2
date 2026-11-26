@@ -310,3 +310,133 @@ describe("US-01 shortcut placement check", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * Real engine search for US-01. Each state is a Run that `applyAction` returns.
+ * The search removes Wardens, because a Warden never changes which tile a Move
+ * reaches. A Gate Warden Challenge gets one correct answer, which is the
+ * shortest rescue. A state that reaches no won state is a trap.
+ *
+ * @param {TestRun} start
+ */
+function engineTrap(start) {
+  /** @param {TestRun} run */
+  const stateKey = (run) =>
+    JSON.stringify([
+      run.explorer.row,
+      run.explorer.col,
+      run.echoes.map((echo) => echo.collected),
+      run.gate,
+      run.tideDoors.map((door) => door.open),
+      run.echoBridges,
+      run.status,
+      Boolean(run.challenge)
+    ]);
+  /** @type {Map<string, TestRun>} */
+  const states = new Map([[stateKey(start), start]]);
+  /** @type {Map<string, string[]>} */
+  const parents = new Map();
+  const queue = [start];
+  /** @param {TestRun} run */
+  const successors = (run) => {
+    if (run.status === "challenge") {
+      const asked = applyAction(run, {
+        type: "provide-question",
+        question: {
+          id: "engine-check",
+          prompt: "Engine check",
+          choices: [{ id: "a", label: "A" }],
+          answerId: "a",
+          explanation: "Engine check.",
+          hint: "Engine check.",
+          difficultyBand: "beginner",
+          topicId: "engine-check",
+          learningObjectiveId: "engine-check"
+        }
+      });
+      return [applyAction(asked, { type: "answer-question", answerId: "a" })];
+    }
+    if (run.status !== "active") return [];
+    return MOVES.map(([direction]) =>
+      applyAction(run, {
+        type: "move",
+        direction: /** @type {import("../src/game/game-session.js").Direction} */ (direction)
+      })
+    );
+  };
+  while (queue.length > 0) {
+    const run = /** @type {TestRun} */ (queue.shift());
+    const key = stateKey(run);
+    for (const next of successors(run)) {
+      const nextKey = stateKey(next);
+      parents.set(nextKey, [...(parents.get(nextKey) ?? []), key]);
+      if (!states.has(nextKey)) {
+        states.set(nextKey, next);
+        queue.push(next);
+      }
+    }
+  }
+  const rescued = new Set(
+    [...states].filter(([, run]) => run.status === "won").map(([key]) => key)
+  );
+  const pending = [...rescued];
+  while (pending.length > 0) {
+    for (const parent of parents.get(/** @type {string} */ (pending.pop())) ?? []) {
+      if (rescued.has(parent)) continue;
+      rescued.add(parent);
+      pending.push(parent);
+    }
+  }
+  return {
+    won: rescued.size > 0,
+    trap: [...states.keys()].find((key) => !rescued.has(key)) ?? null
+  };
+}
+
+describe("US-01 real engine cross-check", () => {
+  const revisions = [
+    ...shippedConfigsBySize(getQuestRunRuleset),
+    ...shippedConfigsBySize(getClassicRunRuleset)
+  ];
+
+  it.each([...new Set(revisions.map((group) => group.ruleset.revision))])(
+    "US-01.1: applyAction leaves no trapped state in %s",
+    (revision) => {
+      /** @type {string[]} */
+      const traps = [];
+      for (const group of revisions.filter((item) => item.ruleset.revision === revision)) {
+        for (const { levelId, labyrinthNumber, config } of group.configs) {
+          const seed = `ENGINE-${levelId}-${labyrinthNumber}`;
+          const run = createRun(seed, { ...config, ruleset: group.ruleset });
+          const result = engineTrap({ ...run, wardens: [] });
+          expect(result.won).toBe(true);
+          if (result.trap) traps.push(`${revision} size ${group.size} seed ${seed} ${result.trap}`);
+        }
+      }
+      expect(traps).toEqual([]);
+    },
+    120_000
+  );
+
+  it("US-01.3: applyAction traps the pinned seed under windways-v1", () => {
+    if (!WINDWAYS_V1) throw new Error("windways-v1 must stay known");
+    const run = createRun("WINDWAY-TRAP-7", {
+      ...getLabyrinthConfig("bright-start", 5),
+      ruleset: WINDWAYS_V1
+    });
+    expect(engineTrap({ ...run, wardens: [] }).trap).not.toBeNull();
+  });
+
+  it("US-01.4: windways-v2 places two Windways on every shipped Developing Labyrinth", () => {
+    for (const group of shippedConfigsBySize(getQuestRunRuleset)) {
+      if (group.ruleset.revision !== "windways-v2") continue;
+      for (const { levelId, labyrinthNumber, config } of group.configs) {
+        const run = createRun(`YIELD-${levelId}-${labyrinthNumber}`, {
+          ...config,
+          ruleset: group.ruleset
+        });
+        expect(run.windways).toHaveLength(2);
+      }
+    }
+  });
+});

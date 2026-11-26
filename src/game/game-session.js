@@ -1,5 +1,6 @@
 import {
   getClassicRunRuleset,
+  isWindwaysRevision,
   normalizeKnownRunRuleset
 } from "./run-ruleset.js";
 import { compareKeys } from "./compare-keys.js";
@@ -1479,13 +1480,6 @@ function createSignalBells(
 }
 
 /**
- * @param {string} revision
- */
-function isWindwaysRevision(revision) {
-  return revision === "windways-v1" || revision === "windways-v2";
-}
-
-/**
  * @param {number[][]} labyrinth
  * @param {Set<string>} protectedTiles
  * @param {() => number} random
@@ -1685,7 +1679,7 @@ function openShortcutAcrossWall(shortcuts, position, wall) {
 }
 
 /**
- * The shared soft-lock check for Twist placement (ADR 0053). It accepts a
+ * The shared Objective Reachability check for Twist placement (ADR 0053). It accepts a
  * placement only when every tile that the Explorer can reach, with every
  * shortcut open, still reaches every objective through edges that are always
  * present. Shortcuts only add edges, so the check holds for each Echo mask and

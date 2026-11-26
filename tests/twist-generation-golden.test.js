@@ -12,9 +12,10 @@ const SEEDS = 20;
 const LABYRINTH_COUNT = 20;
 
 /**
- * Fingerprints captured on main before windways-v2 (ADR 0053). A known
- * revision must replay the same Labyrinth and Twist placement (ADR 0002,
- * ADR 0026).
+ * Fingerprints of each known revision. The v1 and Classic values come from main
+ * before windways-v2 (ADR 0053). The windways-v2 values pin the revision that
+ * new Runs start on. A known revision must replay the same Labyrinth and Twist
+ * placement (ADR 0002, ADR 0026).
  */
 const EXPECTED = Object.freeze({
   "echo-hush-v1:bright-start": "c43a4bf23b009af3",
@@ -23,6 +24,9 @@ const EXPECTED = Object.freeze({
   "windways-v1:bright-start": "4e2ed614533bd405",
   "windways-v1:trail-scout": "4dc8d6d54bfe0500",
   "windways-v1:maze-master": "394d60e3664617ac",
+  "windways-v2:bright-start": "5cfd60aa4e87085a",
+  "windways-v2:trail-scout": "f3e5178138e7df73",
+  "windways-v2:maze-master": "24e3ef262a2b97a5",
   "echo-bridges-v1:bright-start": "4bbd5507848f2bf6",
   "echo-bridges-v1:trail-scout": "fa16073545301c77",
   "echo-bridges-v1:maze-master": "577f09ac202ed143",
@@ -81,12 +85,13 @@ function fingerprints(rulesetFor) {
 }
 
 export const captureFingerprints = () => ({
+  ...fingerprints(getQuestRunRuleset),
   ...fingerprints(legacyRuleset),
   ...fingerprints(getClassicRunRuleset)
 });
 
 describe("US-01.4 replay exactness for known revisions", () => {
-  it("keeps the Labyrinth and Twist placement of every v1 revision and Classic Rules", () => {
+  it("keeps the Labyrinth and Twist placement of every known revision and Classic Rules", () => {
     expect(captureFingerprints()).toEqual(EXPECTED);
   });
 });

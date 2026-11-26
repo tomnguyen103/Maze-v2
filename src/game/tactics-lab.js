@@ -26,7 +26,7 @@ export const TACTICS_TRAIL_TWIST_IDS = Object.freeze([
 ]);
 
 /** @type {Readonly<Record<string, number>>} */
-const TRAIL_TWIST_LABYRINTHS = Object.freeze({
+export const TRAIL_TWIST_LABYRINTHS = Object.freeze({
   "echo-hush-v1": 1,
   "windways-v2": 5,
   "echo-bridges-v1": 9,

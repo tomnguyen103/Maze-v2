@@ -311,7 +311,12 @@ export function createOfflineContinuityRuntime({
   /** @param {OfflineRunWithQuestId} locator */
   async function prepareInternal(locator) {
     try {
-      const result = await client.issueAndPin(locator);
+      // The server binds the revision the Run plays (ADR 0053).
+      const request = {
+        ...locator,
+        rulesetRevision: locator.rulesetRevision ?? getRun().ruleset.revision
+      };
+      const result = await client.issueAndPin(request);
       if (result.ok === true) {
         workerLeaseRunId = locator.runId;
       }
@@ -330,7 +335,7 @@ export function createOfflineContinuityRuntime({
         return false;
       }
       const receipt = /** @type {OfflineReceipt} */ (result.receipt);
-      const identity = offlineRunIdentity(locator, receipt);
+      const identity = offlineRunIdentity(request, receipt);
       if (!identity.rulesetRevision || !identity.contentPackHash) {
         showEvent("Offline Continuity is not ready for this Run.");
         return false;
