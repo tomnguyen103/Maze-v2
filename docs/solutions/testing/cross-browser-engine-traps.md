@@ -13,15 +13,16 @@ chunking. Each trap below is fixed or named in a code comment.
 
 ## App bugs (fixed in app code)
 
-- **Board not square in WebKit.** A percent height on the canvas resolved against an
-  indefinite parent. `#maze-canvas` in `src/daylight.css:522` takes `height: auto` and
+- **Board not square in WebKit.** The canvas frame is an aspect-ratio box with padding.
+  WebKit resolves a percent height inside it against the border box, so the frame grew
+  by its padding. `#maze-canvas` in `src/daylight.css:518` takes `height: auto` and
   `aspect-ratio: 1`.
 - **First header tabs out of reach.** `justify-content: flex-end` on an overflowing row
   pushes the start past the left edge, where no scroll reaches. The row uses
   `safe flex-end` (`src/daylight.css:238`).
 - **Focus not returned after Daily closes (WebKit).** WebKit does not focus a clicked
   button, and it does not return focus to the opener when a modal dialog closes.
-  `openDailyDialog(opener)` at `src/main.js:2219` keeps the opener, and `closeDailyDialog` (`src/main.js:2523`)
+  `openDailyDialog(opener)` at `src/main.js:2220` keeps the opener, and `closeDailyDialog` (`src/main.js:2522`)
   focuses it.
 - **Unused preload of the entry chunk.** A dynamic-import preload map named the HTML
   entry chunk. `vite.config.mjs:17` filters `assets/index-` out, and

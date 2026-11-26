@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * `check` is the pre-push gate and has to stay runnable on a clean clone with
  * no browser download and no network. Playwright needs both. `check:full`
- * (`check` + `test:e2e`) is the pre-release gate and is what a browser matrix
+ * (`check` + `test:e2e` + `test:e2e:xbrowser`) is the pre-release gate and is what a browser matrix
  * is run through. The two failure modes T-05 named are closed inside this
  * config instead: `forbidOnly` stops a committed `test.only` from narrowing
  * the suite silently, and reuse of an already-running preview is now opt-in

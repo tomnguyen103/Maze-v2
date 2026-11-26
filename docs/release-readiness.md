@@ -54,6 +54,7 @@ npx playwright test --project=desktop --project=mobile --workers=4
 ```
 
 The Firefox, WebKit, and iPhone 14 matrix runs with `npm run test:e2e:xbrowser`.
+`npm run check:full` runs `check`, `test:e2e`, and `test:e2e:xbrowser` in that order.
 
 Final integrated closure-candidate evidence:
 
