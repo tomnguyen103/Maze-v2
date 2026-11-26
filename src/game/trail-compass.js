@@ -9,6 +9,8 @@
  * @typedef {import("./game-session.js").GameRun} GameRun
  */
 
+import { openShortcutAcrossWall } from "./game-session.js";
+
 const DIRECTIONS = Object.freeze([
   Object.freeze({ name: "north", row: -1, col: 0 }),
   Object.freeze({ name: "east", row: 0, col: 1 }),
@@ -33,30 +35,6 @@ function revealedTiles(run) {
 }
 
 /**
- * @param {GameRun} run
- * @param {{ row: number, col: number }} from
- * @param {{ row: number, col: number }} to
- */
-function openShortcut(run, from, to) {
-  const matches = (
-    /** @type {{ from: { row: number, col: number }, to: { row: number, col: number }, open: boolean }} */ edge
-  ) =>
-    edge.open &&
-    ((edge.from.row === from.row &&
-      edge.from.col === from.col &&
-      edge.to.row === to.row &&
-      edge.to.col === to.col) ||
-      (edge.to.row === from.row &&
-        edge.to.col === from.col &&
-        edge.from.row === to.row &&
-        edge.from.col === to.col));
-  return (
-    run.echoBridges.some((bridge) => matches(bridge)) ||
-    run.tideDoors.some((door) => matches(door))
-  );
-}
-
-/**
  * Describe one adjacent direction from what the Explorer can already see.
  *
  * @param {GameRun} run
@@ -71,24 +49,44 @@ function describeExit(run, revealed, direction) {
     return null;
   }
   const key = `${row},${col}`;
-  const shortcut = openShortcut(run, run.explorer, { row, col });
-  if (!revealed.has(key) && !shortcut) {
+  // Only the shortcut revisions populate these lists, so this matches the
+  // engine revision gate in resolveMove.
+  if (
+    openShortcutAcrossWall(
+      [...run.echoBridges, ...run.tideDoors],
+      run.explorer,
+      { row, col }
+    )
+  ) {
+    return `${direction.name} open through a shortcut`;
+  }
+  if (!revealed.has(key)) {
     return `${direction.name} unexplored`;
   }
-  if (run.labyrinth[row][col] !== 1 && !shortcut) {
+  if (run.labyrinth[row][col] !== 1) {
     return null;
   }
   const windway = run.windways.find(
     (candidate) =>
       candidate.source.row === row && candidate.source.col === col
   );
-  if (windway) {
-    return (
-      `${direction.name} onto a Windway carrying you to ` +
-      `row ${windway.destination.row + 1}, column ${windway.destination.col + 1}`
-    );
+  if (!windway) {
+    return `${direction.name} open`;
   }
-  return `${direction.name} open${shortcut ? " through a shortcut" : ""}`;
+  const { destination } = windway;
+  if (run.labyrinth[destination.row]?.[destination.col] !== 1) {
+    return null;
+  }
+  if (
+    destination.row === run.explorer.row &&
+    destination.col === run.explorer.col
+  ) {
+    return `${direction.name} onto a Windway that carries you back here`;
+  }
+  return (
+    `${direction.name} onto a Windway carrying you to ` +
+    `row ${destination.row + 1}, column ${destination.col + 1}`
+  );
 }
 
 /**

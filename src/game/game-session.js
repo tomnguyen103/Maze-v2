@@ -1656,7 +1656,7 @@ function selectShortcutEdges(labyrinth, protectedTiles, count, random, accepts) 
  * @param {Position} position
  * @param {Position} wall
  */
-function openShortcutAcrossWall(shortcuts, position, wall) {
+export function openShortcutAcrossWall(shortcuts, position, wall) {
   for (const shortcut of shortcuts) {
     if (!shortcut.open) {
       continue;

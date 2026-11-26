@@ -7,6 +7,10 @@ import {
   createTrailCompass
 } from "../src/game/trail-compass.js";
 import { createRun, applyAction } from "../src/game/game-session.js";
+import {
+  getClassicRunRuleset,
+  getQuestRunRuleset
+} from "../src/game/run-ruleset.js";
 
 /** @param {Record<string, unknown>} [input] */
 function runFixture(input = {}) {
@@ -133,5 +137,150 @@ describe("Trail Compass controller", () => {
     compass.onTransition(run);
     expect(JSON.stringify(run)).toBe(before);
     expect(announce).toHaveBeenCalledTimes(3);
+  });
+});
+
+/** @type {readonly [string, "up" | "right" | "down" | "left", number, number][]} */
+const COMPASS_DIRECTIONS = Object.freeze([
+  ["north", "up", -1, 0],
+  ["east", "right", 0, 1],
+  ["south", "down", 1, 0],
+  ["west", "left", 0, -1]
+]);
+
+/**
+ * The named exit for one Compass direction, or null when the Compass names none.
+ *
+ * @param {string} statement
+ * @param {string} name
+ */
+function namedExit(statement, name) {
+  const exits = statement.match(/Exits: (.*?)\.(?: [A-Z]|$)/)?.[1] ?? "";
+  return exits.split("; ").find((exit) => exit.startsWith(`${name} `)) ?? null;
+}
+
+/**
+ * A Run with its first shortcut open and the Explorer on its `from` end.
+ *
+ * @param {"echo-bridges-v1" | "tide-doors-v1"} revision
+ * @param {"capable" | "advanced"} atlasRegionId
+ */
+function openShortcutFixture(revision, atlasRegionId) {
+  const run = structuredClone(
+    runFixture({ ruleset: { atlasRegionId, revision } })
+  );
+  const shortcuts =
+    revision === "echo-bridges-v1" ? run.echoBridges : run.tideDoors;
+  expect(shortcuts.length).toBeGreaterThan(0);
+  for (const shortcut of shortcuts) {
+    shortcut.open = true;
+  }
+  const [shortcut] = shortcuts;
+  run.explorer = { ...run.explorer, row: shortcut.from.row, col: shortcut.from.col };
+  const rowStep = (shortcut.to.row - shortcut.from.row) / 2;
+  const colStep = (shortcut.to.col - shortcut.from.col) / 2;
+  const direction = COMPASS_DIRECTIONS.find(
+    ([, , row, col]) => row === rowStep && col === colStep
+  );
+  if (!direction) {
+    throw new Error("The fixture shortcut is not straight across one wall.");
+  }
+  return { run, shortcut, direction };
+}
+
+describe("Trail Compass exits match the engine", () => {
+  it("names an open shortcut as an exit", () => {
+    for (const [revision, atlasRegionId, eventType] of /** @type {const} */ ([
+      ["echo-bridges-v1", "capable", "echo-bridge-travel"],
+      ["tide-doors-v1", "advanced", "tide-door-travel"]
+    ])) {
+      const { run, shortcut, direction } = openShortcutFixture(
+        revision,
+        atlasRegionId
+      );
+      const [name, engineDirection] = direction;
+      expect(namedExit(describeCompassState(run), name)).toBe(
+        `${name} open through a shortcut`
+      );
+      expect(describeCompassAction(run)).toContain(name);
+      const moved = applyAction(run, {
+        type: "move",
+        direction: engineDirection
+      });
+      expect(moved.event.type).toBe(eventType);
+      expect({ row: moved.explorer.row, col: moved.explorer.col }).toEqual({
+        row: shortcut.to.row,
+        col: shortcut.to.col
+      });
+    }
+  });
+
+  it("every named exit agrees with the engine", () => {
+    const rulesets = [
+      getClassicRunRuleset(1),
+      ...[1, 5, 9, 13, 17].map((labyrinthNumber) =>
+        getQuestRunRuleset(labyrinthNumber)
+      )
+    ];
+    expect(new Set(rulesets.map((ruleset) => ruleset.revision)).size).toBe(6);
+    let shortcutMoves = 0;
+    let windwayBackHere = 0;
+    for (const ruleset of rulesets) {
+      for (const size of [9, 13]) {
+        for (let seed = 0; seed < 20; seed += 1) {
+          let run = createRun(`compass-sweep-${seed}`, {
+            size,
+            echoCount: 3,
+            wardenCount: 2,
+            ruleset
+          });
+          for (let step = 0; step < 60 && run.status === "active"; step += 1) {
+            const statement = describeCompassState(run);
+            const legal = [];
+            for (const [name, engineDirection] of COMPASS_DIRECTIONS) {
+              const exit = namedExit(statement, name);
+              const moved = applyAction(run, {
+                type: "move",
+                direction: engineDirection
+              });
+              const blocked = moved.event.type === "blocked";
+              const context = `${ruleset.revision} size ${size} seed ${seed} step ${step} ${name}: ${exit}`;
+              if (exit === null) {
+                expect(blocked, context).toBe(true);
+              } else if (!exit.endsWith("unexplored")) {
+                expect(blocked, context).toBe(false);
+              }
+              if (
+                moved.event.type === "echo-bridge-travel" ||
+                moved.event.type === "tide-door-travel"
+              ) {
+                shortcutMoves += 1;
+                expect(exit, context).toBe(`${name} open through a shortcut`);
+              }
+              if (exit?.includes("Windway")) {
+                expect(exit, context).not.toContain(
+                  `row ${run.explorer.row + 1}, column ${run.explorer.col + 1}`
+                );
+                if (exit.includes("back here")) {
+                  windwayBackHere += 1;
+                }
+              }
+              if (!blocked) {
+                legal.push(moved);
+              }
+            }
+            if (legal.length === 0) {
+              break;
+            }
+            // Prefer a shortcut move so the sweep crosses open shortcuts.
+            run =
+              legal.find((next) => next.event.type.endsWith("-travel")) ??
+              legal[(step * 7 + seed) % legal.length];
+          }
+        }
+      }
+    }
+    expect(shortcutMoves).toBeGreaterThan(0);
+    expect(windwayBackHere).toBeGreaterThan(0);
   });
 });
