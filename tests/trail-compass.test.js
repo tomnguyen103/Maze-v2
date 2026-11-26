@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   describeCompassAction,
   describeCompassState,
@@ -313,5 +313,175 @@ describe("Trail Compass exits match the engine", () => {
     expect(shortcutMoves["tide-doors-v1"]).toBeGreaterThan(0);
     expect(windwayCarries).toBeGreaterThan(0);
     expect(windwayBackHere).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * A classic Run with fixed target positions around the Explorer at row 5,
+ * column 5. Echoes come first in Run order and sit nearer than the Wardens.
+ *
+ * @param {string[] | null} revealedKeys every tile when null
+ */
+function listenFixture(revealedKeys) {
+  const run = structuredClone(runFixture({ echoCount: 5, wardenCount: 2 }));
+  run.explorer = { ...run.explorer, row: 4, col: 4 };
+  const echoTiles = [[2, 4], [4, 5], [3, 4], [5, 4], [4, 3]];
+  run.echoes = run.echoes.map((echo, index) => ({
+    ...echo,
+    row: echoTiles[index][0],
+    col: echoTiles[index][1],
+    collected: false
+  }));
+  run.gate = { ...run.gate, row: 0, col: 0 };
+  // Run order puts the far Warden first, so nearest first must reorder them.
+  run.wardens = [
+    { ...run.wardens[0], row: 8, col: 8 },
+    { ...run.wardens[1], row: 4, col: 7 }
+  ];
+  const size = run.labyrinth.length;
+  run.revealed =
+    revealedKeys ??
+    Array.from({ length: size * size }, (_, index) =>
+      `${Math.floor(index / size)},${index % size}`
+    );
+  run.pulseVisible = [];
+  return run;
+}
+
+/** @param {() => import("../src/game/game-session.js").GameRun} getRun */
+function compassController(getRun) {
+  document.body.innerHTML = `
+    <div id="trail-compass" hidden>
+      <button id="compass-listen" type="button">Listen</button>
+    </div>
+  `;
+  const announce = vi.fn();
+  const playCue = vi.fn();
+  const compass = createTrailCompass({ getRun, announce, playCue });
+  return { compass, announce, playCue };
+}
+
+describe("Trail Compass Listen and Bell status", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Listen names revealed Wardens first, inside the cap", () => {
+    // US-01.1: one revealed Warden and two revealed Echoes.
+    const small = listenFixture(["4,4", "4,5", "3,4", "4,7"]);
+    vi.useFakeTimers();
+    const first = compassController(() => small);
+    document.getElementById("compass-listen")?.click();
+    vi.advanceTimersByTime(0);
+    expect(first.playCue.mock.calls.map(([cue]) => cue)).toEqual(["compass-warden"]);
+    vi.advanceTimersByTime(159);
+    expect(first.playCue).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(first.playCue).toHaveBeenCalledTimes(2);
+    expect(String(first.announce.mock.calls[0][0])).toMatch(/^Listen: warden/);
+
+    // US-01.2: more than 6 revealed targets, Echoes first in Run order.
+    const run = listenFixture(null);
+    expect(describeListenTargets(run).length).toBeGreaterThan(6);
+    const { announce, playCue } = compassController(() => run);
+    document.getElementById("compass-listen")?.click();
+    vi.runAllTimers();
+    expect(playCue.mock.calls.map(([cue]) => cue)).toEqual([
+      "compass-warden",
+      "compass-warden",
+      "compass-gate",
+      "compass-echo",
+      "compass-echo",
+      "compass-echo"
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "Listen: warden 3 east; warden 4 south and 4 east; " +
+        "gate 4 north and 4 west; echo 1 east; echo 1 north; echo 1 south."
+    );
+  });
+
+  it("a new Listen, a Run change, or hide cancels queued tones", () => {
+    vi.useFakeTimers();
+    const run = listenFixture(null);
+    const { compass, playCue } = compassController(() => run);
+    const listen = () => document.getElementById("compass-listen")?.click();
+
+    listen();
+    vi.advanceTimersByTime(200);
+    expect(playCue).toHaveBeenCalledTimes(2);
+    listen();
+    vi.runAllTimers();
+    // 2 tones from the first press, then all 6 from the second press only.
+    expect(playCue).toHaveBeenCalledTimes(8);
+    expect(playCue.mock.calls[2][0]).toBe("compass-warden");
+
+    playCue.mockClear();
+    listen();
+    vi.advanceTimersByTime(0);
+    compass.onTransition(run);
+    vi.runAllTimers();
+    expect(playCue).toHaveBeenCalledTimes(1);
+
+    playCue.mockClear();
+    listen();
+    vi.advanceTimersByTime(0);
+    compass.hide();
+    vi.runAllTimers();
+    expect(playCue).toHaveBeenCalledTimes(1);
+  });
+
+  it("says every Signal Bell has rung", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "mastery", revision: "warden-bells-v1" } })
+    );
+    expect(run.signalBells.length).toBeGreaterThan(0);
+    run.signalBells = run.signalBells.map((bell) => ({ ...bell, spent: true }));
+    const text = describeCompassState(run);
+    expect(text).toContain("Every Signal Bell has rung.");
+    expect(text).not.toContain("wait elsewhere");
+
+    // One unspent Bell, three steps from the Explorer, is not beside it.
+    run.signalBells[0] = {
+      ...run.signalBells[0],
+      row: run.explorer.row + 3,
+      col: run.explorer.col,
+      spent: false
+    };
+    expect(describeCompassState(run)).toContain("Signal Bells wait elsewhere");
+
+    run.signalBells = [];
+    expect(describeCompassState(run)).not.toContain("Every Signal Bell has rung.");
+  });
+
+  it("a Ring Bell with no Bell says so", () => {
+    const action = /** @type {const} */ ({ type: "ring-bell" });
+    const bellRun = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "mastery", revision: "warden-bells-v1" } })
+    );
+    const spentBells = structuredClone(bellRun);
+    spentBells.signalBells = spentBells.signalBells.map((bell) => ({
+      ...bell,
+      spent: true
+    }));
+    for (const previous of [spentBells, structuredClone(runFixture())]) {
+      previous.event = { type: "echo-collected", message: "Echo recovered. 2 remain." };
+      const next = applyAction(previous, action);
+      const { compass, announce } = compassController(() => next);
+      compass.onTransition(next, previous, action);
+      expect(announce).toHaveBeenCalledWith("No Signal Bell is beside you.");
+      expect(String(announce.mock.calls[0][0])).not.toContain("Echo recovered");
+    }
+
+    // A real ring still announces the engine event.
+    const ready = structuredClone(bellRun);
+    const beside = ready.explorer.row > 0
+      ? { row: ready.explorer.row - 1, col: ready.explorer.col }
+      : { row: ready.explorer.row + 1, col: ready.explorer.col };
+    ready.signalBells[0] = { ...ready.signalBells[0], ...beside, spent: false };
+    const rung = applyAction(ready, action);
+    expect(rung.event.type).toBe("signal-bell-rung");
+    const { compass, announce } = compassController(() => rung);
+    compass.onTransition(rung, ready, action);
+    expect(String(announce.mock.calls[0][0])).toContain(rung.event.message);
   });
 });
