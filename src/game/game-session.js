@@ -1679,6 +1679,28 @@ export function openShortcutAcrossWall(shortcuts, position, wall) {
 }
 
 /**
+ * True when the Run has a Windway that can carry the Explorer to a tile from
+ * which an objective is out of reach. Only a windways-v1 Run can be so
+ * (ADR 0053), and Active Run Recovery and Restart use it to leave such a Run.
+ *
+ * @param {Pick<GameRun, "labyrinth" | "explorer" | "gate" | "echoes" | "windways">} run
+ */
+export function explorerCanBeTrapped(run) {
+  if (run.windways.length === 0) return false;
+  const objectives = [
+    run.gate,
+    ...run.echoes.filter((echo) => !echo.collected)
+  ];
+  return !everyReachableTileReachesObjectives(
+    run.labyrinth,
+    run.explorer,
+    objectives,
+    run.windways,
+    []
+  );
+}
+
+/**
  * The shared Objective Reachability check for Twist placement (ADR 0053). It accepts a
  * placement only when every tile that the Explorer can reach, with every
  * shortcut open, still reaches every objective through edges that are always

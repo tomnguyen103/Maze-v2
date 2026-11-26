@@ -5,6 +5,7 @@ import "./game/first-light.css";
 import {
   clearActiveRunLocator,
   loadActiveRunLocator,
+  mustRestartOnCurrentRuleset,
   saveActiveRunLocator
 } from "./game/active-run-locator.js";
 import {
@@ -47,6 +48,7 @@ import {
 } from "./game/run-action-log.js";
 import {
   CLASSIC_RULESET_REVISION,
+  currentRunRuleset,
   getClassicRunRuleset,
   getQuestRunRuleset,
   normalizeRunRuleset
@@ -2575,14 +2577,30 @@ async function startFreshRun(replaceRunIdentity = false) {
     activeRunLocator?.levelId === levelId &&
     activeRunLocator.labyrinthNumber === labyrinthNumber
   ) {
+    const storedRuleset = normalizeRunRuleset(
+      rulesetIdentityFromLocator(activeRunLocator),
+      labyrinthNumber
+    );
+    const ruleset = storedRuleset && currentRunRuleset(storedRuleset);
+    // A legacy revision can trap the Explorer (ADR 0053), so Restart and
+    // Retry rebuild the same seed on the current revision.
+    const upgrade = Boolean(
+      storedRuleset && ruleset && ruleset.revision !== storedRuleset.revision
+    );
     locator = {
       ...withRunAccessId(
-        replaceRunIdentity
+        replaceRunIdentity || upgrade
           ? {
               ...activeRunLocator,
               version: 3,
               runId: createRunAccessId(),
-              pending: false
+              pending: false,
+              ...(upgrade && ruleset
+                ? {
+                    atlasRegionId: ruleset.atlasRegionId,
+                    rulesetRevision: ruleset.revision
+                  }
+                : {})
             }
           : activeRunLocator
       ),
@@ -2640,12 +2658,44 @@ async function startSharedRun(
     }),
     questId: questProgress.questId
   };
-  if (!(await authorizeRunLocator(locator))) {
+  // A share link without the player's own run ID keeps its legacy revision.
+  const ownRun =
+    typeof runId === "string" &&
+    activeRunLocator?.runId === runId &&
+    activeRunLocator.seed === seed &&
+    activeRunLocator.levelId === levelId &&
+    activeRunLocator.labyrinthNumber === labyrinthNumber;
+  const legacyOwnRun =
+    ownRun && currentRunRuleset(ruleset).revision !== ruleset.revision;
+  // A legacy Run decides the restart before admission, so one restart
+  // admits only the replacement run ID. Other Runs admit before recovery.
+  if (!legacyOwnRun && !(await authorizeRunLocator(locator))) {
     return false;
   }
   const recoveredRun = canRecover
     ? await loadRecoveredRun(locator)
     : null;
+  if (legacyOwnRun && mustRestartOnCurrentRuleset(ruleset, recoveredRun)) {
+    const savedLocator = activeRunLocator;
+    if (await startFreshRun(true)) {
+      // The v1 share URL would reject the v2 locator on the next reload.
+      window.history.replaceState({}, "", "/play");
+      const notice =
+        "This saved Run used an older Windway layout that could trap the Explorer. A fresh Run started.";
+      announce(notice);
+      showEvent(notice);
+      if (activeRunRecoveryUnavailableReported) {
+        reportActiveRunRecoveryUnavailable(true);
+      }
+      return true;
+    }
+    // A refused replacement keeps the admitted legacy Run and its checkpoint.
+    if (!savedLocator || !canRecover) return false;
+    activeRunLocator = saveActiveRunLocator(savedLocator);
+  }
+  if (legacyOwnRun && !(await authorizeRunLocator(locator))) {
+    return false;
+  }
   if (!canRecover) {
     await beginActiveRunRecovery(locator);
   }

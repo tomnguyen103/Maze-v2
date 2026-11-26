@@ -1,5 +1,6 @@
 import { QUEST_LABYRINTH_COUNT } from "../questions/quest-levels.js";
-import { normalizeRunRuleset } from "./run-ruleset.js";
+import { explorerCanBeTrapped } from "./game-session.js";
+import { currentRunRuleset, normalizeRunRuleset } from "./run-ruleset.js";
 
 const ACTIVE_RUN_LOCATOR_KEY = "echo-maze:active-run:v1";
 const QUEST_ID_PATTERN = /^(?:quest|legacy)_[A-Za-z0-9_-]{7,92}$/;
@@ -137,4 +138,17 @@ function normalizeLocator(value) {
       ? { questId: candidate.questId }
       : {})
   };
+}
+
+/**
+ * True when the player's own saved Run must start again on the current
+ * revision of its Atlas Region. A legacy revision continues only from a
+ * recovered Run whose Explorer cannot reach a trapped tile (ADR 0053).
+ *
+ * @param {Readonly<{ atlasRegionId: string, revision: string, label: string }>} ruleset
+ * @param {Parameters<typeof explorerCanBeTrapped>[0] | null} recoveredRun
+ */
+export function mustRestartOnCurrentRuleset(ruleset, recoveredRun) {
+  if (currentRunRuleset(ruleset).revision === ruleset.revision) return false;
+  return recoveredRun === null || explorerCanBeTrapped(recoveredRun);
 }
