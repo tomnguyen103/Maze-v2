@@ -1,5 +1,6 @@
 ---
 stitch-project: 3244739478942983822
+stitch-design-system: a5e0a7aba16145f7b5ebd784c8ee5945
 ---
 
 # Design - Echo Maze
@@ -52,9 +53,12 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 | Passage (water) | `oklch(95.5% 0.022 232)` | `oklch(32% 0.04 232)` | Land |
 | Fog | `oklch(99% 0.004 95)` | `oklch(21% 0.03 250)` | none (the Fog dot marks the edge) |
 | Fog dot | `oklch(18% 0.012 250 / 80%)` | `oklch(95% 0.006 95 / 70%)` | Fog and Passage |
+| Memory dot | Fog dot | Fog dot | Remembered Passage |
 | Explorer | `oklch(46% 0.17 250)` | `oklch(74% 0.13 250)` | Land |
 | Explorer ring | Ink | Ink | Passage |
 | Warden and Danger line | Ink | Ink | Passage |
+| Warden telegraph | Ink | Ink | Passage |
+| Pulse range ring | Gate | Signal | Passage |
 | Echo | `oklch(52% 0.17 250)` | `oklch(74% 0.13 250)` | Passage |
 | Echo number | `oklch(100% 0 0)` | `oklch(18% 0.012 250)` | Echo |
 | Gate | `oklch(58% 0.24 340)` | `oklch(70% 0.2 340)` | Passage |
@@ -129,6 +133,8 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
   player console, and the seed.
 - **Chart notes**: the objective, the adventure log, the map marks legend, and the
   field note as ruled rows.
+- **Legend contract**: the Map marks legend lists each mark that the board can draw. Each
+  legend entry uses the colour and the shape of its board mark.
 
 ## Atlas
 
@@ -153,20 +159,41 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - **Land**: the Land colour with a hatch of 1px ink lines at 45 degrees. The hatch pitch
   is 4px, set in integer device pixels. The hatch is drawn inside each merged wall run. Land has no tile outline.
 - **Coastline**: one ink line where water meets land.
-- **Fog**: 4 to 6% stipple coverage from an 8 by 8 pattern tile, over unknown tiles. Fog dots cover fog cells only.
+- **Fog**: a tile has one of three states.
+  - Unknown: the Fog fill with 4 to 6% stipple coverage from an 8 by 8 pattern tile.
+  - Remembered: the Passage or the Land as charted, plus one Memory dot at the tile centre.
+    A remembered tile shows no Echo, no Gate, no Warden, no telegraph, and no Danger line.
+  - In sight: the Passage or the Land with no dot.
+  The Memory dot, not a tint, separates a remembered tile from a tile in sight.
+- **Echo number**: the number draws at 12px or more. On a tile below 24px the board draws
+  the plain Echo mark, and the Readout carries the number.
 - **Position fix**: the Explorer reads as a ringed mark, not a glowing disc.
 - **Danger line**: a dotted ink line around a Warden. Red never marks the board.
 - **Wardens**: four marks, each with its own silhouette.
   - Patrol: a round mark.
   - Hunt: a pointed mark.
   - Intercept: a chevron.
-  - Lured: a ringed mark.
-- Maze geometry, rulesets, and `echo-bridges-v1` never change.
+  - Lured: a square outline. It shares no shape with the Explorer ring.
+- **Warden telegraph**: a dashed ink arrow from a Warden to the tile of its next Move.
+  The dash is 4px on and 3px off. The arrow head is solid. The telegraph draws for a
+  Warden in sight only.
+- **Pulse range ring**: one Signal ring at the Pulse radius, 1.5px wide, around the
+  Explorer. It shows the tiles that the Pulse reveals.
+- **Paused cover**: a paused board has a full cover in the Fog fill. No tile shows under
+  the PAUSED band.
+- **Forced colours**: under `forced-colors: active` each mark keeps its shape and takes a
+  system colour.
+- **Tile rule at 375px**: a size 15 board scrolls inside its frame, so a tile is never
+  below 24px. The frame follows the Explorer, and a swipe stays a Move.
+- The geometry and the rules of a generation 1 revision never change. The geometry and
+  the rules of a generation 2 revision freeze at its release.
 
 ## Chart devices
 
 - **Neatline**: 1px ink around the board with one 2px tick per tile line, so size + 1 ticks per side. The Grid reference
   sits outside the frame in 10px Geist Mono.
+- **Narrow frame**: on a board below 420px the frame keeps a 12px gutter on the top and
+  the left. Each tick stays. The Grid reference labels each second tile.
 - **Grid reference**: column letters and row numbers that name a tile.
 - **Title block**: a corner block with two rules. The Labyrinth number sets in Archivo.
   The level and ruleset set in body type. The seed and date share one caption line.
@@ -192,8 +219,22 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 
 - The landing trail draws once through `stroke-dashoffset`. No other motion plays on
   the landing.
-- A collision recoils the board once for 240ms.
-- Under `prefers-reduced-motion: reduce`, every animation runs in 0.01ms.
+- Board motion is feedback for one action. Each motion plays once, uses `ease-out`,
+  and never delays the next input.
+
+| Motion | Duration | Property | Reduced-motion form |
+| :-- | :-- | :-- | :-- |
+| Explorer Move | 120ms | mark position | the mark jumps to the tile |
+| Warden Move | 160ms | mark position | the mark jumps to the tile |
+| Fog reveal | 200ms | Fog opacity | the tile shows at once |
+| Echo collect | 200ms | mark scale and opacity | the mark disappears at once |
+| Pulse range ring | 300ms | ring radius and opacity | a static ring for one action |
+| Contact recoil | 240ms | board transform | the Readout Vitality cell inverts for one action |
+| Gate open | 300ms | Signal light opacity | the light shows at once |
+
+- Board motion loads as one lazy chunk. The play screen is complete without it.
+- Under `prefers-reduced-motion: reduce`, the game does not load the motion chunk and
+  every CSS animation runs in 0.01ms.
 - No animation changes a layout property.
 
 ## Banned
@@ -221,7 +262,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 | :-- | :-- |
 | I1 | Theme Choice values and the storage key stay unchanged. |
 | I2 | The three bar-colour copies stay equal. |
-| I3 | Maze geometry and each ruleset revision stay unchanged. One exception: the Developing Region runs `windways-v2` (ADR 0053), and `windways-v1` stays for replay. |
+| I3 | Each generation 1 revision stays unchanged, and `windways-v1` stays for replay (ADR 0053). Each generation 2 revision (ADR 0054) freezes at slice Z1 of `docs/plans/2026-11-26-premium-rebuild.md`. |
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |

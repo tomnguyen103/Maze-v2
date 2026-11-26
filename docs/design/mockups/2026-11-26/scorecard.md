@@ -22,7 +22,7 @@ Each direction draws one real Labyrinth: `createRun("PILOT-CHART")`, revision `w
 
 Each folder holds `index.html`, `art.js`, `style.css`, and `captures/` at 375, 1280, and 1920 px for the two themes. The command `node docs/design/mockups/2026-11-26/capture.mjs` makes the captures again.
 
-The impeccable detector exits 0 on the folder `docs/design/mockups/2026-11-26`.
+The impeccable detector exits 0 on the folder `docs/design/mockups/2026-11-26`. The file `.impeccable/config.json` holds one suppression for this folder: rule `overused-font`, value Geist Mono, file `shared/base.css`. Geist Mono is the numeral face of `design.md`.
 
 ## Scores
 
