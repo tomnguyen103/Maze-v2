@@ -315,8 +315,8 @@ describe("US-01 shortcut placement check", () => {
  * Real engine search for US-01. Each state is a Run that `applyAction` returns.
  * The search removes Wardens, because a Warden never changes which tile a Move
  * reaches. A Gate Warden Challenge gets one correct answer, which is the
- * shortest rescue. A Pulse spends a turn, so the search expands it too. A state
- * that reaches no won state is a trap.
+ * shortest rescue. A Pulse turns the Tide, so the search expands it where Tide
+ * Doors exist. A state that reaches no won state is a trap.
  *
  * @param {TestRun} start
  */
@@ -365,7 +365,10 @@ function engineTrap(start) {
         direction: /** @type {import("../src/game/game-session.js").Direction} */ (direction)
       })
     );
-    return run.pulses > 0 ? [...moves, applyAction(run, { type: "pulse" })] : moves;
+    // Without Tide Doors a Pulse opens no path: it spends a Pulse and moves only removed Wardens.
+    return run.pulses > 0 && run.tideDoors.length > 0
+      ? [...moves, applyAction(run, { type: "pulse" })]
+      : moves;
   };
   while (queue.length > 0) {
     const run = /** @type {TestRun} */ (queue.shift());
@@ -418,7 +421,8 @@ describe("US-01 real engine cross-check", () => {
       }
       expect(traps).toEqual([]);
     },
-    120_000
+    // The search is exhaustive: tide-doors-v1 takes about 50 s alone and slower under the full gate.
+    300_000
   );
 
   it("US-01.3: applyAction traps the pinned seed under windways-v1", () => {
