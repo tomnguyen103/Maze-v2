@@ -1697,7 +1697,7 @@ function openShortcutAcrossWall(shortcuts, position, wall) {
  * @param {Windway[]} windways
  * @param {Shortcut[]} shortcuts
  */
-function everyReachableTileReachesObjectives(
+export function everyReachableTileReachesObjectives(
   labyrinth,
   start,
   objectives,

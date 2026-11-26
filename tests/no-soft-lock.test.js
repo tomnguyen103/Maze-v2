@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, createRun } from "../src/game/game-session.js";
+import {
+  applyAction,
+  createRun,
+  everyReachableTileReachesObjectives
+} from "../src/game/game-session.js";
 import {
   getClassicRunRuleset,
   getQuestRunRuleset,
@@ -280,5 +284,29 @@ describe("US-01 no trapped Labyrinth", () => {
 
     const current = createRun(seed, { ...config, ruleset: getQuestRunRuleset(5) });
     expect(exploreStates(current).trap).toBeNull();
+  });
+});
+
+describe("US-01 shortcut placement check", () => {
+  // Row 1: Gate (1,1), passage (1,2), wall (1,3), pocket (1,4).
+  const labyrinth = [
+    [0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 0, 1, 0],
+    [0, 0, 0, 0, 0, 0]
+  ];
+  const start = { row: 1, col: 1 };
+  const gate = { row: 1, col: 1 };
+
+  it("US-01.4: accepts the Labyrinth when no crossing leads into the pocket", () => {
+    expect(
+      everyReachableTileReachesObjectives(labyrinth, start, [gate], [], [])
+    ).toBe(true);
+  });
+
+  it("US-01.4: rejects a crossing whose far side has no base-graph path to the Gate", () => {
+    const shortcut = { from: { row: 1, col: 2 }, to: { row: 1, col: 4 } };
+    expect(
+      everyReachableTileReachesObjectives(labyrinth, start, [gate], [], [shortcut])
+    ).toBe(false);
   });
 });
