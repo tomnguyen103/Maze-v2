@@ -310,7 +310,15 @@ export function createTrailCompass({
     const run = getRun();
     announce(run ? describeCompassState(run) : "No active Run to describe.");
   });
+  /** @type {ReturnType<typeof setTimeout>[]} */
+  let pendingCues = [];
+  // A new Listen, a Run change, or a hidden panel makes queued tones stale.
+  const cancelCues = () => {
+    pendingCues.forEach(clearTimeout);
+    pendingCues = [];
+  };
   root.getElementById("compass-listen")?.addEventListener("click", () => {
+    cancelCues();
     const run = getRun();
     if (!run) {
       announce("No active Run to listen to.");
@@ -322,9 +330,11 @@ export function createTrailCompass({
       return;
     }
     // Each tone lasts 150 ms; a 160 ms gap lets the order be heard.
-    targets.slice(0, 6).forEach((target, index) => {
-      setTimeout(() => playCue(`compass-${target.kind}`), index * LISTEN_CUE_GAP_MS);
-    });
+    pendingCues = targets
+      .slice(0, 6)
+      .map((target, index) =>
+        setTimeout(() => playCue(`compass-${target.kind}`), index * LISTEN_CUE_GAP_MS)
+      );
     announce(
       `Listen: ${targets
         .slice(0, 6)
@@ -339,6 +349,7 @@ export function createTrailCompass({
      * @param {{ type: string }} [action]
      */
     onTransition(run, previous, action) {
+      cancelCues();
       // resolveRingBell returns the same Run when no Bell is beside the
       // Explorer, so the old event message would repeat.
       if (
@@ -352,6 +363,7 @@ export function createTrailCompass({
       announce(describeCompassAction(run));
     },
     hide() {
+      cancelCues();
       if (panel) {
         panel.hidden = true;
       }

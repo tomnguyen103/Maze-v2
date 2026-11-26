@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   describeCompassAction,
   describeCompassState,
@@ -362,6 +362,10 @@ function compassController(getRun) {
 }
 
 describe("Trail Compass Listen and Bell status", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("Listen names revealed Wardens first, inside the cap", () => {
     // US-01.1: one revealed Warden and two revealed Echoes.
     const small = listenFixture(["4,4", "4,5", "3,4", "4,7"]);
@@ -382,7 +386,6 @@ describe("Trail Compass Listen and Bell status", () => {
     const { announce, playCue } = compassController(() => run);
     document.getElementById("compass-listen")?.click();
     vi.runAllTimers();
-    vi.useRealTimers();
     expect(playCue.mock.calls.map(([cue]) => cue)).toEqual([
       "compass-warden",
       "compass-warden",
@@ -395,6 +398,36 @@ describe("Trail Compass Listen and Bell status", () => {
       "Listen: warden 3 east; warden 4 south and 4 east; " +
         "gate 4 north and 4 west; echo 1 east; echo 1 north; echo 1 south."
     );
+  });
+
+  it("a new Listen, a Run change, or hide cancels queued tones", () => {
+    vi.useFakeTimers();
+    const run = listenFixture(null);
+    const { compass, playCue } = compassController(() => run);
+    const listen = () => document.getElementById("compass-listen")?.click();
+
+    listen();
+    vi.advanceTimersByTime(200);
+    expect(playCue).toHaveBeenCalledTimes(2);
+    listen();
+    vi.runAllTimers();
+    // 2 tones from the first press, then all 6 from the second press only.
+    expect(playCue).toHaveBeenCalledTimes(8);
+    expect(playCue.mock.calls[2][0]).toBe("compass-warden");
+
+    playCue.mockClear();
+    listen();
+    vi.advanceTimersByTime(0);
+    compass.onTransition(run);
+    vi.runAllTimers();
+    expect(playCue).toHaveBeenCalledTimes(1);
+
+    playCue.mockClear();
+    listen();
+    vi.advanceTimersByTime(0);
+    compass.hide();
+    vi.runAllTimers();
+    expect(playCue).toHaveBeenCalledTimes(1);
   });
 
   it("says every Signal Bell has rung", () => {
