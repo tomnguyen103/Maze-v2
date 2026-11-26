@@ -223,17 +223,32 @@ describe("Trail Compass exits match the engine", () => {
       )
     ];
     expect(new Set(rulesets.map((ruleset) => ruleset.revision)).size).toBe(6);
-    let shortcutMoves = 0;
+    /** @type {Record<string, number>} */
+    const shortcutMoves = { "echo-bridges-v1": 0, "tide-doors-v1": 0 };
     let windwayBackHere = 0;
+    let windwayCarries = 0;
     for (const ruleset of rulesets) {
       for (const size of [9, 13]) {
         for (let seed = 0; seed < 20; seed += 1) {
-          let run = createRun(`compass-sweep-${seed}`, {
-            size,
-            echoCount: 3,
-            wardenCount: 2,
-            ruleset
+          // Wardens never change which tiles a Move reaches, so the sweep
+          // removes them and no Warden challenge ends the walk early.
+          /** @type {import("../src/game/game-session.js").GameRun} */
+          let run = structuredClone({
+            ...createRun(`compass-sweep-${seed}`, {
+              size,
+              echoCount: 3,
+              wardenCount: 2,
+              ruleset
+            }),
+            wardens: []
           });
+          // Open every shortcut on the Run copy, as US-01.1 does, so the
+          // walk meets open Echo Bridges and Tide Doors.
+          for (const shortcut of [...run.echoBridges, ...run.tideDoors]) {
+            shortcut.open = true;
+          }
+          /** @type {Map<string, number>} */
+          const visits = new Map([[`${run.explorer.row},${run.explorer.col}`, 1]]);
           for (let step = 0; step < 60 && run.status === "active"; step += 1) {
             const statement = describeCompassState(run);
             const legal = [];
@@ -254,7 +269,7 @@ describe("Trail Compass exits match the engine", () => {
                 moved.event.type === "echo-bridge-travel" ||
                 moved.event.type === "tide-door-travel"
               ) {
-                shortcutMoves += 1;
+                shortcutMoves[ruleset.revision] += 1;
                 expect(exit, context).toBe(`${name} open through a shortcut`);
               }
               if (exit?.includes("Windway")) {
@@ -263,6 +278,16 @@ describe("Trail Compass exits match the engine", () => {
                 );
                 if (exit.includes("back here")) {
                   windwayBackHere += 1;
+                  expect(moved.explorer.row, context).toBe(run.explorer.row);
+                  expect(moved.explorer.col, context).toBe(run.explorer.col);
+                } else {
+                  const target = exit.match(/row (\d+), column (\d+)$/);
+                  expect(target, context).not.toBeNull();
+                  windwayCarries += 1;
+                  expect(
+                    { row: moved.explorer.row + 1, col: moved.explorer.col + 1 },
+                    context
+                  ).toEqual({ row: Number(target?.[1]), col: Number(target?.[2]) });
                 }
               }
               if (!blocked) {
@@ -272,15 +297,21 @@ describe("Trail Compass exits match the engine", () => {
             if (legal.length === 0) {
               break;
             }
-            // Prefer a shortcut move so the sweep crosses open shortcuts.
-            run =
-              legal.find((next) => next.event.type.endsWith("-travel")) ??
-              legal[(step * 7 + seed) % legal.length];
+            // Take the least visited destination, so the walk covers the board.
+            const visitCount = (/** @type {import("../src/game/game-session.js").GameRun} */ next) =>
+              visits.get(`${next.explorer.row},${next.explorer.col}`) ?? 0;
+            const fewest = Math.min(...legal.map(visitCount));
+            const choices = legal.filter((next) => visitCount(next) === fewest);
+            run = choices[(step + seed) % choices.length];
+            const key = `${run.explorer.row},${run.explorer.col}`;
+            visits.set(key, (visits.get(key) ?? 0) + 1);
           }
         }
       }
     }
-    expect(shortcutMoves).toBeGreaterThan(0);
+    expect(shortcutMoves["echo-bridges-v1"]).toBeGreaterThan(0);
+    expect(shortcutMoves["tide-doors-v1"]).toBeGreaterThan(0);
+    expect(windwayCarries).toBeGreaterThan(0);
     expect(windwayBackHere).toBeGreaterThan(0);
   });
 });
