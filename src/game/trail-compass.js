@@ -231,7 +231,7 @@ export function describeCompassState(run) {
     sentences.push(
       adjacent
         ? "A Signal Bell is beside you — Ring Bell is ready."
-        : run.signalBells.every((bell) => bell.spent)
+        : run.signalBells.length > 0 && run.signalBells.every((bell) => bell.spent)
           ? "Every Signal Bell has rung."
           : "Signal Bells wait elsewhere in this Labyrinth."
     );
@@ -294,6 +294,8 @@ function wardenModeNote(run) {
  *   root?: Document
  * }} dependencies
  */
+const LISTEN_CUE_GAP_MS = 160;
+
 export function createTrailCompass({
   getRun,
   announce,
@@ -319,9 +321,10 @@ export function createTrailCompass({
       announce("Nothing revealed to listen for yet. Explore or use Pulse.");
       return;
     }
-    for (const target of targets.slice(0, 6)) {
-      playCue(`compass-${target.kind}`);
-    }
+    // Each tone lasts 150 ms; a 160 ms gap lets the order be heard.
+    targets.slice(0, 6).forEach((target, index) => {
+      setTimeout(() => playCue(`compass-${target.kind}`), index * LISTEN_CUE_GAP_MS);
+    });
     announce(
       `Listen: ${targets
         .slice(0, 6)

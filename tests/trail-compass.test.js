@@ -365,9 +365,15 @@ describe("Trail Compass Listen and Bell status", () => {
   it("Listen names revealed Wardens first, inside the cap", () => {
     // US-01.1: one revealed Warden and two revealed Echoes.
     const small = listenFixture(["4,4", "4,5", "3,4", "4,7"]);
+    vi.useFakeTimers();
     const first = compassController(() => small);
     document.getElementById("compass-listen")?.click();
-    expect(first.playCue.mock.calls[0][0]).toBe("compass-warden");
+    vi.advanceTimersByTime(0);
+    expect(first.playCue.mock.calls.map(([cue]) => cue)).toEqual(["compass-warden"]);
+    vi.advanceTimersByTime(159);
+    expect(first.playCue).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(first.playCue).toHaveBeenCalledTimes(2);
     expect(String(first.announce.mock.calls[0][0])).toMatch(/^Listen: warden/);
 
     // US-01.2: more than 6 revealed targets, Echoes first in Run order.
@@ -375,6 +381,8 @@ describe("Trail Compass Listen and Bell status", () => {
     expect(describeListenTargets(run).length).toBeGreaterThan(6);
     const { announce, playCue } = compassController(() => run);
     document.getElementById("compass-listen")?.click();
+    vi.runAllTimers();
+    vi.useRealTimers();
     expect(playCue.mock.calls.map(([cue]) => cue)).toEqual([
       "compass-warden",
       "compass-warden",
@@ -398,6 +406,18 @@ describe("Trail Compass Listen and Bell status", () => {
     const text = describeCompassState(run);
     expect(text).toContain("Every Signal Bell has rung.");
     expect(text).not.toContain("wait elsewhere");
+
+    // One unspent Bell, three steps from the Explorer, is not beside it.
+    run.signalBells[0] = {
+      ...run.signalBells[0],
+      row: run.explorer.row + 3,
+      col: run.explorer.col,
+      spent: false
+    };
+    expect(describeCompassState(run)).toContain("Signal Bells wait elsewhere");
+
+    run.signalBells = [];
+    expect(describeCompassState(run)).not.toContain("Every Signal Bell has rung.");
   });
 
   it("a Ring Bell with no Bell says so", () => {
