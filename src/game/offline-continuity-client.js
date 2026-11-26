@@ -86,7 +86,7 @@ export function createOfflineContinuityClient({
 
   /**
    * @param {unknown} receipt
-   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} run
+   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, questId?: string }} run
    */
   function receiptMatchesRun(receipt, run) {
     if (!receipt || typeof receipt !== "object") {
@@ -103,6 +103,8 @@ export function createOfflineContinuityClient({
         /** @type {Record<string, unknown>} */ (binding).levelId === run.levelId &&
         /** @type {Record<string, unknown>} */ (binding).labyrinthNumber ===
           run.labyrinthNumber &&
+        /** @type {Record<string, unknown>} */ (binding).rulesetRevision ===
+          run.rulesetRevision &&
         questIdentityMatches(
           /** @type {Record<string, unknown>} */ (binding).questId,
           run.questId
@@ -137,7 +139,7 @@ export function createOfflineContinuityClient({
    * never reaches the worker, and a failed pin is returned to the caller so
    * online play is not presented as offline-ready.
    *
-   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId: string }} run
+   * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, questId: string }} run
    */
   async function issueAndPin(run) {
     if (!receiptVerifier) {

@@ -204,7 +204,7 @@ const REGION_STORYLETS = Object.freeze({
 const QUEST_II_REGIONS = Object.freeze(
   [
     ["foundation", "Hushline Orchard", REGION_MOTIFS.foundation, "echo-hush-v1", "Notice a changed rhythm"],
-    ["developing", "Windthread Steps", REGION_MOTIFS.developing, "windways-v1", "Compare movement choices"],
+    ["developing", "Windthread Steps", REGION_MOTIFS.developing, "windways-v2", "Compare movement choices"],
     ["capable", "Bridgewake Basin", REGION_MOTIFS.capable, "echo-bridges-v1", "Connect two observations"],
     ["advanced", "Tideglass Causeway", REGION_MOTIFS.advanced, "tide-doors-v1", "Plan before committing"],
     ["mastery", "Bellroot Nightline", REGION_MOTIFS.mastery, "warden-bells-v1", "Apply the full pattern"]

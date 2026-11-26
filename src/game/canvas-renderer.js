@@ -179,22 +179,26 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     /** @type {Array<[number, number]>} */
     const pulseCells = [];
     /** @type {Array<[number, number]>} */
-    const wallCells = [];
+    const landCells = [];
+    /** @type {Array<[number, number]>} */
+    const waterCells = [];
     for (let row = 0; row < size; row += 1) {
       for (let col = 0; col < size; col += 1) {
         const key = `${row},${col}`;
         if (!revealed.has(key)) continue;
+        // ADR 0052 item 1: a passage (1) is water, a wall (0) is land.
         if (run.labyrinth[row][col] === 1) {
-          wallCells.push([row, col]);
+          waterCells.push([row, col]);
         } else {
-          drawPassage(row, col, tile);
+          landCells.push([row, col]);
         }
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
           pulseCells.push([row, col]);
         }
       }
     }
-    drawLand(wallCells, tile);
+    drawWater(waterCells, tile);
+    drawLand(landCells, tile);
     if (pulseCells.length > 0) {
       // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
       context.beginPath();
@@ -405,14 +409,14 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   }
 
   /**
-   * A passage is a square of water.
-   * @param {number} row
-   * @param {number} col
+   * Known passages are one water shape from one path (ADR 0052 item 1).
+   * @param {Array<[number, number]>} cells
    * @param {number} tile
    */
-  function drawPassage(row, col, tile) {
+  function drawWater(cells, tile) {
+    if (cells.length === 0) return;
     context.beginPath();
-    traceTile(row, col, tile);
+    for (const [row, col] of cells) traceTile(row, col, tile);
     context.fillStyle = palette.passage;
     context.fill();
   }

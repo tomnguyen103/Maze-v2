@@ -3,6 +3,7 @@ import {
   CLASSIC_RULESET_REVISION,
   getClassicRunRuleset,
   getQuestRunRuleset,
+  normalizeKnownRunRuleset,
   normalizeRunRuleset
 } from "../src/game/run-ruleset.js";
 
@@ -20,7 +21,7 @@ describe("Run ruleset identity", () => {
       },
       {
         atlasRegionId: "developing",
-        revision: "windways-v1",
+        revision: "windways-v2",
         label: "Windways"
       },
       {
@@ -50,6 +51,44 @@ describe("Run ruleset identity", () => {
     expect(normalizeRunRuleset(undefined, 10)).toEqual(
       getClassicRunRuleset(10)
     );
+  });
+
+  it("starts new Developing runs on windways-v2 (ADR 0053)", () => {
+    expect(getQuestRunRuleset(5).revision).toBe("windways-v2");
+  });
+
+  it("keeps windways-v1 known for replay and recovery (ADR 0053)", () => {
+    expect(
+      normalizeRunRuleset(
+        { atlasRegionId: "developing", revision: "windways-v1" },
+        5
+      )
+    ).toEqual({
+      atlasRegionId: "developing",
+      revision: "windways-v1",
+      label: "Windways"
+    });
+    expect(
+      normalizeKnownRunRuleset({
+        atlasRegionId: "developing",
+        revision: "windways-v1"
+      })?.revision
+    ).toBe("windways-v1");
+  });
+
+  it("rejects a Windways revision outside its Region or not yet defined", () => {
+    expect(
+      normalizeRunRuleset(
+        { atlasRegionId: "foundation", revision: "windways-v2" },
+        1
+      )
+    ).toBeNull();
+    expect(
+      normalizeKnownRunRuleset({
+        atlasRegionId: "developing",
+        revision: "windways-v3"
+      })
+    ).toBeNull();
   });
 
   it("rejects unknown and mismatched Region revisions", () => {

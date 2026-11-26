@@ -1,6 +1,10 @@
 import { URL } from "node:url";
 import { classroomIdFromRequest } from "./classroom-context.js";
-import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
+import {
+  CLASSIC_RULESET_REVISION,
+  getQuestRunRuleset,
+  normalizeRunRuleset
+} from "../src/game/run-ruleset.js";
 import { offlineReceiptWindows } from "../shared/offline-receipt.js";
 import {
   OfflineDeviceInputError,
@@ -81,13 +85,36 @@ async function readReceiptRequest(request) {
   ) {
     throw new RunAccessInputError("Quest ID is invalid.");
   }
+  const run = validateRunRequest(input);
   return {
-    ...validateRunRequest(input),
+    ...run,
+    rulesetRevision: readRulesetRevision(input.rulesetRevision, run.labyrinthNumber),
     questId: input.questId,
     deviceInstallationNonce: validateOfflineDeviceInstallationNonce(
       input.deviceInstallationNonce
     )
   };
+}
+
+/**
+ * The receipt binds the Run's own revision. A Run that started on an earlier
+ * revision (ADR 0053) keeps it, so its replay builds the board that was played.
+ * A request must name the revision. A client from before ADR 0053 sends none, and
+ * its Run can be on `windways-v1`, so the route stores no guessed binding for it.
+ *
+ * @param {unknown} value
+ * @param {number} labyrinthNumber
+ */
+function readRulesetRevision(value, labyrinthNumber) {
+  const current = getQuestRunRuleset(labyrinthNumber);
+  const ruleset = normalizeRunRuleset(
+    { atlasRegionId: current.atlasRegionId, revision: value },
+    labyrinthNumber
+  );
+  if (!ruleset || ruleset.revision === CLASSIC_RULESET_REVISION) {
+    throw new RunAccessInputError("Ruleset revision is invalid.");
+  }
+  return ruleset.revision;
 }
 
 /**
@@ -132,7 +159,6 @@ async function readReceiptRequest(request) {
  *   contentPackHash: string,
  *   assetPackage: { version: string, assets: { url: string, scope: "public" | "account" }[] },
  *   classroomIdFor?: (request: import("node:http").IncomingMessage) => string | null,
- *   rulesetFor?: (run: { labyrinthNumber: number }) => { revision: string },
  *   now?: () => Date
  * }} dependencies
  */
@@ -147,7 +173,6 @@ export function createOfflineReceiptHandler({
   contentPackHash,
   assetPackage,
   classroomIdFor = classroomIdFromRequest,
-  rulesetFor = (run) => getQuestRunRuleset(run.labyrinthNumber),
   now = () => new Date()
 }) {
   /**
@@ -225,7 +250,6 @@ export function createOfflineReceiptHandler({
         initialUsedQuestionIds: [...progress.usedQuestionIds]
       };
       const deviceInstallationHash = deviceHashFor(input.deviceInstallationNonce);
-      const rulesetRevision = rulesetFor(input).revision;
       const issuedAt = now().toISOString();
       const windows = offlineReceiptWindows(issuedAt);
       const issued = await issueReceipt({
@@ -235,7 +259,7 @@ export function createOfflineReceiptHandler({
         seed: input.seed,
         levelId: input.levelId,
         labyrinthNumber: input.labyrinthNumber,
-        rulesetRevision,
+        rulesetRevision: input.rulesetRevision,
         contentPackHash,
         issuedAt,
         ...windows,

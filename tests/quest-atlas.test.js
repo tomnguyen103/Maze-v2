@@ -174,7 +174,7 @@ describe("Echo Atlas projection", () => {
     expect(atlas.regions[1]).toMatchObject({
       arcName: "Windthread Steps",
       learningMove: "Compare movement choices",
-      trailTwistRevision: "windways-v1"
+      trailTwistRevision: "windways-v2"
     });
     expect(atlas.regions[1].nodes[1]).toMatchObject({
       labyrinthNumber: 6,

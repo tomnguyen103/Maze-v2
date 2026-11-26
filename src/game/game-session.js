@@ -1,5 +1,6 @@
 import {
   getClassicRunRuleset,
+  isWindwaysRevision,
   normalizeKnownRunRuleset
 } from "./run-ruleset.js";
 import { compareKeys } from "./compare-keys.js";
@@ -8,6 +9,7 @@ import { compareKeys } from "./compare-keys.js";
  * @typedef {"up" | "right" | "down" | "left"} Direction
  * @typedef {{ row: number, col: number }} Position
  * @typedef {Position & { collected: boolean }} Echo
+ * @typedef {{ from: Position, to: Position }} Shortcut
  * @typedef {{
  *   source: Position,
  *   destination: Position,
@@ -251,13 +253,41 @@ export function createRun(requestedSeed, input = {}) {
     ...echoes,
     ...generatedWardens
   ];
-  const windways = config.ruleset.revision === "windways-v1"
+  const objectives = [gatePosition, ...echoes];
+  /** @param {Windway[]} candidate */
+  const acceptsWindways = (candidate) =>
+    everyReachableTileReachesObjectives(
+      labyrinth,
+      explorerPosition,
+      objectives,
+      candidate,
+      []
+    );
+  /** @param {Windway[]} candidate */
+  const acceptsLegacyWindways = (candidate) =>
+    protectedTilesRemainMutuallyReachable(
+      labyrinth,
+      protectedPositions,
+      candidate
+    );
+  /** @param {Shortcut[]} candidate */
+  const acceptsShortcuts = (candidate) =>
+    everyReachableTileReachesObjectives(
+      labyrinth,
+      explorerPosition,
+      objectives,
+      [],
+      candidate
+    );
+  const windways = isWindwaysRevision(config.ruleset.revision)
     ? createWindways(
         labyrinth,
         occupied,
-        protectedPositions,
         random,
-        2
+        2,
+        config.ruleset.revision === "windways-v1"
+          ? acceptsLegacyWindways
+          : acceptsWindways
       )
     : [];
   const echoBridges = config.ruleset.revision === "echo-bridges-v1"
@@ -265,11 +295,12 @@ export function createRun(requestedSeed, input = {}) {
         labyrinth,
         occupied,
         echoes.length,
-        random
+        random,
+        acceptsShortcuts
       )
     : [];
   const tideDoors = config.ruleset.revision === "tide-doors-v1"
-    ? createTideDoors(labyrinth, occupied, 2, random)
+    ? createTideDoors(labyrinth, occupied, 2, random, acceptsShortcuts)
     : [];
   const signalBells = config.ruleset.revision === "warden-bells-v1"
     ? createSignalBells(openTiles, distances, occupied, 2, random)
@@ -632,7 +663,7 @@ function resolveMove(run, directionName) {
     };
   }
 
-  const windway = run.ruleset.revision === "windways-v1"
+  const windway = isWindwaysRevision(run.ruleset.revision)
     ? run.windways.find(({ source }) => samePosition(source, directTarget))
     : undefined;
   if (windway && !isPassage(run.labyrinth, windway.destination)) {
@@ -1451,17 +1482,17 @@ function createSignalBells(
 /**
  * @param {number[][]} labyrinth
  * @param {Set<string>} protectedTiles
- * @param {Position[]} protectedPositions
  * @param {() => number} random
  * @param {number} count
+ * @param {(windways: Windway[]) => boolean} accepts
  * @returns {Windway[]}
  */
 function createWindways(
   labyrinth,
   protectedTiles,
-  protectedPositions,
   random,
-  count
+  count,
+  accepts
 ) {
   const candidates = getOpenTiles(labyrinth).flatMap((source) =>
     DIRECTIONS.map((direction) => ({
@@ -1493,11 +1524,7 @@ function createWindways(
       destination: { ...candidate.destination },
       direction: candidate.direction
     };
-    if (!protectedTilesRemainMutuallyReachable(
-      labyrinth,
-      protectedPositions,
-      [...windways, windway]
-    )) {
+    if (!accepts([...windways, windway])) {
       continue;
     }
     windways.push(windway);
@@ -1515,10 +1542,11 @@ function createWindways(
  * @param {Set<string>} protectedTiles
  * @param {number} count
  * @param {() => number} random
+ * @param {(shortcuts: Shortcut[]) => boolean} accepts
  * @returns {EchoBridge[]}
  */
-function createEchoBridges(labyrinth, protectedTiles, count, random) {
-  return selectShortcutEdges(labyrinth, protectedTiles, count, random)
+function createEchoBridges(labyrinth, protectedTiles, count, random, accepts) {
+  return selectShortcutEdges(labyrinth, protectedTiles, count, random, accepts)
     .map((bridge, echoIndex) => ({
       echoIndex,
       from: { ...bridge.from },
@@ -1532,10 +1560,11 @@ function createEchoBridges(labyrinth, protectedTiles, count, random) {
  * @param {Set<string>} protectedTiles
  * @param {number} count
  * @param {() => number} random
+ * @param {(shortcuts: Shortcut[]) => boolean} accepts
  * @returns {TideDoor[]}
  */
-function createTideDoors(labyrinth, protectedTiles, count, random) {
-  return selectShortcutEdges(labyrinth, protectedTiles, count, random)
+function createTideDoors(labyrinth, protectedTiles, count, random, accepts) {
+  return selectShortcutEdges(labyrinth, protectedTiles, count, random, accepts)
     .map((door, id) => ({
       id,
       from: { ...door.from },
@@ -1549,9 +1578,10 @@ function createTideDoors(labyrinth, protectedTiles, count, random) {
  * @param {Set<string>} protectedTiles
  * @param {number} count
  * @param {() => number} random
- * @returns {{ from: Position, to: Position }[]}
+ * @param {(shortcuts: Shortcut[]) => boolean} accepts
+ * @returns {Shortcut[]}
  */
-function selectShortcutEdges(labyrinth, protectedTiles, count, random) {
+function selectShortcutEdges(labyrinth, protectedTiles, count, random, accepts) {
   const candidates = [];
   for (let row = 1; row < labyrinth.length - 1; row += 1) {
     for (let col = 1; col < labyrinth[row].length - 1; col += 1) {
@@ -1586,7 +1616,8 @@ function selectShortcutEdges(labyrinth, protectedTiles, count, random) {
   for (const candidate of candidates) {
     if (
       reserved.has(positionKey(candidate.from)) ||
-      reserved.has(positionKey(candidate.to))
+      reserved.has(positionKey(candidate.to)) ||
+      !accepts([...selected, candidate])
     ) {
       continue;
     }
@@ -1606,6 +1637,9 @@ function selectShortcutEdges(labyrinth, protectedTiles, count, random) {
             samePosition(bridge.to, candidate.to)
         )
       ) {
+        continue;
+      }
+      if (!accepts([...selected, candidate])) {
         continue;
       }
       selected.push(candidate);
@@ -1645,6 +1679,126 @@ function openShortcutAcrossWall(shortcuts, position, wall) {
 }
 
 /**
+ * The shared Objective Reachability check for Twist placement (ADR 0053). It accepts a
+ * placement only when every tile that the Explorer can reach, with every
+ * shortcut open, still reaches every objective through edges that are always
+ * present. Shortcuts only add edges, so the check holds for each Echo mask and
+ * Tide phase.
+ * shortcut: the check ignores Echo mask and Tide phase, so it is conservative;
+ * use the exact state oracle if it rejects too many placements.
+ *
+ * @param {number[][]} labyrinth
+ * @param {Position} start
+ * @param {Position[]} objectives
+ * @param {Windway[]} windways
+ * @param {Shortcut[]} shortcuts
+ */
+export function everyReachableTileReachesObjectives(
+  labyrinth,
+  start,
+  objectives,
+  windways,
+  shortcuts
+) {
+  const destinationsBySource = new Map(
+    windways.map(({ source, destination }) => [
+      positionKey(source),
+      destination
+    ])
+  );
+  /** @type {Map<string, Position>} */
+  const crossings = new Map();
+  for (const { from, to } of shortcuts) {
+    const wall = positionKey({
+      row: (from.row + to.row) / 2,
+      col: (from.col + to.col) / 2
+    });
+    crossings.set(`${positionKey(from)}>${wall}`, to);
+    crossings.set(`${positionKey(to)}>${wall}`, from);
+  }
+  /**
+   * @param {Position} position
+   * @param {{ row: number, col: number }} direction
+   * @param {boolean} withShortcuts
+   * @returns {Position | undefined}
+   */
+  const step = (position, direction, withShortcuts) => {
+    const target = {
+      row: position.row + direction.row,
+      col: position.col + direction.col
+    };
+    const crossing = withShortcuts
+      ? crossings.get(`${positionKey(position)}>${positionKey(target)}`)
+      : undefined;
+    if (crossing) {
+      return crossing;
+    }
+    if (!isPassage(labyrinth, target)) {
+      return undefined;
+    }
+    const destination = destinationsBySource.get(positionKey(target));
+    if (!destination) {
+      return target;
+    }
+    return isPassage(labyrinth, destination) ? destination : undefined;
+  };
+
+  /** @type {Map<string, Position[]>} */
+  const predecessors = new Map();
+  for (const tile of getOpenTiles(labyrinth)) {
+    for (const direction of DIRECTIONS) {
+      const next = step(tile, direction, false);
+      if (!next) {
+        continue;
+      }
+      const key = positionKey(next);
+      const list = predecessors.get(key) ?? [];
+      list.push(tile);
+      predecessors.set(key, list);
+    }
+  }
+  const reachesObjective = objectives.map((objective) => {
+    const visited = new Set([positionKey(objective)]);
+    const queue = [objective];
+    for (let index = 0; index < queue.length; index += 1) {
+      for (const previous of predecessors.get(positionKey(queue[index])) ?? []) {
+        const key = positionKey(previous);
+        if (!visited.has(key)) {
+          visited.add(key);
+          queue.push(previous);
+        }
+      }
+    }
+    return visited;
+  });
+
+  const visited = new Set([positionKey(start)]);
+  const queue = [start];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    const currentKey = positionKey(current);
+    if (!reachesObjective.every((reachable) => reachable.has(currentKey))) {
+      return false;
+    }
+    for (const direction of DIRECTIONS) {
+      const next = step(current, direction, true);
+      if (!next) {
+        continue;
+      }
+      const key = positionKey(next);
+      if (!visited.has(key)) {
+        visited.add(key);
+        queue.push(next);
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * The windways-v1 placement predicate. It stays for exact v1 replay only
+ * (ADR 0026, ADR 0053).
+ *
  * @param {number[][]} labyrinth
  * @param {Position[]} protectedPositions
  * @param {Windway[]} windways

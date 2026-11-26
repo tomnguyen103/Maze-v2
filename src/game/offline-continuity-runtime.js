@@ -132,14 +132,14 @@ export function createOfflineContinuityRuntime({
     controller.setAccountScope(nextAccountScope);
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, questId?: string }} locator @param {OfflineReceipt} receipt */
+  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, questId?: string }} locator @param {OfflineReceipt} receipt */
   function offlineRunIdentity(locator, receipt) {
     return /** @type {OfflineRunIdentity} */ ({
       runId: locator.runId,
       seed: locator.seed,
       levelId: locator.levelId,
       labyrinthNumber: locator.labyrinthNumber,
-      rulesetRevision: locator.rulesetRevision ?? getRun().ruleset.revision,
+      rulesetRevision: locator.rulesetRevision,
       contentPackHash: receipt.binding.contentPackHash,
       ...(typeof locator.questId === "string"
         ? { questId: locator.questId }
@@ -281,7 +281,7 @@ export function createOfflineContinuityRuntime({
     });
   }
 
-  /** @param {OfflineRunWithQuestId} locator */
+  /** @param {OfflineRunWithQuestId & { rulesetRevision: string }} locator */
   async function prepare(locator) {
     setAccountScope(playerController.getAuthenticatedUserId());
     active = false;
@@ -308,9 +308,10 @@ export function createOfflineContinuityRuntime({
     }
   }
 
-  /** @param {OfflineRunWithQuestId} locator */
+  /** @param {OfflineRunWithQuestId & { rulesetRevision: string }} locator */
   async function prepareInternal(locator) {
     try {
+      // The server binds the revision the locator starts (ADR 0053).
       const result = await client.issueAndPin(locator);
       if (result.ok === true) {
         workerLeaseRunId = locator.runId;

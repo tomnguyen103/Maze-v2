@@ -2426,12 +2426,19 @@ function loadOfflineContinuityBridge() {
  * Continuity. The client verifies the server response before asking the
  * worker to pin anything; a failed preparation never blocks the online Run.
  *
- * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, questId?: string }} locator
+ * @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, atlasRegionId?: string, rulesetRevision?: string, questId?: string }} locator
  */
 function prepareOfflineContinuity(locator) {
+  // The Run that startRun creates from this locator plays this revision.
+  const rulesetRevision = normalizeRunRuleset(
+    rulesetIdentityFromLocator(locator),
+    locator.labyrinthNumber
+  )?.revision;
+  if (!rulesetRevision) return Promise.resolve(false);
   return loadOfflineContinuityBridge().then((bridge) =>
     bridge.prepare({
       ...locator,
+      rulesetRevision,
       questId:
         typeof locator.questId === "string"
           ? locator.questId

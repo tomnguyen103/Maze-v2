@@ -72,10 +72,16 @@ For Vercel, connect the Neon project and apply the migrations in order:
 34. `db/migrations/0034_funnel_counter_shards.sql`
 35. `db/migrations/0035_financial_fact_partial_refunds.sql`
 36. `db/migrations/0036_erase_membership_authority_versions.sql`
+37. `db/migrations/0037_windways_v2_score_partition.sql`
 
 Apply migration 0032 before the release that writes Financial Facts. Without
 the table, every Lifetime paid, refund and dispute webhook and every Checkout
 confirmation rolls back, and Stripe retries the webhooks.
+
+Apply migration 0037 before the release that starts `windways-v2` Runs (ADR 0053).
+Run it outside a wrapping transaction, so its VALIDATE does not hold the ACCESS
+EXCLUSIVE lock. Without the migration, each escaped `windways-v2` score insert fails
+the partition check.
 
 Apply migration 0035 before the release that writes partial refunded cents.
 Without the column, every Lifetime paid, refund and dispute webhook and every

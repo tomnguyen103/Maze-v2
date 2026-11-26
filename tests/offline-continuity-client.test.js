@@ -10,7 +10,8 @@ const RUN = {
   questId: "quest_ii_offline_test_123",
   seed: "MOSS-WATCH-11",
   levelId: "trail-scout",
-  labyrinthNumber: 4
+  labyrinthNumber: 4,
+  rulesetRevision: "echo-hush-v1"
 };
 const RECEIPT = {
   schema: "echo-maze-offline-receipt/1",
@@ -20,6 +21,7 @@ const RECEIPT = {
     seed: RUN.seed,
     levelId: RUN.levelId,
     labyrinthNumber: RUN.labyrinthNumber,
+    rulesetRevision: RUN.rulesetRevision,
     deviceInstallationHash: "a".repeat(64)
   }
 };
@@ -132,6 +134,30 @@ describe("Offline Continuity browser boundary", () => {
       ok: false,
       reason: "binding"
     });
+  });
+
+  it("US-03.5: does not pin a receipt bound to another ruleset revision (ADR 0053)", async () => {
+    const pin = vi.fn(async () => ({ ok: true }));
+    const issueOfflineReceipt = vi.fn(async () => ({
+      receipt: {
+        ...RECEIPT,
+        binding: { ...RECEIPT.binding, rulesetRevision: "windways-v1" }
+      },
+      assetPackage: ASSET_PACKAGE
+    }));
+    const client = createOfflineContinuityClient({
+      playerController: { issueOfflineReceipt },
+      receiptVerifier: { verify: async () => ({ valid: true }) },
+      workerClient: { pin },
+      storage: storage(),
+      cryptoLike: cryptoLike()
+    });
+
+    await expect(client.issueAndPin(RUN)).resolves.toMatchObject({
+      ok: false,
+      reason: "binding"
+    });
+    expect(pin).not.toHaveBeenCalled();
   });
 
   it("does not pin a receipt bound to another active Quest", async () => {

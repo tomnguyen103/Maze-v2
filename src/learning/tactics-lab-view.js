@@ -4,7 +4,8 @@ import {
   createTacticsLabSession,
   getTacticsLabPublicState,
   listTacticsDrills,
-  TACTICS_TRAIL_TWIST_IDS
+  TACTICS_TRAIL_TWIST_IDS,
+  TRAIL_TWIST_LABYRINTHS
 } from "../game/tactics-lab.js";
 
 /** @typedef {Readonly<{ prompt: string, choices: readonly { id: string, label: string }[], hint: string }>} TacticsQuestion */
@@ -12,19 +13,10 @@ import {
 /** @type {Readonly<Record<string, string>>} */
 const TWIST_LABELS = Object.freeze({
   "echo-hush-v1": "Echo Hush",
-  "windways-v1": "Windways",
+  "windways-v2": "Windways",
   "echo-bridges-v1": "Echo Bridges",
   "tide-doors-v1": "Tide Doors",
   "warden-bells-v1": "Warden Bells"
-});
-
-/** @type {Readonly<Record<string, number>>} */
-const TWIST_LABYRINTHS = Object.freeze({
-  "echo-hush-v1": 1,
-  "windways-v1": 5,
-  "echo-bridges-v1": 9,
-  "tide-doors-v1": 13,
-  "warden-bells-v1": 17
 });
 
 /** @type {Readonly<Record<string, string>>} */
@@ -286,7 +278,7 @@ export function createTacticsLabView({ onExit = () => {} } = {}) {
       wardenId: challenge.wardenId,
       attempt: challenge.attempt,
       labyrinthNumber: session.twistId
-        ? TWIST_LABYRINTHS[session.twistId]
+        ? TRAIL_TWIST_LABYRINTHS[session.twistId]
         : 1,
       questionOrdinal: challenge.attempt + 1,
       challengeKind: challenge.kind === "gate-warden" ? "gate-warden" : "warden"

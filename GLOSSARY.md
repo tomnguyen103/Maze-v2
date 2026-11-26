@@ -205,6 +205,12 @@ Atlas Region across its four Labyrinths. It adds a readable regional decision
 while preserving Question, Hint, Skip, Vitality, score, and Run Access rules.
 _Avoid_: Random event, Region Theme, difficulty boost
 
+**Objective Reachability**:
+The generation invariant that, from each tile the Explorer can reach, the Gate
+and each Echo stay reachable, in each Trail Twist mechanism state (ADR 0053).
+A Labyrinth that breaks it can trap the Explorer.
+_Avoid_: Soft-lock check, connectivity, solvable
+
 **Gate Warden**:
 One configured Warden reserved at Labyrinths 4, 8, 12, 16, and 20. It seals the
 open Gate until defeated through the normal Warden Challenge rules.

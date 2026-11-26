@@ -832,7 +832,7 @@ describe("Canvas renderer", () => {
 
   it("US-01.2 snaps land fills to the coastline edges at a fractional tile size", () => {
     const labyrinth = Array.from({ length: 23 }, (_, row) =>
-      Array.from({ length: 23 }, (_, col) => (row === 0 && col === 1 ? 1 : 0))
+      Array.from({ length: 23 }, (_, col) => (row === 0 && col === 1 ? 0 : 1))
     );
     const { context, renderer } = stubCanvas({ width: 160 });
     const paints = recordPaints(context);
@@ -1007,11 +1007,12 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const water = paints.find(
       (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-passage")
     );
-    expect(water?.path).toEqual(["rect(320.00,0.00,320.00,320.00)"]);
+    // ADR 0052 item 1: the passage (0,0) is water, and the walls (0,1) and (1,1) are land.
+    expect(water?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
     const land = paints.find(
       (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-land")
     );
-    expect(land?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
+    expect(land?.path).toEqual(["rect(320.00,0.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]);
     const hatch = paints.find(
       (paint) => paint !== land && paint.kind === "fill" && paint.path.join() === land?.path.join()
     );
@@ -1023,6 +1024,48 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(hatchTile.fills.every((fill) => fill.w === 1 && fill.h === 1)).toBe(true);
     expect(hatchTile.fills.every((fill) => fill.style === canvasToken(LIGHT, "--color-hatch"))).toBe(true);
     expect(hatchTile.fills.every((fill) => fill.x + fill.y === 5)).toBe(true);
+  });
+
+  it("US-02.1 paints each passage cell (1) as water and each wall cell (0) as land, with the coastline between", () => {
+    document.body.style.setProperty("--color-passage", "rgb(1, 1, 9)");
+    document.body.style.setProperty("--color-land", "rgb(9, 9, 1)");
+    document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["0,0", "0,1", "1,0", "1,1"] }));
+
+    // ADR 0052 item 1 and design.md: a passage is water and a wall is land.
+    const water = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(1, 1, 9)");
+    expect(water.map((paint) => paint.path)).toEqual([["rect(0.00,0.00,320.00,320.00)"]]);
+    const land = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(9, 9, 1)");
+    expect(land.map((paint) => paint.path)).toEqual([
+      ["rect(320.00,0.00,320.00,320.00)", "rect(0.00,320.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]
+    ]);
+    const coast = paints.filter((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 7)");
+    expect(coast).toHaveLength(1);
+    expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
+  });
+
+  it("US-02.1 paints every known passage in one water fill (ADR 0052 item 1)", () => {
+    document.body.style.setProperty("--color-passage", "rgb(1, 1, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(
+      board({
+        labyrinth: [
+          [1, 1],
+          [0, 1]
+        ],
+        revealed: ["0,0", "0,1", "1,0", "1,1"]
+      })
+    );
+
+    const water = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(1, 1, 9)");
+    expect(water.map((paint) => paint.path)).toEqual([
+      ["rect(0.00,0.00,320.00,320.00)", "rect(320.00,0.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]
+    ]);
   });
 
   it("US-02.1 strokes one coastline path of wall and passage edges in opaque ink", () => {
@@ -1052,7 +1095,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(coast[0].kind).toBe("stroke");
     expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
     expect(coast[0].path.every((step) => !step.startsWith("arc"))).toBe(true);
-    // The wall (0,0) borders the passage (0,1) at x = 320 and the passage (1,0) at y = 320.
+    // The passage (0,0) borders the wall (0,1) at x = 320 and the wall (1,0) at y = 320.
     const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
     // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. Centred on 320.5, it covers 311..330.
     expect(widths).toContain(19);
