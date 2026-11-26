@@ -107,9 +107,7 @@ describe("Pilot Chart identity", () => {
 
   it("keeps the Stitch project id in the design.md frontmatter", () => {
     const design = read("design.md");
-    expect(design.startsWith("---\nstitch-project: 3244739478942983822\n---")).toBe(
-      true
-    );
+    expect(design.startsWith("---\nstitch-project: 3244739478942983822\n")).toBe(true);
   });
 
   it("lists every adopted palette value in design.md", () => {
