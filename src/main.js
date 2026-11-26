@@ -558,6 +558,9 @@ let lastTick = performance.now();
 let eventTimer = 0;
 let resumeAfterAtlas = false;
 let resumeAfterDaily = false;
+// WebKit does not return focus to the opener when a modal dialog closes.
+/** @type {HTMLElement | null} */
+let dailyOpener = null;
 let resumeAfterRecords = false;
 let reopenJournalAfterPractice = false;
 let journalOpenPending = false;
@@ -723,7 +726,8 @@ elements.newRun.addEventListener("click", () => {
   }
   void openLevelPicker();
 });
-elements.dailyButton.addEventListener("click", openDailyDialog);
+// WebKit does not focus a clicked button, so name the opener.
+elements.dailyButton.addEventListener("click", () => openDailyDialog(elements.dailyButton));
 elements.dailyClose.addEventListener("click", closeDailyDialog);
 elements.dailyDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
@@ -2211,7 +2215,9 @@ function startDailyRun() {
   void startRun(locator, daily);
 }
 
-function openDailyDialog() {
+/** @param {HTMLElement | null} [opener] */
+function openDailyDialog(opener) {
+  dailyOpener = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const currentDaily = currentDailyContract();
   resumeAfterDaily = run.status === "active";
   if (resumeAfterDaily) {
@@ -2514,6 +2520,8 @@ function closeDailyDialog() {
     return;
   }
   elements.dailyDialog.close();
+  dailyOpener?.focus();
+  dailyOpener = null;
   if (resumeAfterDaily && run.status === "paused") {
     togglePause();
   }

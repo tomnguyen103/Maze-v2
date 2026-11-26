@@ -55,12 +55,24 @@ test.describe("layout redesign & edge viewports", () => {
       );
       expect(clippedLeft, `Play layout should not clip past the left edge on ${vp.name}`).toEqual([]);
 
-      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
-      const actionsOverflow = await page.evaluate(() => {
+      // The tab row scrolls sideways when it cannot fit. Every tab must stay reachable:
+      // at scroll 0 the first tab starts inside the row, and the scroll range reaches the last tab.
+      // An end-aligned row without `safe` pushed the first tabs past the left edge, where no scroll reaches.
+      const unreachableTabs = await page.evaluate(() => {
         const actions = document.querySelector(".command-bar__actions");
-        return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
+        if (!(actions instanceof HTMLElement)) return [];
+        actions.scrollLeft = 0;
+        const row = actions.getBoundingClientRect();
+        const tabs = [...actions.children];
+        return tabs
+          .filter((tab) => {
+            const box = tab.getBoundingClientRect();
+            if (box.width === 0) return false;
+            return box.left < row.left - 1 || box.right - row.left > actions.scrollWidth + 1;
+          })
+          .map((tab) => tab.textContent?.trim());
       });
-      expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
+      expect(unreachableTabs, `Header tabs must stay reachable on ${vp.name}`).toEqual([]);
 
       // Verify no buttons clip their content
       const clippedButtons = await page.evaluate(() => {

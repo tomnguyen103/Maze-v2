@@ -10,8 +10,11 @@ const resolveModulePreloadDependencies = (
   if (hostType !== "js") {
     return dependencies;
   }
+  // `index-` is the HTML entry chunk: index.html already loads it, so a
+  // preload link for it is never used and WebKit warns about it.
   return dependencies.filter(
     (dependency) =>
+      !dependency.startsWith("assets/index-") &&
       !dependency.includes("game-session-") &&
       !dependency.includes("tactics-lab-view-")
   );
