@@ -50,7 +50,7 @@ npm run typecheck
 npm run test
 npm run build
 npm run check:bundle
-npx playwright test --project=desktop --project=mobile --workers=4
+npm run test:e2e
 ```
 
 The Firefox, WebKit, and iPhone 14 matrix runs with `npm run test:e2e:xbrowser`.
