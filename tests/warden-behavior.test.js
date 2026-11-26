@@ -242,7 +242,14 @@ function playWithWardens(start, plan) {
     }
     run = next;
     // A Gate Warden Challenge can follow a board Warden Challenge on one tile.
-    while (run.status === "challenge") run = resolveChallenge(run);
+    // A Challenge chain is at most a board Warden and the Gate Warden.
+    for (let chain = 0; run.status === "challenge"; chain += 1) {
+      if (chain === 2) {
+        problems.push("a correct answer left the Challenge active");
+        return { run, problems, stats };
+      }
+      run = resolveChallenge(run);
+    }
   }
   return { run, problems, stats };
 }
