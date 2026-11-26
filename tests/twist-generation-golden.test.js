@@ -41,22 +41,26 @@ const EXPECTED = Object.freeze({
   "classic-v1:maze-master": "41052d611dd3a868"
 });
 
-/** @param {number} labyrinthNumber */
+/**
+ * Only the Developing Labyrinths play windways-v1. The Quest pass already covers the others.
+ * @param {number} labyrinthNumber
+ */
 function legacyRuleset(labyrinthNumber) {
-  const ruleset = getQuestRunRuleset(labyrinthNumber);
-  return ruleset.atlasRegionId === "developing"
+  return getQuestRunRuleset(labyrinthNumber).atlasRegionId === "developing"
     ? normalizeKnownRunRuleset({ atlasRegionId: "developing", revision: "windways-v1" })
-    : ruleset;
+    : null;
 }
 
-/** @param {(labyrinthNumber: number) => any} rulesetFor */
+/** @param {(labyrinthNumber: number) => any} rulesetFor A null ruleset skips that Labyrinth. */
 function fingerprints(rulesetFor) {
   /** @type {Record<string, import("node:crypto").Hash>} */
   const hashes = {};
   // normalizeSeed keeps 24 characters, so each sample must stay distinct after it.
   const seeds = new Set();
+  let samples = 0;
   for (let labyrinthNumber = 1; labyrinthNumber <= LABYRINTH_COUNT; labyrinthNumber += 1) {
     const ruleset = rulesetFor(labyrinthNumber);
+    if (!ruleset) continue;
     for (const level of QUEST_LEVELS) {
       const config = getLabyrinthConfig(level.id, labyrinthNumber);
       const key = `${ruleset.revision}:${level.id}`;
@@ -67,6 +71,7 @@ function fingerprints(rulesetFor) {
           ruleset
         });
         seeds.add(run.seed);
+        samples += 1;
         hashes[key].update(
           JSON.stringify([
             run.labyrinth,
@@ -82,7 +87,8 @@ function fingerprints(rulesetFor) {
       }
     }
   }
-  expect(seeds.size).toBe(LABYRINTH_COUNT * QUEST_LEVELS.length * SEEDS);
+  expect(samples).toBeGreaterThan(0);
+  expect(seeds.size).toBe(samples);
   return Object.fromEntries(
     Object.entries(hashes).map(([key, hash]) => [key, hash.digest("hex").slice(0, 16)])
   );

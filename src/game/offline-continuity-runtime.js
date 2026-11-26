@@ -132,14 +132,14 @@ export function createOfflineContinuityRuntime({
     controller.setAccountScope(nextAccountScope);
   }
 
-  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision?: string, questId?: string }} locator @param {OfflineReceipt} receipt */
+  /** @param {{ runId: string, seed: string, levelId: string, labyrinthNumber: number, rulesetRevision: string, questId?: string }} locator @param {OfflineReceipt} receipt */
   function offlineRunIdentity(locator, receipt) {
     return /** @type {OfflineRunIdentity} */ ({
       runId: locator.runId,
       seed: locator.seed,
       levelId: locator.levelId,
       labyrinthNumber: locator.labyrinthNumber,
-      rulesetRevision: locator.rulesetRevision ?? getRun().ruleset.revision,
+      rulesetRevision: locator.rulesetRevision,
       contentPackHash: receipt.binding.contentPackHash,
       ...(typeof locator.questId === "string"
         ? { questId: locator.questId }
