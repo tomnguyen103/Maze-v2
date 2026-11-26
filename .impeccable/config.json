@@ -10,6 +10,14 @@
           "index.html"
         ],
         "createdAt": "2026-10-08T18:35:13.183Z"
+      },
+      {
+        "rule": "overused-font",
+        "value": "Geist Mono",
+        "files": [
+          "docs/design/mockups/2026-11-26/shared/base.css"
+        ],
+        "createdAt": "2026-11-26T00:00:00.000Z"
       }
     ]
   }

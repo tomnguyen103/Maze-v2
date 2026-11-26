@@ -1,0 +1,72 @@
+/* Shared base for the 2026-11-26 play-screen mockups: faces, reset, and structure that no direction restyles. */
+@font-face {
+  font-family: "Archivo";
+  src: url("../../../../../node_modules/@fontsource-variable/archivo/files/archivo-latin-standard-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("../../../../../node_modules/@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../../../../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --font-display: "Archivo", sans-serif;
+  --font-body: "Atkinson Hyperlegible Next", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; min-height: 100dvh; background: var(--surface); color: var(--text); font: 400 1rem/1.5 var(--font-body); }
+h1, h2, p, dl, dd, ul, figure { margin: 0; }
+ul { padding: 0; list-style: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+a { color: inherit; }
+::selection { background: var(--select); color: var(--select-text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.defs { position: absolute; width: 0; height: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: 8px; top: -64px; z-index: 2; padding: 12px 16px; background: var(--text); color: var(--surface); }
+.skip:focus { top: 8px; }
+
+.board { width: var(--b); }
+.board__svg { display: block; width: 100%; height: auto; }
+.swatch { flex: none; width: 2rem; height: 2.5rem; }
+.swatch--wide { width: 6rem; }
+.pad { display: none; }
+.pad__key svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.readout__cell dd, .title-block dd, kbd, code, .act__count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.act { white-space: nowrap; }
+
+.legend, .twists { padding: 32px 24px; }
+.legend ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 4px 24px; margin-top: 16px; }
+.legend li, .watch li { display: flex; align-items: center; gap: 12px; }
+.twists__row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 16px; max-width: 1200px; }
+.twist figcaption { margin-top: 8px; }
+
+@media (max-width: 759px) {
+  .pad { display: grid; grid-template: repeat(2, 48px) / repeat(3, 48px); gap: 4px; }
+  .pad__key { display: grid; place-items: center; }
+  .pad__key--up { grid-area: 1 / 2; }
+  .pad__key--left { grid-area: 2 / 1; }
+  .pad__key--down { grid-area: 2 / 2; }
+  .pad__key--right { grid-area: 2 / 3; }
+  .legend, .twists { padding: 24px 12px; }
+  .twists__row { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .act, .pad__key, .theme { transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .act:active, .pad__key:active { transform: translateY(1px); }
+}
