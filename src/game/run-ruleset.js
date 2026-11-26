@@ -11,7 +11,7 @@ const QUEST_RULESETS = Object.freeze({
   }),
   developing: Object.freeze({
     atlasRegionId: "developing",
-    revision: "windways-v1",
+    revision: "windways-v2",
     label: "Windways"
   }),
   capable: Object.freeze({
@@ -30,6 +30,19 @@ const QUEST_RULESETS = Object.freeze({
     label: "Warden Bells"
   })
 });
+/**
+ * Earlier revisions that new runs no longer start on. Each stays known for
+ * replay, Active Run Recovery, Run Records, and shared links (ADR 0053).
+ *
+ * @type {readonly Readonly<{ atlasRegionId: string, revision: string, label: string }>[]}
+ */
+const LEGACY_QUEST_RULESETS = Object.freeze([
+  Object.freeze({
+    atlasRegionId: "developing",
+    revision: "windways-v1",
+    label: "Windways"
+  })
+]);
 const ATLAS_REGION_IDS = Object.freeze(Object.keys(QUEST_RULESETS));
 
 /** @param {number} labyrinthNumber */
@@ -89,5 +102,12 @@ export function normalizeKnownRunRuleset(value) {
     };
   }
   const quest = QUEST_RULESETS[candidate.atlasRegionId];
-  return quest && candidate.revision === quest.revision ? quest : null;
+  if (quest && candidate.revision === quest.revision) {
+    return quest;
+  }
+  return LEGACY_QUEST_RULESETS.find(
+    (legacy) =>
+      legacy.atlasRegionId === candidate.atlasRegionId &&
+      legacy.revision === candidate.revision
+  ) ?? null;
 }

@@ -18,7 +18,7 @@ describe("Warden Tactics Lab contract", () => {
     ]);
     expect(TACTICS_TRAIL_TWIST_IDS).toEqual([
       "echo-hush-v1",
-      "windways-v1",
+      "windways-v2",
       "echo-bridges-v1",
       "tide-doors-v1",
       "warden-bells-v1"

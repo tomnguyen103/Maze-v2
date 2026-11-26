@@ -138,6 +138,12 @@ describe("Migration ledger check", () => {
       ]
     ],
     [
+      "0037_windways_v2_score_partition.sql",
+      [
+        /conname = 'score_entries_ruleset_partition_check'\s+AND convalidated\s+AND pg_get_constraintdef\(oid\) LIKE '%windways-v2%'/
+      ]
+    ],
+    [
       "0035_financial_fact_partial_refunds.sql",
       [
         /attrelid = to_regclass\('public\.financial_facts'\)\s+AND attname = 'partial_refunded_cents' AND NOT attisdropped/

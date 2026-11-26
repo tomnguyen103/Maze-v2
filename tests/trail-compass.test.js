@@ -67,7 +67,7 @@ describe("Trail Compass descriptions", () => {
   it("describes each Trail Twist state without leaking hidden geometry", () => {
     for (const [atlasRegionId, revision] of [
       ["foundation", "echo-hush-v1"],
-      ["developing", "windways-v1"],
+      ["developing", "windways-v2"],
       ["capable", "echo-bridges-v1"],
       ["advanced", "tide-doors-v1"],
       ["mastery", "warden-bells-v1"]

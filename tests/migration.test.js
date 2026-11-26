@@ -650,6 +650,37 @@ describe("Regional shared-score partition migration", () => {
   });
 });
 
+describe("Windways v2 shared-score partition migration (ADR 0053)", () => {
+  it("US-03.4 widens the Developing partition to windways-v2 and keeps every other revision", async () => {
+    const sql = await readFile(
+      new URL(
+        "../db/migrations/0037_windways_v2_score_partition.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(sql).toContain("SET lock_timeout = '3s';");
+    expect(sql).toMatch(
+      /'classic-v1',\s+'windways-v1',\s+'windways-v2'/
+    );
+    for (const revision of [
+      "echo-hush-v1",
+      "echo-bridges-v1",
+      "tide-doors-v1",
+      "warden-bells-v1"
+    ]) {
+      expect(sql).toContain(`'${revision}'`);
+    }
+    expect(sql).toContain(") NOT VALID;");
+    expect(sql).toContain(
+      "VALIDATE CONSTRAINT score_entries_ruleset_partition_check"
+    );
+    expect(sql).not.toMatch(/^\s*BEGIN;/m);
+    expect(sql.replace(/--.*$/gm, "")).not.toMatch(/\b(DELETE|UPDATE)\b/);
+  });
+});
+
 describe("Classroom Teacher read boundary migration", () => {
   it("projects journals into count-only rows behind one bounded definer read", async () => {
     const sql = await readFile(

@@ -12,7 +12,7 @@ import {
 /** @type {Readonly<Record<string, string>>} */
 const TWIST_LABELS = Object.freeze({
   "echo-hush-v1": "Echo Hush",
-  "windways-v1": "Windways",
+  "windways-v2": "Windways",
   "echo-bridges-v1": "Echo Bridges",
   "tide-doors-v1": "Tide Doors",
   "warden-bells-v1": "Warden Bells"
@@ -21,7 +21,7 @@ const TWIST_LABELS = Object.freeze({
 /** @type {Readonly<Record<string, number>>} */
 const TWIST_LABYRINTHS = Object.freeze({
   "echo-hush-v1": 1,
-  "windways-v1": 5,
+  "windways-v2": 5,
   "echo-bridges-v1": 9,
   "tide-doors-v1": 13,
   "warden-bells-v1": 17

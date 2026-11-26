@@ -152,6 +152,16 @@ now uses a batched, committing backfill instead of one unbounded `UPDATE`, `NOT 
 That difference is the whole point of the boundary: 0019 could be fixed, and
 0014 and 0015 can only be planned around.
 
+### 0037 — windways-v2 score partition (ADR 0053, not applied)
+
+The file replaces `score_entries_ruleset_partition_check` with the 0019 set
+plus `windways-v2`. The DROP and the `NOT VALID` ADD are one statement, so
+the table is never without the check. The ADD holds `ACCESS EXCLUSIVE` for a
+catalogue change only, under `lock_timeout`. `VALIDATE CONSTRAINT` scans
+under `SHARE UPDATE EXCLUSIVE`, and reads and writes continue. **No quiesce
+window is needed.** Apply 0037 before a release that starts windways-v2 Runs:
+until then, each escaped windways-v2 score insert fails the check.
+
 ### 0020, 0022 and 0025 — the same defect, found by the guard
 
 `tests/migration-locking.test.js` derives the live tables from the applied

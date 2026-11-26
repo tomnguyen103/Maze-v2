@@ -183,7 +183,7 @@ describe("Region Theme", () => {
   it("authors Region 2 presentation without changing Run rules", () => {
     const ruleset = {
       atlasRegionId: "developing",
-      revision: "windways-v1",
+      revision: "windways-v2",
       label: "Windways"
     };
     const before = structuredClone(ruleset);

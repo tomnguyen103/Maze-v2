@@ -1,4 +1,4 @@
--- Migration ledger check: one row per migration 0018 to 0036 with `present`
+-- Migration ledger check: one row per migration 0018 to 0037 with `present`
 -- true when the database holds the object that migration creates.
 --
 -- The check reads the system catalog only. It writes nothing, and the
@@ -104,7 +104,14 @@ FROM (
       WHERE attrelid = to_regclass('public.financial_facts')
         AND attname = 'partial_refunded_cents' AND NOT attisdropped)),
   ('0036_erase_membership_authority_versions.sql',
-    to_regprocedure('public.erase_membership_authority_versions(text)') IS NOT NULL)
+    to_regprocedure('public.erase_membership_authority_versions(text)') IS NOT NULL),
+  -- Outside a transaction: the last step validates the widened check.
+  ('0037_windways_v2_score_partition.sql',
+    EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+      WHERE conrelid = to_regclass('public.score_entries')
+        AND conname = 'score_entries_ruleset_partition_check'
+        AND convalidated
+        AND pg_get_constraintdef(oid) LIKE '%windways-v2%'))
 ) AS ledger (migration, present)
 ORDER BY migration;
 

@@ -221,7 +221,7 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 | :-- | :-- |
 | I1 | Theme Choice values and the storage key stay unchanged. |
 | I2 | The three bar-colour copies stay equal. |
-| I3 | Maze geometry, rulesets, and `echo-bridges-v1` stay unchanged. |
+| I3 | Maze geometry, rulesets, and `echo-bridges-v1` stay unchanged. The Developing Region runs `windways-v2` (ADR 0053), and `windways-v1` stays for replay. |
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |

@@ -26,7 +26,7 @@ Quest II contains five fixed region arcs and four Labyrinths per region:
 | Region | Existing Trail Twist | Labyrinth beats | Learning emphasis |
 | --- | --- | --- | --- |
 | Echo Hush | `echo-hush-v1` | arrival → variation → escalation → gate | notice a changed rhythm |
-| Windways | `windways-v1` | arrival → variation → escalation → gate | compare movement choices |
+| Windways | `windways-v2` (`windways-v1` legacy, ADR 0053) | arrival → variation → escalation → gate | compare movement choices |
 | Echo Bridges | `echo-bridges-v1` | arrival → variation → escalation → gate | connect two observations |
 | Tide Doors | `tide-doors-v1` | arrival → variation → escalation → gate | plan before committing |
 | Warden Bells | `warden-bells-v1` | arrival → variation → escalation → gate | apply the full pattern |
