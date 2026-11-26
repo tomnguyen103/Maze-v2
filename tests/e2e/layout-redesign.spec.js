@@ -167,6 +167,9 @@ test.describe("layout redesign & edge viewports", () => {
     // Check direction buttons have active press state
     const downButton = page.locator("[data-move='down']");
     if (await downButton.isVisible()) {
+      // page.mouse presses at viewport coordinates. On a short viewport
+      // (iPhone 14: 664 px) the pad starts below the fold.
+      await downButton.scrollIntoViewIfNeeded();
       const box = await downButton.boundingBox();
       if (box) {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -383,7 +386,15 @@ test.describe("layout redesign & edge viewports", () => {
       await expect(ribbon).toHaveClass(/is-visible/);
       await expect(ribbon).toHaveCSS("opacity", "1");
 
-      expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
+      // Firefox rounds the same layout to float noise (157.8000031 vs
+      // 157.7999878), so compare to 0.005 px instead of exact equality.
+      const after = await positions();
+      expect(after.map((rect) => rect === null)).toEqual(before.map((rect) => rect === null));
+      before.forEach((rect, index) =>
+        rect?.forEach((value, axis) =>
+          expect(after[index]?.[axis], "board, rail, and Title block stay put").toBeCloseTo(value, 2)
+        )
+      );
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
 
       const maze = await page.locator("#maze-canvas").boundingBox();
@@ -422,6 +433,10 @@ test.describe("layout redesign & edge viewports", () => {
     test(`falls back to a ${os} OS scheme for the landing chart when no Theme Choice is set`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
       await page.goto("/");
+      // The app sends COOP same-origin. Playwright Firefox drops the colour
+      // scheme emulation when that header swaps the browsing context group,
+      // so apply it again on the loaded page.
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
       const visible = page.locator(".landing-hero__chart:visible");
       await expect(visible).toHaveCount(1);
       await expect(visible).toHaveAttribute("src", `/landing-chart-${os === "dark" ? "night" : "light"}.webp`);

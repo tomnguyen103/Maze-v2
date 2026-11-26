@@ -53,6 +53,12 @@ function watchRuntimeProblems(page) {
   page.on("console", (message) => {
     const text = message.text();
     const source = message.location().url;
+    // WebKit 27 warns about missing COEP; the app sends COOP without COEP on purpose.
+    const isCrossOriginIsolationAdvisory =
+      /not cross-origin isolated because the Cross-Origin-Embedder-Policy header is missing/.test(
+        text
+      );
+    if (isCrossOriginIsolationAdvisory) return;
     if (
       message.type() === "error" ||
       message.type() === "warning"

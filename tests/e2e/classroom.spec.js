@@ -12,7 +12,8 @@ if (!classroomAsset) {
 }
 
 test("keeps the Classroom entry clear at desktop/mobile, keyboard, reduced motion, and 200 percent text", async ({
-  page
+  page,
+  browserName
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/class");
@@ -32,8 +33,16 @@ test("keeps the Classroom entry clear at desktop/mobile, keyboard, reduced motio
   await expect(page.getByRole("link", { name: "Personal Play" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
 
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Skip to Classroom" })).toBeFocused();
+  const skipLink = page.getByRole("link", { name: "Skip to Classroom" });
+  if (browserName === "webkit") {
+    // WebKit's Tab skips links unless Safari's "Press Tab to highlight each
+    // item" is on, and Playwright cannot set it. Chromium and Firefox prove the
+    // Tab order; WebKit proves the skip target.
+    await skipLink.focus();
+  } else {
+    await page.keyboard.press("Tab");
+  }
+  await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("#classroom-main")).toBeFocused();
 
