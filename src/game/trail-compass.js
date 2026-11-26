@@ -9,7 +9,7 @@
  * @typedef {import("./game-session.js").GameRun} GameRun
  */
 
-import { openShortcutAcrossWall } from "./game-session.js";
+import { actionAdvancedRun, openShortcutAcrossWall } from "./game-session.js";
 
 const DIRECTIONS = Object.freeze([
   Object.freeze({ name: "north", row: -1, col: 0 }),
@@ -108,18 +108,35 @@ function directionAndDistance(run, target) {
 
 /**
  * Everything the Listen tones may indicate: only already-revealed Echoes,
- * the Gate, and Wardens, each with its revealed direction.
+ * the Gate, and Wardens, each with its revealed direction. Danger comes first,
+ * so the Listen cap never hides a Warden: Wardens nearest first, then the Gate,
+ * then Echoes nearest first.
  *
  * @param {GameRun} run
  */
 export function describeListenTargets(run) {
   const revealed = revealedTiles(run);
+  /** @param {{ row: number, col: number }} position */
+  const distance = (position) =>
+    Math.abs(position.row - run.explorer.row) +
+    Math.abs(position.col - run.explorer.col);
+  /**
+   * @template {{ row: number, col: number }} T
+   * @param {T[]} positions
+   * @returns {T[]}
+   */
+  const nearestFirst = (positions) =>
+    [...positions].sort((a, b) => distance(a) - distance(b));
   /** @type {{ kind: "echo" | "gate" | "warden", key: string, where: string }[]} */
   const targets = [];
-  for (const echo of run.echoes) {
-    const key = `${echo.row},${echo.col}`;
-    if (!echo.collected && revealed.has(key)) {
-      targets.push({ kind: "echo", key, where: directionAndDistance(run, echo) });
+  for (const warden of nearestFirst(run.wardens)) {
+    const key = `${warden.row},${warden.col}`;
+    if (revealed.has(key)) {
+      targets.push({
+        kind: "warden",
+        key,
+        where: directionAndDistance(run, warden)
+      });
     }
   }
   const gateKey = `${run.gate.row},${run.gate.col}`;
@@ -130,14 +147,10 @@ export function describeListenTargets(run) {
       where: directionAndDistance(run, run.gate)
     });
   }
-  for (const warden of run.wardens) {
-    const key = `${warden.row},${warden.col}`;
-    if (revealed.has(key)) {
-      targets.push({
-        kind: "warden",
-        key,
-        where: directionAndDistance(run, warden)
-      });
+  for (const echo of nearestFirst(run.echoes)) {
+    const key = `${echo.row},${echo.col}`;
+    if (!echo.collected && revealed.has(key)) {
+      targets.push({ kind: "echo", key, where: directionAndDistance(run, echo) });
     }
   }
   return targets;
@@ -218,7 +231,9 @@ export function describeCompassState(run) {
     sentences.push(
       adjacent
         ? "A Signal Bell is beside you — Ring Bell is ready."
-        : "Signal Bells wait elsewhere in this Labyrinth."
+        : run.signalBells.every((bell) => bell.spent)
+          ? "Every Signal Bell has rung."
+          : "Signal Bells wait elsewhere in this Labyrinth."
     );
   }
   return sentences.join(" ");
@@ -241,8 +256,9 @@ export function describeCompassAction(run) {
   const exitNote = exits.length ? ` Open: ${exits.join(", ")}.` : "";
   // Warden mode is on screen for a sighted Explorer at all times, so a
   // nonvisual Run has to carry it too. It rides this one status rather than
-  // becoming a second announcement, and it is derived from the Run's own
-  // Wardens — revealed state only, nothing Fog-hidden.
+  // becoming a second announcement. It reads every Warden, Fog-hidden ones
+  // included, as the sighted HUD does, and it names a mode only, never a
+  // Warden position.
   return `${event}${place}${exitNote} ${wardenModeNote(run)}`.trim();
 }
 
@@ -314,8 +330,22 @@ export function createTrailCompass({
     );
   });
   return {
-    /** @param {GameRun} run */
-    onTransition(run) {
+    /**
+     * @param {GameRun} run
+     * @param {GameRun} [previous]
+     * @param {{ type: string }} [action]
+     */
+    onTransition(run, previous, action) {
+      // resolveRingBell returns the same Run when no Bell is beside the
+      // Explorer, so the old event message would repeat.
+      if (
+        previous &&
+        action?.type === "ring-bell" &&
+        !actionAdvancedRun(previous, run, action)
+      ) {
+        announce("No Signal Bell is beside you.");
+        return;
+      }
       announce(describeCompassAction(run));
     },
     hide() {

@@ -3888,7 +3888,7 @@ function transition(action) {
   if (trailCompassActive && trailCompassController) {
     // Trail Compass owns the one polite status per player action, and derives
     // Warden mode from the Run itself so this path stays a single status.
-    trailCompassController.onTransition(run);
+    trailCompassController.onTransition(run, previous, action);
   } else if (eventChanged || wardenMode !== previousWardenMode) {
     const modeAnnouncement =
       wardenMode !== previousWardenMode
