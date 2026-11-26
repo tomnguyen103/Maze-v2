@@ -53,6 +53,12 @@ function watchRuntimeProblems(page) {
   page.on("console", (message) => {
     const text = message.text();
     const source = message.location().url;
+    // WebKit 27 warns about missing COEP; the app sends COOP without COEP on purpose.
+    const isCrossOriginIsolationAdvisory =
+      /not cross-origin isolated because the Cross-Origin-Embedder-Policy header is missing/.test(
+        text
+      );
+    if (isCrossOriginIsolationAdvisory) return;
     if (
       message.type() === "error" ||
       message.type() === "warning"
@@ -357,7 +363,7 @@ test("keeps First Light and Campfire choices accessible at exact release viewpor
     });
   });
   const viewport =
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 };
   await page.emulateMedia({ reducedMotion: "reduce" });

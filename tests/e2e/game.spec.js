@@ -949,7 +949,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 }
   );
@@ -1062,7 +1062,7 @@ test("locks one published Learning Deck into a new Quest", async ({
     throw new Error("Published Number Trail fixture is missing.");
   }
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 }
   );
@@ -1267,11 +1267,14 @@ test("starts a playable maze and responds to keyboard actions", async ({
         message.location().url.includes("/assets/clerk-") &&
         message.text().includes("Y._baseFetch")
       );
+    // Firefox rejects the Clerk dev host's Cloudflare cookie. Clerk still works.
+    const isClerkCookieRejected = /Cookie “_cfuvid” has been rejected for invalid domain/.test(message.text());
     if (
       (message.type() === "error" || message.type() === "warning") &&
       !isClerkDevelopmentKeyNotice &&
       !isOptionalClerkUiUnavailable &&
-      !isOptionalClerkRateLimit
+      !isOptionalClerkRateLimit &&
+      !isClerkCookieRejected
     ) {
       consoleProblems.push(message.text());
     }
@@ -1338,11 +1341,12 @@ test("starts a playable maze and responds to keyboard actions", async ({
     2,
     "region-1-echo-hush"
   );
+  // Playwright's Windows WebKit has no Web Audio, so the toggle stays off there.
+  const hasWebAudio = await page.evaluate(() => typeof AudioContext === "function");
   await page.getByRole("button", { name: "Sound off" }).click();
-  await expect(page.getByRole("button", { name: "Sound on" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
+  await expect(
+    page.getByRole("button", { name: hasWebAudio ? "Sound on" : "Sound off" })
+  ).toHaveAttribute("aria-pressed", String(hasWebAudio));
   await expect.poll(() =>
     presentationRequests.some((pathname) =>
       pathname.includes("/assets/audio-")
@@ -1364,8 +1368,8 @@ test("keeps Classic Daily presentation universal after a themed Quest", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One history-dependent Classic presentation proof is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One history-dependent Classic presentation proof per desktop engine is sufficient."
   );
   await page.goto("/play");
   await expectGameReady(page);
@@ -1393,13 +1397,16 @@ test("retries Region presentation after a failed optional chunk", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One optional presentation retry is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One optional presentation retry per desktop engine is sufficient."
   );
+  // Vite preloads the chunk before import() fetches it, and current browsers
+  // fetch a failed preload again. Every request fails until the first start settles.
   let regionThemeRequests = 0;
+  let failing = true;
   await page.route("**/assets/region-theme-*.js", async (route) => {
     regionThemeRequests += 1;
-    if (regionThemeRequests === 1) {
+    if (failing) {
       await route.abort();
       return;
     }
@@ -1408,16 +1415,25 @@ test("retries Region presentation after a failed optional chunk", async ({
   await page.goto("/play");
   await expectGameReady(page);
   await chooseTrailScout(page);
-  await expect.poll(() => regionThemeRequests).toBe(1);
+  // startRun awaits the import before it adds the start story. The story line
+  // shows only after the failed import has rejected, so the first start has settled.
+  await expect(page.locator("#story-log")).toContainText(
+    "begins. Recover every Echo."
+  );
+  expect(regionThemeRequests).toBeGreaterThanOrEqual(1);
   await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
   await expect(page.locator("#warden-guild")).toHaveText(
     "Universal Warden marks"
   );
+  const newQuest = page.getByRole("button", { name: "New Quest" });
+  await expect(newQuest).toBeVisible();
+  const failedRequests = regionThemeRequests;
+  failing = false;
 
-  await page.getByRole("button", { name: "New Quest" }).click();
+  await newQuest.click();
   await chooseTrailScout(page);
 
-  await expect.poll(() => regionThemeRequests).toBe(2);
+  await expect.poll(() => regionThemeRequests).toBeGreaterThan(failedRequests);
   await expect(page.locator("body")).toHaveAttribute(
     "data-region-theme",
     "mosslight-grove"
@@ -1915,10 +1931,13 @@ test("keeps a Run paused when Atlas is activated twice while loading", async ({
 test("retries the Atlas view after its first chunk request fails", async ({
   page
 }) => {
+  // Vite preloads the chunk before import() fetches it, and current browsers
+  // fetch a failed preload again. Every request fails until the first open fails.
   let requests = 0;
+  let failing = true;
   await page.route("**/assets/quest-atlas-view-*.js", async (route) => {
     requests += 1;
-    if (requests === 1) {
+    if (failing) {
       await route.abort();
       return;
     }
@@ -1932,10 +1951,13 @@ test("retries the Atlas view after its first chunk request fails", async ({
   await expect(page.locator("#live-region")).toContainText(
     "Echo Atlas could not open"
   );
+  const failedRequests = requests;
+  failing = false;
   await atlasButton.click();
 
   await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
-  expect(requests).toBe(2);
+  expect(failedRequests).toBeGreaterThanOrEqual(1);
+  expect(requests).toBeGreaterThan(failedRequests);
 });
 
 test("pans from the labeled viewport and centers the current landmark", async ({
@@ -2014,10 +2036,11 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
       .toBeLessThan((bounds?.y ?? 0) + (bounds?.height ?? 0));
     if (viewport.width <= 768) {
       expect((detailBounds?.y ?? 0) + (detailBounds?.height ?? 0))
-        .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0));
+        // 1 px absorbs WebKit subpixel layout rounding.
+        .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0) + 1);
     }
     const isEvidenceViewport =
-      testInfo.project.name === "mobile"
+      testInfo.project.use.isMobile
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
@@ -2104,7 +2127,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     }));
   }, { retainedReplay: replay });
 
-  const viewports = testInfo.project.name === "mobile"
+  const viewports = testInfo.project.use.isMobile
     ? [{ width: 390, height: 844 }]
     : [
         { width: 320, height: 720 },
@@ -2166,7 +2189,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
       "Reconstructed maze state for the selected Trail step."
     )).toBeVisible();
     const nextStep = viewer.getByRole("button", { name: "Next step" });
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await nextStep.tap();
     } else {
       await nextStep.click();
@@ -2192,7 +2215,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await expect(viewer.locator("[data-run-replay-status]"))
       .toContainText(`Step 0 of ${replay.actions.length}`);
     const isEvidenceViewport =
-      testInfo.project.name === "mobile"
+      testInfo.project.use.isMobile
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
@@ -2277,7 +2300,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     const retainedLandmark = atlas.locator(
       "[data-atlas-landmark='foundation-4']"
     );
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await retainedLandmark.tap();
     } else {
       await retainedLandmark.click();
@@ -2287,7 +2310,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await atlas.evaluate((element) => {
       element.scrollTop = 73;
     });
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await atlas.getByRole("button", { name: "Watch Trail" }).tap();
     } else {
       await atlas.getByRole("button", { name: "Watch Trail" }).click();
@@ -2310,7 +2333,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     const corruptLandmark = atlas.locator(
       "[data-atlas-landmark='foundation-3']"
     );
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await corruptLandmark.tap();
     } else {
       await corruptLandmark.click();
@@ -3289,7 +3312,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -3498,7 +3521,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -3659,7 +3682,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -3948,20 +3971,23 @@ test("supports swipe movement and fresh seeded runs", async ({ page }) => {
   if (!box) {
     throw new Error("Expected the maze Canvas.");
   }
-  await canvas.dispatchEvent("pointerdown", {
-    pointerId: 1,
-    pointerType: "touch",
-    isPrimary: true,
-    clientX: box.x + box.width / 2,
-    clientY: box.y + box.height / 2
-  });
-  await canvas.dispatchEvent("pointerup", {
-    pointerId: 1,
-    pointerType: "touch",
-    isPrimary: true,
-    clientX: box.x + box.width / 2,
-    clientY: box.y + box.height / 2 + 80
-  });
+  // The page builds the PointerEvents: Playwright 1.65 locator.dispatchEvent
+  // with a touch PointerEvent crashes the Firefox 159 page.
+  await canvas.evaluate((element, { x, y }) => {
+    /** @param {string} type @param {number} clientY */
+    const swipe = (type, clientY) =>
+      element.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: "touch",
+        isPrimary: true,
+        clientX: x,
+        clientY
+      }));
+    swipe("pointerdown", y);
+    swipe("pointerup", y + 80);
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
   await expect(page.locator("#moves-value")).toHaveText("001");
 
   await page.getByRole("button", { name: "New Quest" }).click();
@@ -4001,7 +4027,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
 test("requires account creation before a guest starts a second Labyrinth", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One terminal browser Run per desktop engine is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -4973,7 +4999,7 @@ test("resumes an active Run after a double-click during slow Journal loading", a
 test("completes a guest Labyrinth and persists Quest progress before account creation", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One full browser passage per desktop engine is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -5346,8 +5372,8 @@ test("keeps a saved terminal result usable when Atlas presentation fails", async
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One terminal presentation fallback is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One terminal presentation fallback per desktop engine is sufficient."
   );
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.route("**/assets/quest-atlas-*.js", (route) => route.abort());
@@ -6276,8 +6302,8 @@ test("keeps a previous owner's Trail hidden when identity scrub writes fail", as
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "The storage-denial identity boundary is viewport-independent."
+    Boolean(testInfo.project.use.isMobile),
+    "The storage-denial identity boundary is viewport-independent, so desktop engines prove it."
   );
   await installSignedInQuestPlayer(page);
   await page.addInitScript(() => {
@@ -6853,8 +6879,8 @@ test("keeps the Constellation readable at the mobile fold and 200 percent text",
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "The viewport is set explicitly, so one project proves it."
+    Boolean(testInfo.project.use.isMobile),
+    "The viewport is set explicitly, so each desktop engine proves it."
   );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -6903,8 +6929,8 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One optional Constellation retry proof is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One optional Constellation retry proof per desktop engine is sufficient."
   );
   let chunkRequests = 0;
   // A lost connection takes any stylesheet split off with the view chunk too.

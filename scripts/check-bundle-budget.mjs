@@ -141,6 +141,16 @@ for (const budget of budgets) {
   }
 }
 
+// index.html loads the entry chunk. A dynamic-import preload map that names
+// it again adds a <link rel="modulepreload"> that is never used.
+for (const file of files.filter((name) => name.endsWith(".js"))) {
+  const source = await readFile(new URL(file, assetsDirectory), "utf8");
+  if (/"assets\/index-[^"]*\.js"/.test(source)) {
+    failed = true;
+    process.stderr.write(`PRELOAD ${file} lists the entry chunk in its preload map\n`);
+  }
+}
+
 if (failed) {
   process.exitCode = 1;
 }

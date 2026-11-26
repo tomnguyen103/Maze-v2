@@ -397,6 +397,10 @@ function renderAtlas(
     }
     canvas.style.transition = "none";
     applyTransform();
+    // The pan alone centers the landmark. A kept scroll offset can go out of range when the
+    // pan shrinks the scroll area, and Firefox clamps it after this handler.
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
     void canvas.offsetWidth;
     const viewportBounds = viewport.getBoundingClientRect();
     const currentBounds = current.getBoundingClientRect();

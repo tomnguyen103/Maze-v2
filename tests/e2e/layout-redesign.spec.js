@@ -55,12 +55,35 @@ test.describe("layout redesign & edge viewports", () => {
       );
       expect(clippedLeft, `Play layout should not clip past the left edge on ${vp.name}`).toEqual([]);
 
-      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
-      const actionsOverflow = await page.evaluate(() => {
+      // The tab row scrolls sideways when it cannot fit. Every tab must stay reachable:
+      // at scroll 0 the first tab starts inside the row, and the scroll range reaches the last tab.
+      // An end-aligned row without `safe` pushed the first tabs past the left edge, where no scroll reaches.
+      const unreachableTabs = await page.evaluate(() => {
         const actions = document.querySelector(".command-bar__actions");
-        return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
+        if (!(actions instanceof HTMLElement)) return [];
+        actions.scrollLeft = 0;
+        const row = actions.getBoundingClientRect();
+        const tabs = [...actions.children];
+        return tabs
+          .filter((tab) => {
+            const box = tab.getBoundingClientRect();
+            if (box.width === 0) return false;
+            return box.left < row.left - 1 || box.right - row.left > actions.scrollWidth + 1;
+          })
+          .map((tab) => tab.textContent?.trim());
       });
-      expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
+      expect(unreachableTabs, `Header tabs must stay reachable on ${vp.name}`).toEqual([]);
+
+      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
+      // At scaled text the 48rem query still reads the shell as wide, so the row
+      // scrolls there too, and the reachability check above covers it.
+      if (!vp.fontSize) {
+        const actionsOverflow = await page.evaluate(() => {
+          const actions = document.querySelector(".command-bar__actions");
+          return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
+        });
+        expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
+      }
 
       // Verify no buttons clip their content
       const clippedButtons = await page.evaluate(() => {
@@ -155,6 +178,9 @@ test.describe("layout redesign & edge viewports", () => {
     // Check direction buttons have active press state
     const downButton = page.locator("[data-move='down']");
     if (await downButton.isVisible()) {
+      // page.mouse presses at viewport coordinates. On a short viewport
+      // (iPhone 14: 664 px) the pad starts below the fold.
+      await downButton.scrollIntoViewIfNeeded();
       const box = await downButton.boundingBox();
       if (box) {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -371,7 +397,15 @@ test.describe("layout redesign & edge viewports", () => {
       await expect(ribbon).toHaveClass(/is-visible/);
       await expect(ribbon).toHaveCSS("opacity", "1");
 
-      expect(await positions(), "board, rail, and Title block stay put").toEqual(before);
+      // Firefox rounds the same layout to float noise (157.8000031 vs
+      // 157.7999878), so compare to 0.005 px instead of exact equality.
+      const after = await positions();
+      expect(after.map((rect) => rect === null)).toEqual(before.map((rect) => rect === null));
+      before.forEach((rect, index) =>
+        rect?.forEach((value, axis) =>
+          expect(after[index]?.[axis], "board, rail, and Title block stay put").toBeCloseTo(value, 2)
+        )
+      );
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(pageHeight);
 
       const maze = await page.locator("#maze-canvas").boundingBox();
@@ -410,6 +444,10 @@ test.describe("layout redesign & edge viewports", () => {
     test(`falls back to a ${os} OS scheme for the landing chart when no Theme Choice is set`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
       await page.goto("/");
+      // The app sends COOP same-origin. Playwright Firefox drops the colour
+      // scheme emulation when that header swaps the browsing context group,
+      // so apply it again on the loaded page.
+      await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
       const visible = page.locator(".landing-hero__chart:visible");
       await expect(visible).toHaveCount(1);
       await expect(visible).toHaveAttribute("src", `/landing-chart-${os === "dark" ? "night" : "light"}.webp`);

@@ -50,8 +50,11 @@ npm run typecheck
 npm run test
 npm run build
 npm run check:bundle
-npx playwright test --workers=4
+npm run test:e2e
 ```
+
+The Firefox, WebKit, and iPhone 14 matrix runs with `npm run test:e2e:xbrowser`.
+`npm run check:full` runs `check`, `test:e2e`, and `test:e2e:xbrowser` in that order.
 
 Final integrated closure-candidate evidence:
 
