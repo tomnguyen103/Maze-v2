@@ -363,7 +363,7 @@ test("keeps First Light and Campfire choices accessible at exact release viewpor
     });
   });
   const viewport =
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 };
   await page.emulateMedia({ reducedMotion: "reduce" });

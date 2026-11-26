@@ -548,8 +548,8 @@ for (const outcome of /** @type {const} */ ([
     page
   }, testInfo) => {
     test.skip(
-      testInfo.project.name !== "desktop",
-      "Signed-in outcome copy needs one browser profile."
+      Boolean(testInfo.project.use.isMobile),
+      "Signed-in outcome copy needs one desktop profile per engine."
     );
     await page.clock.install({ time: FIXED_DAILY_NOW });
     await installSignedInDailyPlayer(page, outcome);
@@ -600,8 +600,8 @@ test("keeps a rejected signed-in Daily replay local and truthful", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One rejected-submission browser check is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One rejected-submission browser check per desktop engine is sufficient."
   );
   await page.clock.install({ time: FIXED_DAILY_NOW });
   await installSignedInDailyPlayer(page, "rejected");
@@ -626,8 +626,8 @@ test("explains an empty verified board and keeps the Daily action available", as
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One empty-board browser check is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One empty-board browser check per desktop engine is sufficient."
   );
   await page.clock.install({ time: FIXED_DAILY_NOW });
   await preserveQuestState(page);
@@ -665,8 +665,8 @@ test("retries a network-failed verified board without blocking local play", asyn
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One network retry browser check is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One network retry browser check per desktop engine is sufficient."
   );
   await page.clock.install({ time: FIXED_DAILY_NOW });
   await preserveQuestState(page);
@@ -711,8 +711,8 @@ test("separates server unavailability and rejects a different UTC board", async 
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One server-state browser check is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One server-state browser check per desktop engine is sufficient."
   );
   await page.clock.install({ time: FIXED_DAILY_NOW });
   await preserveQuestState(page);
@@ -804,8 +804,8 @@ test("does not save or verify a Daily that crosses UTC midnight before escape", 
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One mid-Run UTC boundary proof is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One mid-Run UTC boundary proof per desktop engine is sufficient."
   );
   await page.clock.install({
     time: new Date("2026-07-26T23:59:59.000Z")
@@ -917,8 +917,8 @@ test("does not claim an unsaved Daily result is a Personal Best", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One storage-failure browser check is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One storage-failure browser check per desktop engine is sufficient."
   );
   await page.clock.install({ time: FIXED_DAILY_NOW });
   const daily = createDailyContract(utcDateKey(FIXED_DAILY_NOW));

@@ -130,7 +130,7 @@ test("US-03.1 and US-03.2 show the crop, price and action at desktop and 390 by 
 test("opens the maintained Clerk SignIn dialog when configured", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One configured browser check is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One configured browser check per desktop engine is sufficient.");
   test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
   await page.goto("/");
   const signIn = page.locator("#landing-sign-in");
@@ -469,7 +469,7 @@ test("defeats and freely retries First Light through touch controls", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "mobile",
+    !testInfo.project.use.isMobile,
     "The dedicated touch journey runs in the mobile browser."
   );
   /** @type {string[]} */
@@ -848,7 +848,7 @@ test("server guest admission survives local storage clearing", async ({
 test("hands the top layer from the demo gate to Clerk account creation", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One configured browser check is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One configured browser check per desktop engine is sufficient.");
   test.skip(!hasClerkPublishableKey, "Clerk is not configured for this browser run.");
   await page.addInitScript(() => {
     localStorage.setItem(

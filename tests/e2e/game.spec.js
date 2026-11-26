@@ -949,7 +949,7 @@ test("keeps Practice Intention explicit, transient, and rejected before storage"
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 }
   );
@@ -1062,7 +1062,7 @@ test("locks one published Learning Deck into a new Quest", async ({
     throw new Error("Published Number Trail fixture is missing.");
   }
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1440, height: 900 }
   );
@@ -1368,8 +1368,8 @@ test("keeps Classic Daily presentation universal after a themed Quest", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One history-dependent Classic presentation proof is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One history-dependent Classic presentation proof per desktop engine is sufficient."
   );
   await page.goto("/play");
   await expectGameReady(page);
@@ -1397,8 +1397,8 @@ test("retries Region presentation after a failed optional chunk", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One optional presentation retry is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One optional presentation retry per desktop engine is sufficient."
   );
   // Vite preloads the chunk before import() fetches it, and current browsers
   // fetch a failed preload again. Every request fails until the first start settles.
@@ -1415,12 +1415,16 @@ test("retries Region presentation after a failed optional chunk", async ({
   await page.goto("/play");
   await expectGameReady(page);
   await chooseTrailScout(page);
-  await expect.poll(() => regionThemeRequests).toBeGreaterThanOrEqual(1);
+  // startRun awaits the import before it adds the start story. The story line
+  // shows only after the failed import has rejected, so the first start has settled.
+  await expect(page.locator("#story-log")).toContainText(
+    "begins. Recover every Echo."
+  );
+  expect(regionThemeRequests).toBeGreaterThanOrEqual(1);
   await expect(page.locator("body")).toHaveAttribute("data-region-theme", "");
   await expect(page.locator("#warden-guild")).toHaveText(
     "Universal Warden marks"
   );
-  // startRun awaits the import, so the failed load has settled once New Quest is usable.
   const newQuest = page.getByRole("button", { name: "New Quest" });
   await expect(newQuest).toBeVisible();
   const failedRequests = regionThemeRequests;
@@ -2036,7 +2040,7 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
         .toBeLessThanOrEqual((bounds?.y ?? 0) + (bounds?.height ?? 0) + 1);
     }
     const isEvidenceViewport =
-      testInfo.project.name === "mobile"
+      testInfo.project.use.isMobile
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
@@ -2123,7 +2127,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     }));
   }, { retainedReplay: replay });
 
-  const viewports = testInfo.project.name === "mobile"
+  const viewports = testInfo.project.use.isMobile
     ? [{ width: 390, height: 844 }]
     : [
         { width: 320, height: 720 },
@@ -2185,7 +2189,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
       "Reconstructed maze state for the selected Trail step."
     )).toBeVisible();
     const nextStep = viewer.getByRole("button", { name: "Next step" });
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await nextStep.tap();
     } else {
       await nextStep.click();
@@ -2211,7 +2215,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await expect(viewer.locator("[data-run-replay-status]"))
       .toContainText(`Step 0 of ${replay.actions.length}`);
     const isEvidenceViewport =
-      testInfo.project.name === "mobile"
+      testInfo.project.use.isMobile
         ? viewport.width === 390
         : viewport.width === 1440;
     if (isEvidenceViewport) {
@@ -2296,7 +2300,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     const retainedLandmark = atlas.locator(
       "[data-atlas-landmark='foundation-4']"
     );
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await retainedLandmark.tap();
     } else {
       await retainedLandmark.click();
@@ -2306,7 +2310,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     await atlas.evaluate((element) => {
       element.scrollTop = 73;
     });
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await atlas.getByRole("button", { name: "Watch Trail" }).tap();
     } else {
       await atlas.getByRole("button", { name: "Watch Trail" }).click();
@@ -2329,7 +2333,7 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     const corruptLandmark = atlas.locator(
       "[data-atlas-landmark='foundation-3']"
     );
-    if (testInfo.project.name === "mobile") {
+    if (testInfo.project.use.isMobile) {
       await corruptLandmark.tap();
     } else {
       await corruptLandmark.click();
@@ -3308,7 +3312,7 @@ test("carries Region 3 identity through Echo Bridge play and Watch Trail", async
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -3517,7 +3521,7 @@ test("carries Region 4 identity and shared Tide phase through play and Watch Tra
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -3678,7 +3682,7 @@ test("carries Region 5 identity and one-use Signal Bell through play and Watch T
   page
 }, testInfo) => {
   await page.setViewportSize(
-    testInfo.project.name === "mobile"
+    testInfo.project.use.isMobile
       ? { width: 390, height: 844 }
       : { width: 1280, height: 800 }
   );
@@ -4023,7 +4027,7 @@ test("starts fresh from a 24-character seed with repeated random values", async 
 test("requires account creation before a guest starts a second Labyrinth", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One terminal browser Run is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One terminal browser Run per desktop engine is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -4995,7 +4999,7 @@ test("resumes an active Run after a double-click during slow Journal loading", a
 test("completes a guest Labyrinth and persists Quest progress before account creation", async ({
   page
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "One full browser passage is sufficient.");
+  test.skip(Boolean(testInfo.project.use.isMobile), "One full browser passage per desktop engine is sufficient.");
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.goto(`/?seed=${WINNING_SEED}&level=trail-scout`);
   await expectGameReady(page);
@@ -5368,8 +5372,8 @@ test("keeps a saved terminal result usable when Atlas presentation fails", async
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One terminal presentation fallback is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One terminal presentation fallback per desktop engine is sufficient."
   );
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.route("**/assets/quest-atlas-*.js", (route) => route.abort());
@@ -6298,8 +6302,8 @@ test("keeps a previous owner's Trail hidden when identity scrub writes fail", as
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "The storage-denial identity boundary is viewport-independent."
+    Boolean(testInfo.project.use.isMobile),
+    "The storage-denial identity boundary is viewport-independent, so desktop engines prove it."
   );
   await installSignedInQuestPlayer(page);
   await page.addInitScript(() => {
@@ -6875,8 +6879,8 @@ test("keeps the Constellation readable at the mobile fold and 200 percent text",
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "The viewport is set explicitly, so one project proves it."
+    Boolean(testInfo.project.use.isMobile),
+    "The viewport is set explicitly, so each desktop engine proves it."
   );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -6925,8 +6929,8 @@ test("offers an explicit retry when the Constellation chunk fails", async ({
   page
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
-    "One optional Constellation retry proof is sufficient."
+    Boolean(testInfo.project.use.isMobile),
+    "One optional Constellation retry proof per desktop engine is sufficient."
   );
   let chunkRequests = 0;
   // A lost connection takes any stylesheet split off with the view chunk too.

@@ -2044,6 +2044,7 @@ async function startRun(locator, daily = null, recoveredRun = null) {
   if (elements.dailyDialog.open) {
     elements.dailyDialog.close();
   }
+  dailyOpener = null;
   resumeAfterDaily = false;
   updateInterface();
   if (recoveredRun) {
@@ -2217,7 +2218,14 @@ function startDailyRun() {
 
 /** @param {HTMLElement | null} [opener] */
 function openDailyDialog(opener) {
-  dailyOpener = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (!elements.dailyDialog.open) {
+    const active = document.activeElement;
+    dailyOpener =
+      opener ??
+      (active instanceof HTMLElement && !elements.dailyDialog.contains(active)
+        ? active
+        : null);
+  }
   const currentDaily = currentDailyContract();
   resumeAfterDaily = run.status === "active";
   if (resumeAfterDaily) {
@@ -2520,7 +2528,9 @@ function closeDailyDialog() {
     return;
   }
   elements.dailyDialog.close();
-  dailyOpener?.focus();
+  if (dailyOpener?.isConnected) {
+    dailyOpener.focus();
+  }
   dailyOpener = null;
   if (resumeAfterDaily && run.status === "paused") {
     togglePause();
@@ -2546,6 +2556,7 @@ async function copyDailyLink(button) {
 }
 
 function returnToQuest() {
+  dailyOpener = null;
   window.location.assign("/play");
 }
 
