@@ -2556,7 +2556,6 @@ async function copyDailyLink(button) {
 }
 
 function returnToQuest() {
-  dailyOpener = null;
   window.location.assign("/play");
 }
 
