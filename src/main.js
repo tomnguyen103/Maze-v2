@@ -2658,15 +2658,13 @@ async function startSharedRun(
     }),
     questId: questProgress.questId
   };
-  if (!(await authorizeRunLocator(locator))) {
-    return false;
-  }
   const recoveredRun = canRecover
     ? await loadRecoveredRun(locator)
     : null;
   // A share link without the player's own run ID keeps its legacy revision.
   const ownRun =
     typeof runId === "string" && activeRunLocator?.runId === runId;
+  // Decide before admission, so one restart admits only the replacement run ID.
   if (ownRun && mustRestartOnCurrentRuleset(ruleset, recoveredRun)) {
     if (recoveredRun) {
       const cleared = activeRunRecoveryController?.clear();
@@ -2685,6 +2683,9 @@ async function startSharedRun(
       reportActiveRunRecoveryUnavailable(true);
     }
     return started;
+  }
+  if (!(await authorizeRunLocator(locator))) {
+    return false;
   }
   if (!canRecover) {
     await beginActiveRunRecovery(locator);

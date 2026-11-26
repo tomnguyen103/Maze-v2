@@ -89,14 +89,16 @@ function planWithoutWardens(start) {
 }
 
 /**
+ * @param {TestRun} previous
  * @param {TestRun} run
  * @param {import("../src/game/game-session.js").Position} from
  * @param {import("../src/game/game-session.js").Position} to
  */
-function isLegalWardenStep(run, from, to) {
+function isLegalWardenStep(previous, run, from, to) {
   const distance = Math.abs(from.row - to.row) + Math.abs(from.col - to.col);
   if (distance <= 1) return true;
-  return [...run.echoBridges, ...run.tideDoors].some(
+  // Echo Bridges open before Wardens move; Tide Doors change phase after.
+  return [...run.echoBridges, ...previous.tideDoors].some(
     (shortcut) =>
       shortcut.open &&
       ((shortcut.from.row === from.row && shortcut.from.col === from.col &&
@@ -136,7 +138,7 @@ function wardenViolations(previous, run) {
     const before = previous.wardens.find(({ id }) => id === warden.id);
     if (!before) {
       problems.push(`Warden ${warden.id} appeared from nowhere`);
-    } else if (!isLegalWardenStep(previous, before, warden)) {
+    } else if (!isLegalWardenStep(previous, run, before, warden)) {
       problems.push(
         `Warden ${warden.id} jumped from ${before.row},${before.col} to ${key}`
       );
