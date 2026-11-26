@@ -282,6 +282,8 @@ function wardenModeNote(run) {
   return "Warden mode: Patrol.";
 }
 
+const LISTEN_CUE_GAP_MS = 160;
+
 /**
  * Self-wiring controller for the Trail Compass panel. Describe and Listen
  * dispatch no Run action and write no log entry; each player action produces
@@ -294,8 +296,6 @@ function wardenModeNote(run) {
  *   root?: Document
  * }} dependencies
  */
-const LISTEN_CUE_GAP_MS = 160;
-
 export function createTrailCompass({
   getRun,
   announce,
