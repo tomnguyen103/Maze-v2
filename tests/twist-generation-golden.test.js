@@ -13,32 +13,32 @@ const LABYRINTH_COUNT = 20;
 
 /**
  * Fingerprints of each known revision. The v1 and Classic values come from main
- * before windways-v2 (ADR 0053). The windways-v2 values pin the revision that
- * new Runs start on. A known revision must replay the same Labyrinth and Twist
- * placement (ADR 0002, ADR 0026).
+ * at a0f037b, before windways-v2 (ADR 0053). The windways-v2 values pin the
+ * revision that new Runs start on. A known revision must replay the same
+ * Labyrinth and Twist placement (ADR 0002, ADR 0026).
  */
 const EXPECTED = Object.freeze({
-  "echo-hush-v1:bright-start": "c43a4bf23b009af3",
-  "echo-hush-v1:trail-scout": "a393e23e28ac1dd2",
-  "echo-hush-v1:maze-master": "9901b7d8d1c4ca1c",
-  "windways-v1:bright-start": "4e2ed614533bd405",
-  "windways-v1:trail-scout": "4dc8d6d54bfe0500",
-  "windways-v1:maze-master": "394d60e3664617ac",
-  "windways-v2:bright-start": "5cfd60aa4e87085a",
-  "windways-v2:trail-scout": "f3e5178138e7df73",
-  "windways-v2:maze-master": "24e3ef262a2b97a5",
-  "echo-bridges-v1:bright-start": "4bbd5507848f2bf6",
-  "echo-bridges-v1:trail-scout": "fa16073545301c77",
-  "echo-bridges-v1:maze-master": "577f09ac202ed143",
-  "tide-doors-v1:bright-start": "06a728e4328a98b3",
-  "tide-doors-v1:trail-scout": "08aded5038cfbd20",
-  "tide-doors-v1:maze-master": "cff4d8bf3237c53d",
-  "warden-bells-v1:bright-start": "7ecc2a2ddf150edd",
-  "warden-bells-v1:trail-scout": "da36453f26a5fe99",
-  "warden-bells-v1:maze-master": "b796fe62bce1b952",
-  "classic-v1:bright-start": "358b4452d2164d6b",
-  "classic-v1:trail-scout": "14e956ebe38e612c",
-  "classic-v1:maze-master": "1f0ba803633dce81"
+  "echo-hush-v1:bright-start": "d72072aa3de4bd2f",
+  "echo-hush-v1:trail-scout": "11f296d6285be550",
+  "echo-hush-v1:maze-master": "12378ab35cade390",
+  "windways-v1:bright-start": "9a780edf3277a7aa",
+  "windways-v1:trail-scout": "8a074e258d7350ec",
+  "windways-v1:maze-master": "a576ed019b30f9a0",
+  "windways-v2:bright-start": "0f46a10adcce2392",
+  "windways-v2:trail-scout": "85a64d095386d138",
+  "windways-v2:maze-master": "ec1d692de3d67d59",
+  "echo-bridges-v1:bright-start": "1ea5877f4811fe92",
+  "echo-bridges-v1:trail-scout": "3e4943edec5b5d55",
+  "echo-bridges-v1:maze-master": "4ecfb5a85b1b2afc",
+  "tide-doors-v1:bright-start": "ca35fb15ef992e3d",
+  "tide-doors-v1:trail-scout": "61fbde533a4ce0b1",
+  "tide-doors-v1:maze-master": "cf6bc724e7282263",
+  "warden-bells-v1:bright-start": "2b03fc4bd8fabc9c",
+  "warden-bells-v1:trail-scout": "b3f07be1eb26a655",
+  "warden-bells-v1:maze-master": "34db1d522032752d",
+  "classic-v1:bright-start": "491cd1a0103b9153",
+  "classic-v1:trail-scout": "66f118478e6bc60b",
+  "classic-v1:maze-master": "41052d611dd3a868"
 });
 
 /** @param {number} labyrinthNumber */
@@ -53,6 +53,8 @@ function legacyRuleset(labyrinthNumber) {
 function fingerprints(rulesetFor) {
   /** @type {Record<string, import("node:crypto").Hash>} */
   const hashes = {};
+  // normalizeSeed keeps 24 characters, so each sample must stay distinct after it.
+  const seeds = new Set();
   for (let labyrinthNumber = 1; labyrinthNumber <= LABYRINTH_COUNT; labyrinthNumber += 1) {
     const ruleset = rulesetFor(labyrinthNumber);
     for (const level of QUEST_LEVELS) {
@@ -60,10 +62,11 @@ function fingerprints(rulesetFor) {
       const key = `${ruleset.revision}:${level.id}`;
       hashes[key] ??= createHash("sha256");
       for (let seedIndex = 0; seedIndex < SEEDS; seedIndex += 1) {
-        const run = createRun(`GOLDEN-${level.id}-${labyrinthNumber}-${seedIndex}`, {
+        const run = createRun(`G-${level.id}-${labyrinthNumber}-${seedIndex}`, {
           ...config,
           ruleset
         });
+        seeds.add(run.seed);
         hashes[key].update(
           JSON.stringify([
             run.labyrinth,
@@ -79,6 +82,7 @@ function fingerprints(rulesetFor) {
       }
     }
   }
+  expect(seeds.size).toBe(LABYRINTH_COUNT * QUEST_LEVELS.length * SEEDS);
   return Object.fromEntries(
     Object.entries(hashes).map(([key, hash]) => [key, hash.digest("hex").slice(0, 16)])
   );

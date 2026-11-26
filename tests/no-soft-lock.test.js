@@ -315,7 +315,8 @@ describe("US-01 shortcut placement check", () => {
  * Real engine search for US-01. Each state is a Run that `applyAction` returns.
  * The search removes Wardens, because a Warden never changes which tile a Move
  * reaches. A Gate Warden Challenge gets one correct answer, which is the
- * shortest rescue. A state that reaches no won state is a trap.
+ * shortest rescue. A Pulse spends a turn, so the search expands it too. A state
+ * that reaches no won state is a trap.
  *
  * @param {TestRun} start
  */
@@ -330,7 +331,8 @@ function engineTrap(start) {
       run.tideDoors.map((door) => door.open),
       run.echoBridges,
       run.status,
-      Boolean(run.challenge)
+      Boolean(run.challenge),
+      run.pulses
     ]);
   /** @type {Map<string, TestRun>} */
   const states = new Map([[stateKey(start), start]]);
@@ -357,12 +359,13 @@ function engineTrap(start) {
       return [applyAction(asked, { type: "answer-question", answerId: "a" })];
     }
     if (run.status !== "active") return [];
-    return MOVES.map(([direction]) =>
+    const moves = MOVES.map(([direction]) =>
       applyAction(run, {
         type: "move",
         direction: /** @type {import("../src/game/game-session.js").Direction} */ (direction)
       })
     );
+    return run.pulses > 0 ? [...moves, applyAction(run, { type: "pulse" })] : moves;
   };
   while (queue.length > 0) {
     const run = /** @type {TestRun} */ (queue.shift());
