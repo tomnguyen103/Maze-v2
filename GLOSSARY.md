@@ -211,6 +211,19 @@ and each Echo stay reachable, in each Trail Twist mechanism state (ADR 0053).
 A Labyrinth that breaks it can trap the Explorer.
 _Avoid_: Soft-lock check, connectivity, solvable
 
+**Game restriction**:
+A condition that each Run must hold. Examples: each Echo and the Gate are
+reachable, no state soft-locks, one seed and one action list give one outcome,
+Fog hides what the rules say it hides, and the server rejects a Run that the
+engine cannot produce.
+_Avoid_: Invariant (alone), rule check, constraint
+
+**Harness**:
+The executable proof of the Game restrictions. It covers the unit and property
+tests, the soft-lock search, the replay verifier, the e2e gameplay flows, and
+the gate scripts under `scripts/`.
+_Avoid_: Test suite (alone), CI, QA
+
 **Gate Warden**:
 One configured Warden reserved at Labyrinths 4, 8, 12, 16, and 20. It seals the
 open Gate until defeated through the normal Warden Challenge rules.
