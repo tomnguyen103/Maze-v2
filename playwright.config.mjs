@@ -37,7 +37,12 @@ export default defineConfig({
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] }
-    }
+    },
+    // Cross-browser matrix: `npm run test:e2e:xbrowser`. WebKit on Windows runs
+    // the 4-viewport tests near the 30 s default, so these projects get 60 s.
+    { name: "firefox", timeout: 60_000, use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", timeout: 60_000, use: { ...devices["Desktop Safari"] } },
+    { name: "iphone", timeout: 60_000, use: { ...devices["iPhone 14"] } }
   ],
   webServer: {
     command: "npm run preview -- --host 127.0.0.1",

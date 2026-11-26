@@ -26,3 +26,4 @@ Run `npm run test:e2e` (`package.json:17`), which builds in e2e mode first. For 
 focused run, build with `npx vite build --mode e2e` before `npx playwright test`.
 Stop any manual preview server on port 4173 first, because `PW_REUSE_SERVER=1`
 reuses it (`playwright.config.mjs:51`).
+`npm run test:e2e` runs the Chromium projects; `npm run test:e2e:xbrowser` runs Firefox, WebKit, and iPhone 14.
