@@ -10,6 +10,7 @@ export default [
       "coverage/**",
       "design-system/**",
       "dist/**",
+      "docs/design/mockups/**",
       "graphify-out/**",
       "node_modules/**",
       "playwright-report/**",
