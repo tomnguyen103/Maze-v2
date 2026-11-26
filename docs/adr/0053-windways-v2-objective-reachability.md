@@ -57,7 +57,9 @@ Active Run Recovery, Run Records, shared links, and replay.
   `applyAction` itself on each shipped configuration, so a change in the move rule
   cannot pass on a copy of the rule.
 - An offline receipt binds the revision of its own Run. A v1 Run that starts before
-  the release still gets a v1 receipt after it.
+  the release still gets a v1 receipt after it. The receipt request must name the
+  revision. A tab from before the release sends none and gets 400 until it reloads,
+  so the route never stores a v2 binding for a v1 Run.
 - Apply migration 0037 before a release that starts v2 Runs. Until then, each
   escaped v2 score insert fails the check.
 - The Tactics Lab drill for Windways uses `windways-v2`. The drill holds no persisted

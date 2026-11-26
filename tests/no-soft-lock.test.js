@@ -297,13 +297,13 @@ describe("US-01 shortcut placement check", () => {
   const start = { row: 1, col: 1 };
   const gate = { row: 1, col: 1 };
 
-  it("US-01.4: accepts the Labyrinth when no crossing leads into the pocket", () => {
+  it("US-01.1: accepts the Labyrinth when no crossing leads into the pocket", () => {
     expect(
       everyReachableTileReachesObjectives(labyrinth, start, [gate], [], [])
     ).toBe(true);
   });
 
-  it("US-01.4: rejects a crossing whose far side has no base-graph path to the Gate", () => {
+  it("US-01.1: rejects a crossing whose far side has no base-graph path to the Gate", () => {
     const shortcut = { from: { row: 1, col: 2 }, to: { row: 1, col: 4 } };
     expect(
       everyReachableTileReachesObjectives(labyrinth, start, [gate], [], [shortcut])
@@ -427,7 +427,7 @@ describe("US-01 real engine cross-check", () => {
     expect(engineTrap({ ...run, wardens: [] }).trap).not.toBeNull();
   });
 
-  it("US-01.4: windways-v2 places two Windways on every shipped Developing Labyrinth", () => {
+  it("US-01.2: windways-v2 places two Windways on every shipped Developing Labyrinth", () => {
     for (const group of shippedConfigsBySize(getQuestRunRuleset)) {
       if (group.ruleset.revision !== "windways-v2") continue;
       for (const { levelId, labyrinthNumber, config } of group.configs) {

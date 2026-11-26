@@ -84,7 +84,7 @@ function fingerprints(rulesetFor) {
   );
 }
 
-export const captureFingerprints = () => ({
+const captureFingerprints = () => ({
   ...fingerprints(getQuestRunRuleset),
   ...fingerprints(legacyRuleset),
   ...fingerprints(getClassicRunRuleset)

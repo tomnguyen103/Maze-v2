@@ -17,7 +17,7 @@ The screenshot is `docs/playtests/screenshots/2026-11-25-windway-soft-lock.png`.
 ## What did not work
 
 The windways-v1 placement check `protectedTilesRemainMutuallyReachable`
-(`src/game/game-session.js:1810`). It proves that the protected tiles reach each
+in `src/game/game-session.js`. It proves that the protected tiles reach each
 other. It does not test the tiles that a one-way hop makes reachable. A pocket
 tile is not protected, so the check accepts the trap.
 
@@ -30,19 +30,19 @@ directed edge must test each reachable tile, not only the endpoints.
 ## Fix
 
 One shared check, `everyReachableTileReachesObjectives`
-(`src/game/game-session.js:1700`). A forward search from the start runs on the
+in `src/game/game-session.js`. A forward search from the start runs on the
 graph with every crossing open (Over). A reverse search from each objective runs
 on the base graph plus the Windways (Under). A crossing only adds a move, so the
 check holds for each Echo Bridge state and each Tide Door phase (ADR 0053).
 
-- windways-v2 placement calls it (`src/game/game-session.js:257`).
+- windways-v2 placement calls it in `createRun`.
 - Echo Bridge and Tide Door placement call it through `selectShortcutEdges`
-  (`src/game/game-session.js:272`, `src/game/game-session.js:1590`).
+  in `src/game/game-session.js`.
 - windways-v1 keeps the legacy check, so each v1 seed replays exactly (ADR 0002).
 
-`tests/no-soft-lock.test.js:220` runs an exact search over position and mechanism
+The US-01.1/US-01.2 sweep in `tests/no-soft-lock.test.js` runs an exact search over position and mechanism
 state for each ruleset and board size, with at least 300 seeds per group. It also
-pins the trap under v1 and its absence under v2 (`tests/no-soft-lock.test.js:255`).
+pins the trap under v1 and its absence under v2 (the US-01.3 tests).
 `tests/twist-generation-golden.test.js` pins the placement of the other Twist
 revisions, so the shared check cannot change a seed silently.
 

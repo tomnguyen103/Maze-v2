@@ -7,13 +7,14 @@ import {
   OFFLINE_RECEIPT_PATH
 } from "../server/offline-receipt-route.js";
 
-/** @type {{ runId: string, questId: string, seed: string, levelId: "trail-scout", labyrinthNumber: number }} */
+/** @type {{ runId: string, questId: string, seed: string, levelId: "trail-scout", labyrinthNumber: number, rulesetRevision: string }} */
 const RUN = {
   runId: "access_01J1MOSSWATCH",
   questId: "quest_01MOSS123",
   seed: "MOSS-WATCH-11",
   levelId: "trail-scout",
-  labyrinthNumber: 4
+  labyrinthNumber: 4,
+  rulesetRevision: "echo-hush-v1"
 };
 const DEVICE_HASH = "a".repeat(64);
 const CONTENT_PACK_HASH = "b".repeat(64);
@@ -166,7 +167,7 @@ describe("Offline Continuity receipt route", () => {
     );
   });
 
-  it("binds the Run's own earlier revision, and the current one when none is sent (ADR 0053)", async () => {
+  it("US-03.5: binds the Run's own revision, and refuses a request that names none (ADR 0053)", async () => {
     const windwayRun = { ...RUN, labyrinthNumber: 5 };
     const progress = { ...DEFAULT_QUEST_PROGRESS, labyrinthNumber: 5 };
     /** @param {Record<string, unknown>} extra */
@@ -188,11 +189,11 @@ describe("Offline Continuity receipt route", () => {
     expect(legacy.output.statusCode).toBe(201);
     expect(legacy.body().receipt.binding.rulesetRevision).toBe("windways-v1");
 
-    const current = await issue({});
+    const current = await issue({ rulesetRevision: "windways-v2" });
     expect(current.output.statusCode).toBe(201);
     expect(current.body().receipt.binding.rulesetRevision).toBe("windways-v2");
 
-    for (const rulesetRevision of ["classic-v1", "echo-hush-v1", "windways-v9", 5]) {
+    for (const rulesetRevision of [undefined, "classic-v1", "echo-hush-v1", "windways-v9", 5]) {
       const refused = await issue({ rulesetRevision });
       expect(refused.output.statusCode).toBe(400);
     }

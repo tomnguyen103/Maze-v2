@@ -1684,6 +1684,8 @@ function openShortcutAcrossWall(shortcuts, position, wall) {
  * shortcut open, still reaches every objective through edges that are always
  * present. Shortcuts only add edges, so the check holds for each Echo mask and
  * Tide phase.
+ * shortcut: the check ignores Echo mask and Tide phase, so it is conservative;
+ * use the exact state oracle if it rejects too many placements.
  *
  * @param {number[][]} labyrinth
  * @param {Position} start

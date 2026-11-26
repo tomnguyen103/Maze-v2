@@ -99,16 +99,14 @@ async function readReceiptRequest(request) {
 /**
  * The receipt binds the Run's own revision. A Run that started on an earlier
  * revision (ADR 0053) keeps it, so its replay builds the board that was played.
- * A request without a revision binds the current Quest ruleset.
+ * A request must name the revision. A client from before ADR 0053 sends none, and
+ * its Run can be on `windways-v1`, so the route stores no guessed binding for it.
  *
  * @param {unknown} value
  * @param {number} labyrinthNumber
  */
 function readRulesetRevision(value, labyrinthNumber) {
   const current = getQuestRunRuleset(labyrinthNumber);
-  if (value === undefined) {
-    return current.revision;
-  }
   const ruleset = normalizeRunRuleset(
     { atlasRegionId: current.atlasRegionId, revision: value },
     labyrinthNumber

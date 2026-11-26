@@ -1047,6 +1047,27 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
   });
 
+  it("US-02.1 paints every known passage in one water fill (ADR 0052 item 1)", () => {
+    document.body.style.setProperty("--color-passage", "rgb(1, 1, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(
+      board({
+        labyrinth: [
+          [1, 1],
+          [0, 1]
+        ],
+        revealed: ["0,0", "0,1", "1,0", "1,1"]
+      })
+    );
+
+    const water = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(1, 1, 9)");
+    expect(water.map((paint) => paint.path)).toEqual([
+      ["rect(0.00,0.00,320.00,320.00)", "rect(320.00,0.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]
+    ]);
+  });
+
   it("US-02.1 strokes one coastline path of wall and passage edges in opaque ink", () => {
     document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
     const { context, renderer } = stubCanvas();
