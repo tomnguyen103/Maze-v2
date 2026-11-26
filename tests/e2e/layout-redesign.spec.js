@@ -74,6 +74,17 @@ test.describe("layout redesign & edge viewports", () => {
       });
       expect(unreachableTabs, `Header tabs must stay reachable on ${vp.name}`).toEqual([]);
 
+      // Under 48rem the tab row scrolls sideways by design; wider shells fit it whole.
+      // At scaled text the 48rem query still reads the shell as wide, so the row
+      // scrolls there too, and the reachability check above covers it.
+      if (!vp.fontSize) {
+        const actionsOverflow = await page.evaluate(() => {
+          const actions = document.querySelector(".command-bar__actions");
+          return actions && window.innerWidth > 768 ? actions.scrollWidth - actions.clientWidth : 0;
+        });
+        expect(actionsOverflow, `Header tabs should fit without scrolling on ${vp.name}`).toBeLessThanOrEqual(1);
+      }
+
       // Verify no buttons clip their content
       const clippedButtons = await page.evaluate(() => {
         const buttons = [...document.querySelectorAll(".command-bar__actions > *")];
