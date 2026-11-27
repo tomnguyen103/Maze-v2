@@ -70,6 +70,8 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   let deviceRatio = 1;
   /** @type {Map<string, CanvasPattern | null>} */
   const patterns = new Map();
+  /** @type {GameRun | null} */
+  let lastRun = null;
 
   /**
    * One pattern per paint and device pixel size. Without a tile context the caller gets null.
@@ -156,8 +158,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
 
   /** @param {GameRun} run */
   function render(run) {
-    resize();
+    lastRun = run;
+    // Read the tokens before resize() clears the canvas, so a missing token leaves the last board.
     palette = readPalette();
+    resize();
     const size = run.labyrinth.length;
     const tile = canvas.width / size;
     const revealed = new Set([...run.revealed, ...run.pulseVisible]);
@@ -983,6 +987,18 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     ]);
   }
 
+  // A scheme or theme change moves the tokens; the cached Fog and hatch patterns hold the old colours.
+  function repaint() {
+    if (!lastRun) return;
+    patterns.clear();
+    render(lastRun);
+  }
+  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", repaint);
+  new MutationObserver(repaint).observe(document.documentElement, {
+    attributeFilter: ["data-theme"],
+    attributes: true
+  });
+
   return { loadFonts, render, resize };
 }
 
@@ -1003,71 +1019,53 @@ function getCanvasContext(canvas) {
   return context;
 }
 
+export class MissingBoardTokenError extends Error {
+  /** @param {string} token The CSS custom property that read empty. */
+  constructor(token) {
+    super(`Board token ${token} is empty.`);
+    this.name = "MissingBoardTokenError";
+    this.token = token;
+  }
+}
+
 function readPalette() {
   // Read from body so a scope set on body reaches the canvas. The board marks
   // use their own tokens, because Night draws them on a light passage.
   const styles = getComputedStyle(document.body ?? document.documentElement);
-  /**
-   * @param {string} name
-   * @param {string} fallback
-   */
-  const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  /** @param {string} name */
+  const color = (name) => {
+    const value = styles.getPropertyValue(name).trim();
+    // An empty token means the stylesheet did not load; a guessed colour would hide that.
+    if (!value) throw new MissingBoardTokenError(name);
+    return value;
+  };
   return {
-    coastline: color("--color-coastline", FALLBACK_PALETTE.coastline),
-    danger: color("--color-danger-line", FALLBACK_PALETTE.danger),
-    echo: color("--color-board-echo", FALLBACK_PALETTE.echo),
-    echoText: color("--color-board-echo-text", FALLBACK_PALETTE.echoText),
-    boardInk: color("--color-board-ink", FALLBACK_PALETTE.boardInk),
-    casing: color("--color-board-casing", FALLBACK_PALETTE.casing),
-    explorer: color("--color-board-explorer", FALLBACK_PALETTE.explorer),
-    explorerDisc: color("--color-board-explorer-disc", FALLBACK_PALETTE.explorerDisc),
-    explorerRing: color("--color-board-explorer-ring", FALLBACK_PALETTE.explorerRing),
-    fontBody: color("--font-body", FALLBACK_PALETTE.fontBody),
-    fontMono: color("--font-utility", FALLBACK_PALETTE.fontMono),
-    fog: color("--color-fog", FALLBACK_PALETTE.fog),
-    fogDot: color("--color-fog-dot", FALLBACK_PALETTE.fogDot),
-    gate: color("--color-board-gate", FALLBACK_PALETTE.gate),
-    hatch: color("--color-hatch", FALLBACK_PALETTE.hatch),
-    ink: color("--color-ink", FALLBACK_PALETTE.ink),
-    land: color("--color-land", FALLBACK_PALETTE.land),
-    light: color("--color-board-light", FALLBACK_PALETTE.light),
-    lightOnFill: color("--color-board-light-on-fill", FALLBACK_PALETTE.lightOnFill),
+    coastline: color("--color-coastline"),
+    danger: color("--color-danger-line"),
+    echo: color("--color-board-echo"),
+    echoText: color("--color-board-echo-text"),
+    boardInk: color("--color-board-ink"),
+    casing: color("--color-board-casing"),
+    explorer: color("--color-board-explorer"),
+    explorerDisc: color("--color-board-explorer-disc"),
+    explorerRing: color("--color-board-explorer-ring"),
+    fontBody: color("--font-body"),
+    fontMono: color("--font-utility"),
+    fog: color("--color-fog"),
+    fogDot: color("--color-fog-dot"),
+    gate: color("--color-board-gate"),
+    hatch: color("--color-hatch"),
+    ink: color("--color-ink"),
+    land: color("--color-land"),
+    light: color("--color-board-light"),
+    lightOnFill: color("--color-board-light-on-fill"),
     // A negative scale would make `arc` throw, so the scale keeps a positive floor.
     markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
-    night: color("--color-night-deep", FALLBACK_PALETTE.night),
-    onFill: color("--color-on-fill", FALLBACK_PALETTE.onFill),
-    passage: color("--color-passage", FALLBACK_PALETTE.passage),
-    pulse: color("--color-pulse", FALLBACK_PALETTE.pulse),
+    night: color("--color-night-deep"),
+    onFill: color("--color-on-fill"),
+    passage: color("--color-passage"),
+    pulse: color("--color-pulse"),
     strong: document.documentElement.dataset.accessContrast === "strong",
-    warden: color("--color-board-warden", FALLBACK_PALETTE.warden)
+    warden: color("--color-board-warden")
   };
 }
-
-// Used when a CSS variable is missing, so the board never paints with an empty style.
-// The values equal the light block of tokens.css.
-const FALLBACK_PALETTE = {
-  boardInk: "oklch(18% 0.012 250)",
-  casing: "oklch(100% 0 0)",
-  coastline: "oklch(18% 0.012 250)",
-  danger: "oklch(18% 0.012 250)",
-  echo: "oklch(52% 0.17 250)",
-  echoText: "oklch(100% 0 0)",
-  explorer: "oklch(46% 0.17 250)",
-  explorerDisc: "oklch(99% 0.004 95)",
-  explorerRing: "oklch(18% 0.012 250)",
-  fontBody: "Arial, sans-serif",
-  fontMono: "monospace",
-  fog: "oklch(99% 0.004 95)",
-  fogDot: "oklch(18% 0.012 250 / 80%)",
-  gate: "oklch(58% 0.24 340)",
-  hatch: "oklch(18% 0.012 250 / 30%)",
-  ink: "oklch(18% 0.012 250)",
-  land: "oklch(99% 0.004 95)",
-  light: "oklch(58% 0.24 340)",
-  lightOnFill: "oklch(58% 0.24 340)",
-  night: "oklch(18% 0.012 250)",
-  onFill: "oklch(100% 0 0)",
-  passage: "oklch(95.5% 0.022 232)",
-  pulse: "oklch(52% 0.17 250 / 28%)",
-  warden: "oklch(18% 0.012 250)"
-};
