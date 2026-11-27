@@ -113,3 +113,45 @@ describe("popup landing hero", () => {
     });
   }
 });
+
+describe("look fonts (D9)", () => {
+  /** @param {string} path */
+  const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+  /** @param {string} path @param {RegExp} rule */
+  const ruleBody = (path, rule) => {
+    const match = read(path).match(rule);
+    expect(match, `${path} has no rule ${rule}`).not.toBeNull();
+    return match?.[1] ?? "";
+  };
+
+  it("defines --font-code as Geist Mono in both looks", () => {
+    for (const path of ["src/looks/pilot/tokens.css", "src/looks/popup/tokens.css"]) {
+      expect(read(path)).toContain('--font-code: "Geist Mono Variable", "Courier New", monospace;');
+    }
+  });
+
+  it("sets the Popup readout font to Andika and keeps Geist in the Pilot one", () => {
+    const popupUtility = ruleBody("src/looks/popup/tokens.css", /--font-utility: ([^;]+);/);
+    expect(popupUtility).toContain("Andika");
+    expect(popupUtility).not.toContain("Geist");
+    expect(ruleBody("src/looks/pilot/tokens.css", /--font-utility: ([^;]+);/)).toContain(
+      "Geist Mono Variable"
+    );
+  });
+
+  it("sets the seed code and the admin textarea to --font-code", () => {
+    expect(ruleBody("src/daylight.css", /\.seed-copy strong \{([^}]*)\}/)).toContain(
+      "var(--font-code)"
+    );
+    expect(ruleBody("src/admin/admin.css", /\.admin-field textarea \{([^}]*)\}/)).toContain(
+      "var(--font-code)"
+    );
+    expect(
+      ruleBody("src/game/game-dialogs.css", /\.run-records \.run-records__seed \{([^}]*)\}/)
+    ).toContain("var(--font-code)");
+    expect(ruleBody("src/looks/popup/surface.css", /:root #result-seed \{([^}]*)\}/)).toContain(
+      "var(--font-code)"
+    );
+  });
+});

@@ -1132,6 +1132,13 @@ dialog > .dialog-heading > button {
   overflow-wrap: anywhere;
 }
 
+/* Plan D9: a Seed code shows in the code font. */
+.run-records .run-records__seed {
+  display: inline;
+  margin-top: 0;
+  font-family: var(--font-code);
+}
+
 .run-records li.run-records__empty {
   display: block;
   padding: var(--space-5) 0;

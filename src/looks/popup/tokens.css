@@ -5,7 +5,8 @@
 
   --font-display: "Chewy", "Arial Rounded MT Bold", Verdana, sans-serif;
   --font-body: "Andika", Verdana, sans-serif;
-  --font-utility: "Geist Mono Variable", "Courier New", monospace;
+  --font-utility: "Andika", Verdana, sans-serif;
+  --font-code: "Geist Mono Variable", "Courier New", monospace;
 
   /* Popup primitives. Night redefines the surface and text ones only. */
   --paper: oklch(96.6% 0.024 85.8);

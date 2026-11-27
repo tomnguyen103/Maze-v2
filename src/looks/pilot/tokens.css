@@ -6,6 +6,7 @@
   --font-display: "Archivo Variable", "Arial Narrow", sans-serif;
   --font-body: "Atkinson Hyperlegible Next Variable", Verdana, sans-serif;
   --font-utility: "Geist Mono Variable", "Courier New", monospace;
+  --font-code: "Geist Mono Variable", "Courier New", monospace;
 
   /* Chart ink on white paper. */
   --color-ink: oklch(18% 0.012 250);
