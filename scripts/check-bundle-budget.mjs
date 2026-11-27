@@ -2,13 +2,15 @@ import { readFile, readdir } from "node:fs/promises";
 import process from "node:process";
 import { URL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { loadEnv } from "vite";
+import { resolveLook } from "../vite.config.mjs";
 
-// The look comes from the first argument or `VITE_LOOK`; each look builds to its own folder.
-const look = process.argv[2] ?? process.env.VITE_LOOK ?? "pilot";
+// The look comes from the first argument, else from `VITE_LOOK` read the way the build reads it.
+const look = resolveLook(
+  process.argv[2] ?? loadEnv("production", process.cwd(), "").VITE_LOOK
+);
+/** @type {Record<string, string>} */
 const outDirectories = { pilot: "dist", popup: "dist-look-popup" };
-if (!(look in outDirectories)) {
-  throw new Error(`Unknown look "${look}". Allowed: pilot, popup.`);
-}
 const assetsDirectory = new URL(`../${outDirectories[look]}/assets/`, import.meta.url);
 const files = await readdir(assetsDirectory);
 const budgets = [

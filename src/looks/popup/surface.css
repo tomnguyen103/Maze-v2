@@ -1,1 +1,6 @@
-/* Popup surface rules: none yet. */
+/* Popup surface rules. */
+
+/* The bright band is the full sky fill, so its caption takes full ink to reach 4.5:1. */
+.classroom-constellation-marker[data-band="bright"] p {
+  color: var(--color-ink);
+}

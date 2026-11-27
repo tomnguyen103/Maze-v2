@@ -90,7 +90,11 @@ const LIGHT_PAIRS = [
   ["--fur", "--sky", 3],
   ["--focus", "--paper", 3],
   ["--focus", "--card", 3],
-  ["--focus", "--cover", 3]
+  ["--focus", "--cover", 3],
+  // Constellation band captions: surface.css gives the bright band full ink.
+  ["--color-ink-muted", "--color-band-1", 4.5],
+  ["--color-ink-muted", "--color-band-2", 4.5],
+  ["--color-ink", "--color-band-3", 4.5]
 ];
 
 /** @type {[string, string, number][]} */
@@ -105,7 +109,11 @@ const NIGHT_PAIRS = [
   ["--cover-deep", "--card", 7],
   ["--color-on-fill", "--cover-fill", 7],
   ["--focus", "--paper", 3],
-  ["--focus", "--card", 3]
+  ["--focus", "--card", 3],
+  ["--color-ink-muted", "--color-band-1", 4.5],
+  ["--color-ink-muted", "--color-band-2", 4.5],
+  ["--color-ink-muted", "--color-band-3", 4.5],
+  ["--color-ink", "--color-band-3", 4.5]
 ];
 
 describe("Popup contrast (WCAG 2)", () => {

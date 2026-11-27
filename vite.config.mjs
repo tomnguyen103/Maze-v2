@@ -57,10 +57,12 @@ function popupBarColors() {
   const swap = (text) =>
     text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
   let outDir = "";
+  let isBuild = false;
   return {
     name: "popup-bar-colors",
     configResolved: (config) => {
       outDir = config.build.outDir;
+      isBuild = config.command === "build";
     },
     transformIndexHtml: swap,
     transform(code, id) {
@@ -69,6 +71,10 @@ function popupBarColors() {
         : null;
     },
     closeBundle() {
+      // The dev server also calls this hook when it closes, and it writes no outDir.
+      if (!isBuild) {
+        return;
+      }
       const boot = `${outDir}/theme-boot.js`;
       writeFileSync(boot, swap(readFileSync(boot, "utf8")));
     }

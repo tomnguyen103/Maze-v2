@@ -184,6 +184,7 @@
     --color-water-2: oklch(38% 0.07 241);
     --color-band-1: oklch(30% 0.05 241);
     --color-band-2: oklch(38% 0.07 241);
+    --color-band-3: oklch(41% 0.11 241);
     --color-signal-soft: oklch(32% 0.07 32);
     --color-warden-soft: oklch(32% 0.05 300);
     --color-echo-soft: oklch(32% 0.06 85);
@@ -214,6 +215,7 @@
   --color-water-2: oklch(38% 0.07 241);
   --color-band-1: oklch(30% 0.05 241);
   --color-band-2: oklch(38% 0.07 241);
+  --color-band-3: oklch(41% 0.11 241);
   --color-signal-soft: oklch(32% 0.07 32);
   --color-warden-soft: oklch(32% 0.05 300);
   --color-echo-soft: oklch(32% 0.06 85);
@@ -224,7 +226,9 @@
 }
 
 @media (prefers-contrast: more) {
-  :root {
+  /* This selector matches the Night selectors in specificity, so it wins by source order. */
+  :root:not([data-theme="light"]),
+  :root[data-theme="light"] {
     --color-ink-muted: var(--ink);
     --color-ink-faint: var(--ink);
     --color-line-soft: var(--ink);
@@ -235,7 +239,9 @@
 
 /* Forced colours: system colours replace the palette, and each board mark keeps its shape. */
 @media (forced-colors: active) {
-  :root {
+  /* This selector matches the Night selectors in specificity, so it wins by source order. */
+  :root:not([data-theme="light"]),
+  :root[data-theme="light"] {
     --color-ink: CanvasText;
     --color-ink-muted: CanvasText;
     --color-ink-faint: CanvasText;
