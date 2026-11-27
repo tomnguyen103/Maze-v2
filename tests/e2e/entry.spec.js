@@ -295,6 +295,14 @@ test("completes First Light without writing product progress", async ({
   await expect(page.locator("#live-region")).toContainText(
     "First Light complete"
   );
+  // First Light has no Atlas summary: the hidden box must not render.
+  await expect(page.locator("#result-atlas")).toBeHidden();
+  await expect(page.locator("#result-dialog")).toHaveAttribute(
+    "data-result-state",
+    "gate"
+  );
+  await expect(page.locator("#result-echoes")).toHaveText(/^\d+ of \d+$/);
+  await expect(page.locator("#result-play-seed")).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Choose Quest Level" })
   ).toBeVisible();
