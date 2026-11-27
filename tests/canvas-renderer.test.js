@@ -2386,6 +2386,42 @@ describe("R1b layered renderer", () => {
     expect([chartPaints(), clips.length]).toEqual([2, 2]);
   });
 
+  it("PR 317 repaints the Fog on a return to the last good frame after a Fog pass throws", () => {
+    const { context, clips, renderer } = layered();
+    const target = /** @type {Record<string, any>} */ (context);
+
+    renderer.render(run);
+    const clip = target.clip;
+    target.clip = vi.fn(() => {
+      throw new Error("canvas lost");
+    });
+    expect(() => renderer.render({ ...run, revealed: ["0,0", "0,1"] })).toThrow("canvas lost");
+    target.clip = clip;
+    // A Replay step back to the first frame finds the Fog layer half painted, so the Fog repaints.
+    renderer.render(run);
+
+    expect(clips).toEqual([["0,0,320,320"], ["0,0,320,320"]]);
+  });
+
+  it("PR 317 repaints the chart on a return to the last good frame after a chart pass throws", () => {
+    const { canvas, context, chartPaints, renderer } = layered();
+    const target = /** @type {Record<string, any>} */ (context);
+    const box = canvas.getBoundingClientRect;
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 320 });
+    const fill = target.fill;
+    target.fill = vi.fn(() => {
+      throw new Error("canvas lost");
+    });
+    expect(() => renderer.render(run)).toThrow("canvas lost");
+    target.fill = fill;
+    canvas.getBoundingClientRect = box;
+    renderer.render(run);
+
+    expect(chartPaints()).toBe(2);
+  });
+
   it("US-01.2 repaints the chart on a width-only backing change", () => {
     const { canvas, chartPaints, renderer } = layered({ width: 640, height: 640 });
 

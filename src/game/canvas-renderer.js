@@ -226,12 +226,15 @@ export function createCanvasRenderer(
     // The chart repaints on a new labyrinth, a new backing size, a new device ratio or a new palette; a Move never repaints it.
     const nextChartKey = [run.labyrinth, canvas.width, canvas.height, deviceRatio, palette];
     const chartDirty = nextChartKey.some((part, index) => part !== chartKey[index]);
+    // Each key clears before its pass writes the layer, so a pass that throws leaves no key that names a half-painted layer.
     if (chartDirty) {
+      chartKey = [];
       onLayer(chart, () => paintChart(run, tile));
     }
     // The Fog repaints whole with the chart or when the known set changes, so no stale cell shows.
     const nextFogKey = `${run.revealed.join(";")}|${run.pulseVisible.join(";")}`;
     if (chartDirty || nextFogKey !== fogKey) {
+      fogKey = "";
       onLayer(fog, () => paintFog(run, revealed, tile, chart.canvas));
       fogKey = nextFogKey;
     }
