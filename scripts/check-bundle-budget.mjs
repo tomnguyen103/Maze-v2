@@ -3,7 +3,13 @@ import process from "node:process";
 import { URL } from "node:url";
 import { gzipSync } from "node:zlib";
 
-const assetsDirectory = new URL("../dist/assets/", import.meta.url);
+// The look comes from the first argument or `VITE_LOOK`; each look builds to its own folder.
+const look = process.argv[2] ?? process.env.VITE_LOOK ?? "pilot";
+const outDirectories = { pilot: "dist", popup: "dist-look-popup" };
+if (!(look in outDirectories)) {
+  throw new Error(`Unknown look "${look}". Allowed: pilot, popup.`);
+}
+const assetsDirectory = new URL(`../${outDirectories[look]}/assets/`, import.meta.url);
 const files = await readdir(assetsDirectory);
 const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
@@ -124,7 +130,7 @@ for (const budget of budgets) {
     }
     const missing = prefixes.filter((_, at) => !matched[at]);
     throw new Error(
-      `Could not find ${budget.label} in dist/assets (${missing.join(", ")}).`
+      `[${look}] Could not find ${budget.label} in ${outDirectories[look]}/assets (${missing.join(", ")}).`
     );
   }
   let gzipKb = 0;
@@ -132,7 +138,7 @@ for (const budget of budgets) {
     const bytes = await readFile(new URL(String(file), assetsDirectory));
     gzipKb += gzipSync(bytes).byteLength / 1024;
   }
-  const result = `${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
+  const result = `[${look}] ${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
   if (gzipKb > budget.maxKb) {
     failed = true;
     process.stderr.write(`OVER ${result}\n`);
@@ -147,7 +153,7 @@ for (const file of files.filter((name) => name.endsWith(".js"))) {
   const source = await readFile(new URL(file, assetsDirectory), "utf8");
   if (/"assets\/index-[^"]*\.js"/.test(source)) {
     failed = true;
-    process.stderr.write(`PRELOAD ${file} lists the entry chunk in its preload map\n`);
+    process.stderr.write(`PRELOAD [${look}] ${file} lists the entry chunk in its preload map\n`);
   }
 }
 

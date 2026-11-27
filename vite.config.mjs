@@ -1,5 +1,25 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
+
+/** The looks a build can ship. `pilot` is the default; `popup` is the rebuild. */
+export const LOOKS = ["pilot", "popup"];
+
+/**
+ * Maps the `VITE_LOOK` value to a look name. An empty value means `pilot`;
+ * any other unknown value throws, so a typo never ships the wrong look.
+ *
+ * @param {string | undefined} value
+ */
+export function resolveLook(value) {
+  const look = value || "pilot";
+  if (!LOOKS.includes(look)) {
+    throw new Error(
+      `VITE_LOOK must be one of: ${LOOKS.join(", ")}. Got "${look}".`
+    );
+  }
+  return look;
+}
 
 /** @type {import("vite").ResolveModulePreloadDependenciesFn} */
 const resolveModulePreloadDependencies = (
@@ -21,7 +41,16 @@ const resolveModulePreloadDependencies = (
 };
 
 export default defineConfig(({ mode }) => {
+  const look = resolveLook(
+    loadEnv(mode, globalThis.process.cwd(), "").VITE_LOOK
+  );
   const base = {
+    // `@look` names the look folder: tokens.css, fonts.js, surface.css.
+    resolve: {
+      alias: {
+        "@look": fileURLToPath(new URL(`./src/looks/${look}/`, import.meta.url))
+      }
+    },
     test: {
       include: ["tests/*.test.js"],
       // The default fork pool has repeatedly lost workers on this Windows
@@ -35,7 +64,8 @@ export default defineConfig(({ mode }) => {
       execArgv: ["--no-experimental-webstorage"]
     },
     build: {
-      outDir: "dist",
+      // The popup build gets its own folder so the default `dist` stays Pilot.
+      outDir: look === "popup" ? "dist-look-popup" : "dist",
       sourcemap: true,
       rolldownOptions: {
         output: {

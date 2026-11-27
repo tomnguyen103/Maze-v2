@@ -20,7 +20,8 @@ describe("vite config side effects", () => {
       include: ["tests/*.test.js"],
       pool: "threads",
       maxWorkers: 1,
-      fileParallelism: false
+      fileParallelism: false,
+      execArgv: ["--no-experimental-webstorage"]
     });
   });
 

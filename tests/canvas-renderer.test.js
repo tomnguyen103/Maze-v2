@@ -154,7 +154,7 @@ function questRun(seed, level, quest) {
   });
 }
 
-const tokensCss = readFileSync(resolve(process.cwd(), "tokens.css"), "utf8");
+const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
 
 /** @param {string} selector */
 function scopeOf(selector) {

@@ -1,6 +1,4 @@
-import "@fontsource-variable/archivo/wdth.css";
-import "@fontsource-variable/atkinson-hyperlegible-next";
-import "@fontsource-variable/geist-mono";
+import "@look/fonts.js";
 import "./daylight.css";
 
 import { renderLanding } from "./landing/landing-controller.js";

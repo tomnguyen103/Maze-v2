@@ -15,7 +15,8 @@ const GENERATED = [
   ".ua",
   "playwright-report",
   "test-results",
-  "coverage"
+  "coverage",
+  "dist-look-popup"
 ];
 
 /** Static design mockups: never served, ignored by `eslint.config.mjs` too. */
@@ -229,7 +230,7 @@ describe("shared base styles", () => {
 
   it("draws no island, rope bridge, blob or grid ground (US-01.3)", () => {
     expect(daylight).not.toMatch(/--island\b/);
-    expect(readFileSync(root + "tokens.css", "utf8")).not.toMatch(/--island\b/);
+    expect(readFileSync(root + "src/looks/pilot/tokens.css", "utf8")).not.toMatch(/--island\b/);
     expect(daylight).not.toMatch(/rope/i);
     expect(daylight).not.toMatch(/closest-side/);
     expect(daylight).not.toMatch(/--color-paper-grid/);
