@@ -1610,15 +1610,18 @@ function loadClassExpeditionPlay() {
   return classExpeditionPlayPromise;
 }
 
-/** @param {boolean} [force] */
-function reportActiveRunRecoveryUnavailable(force = false) {
+/**
+ * @param {boolean} [force]
+ * @param {string} [prefix] The action status to speak in the same call.
+ */
+function reportActiveRunRecoveryUnavailable(force = false, prefix = "") {
   if (activeRunRecoveryUnavailableReported && !force) {
     return;
   }
   activeRunRecoveryUnavailableReported = true;
   const message =
     "Campfire Resume is unavailable for this Run. Current-tab play continues.";
-  announce(message);
+  announce(`${prefix} ${message}`.trim());
   showEvent(message);
 }
 
@@ -3699,6 +3702,7 @@ function transition(action) {
       addStory(getQuestIIStoryletLogEntry(currentLabyrinthNumber), "region");
     }
   }
+  let actionAnnouncement = "";
   if (trailCompassActive && trailCompassController) {
     // Trail Compass owns the one polite status per player action, and derives
     // Warden mode from the Run itself so this path stays a single status.
@@ -3708,7 +3712,14 @@ function transition(action) {
       wardenMode !== previousWardenMode
         ? ` Warden mode: ${wardenModeLabel(wardenMode)}.`
         : "";
-    announce(`${eventChanged ? eventMessage : ""}${modeAnnouncement}`.trim());
+    actionAnnouncement = `${eventChanged ? eventMessage : ""}${modeAnnouncement}`.trim();
+  }
+  // The live region speaks only its newest call, so the recovery warning
+  // carries the action status in the same call.
+  const recoveryWarning =
+    recoveryResult?.status === "unavailable" && !activeRunRecoveryUnavailableReported;
+  if (actionAnnouncement && !recoveryWarning) {
+    announce(actionAnnouncement);
   }
   playEventSound(eventType);
   if (
@@ -3723,8 +3734,8 @@ function transition(action) {
 
   updateInterface();
   syncChallengeDialog();
-  if (recoveryResult?.status === "unavailable") {
-    reportActiveRunRecoveryUnavailable();
+  if (recoveryWarning) {
+    reportActiveRunRecoveryUnavailable(false, actionAnnouncement);
   }
   if (
     recoveryResult?.status === "terminal" &&

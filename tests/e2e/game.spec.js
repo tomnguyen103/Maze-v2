@@ -5909,6 +5909,10 @@ test("continues current-tab play when recovery storage writes are denied", async
   await expect(page.locator("#event-ribbon")).toContainText(
     "Campfire Resume is unavailable"
   );
+  // One live call carries the action status and the warning, so neither drops.
+  await expect(page.locator("#live-region")).toHaveText(
+    /\S.* Campfire Resume is unavailable for this Run\. Current-tab play continues\.$/
+  );
 });
 
 test("scrubs a checkpoint when Campfire deletion is denied", async ({
