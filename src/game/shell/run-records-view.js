@@ -93,3 +93,38 @@ export function renderRunRecords(list, runRecords, { formatTime, formatRunRulese
     })
   );
 }
+
+/**
+ * Copies the share link of one Records row. Rows exist only after this module
+ * has rendered them, so the module is already loaded.
+ * @param {HTMLButtonElement} button
+ * @param {(message: string) => void} announce
+ */
+export async function copyRecordShareLink(button, announce) {
+  const { seed = "", level = "trail-scout", labyrinth = "1" } = button.dataset;
+  try {
+    const ruleset = normalizeRunRuleset(
+      { atlasRegionId: button.dataset.region, revision: button.dataset.ruleset },
+      Number(labyrinth)
+    );
+    if (!ruleset) {
+      throw new Error("Run ruleset identity is invalid.");
+    }
+    const url = new URL("/play", window.location.origin);
+    url.searchParams.set("seed", seed);
+    url.searchParams.set("level", level);
+    url.searchParams.set("labyrinth", String(Number(labyrinth)));
+    url.searchParams.set("region", ruleset.atlasRegionId);
+    url.searchParams.set("rules", ruleset.revision);
+    await navigator.clipboard.writeText(url.toString());
+    button.textContent = "Copied";
+    announce(`Share link for seed ${seed} copied.`);
+    window.setTimeout(() => {
+      if (button.isConnected) {
+        button.textContent = "Copy Share Link";
+      }
+    }, 1400);
+  } catch {
+    announce(`Copy failed. Seed ${seed} is visible.`);
+  }
+}

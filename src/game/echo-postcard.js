@@ -145,3 +145,45 @@ export function parseEchoPostcard(value) {
     return null;
   }
 }
+
+/**
+ * Copies the Daily link or the Echo Postcard link for the current Run.
+ * @param {{
+ *   dailyDate: string | null,
+ *   run: { seed: string, ruleset: any },
+ *   levelId: string,
+ *   labyrinthNumber: number,
+ *   announce: (message: string) => void,
+ *   showEvent: (message: string) => void
+ * }} parts
+ */
+export async function copySeedLink({
+  dailyDate,
+  run,
+  levelId,
+  labyrinthNumber,
+  announce,
+  showEvent
+}) {
+  if (dailyDate) {
+    const url = new URL("/play", window.location.origin);
+    url.searchParams.set("daily", dailyDate);
+    await navigator.clipboard.writeText(url.toString());
+    announce("Today’s Daily link copied.");
+    showEvent("Daily link copied. It contains only the public UTC date.");
+    return;
+  }
+  await navigator.clipboard.writeText(
+    createEchoPostcardUrl({
+      origin: window.location.origin,
+      seed: run.seed,
+      levelId,
+      labyrinthNumber,
+      ruleset: run.ruleset
+    })
+  );
+  announce("Echo Postcard copied.");
+  showEvent(
+    "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
+  );
+}

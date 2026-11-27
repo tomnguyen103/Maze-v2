@@ -123,10 +123,6 @@ import {
 let lanternJournalUiPromise = null;
 let lanternJournalUiRetry = false;
 let lanternJournalUiFailedTwice = false;
-/** @type {Promise<ReturnType<typeof import("./learning/lantern-trail-view.js").createLanternTrailView>> | null} */
-let lanternTrailViewPromise = null;
-let lanternTrailViewRetry = false;
-let lanternTrailViewFailedTwice = false;
 /** @type {Promise<typeof import("./learning/echo-lens-view.js") | null> | null} */
 let echoLensViewPromise = null;
 let echoLensRequestId = 0;
@@ -559,6 +555,47 @@ const loadRunRecordsView = lazyShellView(
   () => import("./game/shell/run-records-view.js?retry=1"),
   "Run Records"
 );
+const loadQuestAtlasOpener = lazyShellView(
+  () => import("./game/shell/quest-atlas-opener.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/quest-atlas-opener.js?retry=1"),
+  "Echo Atlas"
+);
+const loadRunReplayOpener = lazyShellView(
+  () => import("./game/shell/run-replay-opener.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/run-replay-opener.js?retry=1"),
+  "This Trail"
+);
+const loadLanternJournalRender = lazyShellView(
+  () => import("./game/shell/lantern-journal-render.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/lantern-journal-render.js?retry=1"),
+  "Lantern Journal"
+);
+const loadWorkshopOpener = lazyShellView(
+  () => import("./game/shell/workshop-opener.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/workshop-opener.js?retry=1"),
+  "Lantern Trail Workshop"
+);
+const loadAccessSettingsOpener = lazyShellView(
+  () => import("./game/shell/access-settings-opener.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/access-settings-opener.js?retry=1"),
+  "Explorer Access Settings"
+);
+/** @type {Awaited<ReturnType<typeof loadAccessSettingsOpener>>} */
+let loadedAccessSettingsOpener = null;
+const loadDailyConstellationBoard = lazyShellView(
+  () => import("./game/shell/daily-constellation-board.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/daily-constellation-board.js?retry=1"),
+  "The Constellation",
+  () => {
+    dailyConstellationBoardFailures += 1;
+  }
+);
 const loadVerifiedDailyBoard = lazyShellView(
   () => import("./game/shell/verified-daily-board.js"),
   // @ts-expect-error Vite treats the query as a distinct retry chunk.
@@ -603,7 +640,6 @@ let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
 let eventTimer = 0;
-let resumeAfterAtlas = false;
 let resumeAfterDaily = false;
 // WebKit does not return focus to the opener when a modal dialog closes.
 /** @type {HTMLElement | null} */
@@ -611,9 +647,6 @@ let dailyOpener = null;
 let resumeAfterRecords = false;
 let reopenJournalAfterPractice = false;
 let journalOpenPending = false;
-let resumeAfterWorkshop = false;
-let workshopOpenPending = false;
-let resumeAfterAccessSettings = false;
 let resumeAfterQuestConflict = false;
 /** @type {{ progress: typeof questProgress, source: "cloud" | "merged" } | null} */
 let deferredCloudQuest = null;
@@ -627,11 +660,8 @@ let gateStagingComplete = false;
 /** @type {ReturnType<typeof createDailyContract> | null} */
 let activeDaily = null;
 let dailyQuestionIndex = 0;
-/** @type {Promise<ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView>> | null} */
-let dailyConstellationViewPromise = null;
-let dailyConstellationViewRetry = false;
-let dailyConstellationFailedTwice = false;
 let dailyConstellationRequestId = 0;
+let dailyConstellationBoardFailures = 0;
 /** @type {Promise<OfflineContinuityBridge> | null} */
 let offlineContinuityBridgePromise = null;
 /** @type {boolean} */
@@ -678,22 +708,6 @@ if (
 let storyEntries = [];
 /** @type {{ x: number, y: number } | null} */
 let touchStart = null;
-/** @type {Promise<ReturnType<typeof import("./game/quest-atlas-view.js").createQuestAtlasView>> | null} */
-let atlasViewPromise = null;
-let atlasOpening = false;
-let atlasViewRetry = false;
-let atlasProjectionRetry = false;
-/** @type {Promise<ReturnType<typeof import("./game/run-replay-view.js").createRunReplayView>> | null} */
-let runReplayViewPromise = null;
-let runReplayOpening = false;
-let runReplayViewRetry = false;
-let resumeAfterRunReplay = false;
-/** @type {typeof import("./game/run-replay.js").buildRunReplayTimeline | null} */
-let buildRunReplayTimelineForAtlas = null;
-/** @type {Promise<ReturnType<typeof import("./player/access-settings-view.js").createAccessSettingsView>> | null} */
-let accessSettingsViewPromise = null;
-let accessSettingsOpening = false;
-let accessSettingsViewRetry = false;
 
 export const gameReady = initializeRunEntry();
 void gameReady.then(() => {
@@ -963,211 +977,36 @@ elements.gateStagingSkip.addEventListener("click", () => {
  * @param {HTMLElement} trigger
  * @param {{ resumePausedRun?: boolean }} [options]
  */
-async function showQuestAtlas(trigger, { resumePausedRun = false } = {}) {
-  if (atlasOpening) {
-    return;
-  }
-  atlasOpening = true;
-  const pauseForAtlas = run.status === "active";
-  resumeAfterAtlas = pauseForAtlas || resumePausedRun;
-  if (pauseForAtlas) {
-    togglePause();
-  }
-  const retrying = atlasViewRetry;
-  try {
-    // Two scopes on purpose. Building the view attaches listeners to
-    // `#atlas-dialog`, so only a failure of the import or of that build may
-    // discard the cached promise. A failure anywhere after it — projecting
-    // the Atlas, reading retained Trails — would leave those listeners
-    // attached and let the next open add a second set, without bound.
-    let atlasView;
-    try {
-      if (!atlasViewPromise) {
-        /** @type {Promise<typeof import("./game/quest-atlas-view.js")>} */
-        const viewModule = retrying
-          // @ts-expect-error Vite treats the query as a distinct retry chunk.
-          ? import("./game/quest-atlas-view.js?retry=1")
-          : import("./game/quest-atlas-view.js");
-        atlasViewRetry = true;
-        atlasViewPromise = viewModule.then(
-          ({ createQuestAtlasView }) => createQuestAtlasView({
-            onWatchTrail: (landmarkId, returnTarget) => {
-              const record = replayRecordForLandmark(landmarkId);
-              if (!record) {
-                announce(
-                  "That Trail is no longer retained on this device."
-                );
-                return;
-              }
-              resumeAfterRunReplay = false;
-              void openRunReplay(record, returnTarget);
-            },
-            onWorkshop: (selection, returnTarget) => {
-              const resumePausedRun = resumeAfterAtlas;
-              resumeAfterAtlas = false;
-              void openWorkshop({
-                ...selection,
-                origin: "atlas",
-                trigger: returnTarget,
-                resumePausedRun
-              });
-            },
-            onClose: () => {
-              if (resumeAfterAtlas && run.status === "paused") {
-                togglePause();
-              }
-              resumeAfterAtlas = false;
-            }
-          })
-        );
-      }
-      atlasView = await atlasViewPromise;
-    } catch {
-      atlasViewPromise = null;
-      if (resumeAfterAtlas && run.status === "paused") {
-        togglePause();
-      }
-      resumeAfterAtlas = false;
-      announce(
-        retrying
-          ? "Echo Atlas is unavailable. Reload to try again."
-          : "Echo Atlas could not open. Continue the Quest and try again."
-      );
-      return;
-    }
-    const { projectAtlas } = await (atlasProjectionRetry
-      // @ts-expect-error Vite treats the query as a distinct retry chunk.
-      ? import("./game/quest-atlas.js?retry=1")
-      : import("./game/quest-atlas.js"));
-    atlasProjectionRetry = true;
-    const watchTrailLandmarkIds = await compatibleReplayLandmarkIds();
-    atlasView.show(await projectAtlas(questProgress, {
-      watchTrailLandmarkIds,
-    }), trigger);
-  } catch {
-    if (resumeAfterAtlas && run.status === "paused") {
-      togglePause();
-    }
-    resumeAfterAtlas = false;
-    announce(
-      "Echo Atlas could not open. Continue the Quest and try again."
-    );
-  } finally {
-    atlasOpening = false;
-  }
-}
-
-/** @param {string} landmarkId */
-function replayRecordForLandmark(landmarkId) {
-  return runRecords.find(
-    (record) =>
-      isCompatibleRunReplay(record) &&
-      record.questId === questProgress.questId &&
-      record.questLevelId === questProgress.levelId &&
-      record.labyrinthNumber !== undefined &&
-      `${getDifficultyBand(record.labyrinthNumber).id}-` +
-        `${record.labyrinthNumber}` === landmarkId
-  ) ?? null;
-}
-
-async function compatibleReplayLandmarkIds() {
-  try {
-    if (!buildRunReplayTimelineForAtlas) {
-      ({ buildRunReplayTimeline: buildRunReplayTimelineForAtlas } =
-        await import("./game/run-replay.js"));
-    }
-  } catch {
-    return new Set();
-  }
-  return new Set(
-    runRecords
-      .filter(
-        (record) =>
-          isCompatibleRunReplay(record) &&
-          record.questId === questProgress.questId &&
-          record.questLevelId === questProgress.levelId &&
-          record.labyrinthNumber !== undefined
-      )
-      .map(
-        (record) =>
-          `${getDifficultyBand(record.labyrinthNumber ?? 1).id}-` +
-          `${record.labyrinthNumber}`
-      )
+async function showQuestAtlas(trigger, options) {
+  const opener = await loadQuestAtlasOpener();
+  await opener?.showQuestAtlas(
+    {
+      getRun: () => run,
+      getRunRecords: () => runRecords,
+      getQuestProgress: () => questProgress,
+      togglePause,
+      announce,
+      openRunReplay,
+      openWorkshop
+    },
+    trigger,
+    options
   );
-}
-
-/** @param {typeof runRecords[number]} record */
-function isCompatibleRunReplay(record) {
-  if (!record.replay || !buildRunReplayTimelineForAtlas) {
-    return false;
-  }
-  try {
-    buildRunReplayTimelineForAtlas(record);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
  * @param {typeof runRecords[number]} record
  * @param {HTMLElement} trigger
+ * @param {boolean} resumeRun
  */
-async function openRunReplay(record, trigger) {
-  if (runReplayOpening || !record.replay) {
-    return;
-  }
-  runReplayOpening = true;
-  const retrying = runReplayViewRetry;
-  try {
-    let view;
-    try {
-      if (!runReplayViewPromise) {
-        /** @type {Promise<typeof import("./game/run-replay-view.js")>} */
-        const viewModule = retrying
-          // @ts-expect-error Vite treats the query as a distinct retry chunk.
-          ? import("./game/run-replay-view.js?retry=1")
-          : import("./game/run-replay-view.js");
-        runReplayViewRetry = true;
-        runReplayViewPromise = viewModule.then(
-          ({ createRunReplayView }) => createRunReplayView({
-            onClose: () => {
-              if (resumeAfterRunReplay && run.status === "paused") {
-                togglePause();
-              }
-              resumeAfterRunReplay = false;
-            }
-          })
-        );
-      }
-      view = await runReplayViewPromise;
-    } catch {
-      runReplayViewPromise = null;
-      if (resumeAfterRunReplay && run.status === "paused") {
-        togglePause();
-      }
-      resumeAfterRunReplay = false;
-      announce(
-        retrying
-          ? "This Trail is unavailable. Reload to try again."
-          : "This Trail is unavailable. Try again."
-      );
-      return;
-    }
-    try {
-      view.show(record, trigger);
-    } catch {
-      if (resumeAfterRunReplay && run.status === "paused") {
-        togglePause();
-      }
-      resumeAfterRunReplay = false;
-      announce(
-        "This Trail is corrupt, so it cannot be watched. Play This Seed is still available."
-      );
-    }
-  } finally {
-    runReplayOpening = false;
-  }
+async function openRunReplay(record, trigger, resumeRun) {
+  const opener = await loadRunReplayOpener();
+  await opener?.openRunReplay(
+    { getRun: () => run, togglePause, announce },
+    record,
+    trigger,
+    resumeRun
+  );
 }
 
 elements.recordsButton.addEventListener("click", () => {
@@ -1218,57 +1057,23 @@ onThemeChoiceChange((choice) => {
 });
 
 elements.settingsButton.addEventListener("click", async () => {
-  if (accessSettingsOpening) {
-    return;
-  }
-  accessSettingsOpening = true;
-  resumeAfterAccessSettings = run.status === "active";
-  if (resumeAfterAccessSettings) {
-    togglePause();
-  }
-  const retrying = accessSettingsViewRetry;
-  try {
-    if (!accessSettingsViewPromise) {
-      /** @type {Promise<typeof import("./player/access-settings-view.js")>} */
-      const viewModule = retrying
-        // @ts-expect-error Vite treats the query as a distinct retry chunk.
-        ? import("./player/access-settings-view.js?retry=1")
-        : import("./player/access-settings-view.js");
-      accessSettingsViewRetry = true;
-      accessSettingsViewPromise = viewModule.then(
-      ({ createAccessSettingsView }) =>
-        createAccessSettingsView({
-          onApply: (settings) => {
-            applyAccessSettings(settings);
-            renderer.render(run);
-            syncTrailCompass();
-          },
-          onClose: () => {
-            if (resumeAfterAccessSettings && run.status === "paused") {
-              togglePause();
-            }
-            resumeAfterAccessSettings = false;
-          },
-          onSave: (settings) => accessSettingsContinuity.save(settings)
-        })
-      );
-    }
-    const accessSettingsView = await accessSettingsViewPromise;
-    accessSettingsView.show(elements.settingsButton);
-  } catch {
-    accessSettingsViewPromise = null;
-    if (resumeAfterAccessSettings && run.status === "paused") {
-      togglePause();
-    }
-    resumeAfterAccessSettings = false;
-    announce(
-      retrying
-        ? "Explorer Access Settings are unavailable. Reload to try again."
-        : "Explorer Access Settings are unavailable. Try again."
-    );
-  } finally {
-    accessSettingsOpening = false;
-  }
+  const opener = await loadAccessSettingsOpener();
+  loadedAccessSettingsOpener = opener ?? loadedAccessSettingsOpener;
+  await opener?.openAccessSettings(
+    {
+      getRun: () => run,
+      togglePause,
+      announce,
+      onApply: (/** @type {import("./player/access-settings-view.js").AccessSettings} */ settings) => {
+        applyAccessSettings(settings);
+        renderer.render(run);
+        syncTrailCompass();
+      },
+      onSave: (/** @type {import("./player/access-settings-view.js").AccessSettings} */ settings) =>
+        accessSettingsContinuity.save(settings)
+    },
+    elements.settingsButton
+  );
 });
 elements.recordsClose.addEventListener("click", () => {
   elements.recordsDialog.close();
@@ -1314,7 +1119,6 @@ elements.journalBands.addEventListener("click", (event) => {
   if (!(button instanceof HTMLButtonElement)) return;
   const learningObjectiveId = button.dataset.objective ?? "";
   void openWorkshop({
-    levelId: levelIdForLearningObjective(learningObjectiveId),
     difficultyBand: button.dataset.band ?? "",
     learningObjectiveId,
     origin: "journal",
@@ -1374,82 +1178,27 @@ async function openLanternJournal({ resumePausedRun = false } = {}) {
 
 async function renderLanternJournal() {
   const { projectLanternJournal } = await loadLanternJournalUi();
-  const projection = projectLanternJournal(lanternJournal);
-  elements.journalStatus.textContent =
-    lanternJournalStatus ||
-    (playerController.getAuthenticatedUserId()
-      ? "Signed in: Journal entries sync with this account."
-      : "Guest Journal: entries stay on this device.");
-  elements.journalClear.disabled = projection.empty;
-
-  if (projection.empty) {
-    const empty = document.createElement("div");
-    const title = document.createElement("strong");
-    const note = document.createElement("p");
-    empty.className = "journal-empty";
-    title.textContent = "Your lantern is ready.";
-    note.textContent =
-      "Answer, use a Hint, or skip a Warden Question to add a learning note.";
-    empty.append(title, note);
-    elements.journalBands.replaceChildren(empty);
-    return;
+  const view = await loadLanternJournalRender();
+  if (!view) {
+    throw new Error("The Journal view is unavailable.");
   }
-
-  elements.journalBands.replaceChildren(
-    ...projection.bands.map((band) => {
-      const section = document.createElement("section");
-      const heading = document.createElement("h3");
-      const objectives = document.createElement("div");
-      section.className = "journal-band";
-      heading.textContent = band.label;
-      objectives.className = "journal-objectives";
-      objectives.replaceChildren(
-        ...band.objectives.map((objective) => {
-          const row = document.createElement("article");
-          const copy = document.createElement("div");
-          const title = document.createElement("h4");
-          const topic = document.createElement("p");
-          const counts = document.createElement("ul");
-          const practice = document.createElement("button");
-          row.className = "journal-objective";
-          title.textContent = objective.label;
-          topic.textContent = objective.topicLabel;
-          counts.className = "journal-counts";
-          counts.replaceChildren(
-            countItem("Correct", objective.correct),
-            countItem("Wrong", objective.wrong),
-            countItem("Hints", objective.hint),
-            countItem("Skips", objective.skip)
-          );
-          copy.append(title, topic, counts);
-          practice.type = "button";
-          practice.className = "control-button journal-practice";
-          practice.textContent = "Practice";
-          practice.hidden = objective.status !== "practice-ready";
-          practice.dataset.practiceQuestion = objective.practiceQuestionId;
-          practice.dataset.topic = objective.topicId;
-          practice.dataset.objective = objective.learningObjectiveId;
-          practice.dataset.band = objective.difficultyBand;
-          row.append(copy, practice);
-          return row;
-        })
-      );
-      section.append(heading, objectives);
-      return section;
-    })
+  view.renderLanternJournal(
+    {
+      status: elements.journalStatus,
+      clear: elements.journalClear,
+      bands: elements.journalBands
+    },
+    lanternJournalStatus ||
+      (playerController.getAuthenticatedUserId()
+        ? "Signed in: Journal entries sync with this account."
+        : "Guest Journal: entries stay on this device."),
+    projectLanternJournal(lanternJournal)
   );
-}
-
-/** @param {string} label @param {number} count */
-function countItem(label, count) {
-  const item = document.createElement("li");
-  item.textContent = `${label} ${count}`;
-  return item;
 }
 
 /**
  * @param {{
- *   levelId: string,
+ *   levelId?: string,
  *   difficultyBand: string,
  *   learningObjectiveId?: string,
  *   origin: "play" | "journal" | "atlas",
@@ -1458,103 +1207,24 @@ function countItem(label, count) {
  * }} selection
  */
 async function openWorkshop(selection) {
-  if (workshopOpenPending || elements.practiceDialog.open) return;
-  workshopOpenPending = true;
-  try {
-    if (selection.origin === "journal") {
-      resumeAfterWorkshop =
-        elements.journalDialog.dataset.resumeRun === "true";
-      reopenJournalAfterPractice = true;
-      delete elements.journalDialog.dataset.resumeRun;
-      if (elements.journalDialog.open) {
-        elements.journalDialog.close();
-      }
-    } else {
-      const pauseForWorkshop = run.status === "active";
-      resumeAfterWorkshop =
-        pauseForWorkshop || Boolean(selection.resumePausedRun);
-      if (pauseForWorkshop) {
-        togglePause();
-      }
-    }
-    const view = await loadLanternTrailView();
-    view.show(selection);
-  } catch {
-    announce(
-      lanternTrailViewFailedTwice
-        ? "Lantern Trail Workshop is unavailable. Reload to try again."
-        : "Lantern Trail Workshop is unavailable. Try again."
-    );
-    await navigateAfterWorkshop(selection.origin, selection.trigger);
-  } finally {
-    workshopOpenPending = false;
-  }
-}
-
-function loadLanternTrailView() {
-  if (!lanternTrailViewPromise) {
-    const retrying = lanternTrailViewRetry;
-    const viewModule = retrying
-      // @ts-expect-error Vite treats the query as a distinct retry chunk.
-      ? import("./learning/lantern-trail-view.js?retry=1")
-      : import("./learning/lantern-trail-view.js");
-    lanternTrailViewRetry = true;
-    lanternTrailViewPromise = viewModule
-      .then(({ createLanternTrailView }) =>
-        createLanternTrailView({
-          onNavigate: (
-            /** @type {"play" | "journal" | "atlas"} */ destination,
-            /** @type {HTMLElement | null} */ returnTarget
-          ) => {
-            void navigateAfterWorkshop(destination, returnTarget);
-          },
-          onRecord: (
-            /** @type {ReturnType<typeof getBundledQuestion>} */ question,
-            /** @type {"correct" | "wrong" | "hint" | "skip"} */ outcome
-          ) => {
-            recordLearningOutcome(question, outcome);
-          }
-        })
-      )
-      .catch((error) => {
-        lanternTrailViewPromise = null;
-        lanternTrailViewFailedTwice ||= retrying;
-        throw error;
-      });
-  }
-  return lanternTrailViewPromise;
-}
-
-/**
- * @param {"play" | "journal" | "atlas"} destination
- * @param {HTMLElement | null} returnTarget
- */
-async function navigateAfterWorkshop(destination, returnTarget) {
-  const resumeRun = resumeAfterWorkshop;
-  resumeAfterWorkshop = false;
-  reopenJournalAfterPractice = false;
-  if (destination === "journal") {
-    await openLanternJournal({ resumePausedRun: resumeRun });
-    return;
-  }
-  if (destination === "atlas") {
-    await showQuestAtlas(elements.workshopButton, {
-      resumePausedRun: resumeRun
-    });
-    return;
-  }
-  if (resumeRun && run.status === "paused") {
-    togglePause();
-  }
-  returnTarget?.focus({ preventScroll: true });
-}
-
-/** @param {string} learningObjectiveId */
-function levelIdForLearningObjective(learningObjectiveId) {
-  if (learningObjectiveId.startsWith("bright-")) return "bright-start";
-  if (learningObjectiveId.startsWith("scout-")) return "trail-scout";
-  if (learningObjectiveId.startsWith("master-")) return "maze-master";
-  return "";
+  const opener = await loadWorkshopOpener();
+  await opener?.openWorkshop(
+    {
+      getRun: () => run,
+      togglePause,
+      announce,
+      journalDialog: elements.journalDialog,
+      practiceDialog: elements.practiceDialog,
+      workshopButton: elements.workshopButton,
+      setReopenJournal: (/** @type {boolean} */ reopen) => {
+        reopenJournalAfterPractice = reopen;
+      },
+      openLanternJournal,
+      showQuestAtlas,
+      recordLearningOutcome
+    },
+    selection
+  );
 }
 
 async function openFirstPractice() {
@@ -1564,7 +1234,6 @@ async function openFirstPractice() {
     .find((entry) => entry.status === "practice-ready");
   if (!objective) return;
   await openWorkshop({
-    levelId: levelIdForLearningObjective(objective.learningObjectiveId),
     difficultyBand: objective.difficultyBand,
     learningObjectiveId: objective.learningObjectiveId,
     origin: "play",
@@ -1642,10 +1311,10 @@ elements.runRecords.addEventListener("click", async (event) => {
       );
       return;
     }
-    resumeAfterRunReplay = resumeAfterRecords;
+    const resumeRun = resumeAfterRecords;
     resumeAfterRecords = false;
     elements.recordsDialog.close();
-    await openRunReplay(record, elements.recordsButton);
+    await openRunReplay(record, elements.recordsButton, resumeRun);
     return;
   }
 
@@ -1665,27 +1334,9 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 
   if (button.dataset.recordAction === "copy") {
-    try {
-      await navigator.clipboard.writeText(
-        createShareLink(
-          button.dataset.seed,
-          button.dataset.level ?? "trail-scout",
-          Number(button.dataset.labyrinth ?? 1),
-          {
-            atlasRegionId: button.dataset.region,
-            revision: button.dataset.ruleset
-          }
-        )
-      );
-      button.textContent = "Copied";
-      announce(`Share link for seed ${button.dataset.seed} copied.`);
-      window.setTimeout(() => {
-        if (button.isConnected) {
-          button.textContent = "Copy Share Link";
-        }
-      }, 1400);
-    } catch {
-      announce(`Copy failed. Seed ${button.dataset.seed} is visible.`);
+    const view = await loadRunRecordsView();
+    if (view) {
+      await view.copyRecordShareLink(button, announce);
     }
   }
 });
@@ -1745,19 +1396,15 @@ elements.seedCopy.addEventListener("click", async () => {
     return;
   }
   try {
-    if (activeDaily) {
-      await navigator.clipboard.writeText(
-        createDailyShareLink(currentDailyContract())
-      );
-      announce("Today’s Daily link copied.");
-      showEvent("Daily link copied. It contains only the public UTC date.");
-      return;
-    }
-    await navigator.clipboard.writeText(await createEchoPostcardLink());
-    announce("Echo Postcard copied.");
-    showEvent(
-      "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
-    );
+    const { copySeedLink } = await import("./game/echo-postcard.js");
+    await copySeedLink({
+      dailyDate: activeDaily ? currentDailyContract().date : null,
+      run,
+      levelId: currentLevel.id,
+      labyrinthNumber: currentLabyrinthNumber,
+      announce,
+      showEvent
+    });
   } catch {
     announce(`Echo Postcard copy failed. Current seed ${run.seed}.`);
   }
@@ -2335,75 +1982,31 @@ async function refreshDailyConstellation(daily, escaped) {
   if (!escaped) {
     return;
   }
-  /** @type {ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView> | null} */
-  let view = null;
-  try {
-    view = await loadDailyConstellationView();
-    elements.dailyConstellationStatus.dataset.state = "";
-    view.renderLoading();
-    const projection = await playerController.getDailyConstellation();
-    if (requestId !== dailyConstellationRequestId) {
-      return;
-    }
-    if (projection.date !== daily.date) {
-      // The UTC date turned over while the dialog was open. Rendering the new
-      // Daily's map under the old heading would be a quiet lie.
+  const board = await loadDailyConstellationBoard();
+  if (!board) {
+    if (requestId === dailyConstellationRequestId) {
       elements.dailyConstellationMap.hidden = true;
       elements.dailyConstellationStatus.dataset.state = "error";
-      elements.dailyConstellationStatus.textContent =
-        "The UTC date changed. Reopen Daily for today’s Constellation.";
-      return;
+      elements.dailyConstellationStatus.textContent = dailyConstellationBoardFailures > 1
+        ? "The Constellation is unavailable. Reload to try again."
+        : "The Constellation could not be loaded. Your Daily result is unaffected.";
+      elements.dailyConstellationRetry.hidden = dailyConstellationBoardFailures > 1;
     }
-    elements.dailyConstellationStatus.dataset.state = "";
-    view.render(
-      {
-        published: projection.published === true,
-        markers: Array.isArray(projection.markers) ? projection.markers : []
-      },
-      { size: getLabyrinthConfig(daily.levelId, daily.labyrinthNumber).size }
-    );
-  } catch (error) {
-    if (requestId !== dailyConstellationRequestId) {
-      return;
-    }
-    // A chunk that will not load leaves no silent gap: the surface says so
-    // and offers the retry, exactly like every other lazy view here.
-    elements.dailyConstellationMap.hidden = true;
-    elements.dailyConstellationStatus.dataset.state = "error";
-    elements.dailyConstellationStatus.textContent =
-      view === null
-        ? dailyConstellationFailedTwice
-          ? "The Constellation is unavailable. Reload to try again."
-          : "The Constellation could not be loaded. Your Daily result is unaffected."
-        : errorStatus(error) === 0
-          ? "Network could not reach the Constellation. Your Daily result is unaffected."
-          : "The Constellation is unavailable. Your Daily result is unaffected.";
-    elements.dailyConstellationRetry.hidden = dailyConstellationFailedTwice;
+    return;
   }
-}
-
-function loadDailyConstellationView() {
-  if (!dailyConstellationViewPromise) {
-    const retrying = dailyConstellationViewRetry;
-    const viewModule = retrying
-      // @ts-expect-error Vite treats the query as a distinct retry chunk.
-      ? import("./game/daily-constellation-view.js?retry=1")
-      : import("./game/daily-constellation-view.js");
-    dailyConstellationViewRetry = true;
-    dailyConstellationViewPromise = viewModule
-      .then(({ createDailyConstellationView }) =>
-        createDailyConstellationView({
-          map: elements.dailyConstellationMap,
-          status: elements.dailyConstellationStatus
-        })
-      )
-      .catch((error) => {
-        dailyConstellationViewPromise = null;
-        dailyConstellationFailedTwice ||= retrying;
-        throw error;
-      });
-  }
-  return dailyConstellationViewPromise;
+  await board.refreshDailyConstellation(
+    {
+      map: elements.dailyConstellationMap,
+      status: elements.dailyConstellationStatus,
+      retry: elements.dailyConstellationRetry,
+      load: () => playerController.getDailyConstellation(),
+      errorStatus,
+      sizeFor: (/** @type {typeof daily} */ current) =>
+        getLabyrinthConfig(current.levelId, current.labyrinthNumber).size
+    },
+    daily,
+    () => requestId !== dailyConstellationRequestId
+  );
 }
 
 /**
@@ -3255,9 +2858,10 @@ function showRunAccessGate(access) {
  * @param {() => Promise<T>} first
  * @param {() => Promise<T>} retry
  * @param {string} name
+ * @param {() => void} [onFail] replaces the notice when the caller shows its own
  * @returns {() => Promise<T | null>}
  */
-function lazyShellView(first, retry, name) {
+function lazyShellView(first, retry, name, onFail) {
   /** @type {Promise<T> | null} */
   let promise = null;
   let retried = false;
@@ -3271,6 +2875,10 @@ function lazyShellView(first, retry, name) {
     } catch {
       if (promise === loading) {
         promise = null;
+      }
+      if (onFail) {
+        onFail();
+        return null;
       }
       announce(
         retrying
@@ -3621,9 +3229,7 @@ function handleAuthenticationChange(signedIn) {
     void renderRunRecords();
   }
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
-    void accessSettingsViewPromise
-      ?.then((view) => view.replaceSavedSettings(record.settings))
-      .catch(() => {});
+    loadedAccessSettingsOpener?.replaceSavedSettings(record.settings);
   });
   void loadQuestContinuityController().then((controller) => {
     if (!controller) {
@@ -5063,9 +4669,8 @@ async function submitVerifiedDailyRun(daily) {
     announce("Daily replay limit reached. Your local result is unchanged.");
     return;
   }
-  const { createVerifiedDailySubmission } = await import(
-    "./player/daily-submission.js"
-  );
+  const { createVerifiedDailySubmission, describeVerifiedDailyOutcome } =
+    await import("./player/daily-submission.js");
   const submission = createVerifiedDailySubmission(daily, submittedLog, run);
   if (playerController.hasAuthenticatedUser()) {
     elements.resultKicker.textContent = "Checking Daily replay";
@@ -5075,62 +4680,14 @@ async function submitVerifiedDailyRun(daily) {
   if (activeDaily?.date !== daily.date || runActionLog !== submittedLog) {
     return;
   }
-  if (result.state === "verified") {
-    elements.resultKicker.textContent =
-      `${localKicker} · verified replay`;
-    if (result.bestResult === "created") {
-      elements.resultSummary.textContent =
-        `${localSummary} Your first checked score joined today’s Verified Daily Board.`;
-      elements.resultRank.textContent = `${localRank} · Verified`;
-      announce("Daily escape verified. Your first entry joined the board.");
-    } else if (result.bestResult === "improved") {
-      elements.resultSummary.textContent =
-        `${localSummary} Your checked score improved today’s Verified Daily best.`;
-      elements.resultRank.textContent = `${localRank} · Verified`;
-      announce("Daily escape verified. Your board best improved.");
-    } else {
-      elements.resultSummary.textContent =
-        `${localSummary} Replay passed. Your existing Verified Daily best stays on the board.`;
-      elements.resultRank.textContent = `${localRank} · Verified`;
-      announce("Daily escape verified. Your existing board best remains.");
-    }
-    return;
-  }
-  elements.resultRank.textContent = localRank;
-  if (result.state === "signed-out") {
-    elements.resultKicker.textContent = `${localKicker} · sign in needed`;
-    elements.resultSummary.textContent =
-      `${localSummary} Sign in before a future escape can join the verified board.`;
-    announce("Daily result remains local. Sign in for future verified entries.");
-    return;
-  }
-  if (result.state === "profile-required") {
-    elements.resultKicker.textContent = `${localKicker} · username needed`;
-    elements.resultSummary.textContent =
-      `${localSummary} Create a username before a future escape can join the verified board.`;
-    announce("Daily result remains local. Create a username for future verified entries.");
-    return;
-  }
-  if (result.state === "rejected") {
-    elements.resultKicker.textContent = `${localKicker} · replay not verified`;
-    elements.resultSummary.textContent =
-      `${localSummary} This result did not pass the replay check. Local Daily play still works.`;
-    announce("Daily replay was not verified. Your local result is unchanged.");
-    return;
-  }
-  if (result.state === "network-failure") {
-    elements.resultKicker.textContent = `${localKicker} · replay not sent`;
-    elements.resultSummary.textContent =
-      `${localSummary} The network could not reach the verified board. Your local Daily result is unchanged.`;
-    announce("Network could not verify the Daily result. Local result unchanged.");
-    return;
-  }
-  if (result.state === "unavailable") {
-    elements.resultKicker.textContent =
-      `${localKicker} · verification unavailable`;
-    elements.resultSummary.textContent =
-      `${localSummary} The verified board could not be reached. Your local Daily result is unchanged.`;
-    announce("Verified Daily service unavailable. Local result unchanged.");
+  const outcome = describeVerifiedDailyOutcome(result);
+  elements.resultRank.textContent = outcome?.verified
+    ? `${localRank} · Verified`
+    : localRank;
+  if (outcome) {
+    elements.resultKicker.textContent = `${localKicker} · ${outcome.kicker}`;
+    elements.resultSummary.textContent = `${localSummary} ${outcome.summary}`;
+    announce(outcome.say);
   }
 }
 
@@ -5255,42 +4812,6 @@ function createDailyShareLink(daily) {
   const url = new URL("/play", window.location.origin);
   url.searchParams.set("daily", daily.date);
   return url.toString();
-}
-
-/**
- * @param {string} [seed]
- * @param {string} [levelId]
- * @param {number} [labyrinthNumber]
- * @param {{ atlasRegionId?: string, revision?: string }} [rulesetIdentity]
- */
-function createShareLink(
-  seed = run.seed,
-  levelId = currentLevel.id,
-  labyrinthNumber = currentLabyrinthNumber,
-  rulesetIdentity = run.ruleset
-) {
-  const ruleset = normalizeRunRuleset(rulesetIdentity, labyrinthNumber);
-  if (!ruleset) {
-    throw new Error("Run ruleset identity is invalid.");
-  }
-  const url = new URL("/play", window.location.origin);
-  url.searchParams.set("seed", seed);
-  url.searchParams.set("level", levelId);
-  url.searchParams.set("labyrinth", String(labyrinthNumber));
-  url.searchParams.set("region", ruleset.atlasRegionId);
-  url.searchParams.set("rules", ruleset.revision);
-  return url.toString();
-}
-
-async function createEchoPostcardLink() {
-  const { createEchoPostcardUrl } = await import("./game/echo-postcard.js");
-  return createEchoPostcardUrl({
-    origin: window.location.origin,
-    seed: run.seed,
-    levelId: currentLevel.id,
-    labyrinthNumber: currentLabyrinthNumber,
-    ruleset: run.ruleset
-  });
 }
 
 function seedFromLocation() {

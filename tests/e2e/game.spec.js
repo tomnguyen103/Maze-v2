@@ -2020,6 +2020,36 @@ test("retries the Atlas view after its first chunk request fails", async ({
   expect(requests).toBeGreaterThan(failedRequests);
 });
 
+test("announces a notice when the Atlas opener chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  // Vite preloads the chunk before import() fetches it, so every request fails
+  // until the first open has failed.
+  let failing = true;
+  await page.route("**/assets/quest-atlas-opener-*.js", async (route) => {
+    if (failing) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-OPENER&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+
+  await atlasButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Echo Atlas is unavailable."
+  );
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).not.toBeVisible();
+  await expect(atlasButton).not.toHaveAttribute("aria-busy", "true");
+
+  // No reload: the next open imports the retry chunk in the same page.
+  failing = false;
+  await atlasButton.click();
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
+});
+
 test("pans from the labeled viewport and centers the current landmark", async ({
   page
 }) => {

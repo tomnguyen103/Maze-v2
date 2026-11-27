@@ -108,11 +108,47 @@ const budgets = [
     label: "Run Records JavaScript",
     prefix: "run-records-view-",
     suffix: ".js",
-    maxKb: 1
+    maxKb: 2
   },
   {
     label: "Verified Daily Board JavaScript",
     prefix: "verified-daily-board-",
+    suffix: ".js",
+    maxKb: 1
+  },
+  {
+    label: "Quest Atlas opener JavaScript",
+    prefix: "quest-atlas-opener-",
+    suffix: ".js",
+    maxKb: 2
+  },
+  {
+    label: "Run Replay opener JavaScript",
+    prefix: "run-replay-opener-",
+    suffix: ".js",
+    maxKb: 1
+  },
+  {
+    label: "Lantern Journal render JavaScript",
+    prefix: "lantern-journal-render-",
+    suffix: ".js",
+    maxKb: 1
+  },
+  {
+    label: "Workshop opener JavaScript",
+    prefix: "workshop-opener-",
+    suffix: ".js",
+    maxKb: 2
+  },
+  {
+    label: "Access Settings opener JavaScript",
+    prefix: "access-settings-opener-",
+    suffix: ".js",
+    maxKb: 1
+  },
+  {
+    label: "Daily Constellation board JavaScript",
+    prefix: "daily-constellation-board-",
     suffix: ".js",
     maxKb: 1
   },
