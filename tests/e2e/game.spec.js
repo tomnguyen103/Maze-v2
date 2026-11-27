@@ -762,6 +762,38 @@ test("announces a notice when the Lifetime dialog chunk fails, then opens it on 
   expect(requests).toBe(2);
 });
 
+test("announces a notice when the Records chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/run-records-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=RECORDS-RETRY");
+  await expectGameReady(page);
+
+  const opener = page.getByRole("button", { name: "Records", exact: true });
+  await opener.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Run Records is unavailable."
+  );
+  await expect(page.locator("#records-dialog")).not.toBeVisible();
+  await expect(opener).not.toHaveAttribute("aria-busy", "true");
+
+  // No reload: the next open imports the retry chunk in the same page.
+  await opener.click();
+  await expect(page.getByRole("dialog", { name: "Run Records" })).toBeVisible();
+  await expect(page.locator("#run-records")).toContainText(
+    "No finished Runs recorded yet."
+  );
+  expect(requests).toBe(2);
+});
+
 for (const [name, path] of [
   ["a canceled Checkout", "/play?checkout=canceled"],
   ["an invalid Checkout return", "/play?checkout=success&session_id=bad"],

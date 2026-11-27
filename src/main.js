@@ -553,6 +553,27 @@ let lifetimeViewPromise = null;
 /** @type {ReturnType<typeof import("./player/lifetime-view.js").createLifetimeView> | null} */
 let loadedLifetimeView = null;
 let lifetimeViewRetry = false;
+const loadRunRecordsView = lazyShellView(
+  () => import("./game/shell/run-records-view.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/run-records-view.js?retry=1"),
+  "Run Records"
+);
+const loadVerifiedDailyBoard = lazyShellView(
+  () => import("./game/shell/verified-daily-board.js"),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./game/shell/verified-daily-board.js?retry=1"),
+  "The Verified Daily Board"
+);
+
+const dailyBoardElements = {
+  note: elements.dailyBoardNote,
+  list: elements.dailyBoardList,
+  retry: elements.dailyBoardRetry,
+  status: elements.dailyBoardStatus,
+  date: elements.dailyBoardDate
+};
+
 /**
  * The view loads on first need. `close` and `setStatus` never import: a view
  * that never loaded has no dialog state to change.
@@ -606,7 +627,6 @@ let gateStagingComplete = false;
 /** @type {ReturnType<typeof createDailyContract> | null} */
 let activeDaily = null;
 let dailyQuestionIndex = 0;
-let dailyBoardRequestId = 0;
 /** @type {Promise<ReturnType<typeof import("./game/daily-constellation-view.js").createDailyConstellationView>> | null} */
 let dailyConstellationViewPromise = null;
 let dailyConstellationViewRetry = false;
@@ -1151,12 +1171,21 @@ async function openRunReplay(record, trigger) {
 }
 
 elements.recordsButton.addEventListener("click", () => {
-  resumeAfterRecords = run.status === "active";
-  if (resumeAfterRecords) {
-    togglePause();
+  if (elements.recordsButton.hasAttribute("aria-busy")) {
+    return;
   }
-  renderRunRecords();
-  elements.recordsDialog.showModal();
+  elements.recordsButton.setAttribute("aria-busy", "true");
+  void renderRunRecords().then((rendered) => {
+    elements.recordsButton.removeAttribute("aria-busy");
+    if (!rendered) {
+      return;
+    }
+    resumeAfterRecords = run.status === "active";
+    if (resumeAfterRecords) {
+      togglePause();
+    }
+    elements.recordsDialog.showModal();
+  });
 });
 // A keyboard/screen-reader user who has never opened Settings has no way to
 // learn Trail Compass exists, since the region it controls stays
@@ -2281,7 +2310,6 @@ function openDailyDialog(opener) {
     : "Start today’s Daily";
   elements.dailyClose.textContent =
     expiredRequest || expiredActive ? "Return to Quest" : "Close";
-  renderDailyBoardParticipation();
   void refreshVerifiedDailyBoard(currentDaily);
   void refreshDailyConstellation(currentDaily, record?.completed === true);
   if (!elements.dailyDialog.open) {
@@ -2476,80 +2504,6 @@ function prepareOfflineContinuity(locator) {
 function clearOfflineActiveRun() {
   activeRunLocator = null;
   clearActiveRunLocator();
-}
-
-function renderDailyBoardParticipation() {
-  elements.dailyBoardNote.textContent = playerController.hasAuthenticatedUser()
-    ? "Signed-in escapes with a saved username are checked by replay before they join this board."
-    : "Guest Daily stays casual. Sign in and create a username to join the verified board.";
-}
-
-/** @param {ReturnType<typeof createDailyContract>} daily */
-async function refreshVerifiedDailyBoard(daily) {
-  const requestId = ++dailyBoardRequestId;
-  elements.dailyBoardList.replaceChildren();
-  elements.dailyBoardRetry.hidden = true;
-  elements.dailyBoardStatus.dataset.state = "loading";
-  elements.dailyBoardStatus.textContent = "Loading verified escapes…";
-  try {
-    const result = await playerController.getVerifiedDailyLeaderboard();
-    if (
-      requestId !== dailyBoardRequestId ||
-      elements.dailyBoardDate.textContent !== daily.date
-    ) {
-      return;
-    }
-    if (result.date !== daily.date) {
-      elements.dailyBoardStatus.dataset.state = "error";
-      elements.dailyBoardStatus.textContent =
-        "Verified Daily Board date changed. Reopen Daily to see the current board.";
-      return;
-    }
-    const entries = Array.isArray(result.entries) ? result.entries : [];
-    renderVerifiedDailyEntries(entries);
-  } catch (error) {
-    if (
-      requestId !== dailyBoardRequestId ||
-      elements.dailyBoardDate.textContent !== daily.date
-    ) {
-      return;
-    }
-    elements.dailyBoardList.replaceChildren();
-    elements.dailyBoardRetry.hidden = false;
-    elements.dailyBoardStatus.dataset.state = "error";
-    elements.dailyBoardStatus.textContent = errorStatus(error) === 0
-      ? "Network could not reach the Verified Daily Board. Local Daily play still works."
-      : "Verified Daily services are unavailable. Local Daily play still works.";
-  }
-}
-
-/** @param {Record<string, unknown>[]} entries */
-function renderVerifiedDailyEntries(entries) {
-  elements.dailyBoardList.replaceChildren(
-    ...entries.slice(0, 10).map((entry, index) => {
-      const item = document.createElement("li");
-      const rank = document.createElement("span");
-      const username = document.createElement("strong");
-      const score = document.createElement("span");
-      const moves = document.createElement("span");
-      rank.className = "daily-board__rank";
-      rank.textContent = `#${entry.rank ?? index + 1}`;
-      username.className = "daily-board__username";
-      username.textContent = String(entry.username ?? "Explorer");
-      score.className = "daily-board__score";
-      score.textContent = `${entry.score ?? 0} pts`;
-      moves.className = "daily-board__moves";
-      moves.textContent = `${entry.moves ?? 0} moves`;
-      item.append(rank, username, score, moves);
-      return item;
-    })
-  );
-  elements.dailyBoardStatus.dataset.state = entries.length === 0
-    ? "empty"
-    : "success";
-  elements.dailyBoardStatus.textContent = entries.length === 0
-    ? "No verified escapes yet. The first checked Gate is waiting."
-    : `${entries.length} verified ${entries.length === 1 ? "Explorer" : "Explorers"} ranked today.`;
 }
 
 function closeDailyDialog() {
@@ -3295,6 +3249,74 @@ function showRunAccessGate(access) {
 }
 
 /**
+ * One cached import per shell view. A failed import resets the promise,
+ * announces a notice, and the next call imports the `?retry=1` chunk.
+ * @template T
+ * @param {() => Promise<T>} first
+ * @param {() => Promise<T>} retry
+ * @param {string} name
+ * @returns {() => Promise<T | null>}
+ */
+function lazyShellView(first, retry, name) {
+  /** @type {Promise<T> | null} */
+  let promise = null;
+  let retried = false;
+  return async () => {
+    const retrying = retried;
+    promise ??= retrying ? retry() : first();
+    retried = true;
+    const loading = promise;
+    try {
+      return await loading;
+    } catch {
+      if (promise === loading) {
+        promise = null;
+      }
+      announce(
+        retrying
+          ? `${name} is unavailable. Reload to try again.`
+          : `${name} is unavailable. Try again.`
+      );
+      return null;
+    }
+  };
+}
+
+/** @returns {Promise<boolean>} */
+async function renderRunRecords() {
+  const view = await loadRunRecordsView();
+  view?.renderRunRecords(elements.runRecords, runRecords, {
+    formatTime,
+    formatRunRulesetLabel
+  });
+  return view !== null;
+}
+
+/** @param {ReturnType<typeof createDailyContract>} daily */
+async function refreshVerifiedDailyBoard(daily) {
+  dailyBoardElements.list.parentElement?.setAttribute("aria-busy", "true");
+  const board = await loadVerifiedDailyBoard();
+  dailyBoardElements.list.parentElement?.removeAttribute("aria-busy");
+  if (!board) {
+    dailyBoardElements.list.replaceChildren();
+    dailyBoardElements.retry.hidden = false;
+    dailyBoardElements.status.dataset.state = "error";
+    dailyBoardElements.status.textContent =
+      "Verified Daily services are unavailable. Local Daily play still works.";
+    return;
+  }
+  await board.refreshVerifiedDailyBoard(
+    dailyBoardElements,
+    {
+      hasAuthenticatedUser: () => playerController.hasAuthenticatedUser(),
+      load: () => playerController.getVerifiedDailyLeaderboard(),
+      errorStatus
+    },
+    daily.date
+  );
+}
+
+/**
  * @template T
  * @param {(view: NonNullable<typeof loadedLifetimeView>) => T | Promise<T>} use
  * @param {T} fallback
@@ -3582,7 +3604,12 @@ function syncDemoAccountAction(signedIn) {
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
   if (elements.dailyDialog.open) {
-    renderDailyBoardParticipation();
+    void loadVerifiedDailyBoard().then((board) =>
+      board?.renderDailyBoardParticipation(
+        elements.dailyBoardNote,
+        playerController.hasAuthenticatedUser()
+      )
+    );
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   if (playerController.auth() && hasRunReplayOwnerMismatch(userId)) {
@@ -3591,7 +3618,7 @@ function handleAuthenticationChange(signedIn) {
   runRecords = loadRunRecords(undefined, userId);
   bestEscapeRecord = bestEscape(runRecords);
   if (elements.recordsDialog.open) {
-    renderRunRecords();
+    void renderRunRecords();
   }
   void accessSettingsContinuity.selectUser(userId ?? "").then((record) => {
     void accessSettingsViewPromise
@@ -3617,7 +3644,7 @@ function clearActiveRunRecoveryForIdentityChange() {
         runRecords = loadRunRecords();
         bestEscapeRecord = bestEscape(runRecords);
         if (elements.recordsDialog.open) {
-          renderRunRecords();
+          void renderRunRecords();
         }
       },
       recovery: activeRunRecoveryController,
@@ -4887,7 +4914,6 @@ async function finishRun() {
   elements.resultMoves.textContent = String(terminal.run.moves).padStart(3, "0");
   elements.resultSeed.textContent = terminal.run.seed;
   elements.resultRank.textContent = terminal.standing;
-  renderRunRecords();
   } finally {
     setTerminalPresentationPending(false);
     updateInterface();
@@ -5382,90 +5408,6 @@ function wardenModeLabel(mode) {
     hunt: "Hunt active",
     patrol: "Patrol"
   }[mode];
-}
-
-function renderRunRecords() {
-  if (runRecords.length === 0) {
-    const empty = document.createElement("li");
-    empty.className = "run-records__empty";
-    empty.textContent = "No finished Runs recorded yet.";
-    elements.runRecords.replaceChildren(empty);
-    return;
-  }
-
-  elements.runRecords.replaceChildren(
-    ...runRecords.map((record, index) => {
-      const item = document.createElement("li");
-      const summary = document.createElement("div");
-      const title = document.createElement("strong");
-      const detail = document.createElement("span");
-      const actions = document.createElement("div");
-      const replay = document.createElement("button");
-      const copy = document.createElement("button");
-      const watch = record.replay
-        ? document.createElement("button")
-        : null;
-
-      const outcome = record.outcome === "escaped" ? "Escaped" : "Defeated";
-      const level = getQuestLevel(record.questLevelId);
-      const ruleset =
-        normalizeRunRuleset(
-          record.atlasRegionId || record.rulesetRevision
-            ? {
-                atlasRegionId: record.atlasRegionId,
-                revision: record.rulesetRevision
-              }
-            : undefined,
-          record.labyrinthNumber ?? 1
-        ) ?? getClassicRunRuleset(record.labyrinthNumber ?? 1);
-      title.textContent =
-        `#${index + 1} ${outcome} / ${level.name} / ${formatTime(record.elapsedMs)}`;
-      detail.textContent =
-        `Labyrinth ${record.labyrinthNumber ?? 1} / ${formatRunRulesetLabel(ruleset, record.labyrinthNumber ?? 1)} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
-      replay.type = "button";
-      replay.className = "control-button";
-      replay.dataset.seed = record.seed;
-      replay.dataset.level = record.questLevelId ?? "trail-scout";
-      replay.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
-      replay.dataset.region = ruleset.atlasRegionId;
-      replay.dataset.ruleset = ruleset.revision;
-      replay.dataset.recordIndex = String(index);
-      replay.dataset.recordAction = "replay";
-      replay.textContent = "Play This Seed";
-      replay.setAttribute("aria-label", `Play seed ${record.seed}`);
-      if (watch) {
-        watch.type = "button";
-        watch.className = "primary-button";
-        watch.dataset.seed = record.seed;
-        watch.dataset.recordAction = "watch";
-        watch.dataset.recordIndex = String(index);
-        watch.textContent = "Watch Trail";
-        watch.setAttribute(
-          "aria-label",
-          `Watch retained Trail for seed ${record.seed}`
-        );
-      }
-      copy.type = "button";
-      copy.className = "control-button";
-      copy.dataset.seed = record.seed;
-      copy.dataset.level = record.questLevelId ?? "trail-scout";
-      copy.dataset.labyrinth = String(record.labyrinthNumber ?? 1);
-      copy.dataset.region = ruleset.atlasRegionId;
-      copy.dataset.ruleset = ruleset.revision;
-      copy.dataset.recordAction = "copy";
-      copy.textContent = "Copy Share Link";
-      copy.setAttribute("aria-label", `Copy share link for seed ${record.seed}`);
-      summary.append(title, detail);
-      actions.className = "run-records__actions";
-      actions.append(copy);
-      if (watch) {
-        actions.append(watch);
-      }
-      actions.append(replay);
-      item.append(summary, actions);
-      return item;
-    })
-  );
 }
 
 function resultStanding() {

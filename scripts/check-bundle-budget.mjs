@@ -104,6 +104,18 @@ const budgets = [
     suffix: ".js",
     maxKb: 2
   },
+  {
+    label: "Run Records JavaScript",
+    prefix: "run-records-view-",
+    suffix: ".js",
+    maxKb: 1
+  },
+  {
+    label: "Verified Daily Board JavaScript",
+    prefix: "verified-daily-board-",
+    suffix: ".js",
+    maxKb: 1
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.
