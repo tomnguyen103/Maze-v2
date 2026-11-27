@@ -35,6 +35,16 @@ describe("look flag", () => {
     expect(() => resolveLook("neon")).toThrow(/pilot.*popup/);
     expect(() => aliasFor("neon")).toThrow(/pilot.*popup/);
   });
+
+  it("pins the look in each build and bundle script, so a stray VITE_LOOK cannot switch the Pilot gate", () => {
+    const { scripts } = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8")
+    );
+    expect(scripts.build).toBe("node scripts/build-look.mjs pilot");
+    expect(scripts["build:popup"]).toBe("node scripts/build-look.mjs popup");
+    expect(scripts["check:bundle"]).toBe("node scripts/check-bundle-budget.mjs pilot");
+    expect(scripts["check:bundle:popup"]).toBe("node scripts/check-bundle-budget.mjs popup");
+  });
 });
 
 describe("popup bar colours", () => {

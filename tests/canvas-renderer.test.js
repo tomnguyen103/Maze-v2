@@ -7,7 +7,7 @@ import { MissingBoardTokenError, createCanvasRenderer } from "../src/game/canvas
 import { createRun } from "../src/game/game-session.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
-import { seedBoardTokens } from "./helpers/board-tokens.js";
+import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/board-tokens.js";
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
@@ -1512,6 +1512,18 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.style.removeProperty("--color-passage");
     expect(() => stubCanvas({ seed: false })).toThrow(MissingBoardTokenError);
     expect(() => stubCanvas({ seed: false })).toThrow("--color-passage");
+  });
+
+  it("US-03.3 resolves each board token in each look and paints a Run from the Popup tokens", () => {
+    for (const look of /** @type {const} */ (["pilot", "popup"])) {
+      for (const name of BOARD_TOKENS) expect(resolveBoardToken(name, look), `${look} ${name}`).not.toBe("");
+    }
+    for (const name of BOARD_TOKENS) document.body.style.removeProperty(name);
+    seedBoardTokens("popup");
+    expect(document.body.style.getPropertyValue("--color-passage")).toBe(resolveBoardToken("--color-passage", "popup"));
+    const { renderer } = stubCanvas({ seed: false });
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+    expect(() => renderer.render({ ...run, pulseVisible: [], revealed: [] })).not.toThrow();
   });
 
   it("US-03.1 repaints the last Run with a new palette when the colour scheme changes", () => {
