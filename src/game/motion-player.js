@@ -21,7 +21,12 @@ export function createMotionPlayer(load) {
       }
     );
     pending
-      .then((motion) => motion?.[name]?.(...args))
+      // The Explorer can turn on reduced motion while the chunk loads.
+      .then((motion) => {
+        if (!motionReduced()) {
+          motion?.[name]?.(...args);
+        }
+      })
       .catch(() => {});
   };
 }

@@ -136,6 +136,15 @@ describe("motion player", () => {
     expect(load).not.toHaveBeenCalled();
   });
 
+  it("skips a queued motion when reduced effects turn on during the load", async () => {
+    const flapRipple = vi.fn();
+    const play = createMotionPlayer(async () => ({ default: { flapRipple } }));
+    play("flapRipple");
+    document.documentElement.dataset.accessEffects = "reduced";
+    await flush();
+    expect(flapRipple).not.toHaveBeenCalled();
+  });
+
   it("loads once and calls the named motion", async () => {
     const flapRipple = vi.fn();
     const load = vi.fn(async () => ({ default: { flapRipple } }));

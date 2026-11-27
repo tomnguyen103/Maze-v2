@@ -1,13 +1,13 @@
 ---
 title: A board overlay with inset 0 misses the canvas by the frame padding
 category: frontend
-trigger: A motion piece sits about 11 px off its tile, down and to the right, at every width.
+trigger: A motion piece sits off its tile centre. The offset grows toward the board edges and is zero at the board centre.
 ---
 
 ## Problem
 
 The Popup motion layer places each piece at a percentage of the board: `left = (col + 0.5) / size * 100%`.
-The layer used `inset: 0` inside `#canvas-frame`. Each piece sat about 11 px off its tile centre at 1280 px.
+The layer used `inset: 0` inside `#canvas-frame`. The offset of a piece depends on its position. A piece below 50% shifts left or up. A piece above 50% shifts right or down. A piece at 50% has no offset. At 1280 px an edge tile sat about 11 px off its centre.
 
 ## What did not work
 
