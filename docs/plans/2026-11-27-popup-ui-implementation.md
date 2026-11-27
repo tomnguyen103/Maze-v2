@@ -322,18 +322,21 @@ Derived from the Needs column. Every step before R9 is behind the flag, so produ
 
 ## 14. Run status, 2026-11-27
 
-The first run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Production shows Pilot.
+The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Production shows Pilot.
 
 | Slice | Status | Where |
 | --- | --- | --- |
 | R0a | Merged | #303 (tokens, fonts, look flag, ADR 0064) |
 | R0b, R0c | Merged | #308 (art spike: the 48 device px tile rule, canvas paths, art row estimate 4 KB) |
-| R1 | Partial: R1-token merged | #304 (token read with no fallback, repaint on a theme change). The layers are not built |
+| Game-row headroom | Merged | #309 (lazy shell views free 2.9 KB on the game row) |
+| R1 | Merged | #304 (token read, repaint on a theme change), #316 (R1a renderer findings), #317 (R1b chart layer and Fog layer) |
+| R2, R2b, R2c | Merged | #310 (board marks, Warden Mode legend, paused cover), #311 (Explorer picker), #312 (soft Fangmoor, Lured face) |
 | R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. The R4 JS findings (B-10 frame follow, B-02) are not built |
-| R2, R2b, R2c, R5, R7a | Parked | Need 3 KB free on the game row (section 6 row). Rebuild plan section 2.4 lines 160 and 163: S0 and the first four S4 parts give at most 1.92 KB, and S4 measures after S3 of rebuild M1 |
-| R3, R6c, R7b | Parked | Need the R1 layers and the motion chunk, which need game-row bytes |
+| R5 | Merged | #313 (Trail Compass text parity, live region in dialogs), with a fix in #315 |
+| R7a | Merged | #314 (landing hero from a real board crop) |
+| R3, R6c, R7b | Open | R3 needs only R1, so it is next. R6c and R7b follow R3 |
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
-| R8 | Partial | ADR 0064 merged. The superseding ADRs wait for R2 |
+| R8 | Partial | ADR 0064 merged. The superseding ADRs and the GLOSSARY terms wait for R3 |
 | R9 | Parked | Needs R8 and each gen1 surface in Popup |
 
-The board art, the layered renderer, and motion are not built. The next step is rebuild M0 and M1 (order step 1), which gives the headroom for R2.
+The game row measures 40.24 KB (Pilot) and 40.33 KB (Popup) of 42 KB after #317.
