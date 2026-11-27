@@ -1892,7 +1892,8 @@ function openFirstLightOffer() {
   });
 }
 
-async function initializeRunEntry() {
+/** @param {boolean} [skipLifetimeReturn] true after a Lifetime view that never loaded */
+async function initializeRunEntry(skipLifetimeReturn = false) {
   if (dailyRequest.status === "current") {
     startDailyRun();
     return;
@@ -1903,7 +1904,8 @@ async function initializeRunEntry() {
     openDailyDialog();
     return;
   }
-  if (!(await resolveLifetimeReturn())) {
+  // The kept Checkout Session waits for the next Unlock, so Run entry must not confirm it again.
+  if (!skipLifetimeReturn && !(await resolveLifetimeReturn())) {
     firstLightEntryPending = false;
     return;
   }
@@ -3155,7 +3157,7 @@ function enterRunOnLifetimeClose(opened) {
       removeCheckoutParameters(new URL(window.location.href));
     }
     firstLightEntryPending = offerFirstLight;
-    void initializeRunEntry();
+    void initializeRunEntry(keepSession);
   };
   const enterOnClose = () => enter(false);
   elements.lifetimeDialog.addEventListener("close", enterOnClose);

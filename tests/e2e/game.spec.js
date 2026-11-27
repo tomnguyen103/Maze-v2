@@ -762,6 +762,32 @@ test("announces a notice when the Lifetime dialog chunk fails, then opens it on 
   expect(requests).toBe(2);
 });
 
+test("enters the Run once when a failed confirm meets a failed Lifetime chunk, and keeps the Checkout return", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/lifetime-view-*.js", async (route) => {
+    requests += 1;
+    await route.abort();
+  });
+  // Signed out, so the confirm fails.
+  await page.goto("/play?checkout=success&session_id=cs_test_return");
+  await expectGameReady(page);
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lifetime Membership is unavailable."
+  );
+  await expect(
+    page.getByRole("group", { name: "Choose a Practice Intention" })
+  ).toBeVisible();
+  // A loop would confirm and import again; one import proves the Run entry skipped the return.
+  await page.waitForTimeout(500);
+  expect(requests).toBe(1);
+  expect(new URL(page.url()).searchParams.get("session_id")).toBe(
+    "cs_test_return"
+  );
+});
+
 test("announces a notice when the Records chunk fails, then opens it on the next visit", async ({
   page
 }) => {
