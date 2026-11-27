@@ -34,10 +34,13 @@ function barColors(look) {
     "utf8"
   );
   const paper = /--color-paper:\s*(oklch\([^)]*\))/;
-  return {
-    light: css.match(paper)?.[1] ?? "",
-    dark: css.slice(css.indexOf(':root[data-theme="dark"]')).match(paper)?.[1] ?? ""
-  };
+  const light = css.match(paper)?.[1];
+  const dark = css.slice(css.indexOf(':root[data-theme="dark"]')).match(paper)?.[1];
+  // An empty match would make `replaceAll("", …)` insert the colour everywhere.
+  if (!light || !dark) {
+    throw new Error(`src/looks/${look}/tokens.css has no light or Night --color-paper.`);
+  }
+  return { light, dark };
 }
 
 /**
