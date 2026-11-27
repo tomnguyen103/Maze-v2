@@ -28,11 +28,13 @@
   transform: translateY(2px);
 }
 
-/* Hint and skip stay text buttons. */
+/* Hint, skip, and the command bar tabs stay text buttons. */
 :root .challenge-support > .control-button,
-:root .challenge-skip > .control-button {
+:root .challenge-skip > .control-button,
+:root .command-bar .command-bar__actions > * {
   border-color: transparent;
   box-shadow: none;
+  transform: none;
 }
 
 /* Primary takes the cover teal and danger takes deep coral; both pairs hold in light and Night. */
@@ -54,17 +56,24 @@
   background: var(--color-signal-deep);
 }
 
+/* Hover lifts a pull-tab one step; the fill stays, so each contrast pair holds. */
+:root :is(.primary-button, .danger-button):hover:not(:disabled, :active) {
+  box-shadow: 0 6px 0 var(--color-ink);
+  transform: translateY(-2px);
+}
+
 /* Paper cards: every dialog, and the board panel. */
 :root :is(.atlas-dialog, .access-settings-dialog, .first-light-dialog, .level-dialog, .daily-dialog, .challenge-dialog, .journal-dialog, .practice-dialog, .records-dialog, .player-dialog, .scoreboard-dialog, .lifetime-dialog, .quest-conflict-dialog, .result-dialog, .run-replay-dialog),
 :root .labyrinth-panel {
   border: 3px solid var(--color-ink);
   border-radius: var(--radius-dialog);
-  background: var(--color-panel);
   box-shadow: var(--paper-lift);
 }
 
+/* A dialog keeps the paper fill, so its sticky heading and footer bands match the body. */
 :root .labyrinth-panel {
   padding: var(--space-3);
+  background: var(--color-panel);
 }
 
 :root dialog > .dialog-heading,
@@ -100,7 +109,7 @@
   text-align: center;
 }
 
-:root .run-metrics div:nth-child(4) {
+:root .run-metrics div:has(#vitality-count) {
   color: var(--color-on-signal-deep);
   background: var(--color-signal-deep);
 }
@@ -110,7 +119,7 @@
   color: inherit;
   font-family: var(--font-body);
   font-stretch: normal;
-  font-size: 0.7rem;
+  font-size: var(--text-compact);
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.1;
@@ -138,6 +147,19 @@
 
   :root .run-metrics dd {
     font-size: 1.05rem;
+  }
+
+  /* A full-height sheet has no edge to frame, so it drops the card outline and lift. */
+  :root :is(.atlas-dialog, .access-settings-dialog, .first-light-dialog, .level-dialog, .daily-dialog, .challenge-dialog, .journal-dialog, .practice-dialog, .records-dialog, .player-dialog, .scoreboard-dialog, .lifetime-dialog, .quest-conflict-dialog, .result-dialog) {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 32rem) {
+  :root .run-metrics dd {
+    font-size: var(--text-label);
   }
 }
 

@@ -312,7 +312,7 @@ A pull-tab has a 2px ink outline and a 4px ink lift, and a press flattens the li
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |
-| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. |
+| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. In Popup, the Readout numbers use tabular Andika instead (plan D10). |
 
 ## Canonical export
 
