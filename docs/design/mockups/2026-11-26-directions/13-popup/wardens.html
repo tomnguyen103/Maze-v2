@@ -1,0 +1,213 @@
+<title>Echo Maze Warden ideas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Chewy&display=swap">
+<style>
+/* Approved Popup palette. Wardens use night paper (dark plum) with glowing eyes; threat colour stays the Warden purple family. */
+:root{--teal:#17a398;--plate:#fff8e7;--coral:#ff5a3c;--sun:#ffc93c;--meadow:#6cc24a;--sky:#4db8ff;--ink:#3a2449;--soft:#5e4a6b;--warden:#6b3fc8;--night:#241536;
+  --display:"Chewy","Trebuchet MS",system-ui,sans-serif;--body:"Andika","Verdana",system-ui,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plate);color:var(--ink);font:16px/1.55 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:64px}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(2.4rem,6vw,3.8rem)}h2{font-size:clamp(1.7rem,4vw,2.4rem)}h3{font-size:1.9rem}
+p{margin:0}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+header.top{padding:40px 0 28px;display:grid;gap:14px;max-width:72ch}
+header.top p{font-size:1.08rem;color:var(--soft)}
+.note{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:10px 14px;font-size:.95rem;box-shadow:4px 4px 0 rgba(58,36,73,.18)}
+.before{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.cards{display:grid;gap:28px}
+.card{background:#fff;border:3px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 rgba(58,36,73,.2);overflow:hidden;
+  display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr)}
+.hero{background:var(--night);display:grid;place-items:center;padding:18px;position:relative;border-right:3px solid var(--ink);overflow:hidden}
+.hero::before{content:"";position:absolute;right:26px;top:22px;width:46px;height:46px;border-radius:50%;background:#fff3c4;box-shadow:-12px 6px 0 -6px var(--night) inset}
+.hero::after{content:"";position:absolute;inset:auto 0 0 0;height:34%;background:#3b2a55}
+.hero svg{width:100%;max-width:240px;position:relative;z-index:1}
+.rec{position:absolute;top:14px;left:14px;z-index:2;background:var(--sun);border:2px solid var(--ink);border-radius:999px;padding:2px 12px;font-weight:700;font-size:.85rem}
+.body{padding:22px;display:grid;gap:14px;align-content:start;min-width:0}
+.tag{color:var(--soft);font-size:1.05rem}
+.poses{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.pose{background:#efe7f6;border:2px solid var(--ink);border-radius:14px;padding:6px 6px 8px;text-align:center;font-weight:700;font-size:.85rem}
+.pose small{display:block;font-weight:400;color:var(--soft);font-size:.75rem;line-height:1.3}
+.pose svg{width:100%;max-height:120px}
+.fits{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 18px;margin:0;padding:0;list-style:none}
+.fits li{padding-left:22px;position:relative;font-size:.95rem}
+.fits li::before{content:"";position:absolute;left:0;top:.45em;width:12px;height:12px;border-radius:50%;background:var(--warden);border:2px solid var(--ink)}
+.fits li.con::before{background:#fff}
+section{padding-top:40px;display:grid;gap:16px}
+section>p{max-width:72ch;color:var(--soft)}
+.badges{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.badges div{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:10px;display:flex;gap:10px;align-items:center;font-size:.9rem}
+.badges svg{flex:none;width:44px}
+.guilds{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.guilds figure{margin:0;border:2px solid var(--ink);border-radius:16px;padding:8px;text-align:center}
+.guilds svg{width:100%}
+.guilds figcaption{font-weight:700;font-size:.85rem;line-height:1.3}
+.guilds figcaption span{display:block;font-weight:400;color:var(--soft)}
+.duo{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:center}
+.panel{background:var(--teal);border:3px solid var(--ink);border-radius:20px;padding:14px;overflow:hidden}
+.panel.dark{background:var(--night)}
+.panel svg{width:100%;display:block}
+.cap{color:var(--plate);font-weight:700;text-align:center;margin-top:6px}
+@keyframes lurk{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px) scale(1.01)}}
+.bob{animation:lurk 2.6s ease-in-out infinite;transform-origin:50% 90%}
+@keyframes flick{0%,92%,100%{opacity:1}95%{opacity:.35}}
+.glow{animation:flick 4s infinite}
+@media (prefers-reduced-motion:reduce){.bob,.glow{animation:none}}
+@media (max-width:900px){.poses{grid-template-columns:repeat(3,minmax(0,1fr))}.guilds{grid-template-columns:repeat(3,minmax(0,1fr))}.duo{grid-template-columns:1fr}}
+@media (max-width:760px){.card{grid-template-columns:1fr}.hero{border-right:0;border-bottom:3px solid var(--ink)}.hero svg{max-width:190px}.poses,.guilds{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="cut" x="-40%" y="-40%" width="180%" height="180%">
+    <feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="d"/>
+    <feFlood flood-color="#ffffff"/><feComposite in2="d" operator="in" result="w"/>
+    <feOffset in="d" dx="3" dy="4" result="o"/><feFlood flood-color="#120a1c" flood-opacity=".45"/><feComposite in2="o" operator="in" result="sh"/>
+    <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs></svg>
+
+<div class="wrap">
+<header class="top">
+  <h1>Meet the Wardens</h1>
+  <p>Round two: the Wardens are now scary. They are cut from night paper, with glowing slit eyes, torn edges, and long shadows. They look like the villain of a picture book: no blood, no gore, nothing a child cannot sleep after. Every idea shows the same five Warden Modes: Patrol, Hunt, Intercept, Lured, and defeated.</p>
+  <div class="before note"><svg viewBox="-24 -24 48 48" width="56" aria-label="Current Warden"><rect x="-15" y="-14" width="30" height="28" rx="7" fill="#6b3fc8" stroke="#3a2449" stroke-width="2.5"/><circle cx="-4" cy="0" r="3.4" fill="#fff"/><circle cx="7" cy="0" r="3.4" fill="#fff"/><circle cx="-3" cy="0" r="1.8" fill="#3a2449"/><circle cx="8" cy="0" r="1.8" fill="#3a2449"/><path d="M-9 -9l7 3M13 -9l-7 3" stroke="#3a2449" stroke-width="2.5" stroke-linecap="round"/><circle cx="15" cy="-14" r="7" fill="#fff" stroke="#3a2449" stroke-width="2"/><path d="M12 -14h6l-2.5 -2.5M18 -14l-2.5 2.5" stroke="#3a2449" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <p style="flex:1;min-width:220px"><b>The current Warden:</b> a purple block with brows. Round one (Hoot, Brick, Grumble) was too friendly. These three replace it.</p></div>
+</header>
+
+<div class="cards" id="cards"></div>
+
+<section>
+  <h2>One badge per Warden Mode</h2>
+  <p>The eye glow changes colour with the mode, and the shoulder badge confirms it. The badge stays the same in every Atlas Region and on every Warden idea.</p>
+  <div class="badges" id="badges"></div>
+</section>
+
+<section>
+  <h2>Warden Guilds for Fangmoor</h2>
+  <p>Each Atlas Region has its own Warden Guild. The wolf stays the same and only the Guild piece and its Region Hue change. Guild art changes no move, timing, or ability.</p>
+  <div class="guilds" id="guilds"></div>
+</section>
+
+<section>
+  <h2>On the board, and at the Gate</h2>
+  <p>Left: Clover and the three Warden ideas at 48 px a tile, in Hunt, with the dashed next-Move mark. Right: the Gate Warden that guards the Gate at Labyrinths 4, 8, 12, 16, and 20.</p>
+  <div class="duo"><div class="panel"><div id="strip"></div><p class="cap">At play size</p></div><div class="panel dark"><div id="gate"></div><p class="cap">Same Warden Challenge, holds the Gate key</p></div></div>
+</section>
+
+<section>
+  <div class="note"><b>What this page is.</b> Ideas for review only. "Warden" stays the game term; Gloomtalon, Fangmoor, and Hollowhelm are proposed names. Only the Popup theme is approved. Nothing in the game has changed.</div>
+</section>
+</div>
+
+<script>
+const K='#3a2449',SW=2.6,W='#6b3fc8',DARK='#2b1747',MID='#4a2a85',VOID='#140a22',BONE='#efe4c8',SUN='#ffc93c',CORAL='#ff5a3c',SKY='#4db8ff',CREAM='#fff8e7';
+const mir=p=>`<g>${p}</g><g transform="scale(-1 1)">${p}</g>`;
+const LOOK={patrol:[1.5,0],hunt:[2.5,.5],intercept:[2.5,-.5],lured:[-1,-1.5],down:[0,0]};
+const GLOW={patrol:'#ffd23c',hunt:CORAL,intercept:'#ffd23c',lured:SKY};
+/* Slit eyes, inner ends low (angry). Glow colour follows the Warden Mode. */
+function eyes(m,x,y,w){if(m==='down')return mir(`<path d="M${-x-w*.8} ${y-3} l${w*1.6} 5 M${-x-w*.8} ${y+2} l${w*1.6} -5" stroke="#8a7aa8" stroke-width="2.4" stroke-linecap="round"/>`);
+  const c=GLOW[m],[dx,dy]=LOOK[m],o=m==='hunt'?4:3;
+  const one=s=>`<path d="M${s*(x+w)} ${y-o} Q${s*x} ${y-o-4} ${s*(x-w)} ${y+2} Q${s*x} ${y+3} ${s*(x+w)} ${y-o}Z" fill="${c}"/><ellipse cx="${s*x+dx}" cy="${y-1+dy}" rx="1.3" ry="${m==='hunt'?3.4:2.6}" fill="${VOID}"/>`;
+  return `<g class="glow" filter="url(#glow)">${one(-1)+one(1)}</g>`}
+function badge(m,x=30,y=-44,r=11){const B={patrol:'#fff',hunt:CORAL,intercept:SUN,lured:SKY,down:'#e6dcf7'}[m];let i='';
+  if(m==='patrol')i=`<ellipse cx="-3.5" cy="2" rx="2.6" ry="3.6" fill="${K}"/><ellipse cx="3.5" cy="-2.5" rx="2.6" ry="3.6" fill="${K}"/>`;
+  if(m==='hunt')i=`<rect x="-1.8" y="-7" width="3.6" height="9" rx="1.8" fill="#fff"/><circle cy="5.2" r="2" fill="#fff"/>`;
+  if(m==='intercept')i=`<path d="M-6 4 Q-2 -6 6 -4 M6 -4 l-4 -3 M6 -4 l-3 4" fill="none" stroke="${K}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(m==='lured')i=`<path d="M-1 5 V-6 l6 -2 v9" fill="none" stroke="${K}" stroke-width="2.2"/><circle cx="-3" cy="5" r="2.6" fill="${K}"/><circle cx="3" cy="2" r="2.6" fill="${K}"/>`;
+  if(m==='down')i=`<text y="4" text-anchor="middle" font-family="Chewy" font-size="13" fill="${K}">z</text>`;
+  return `<g transform="translate(${x} ${y})"><circle r="${r}" fill="${B}" stroke="${K}" stroke-width="2.4"/><g transform="scale(${r/11})">${i}</g></g>`}
+function fx(m){
+  if(m==='patrol')return `<g fill="${K}" opacity=".4">${[[-42,56],[-32,52],[-22,57]].map(([x,y],i)=>`<path d="M${x} ${y} l-3 -3 M${x} ${y} l0 -4 M${x} ${y} l3 -3" stroke="${K}" stroke-width="1.6" stroke-linecap="round"/>`).join('')}</g>`;
+  if(m==='hunt')return `<g stroke="${K}" stroke-width="2.4" stroke-linecap="round" opacity=".6"><path d="M-46 -6 h-12 M-44 6 h-16 M-46 18 h-10"/></g>`;
+  if(m==='intercept')return `<path d="M32 30 Q54 10 46 -14" fill="none" stroke="${W}" stroke-width="3" stroke-dasharray="4 4" stroke-linecap="round"/><circle cx="46" cy="-18" r="6" fill="none" stroke="${W}" stroke-width="3" stroke-dasharray="3 3"/>`;
+  if(m==='lured')return `<g transform="translate(-46 -46)"><path d="M-7 6 Q-7 -7 0 -8 Q7 -7 7 6 L9 9 H-9Z" fill="${SUN}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><circle cy="11" r="2.4" fill="${K}"/><path d="M12 -4 q5 5 0 10 M16 -8 q8 9 0 18" fill="none" stroke="${K}" stroke-width="2" stroke-linecap="round"/></g>`;
+  if(m==='down')return `<g font-family="Chewy" fill="${K}"><text x="22" y="-14" font-size="16">z</text><text x="32" y="-28" font-size="12">z</text></g>`;
+  return ''}
+const stand=`<ellipse cx="0" cy="50" rx="40" ry="6" fill="${VOID}" opacity=".35"/><path d="M-26 47 h52 l7 11 h-66z" fill="#c9a46a" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-26 47 h52" stroke="#8f6a3a" stroke-width="2"/>`;
+const ink=`stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"`;
+
+const WD={
+ wolf:{name:'Fangmoor',kind:'the Shadow Wolf',tag:'A lean night wolf with torn paper fur and a mouth full of white fangs. Wolves hunt rabbits, so Clover has every reason to run.',
+  fits:[['Clear threat','Every child knows a wolf chases a bunny. No words needed.'],['Hunt reads at once','Ears flat, jaw open, red eyes: the chase is obvious on a phone.'],['Strong silhouette','Pointed ears and jagged fur stay readable at 48 px.'],['May be too scary for the youngest','Bright Start may need a softer glow or no open jaw.']],con:3,
+  draw(m,acc=''){let s='';
+   const ear=m==='hunt'?`M-22 -22 L-38 -46 L-12 -36Z`:`M-22 -24 L-30 -60 L-10 -38Z`;
+   s+=`<path d="M-22 4 L-30 44 L-22 38 L-16 48 L-8 40 L0 48 L8 40 L16 48 L22 38 L30 44 L22 4 Z" fill="${DARK}" ${ink}/>`;
+   s+=`<path d="M-12 6 L-8 26 L-4 18 L0 30 L4 18 L8 26 L12 6Z" fill="${MID}"/>`;
+   s+=`<path d="M-18 46 l-3 6 M-14 46 l0 7 M-10 46 l3 6 M10 46 l-3 6 M14 46 l0 7 M18 46 l3 6" stroke="${BONE}" stroke-width="2.6" stroke-linecap="round"/>`;
+   s+=mir(`<path d="${ear}" fill="${DARK}" ${ink}/><path d="${ear}" fill="${MID}" transform="translate(-2 4) scale(.6)" />`);
+   s+=`<path d="M-24 -20 Q-26 -40 0 -42 Q26 -40 24 -20 Q24 -2 12 6 L0 14 L-12 6 Q-24 -2 -24 -20Z" fill="${DARK}" ${ink}/>`;
+   s+=mir(`<path d="M-24 -14 L-32 -8 L-24 -6 L-30 0 L-20 0Z" fill="${DARK}" ${ink}/>`);
+   s+=`<path d="M-10 -14 Q0 -18 10 -14 L7 4 Q0 9 -7 4Z" fill="${MID}"/>`;
+   s+=eyes(m,11,-24,7);
+   s+=`<path d="M-4 -12 Q0 -14 4 -12 L0 -7Z" fill="${VOID}"/>`;
+   if(m==='down')s+=`<path d="M-6 4 q6 -3 12 0" fill="none" stroke="${VOID}" stroke-width="2.4" stroke-linecap="round"/>`;
+   else{const j=m==='hunt'?10:m==='lured'?3:6;s+=`<path d="M-8 1 Q0 ${2+j} 8 1 Z" fill="${VOID}"/><path d="M-7 1 l2 ${j*.7} l2 ${-j*.7} M3 1 l2 ${j*.7} l2 ${-j*.7}" fill="${BONE}" stroke="${BONE}" stroke-width="1" stroke-linejoin="round"/>`}
+   return s+acc}},
+ owl:{name:'Gloomtalon',kind:'the Night Owl',tag:'A tall owl in torn black paper, with spiked ear tufts, a hooked bone beak, and talons that click on the stone.',
+  fits:[['Bell rule makes sense','Owls hunt by sound. Lured mode is Gloomtalon turning to the Signal Bell.'],['Watcher from above','Big glowing eyes in a dark mask feel like being watched.'],['Owls hunt rabbits too','A real predator of a bunny, but less of a jump scare than a wolf.'],['Softer threat','The round body still reads a little cute at small size.']],con:3,
+  draw(m,acc=''){let s='';
+   s+=mir(`<path d="M-22 -4 Q-48 6 -44 38 L-38 28 L-36 42 L-30 30 L-26 42 L-20 22Z" fill="${MID}" ${ink}/>`);
+   s+=`<path d="M-24 -6 Q-28 30 -18 40 L-12 34 L-6 44 L0 36 L6 44 L12 34 L18 40 Q28 30 24 -6 Q24 -40 0 -42 Q-24 -40 -24 -6Z" fill="${DARK}" ${ink}/>`;
+   s+=mir(`<path d="M-20 -30 L-36 -64 L-8 -38Z" fill="${DARK}" ${ink}/>`);
+   s+=[10,18,26].map(y=>`<path d="M-8 ${y} l4 5 l4 -5 l4 5 l4 -5" fill="none" stroke="${W}" stroke-width="2" stroke-linejoin="round"/>`).join('');
+   s+=`<path d="M-24 -20 Q-12 -34 0 -24 Q12 -34 24 -20 Q20 -4 0 -6 Q-20 -4 -24 -20Z" fill="${VOID}"/>`;
+   s+=eyes(m,11,-18,8);
+   s+=`<path d="M-5 -12 Q0 -14 5 -12 Q3 -4 0 2 Q-1 -4 -5 -12Z" fill="${BONE}" stroke="${K}" stroke-width="1.6"/>`;
+   s+=`<path d="M-14 42 q-4 4 -2 8 M-10 42 q0 5 2 8 M10 42 q0 5 -2 8 M14 42 q4 4 2 8" fill="none" stroke="${BONE}" stroke-width="2.8" stroke-linecap="round"/>`;
+   return s+acc}},
+ knight:{name:'Hollowhelm',kind:'the Empty Knight',tag:'A suit of spiked armour with nobody inside. Only two eyes glow in the dark visor. It carries a long halberd and a torn cape.',
+  fits:[['Feels like a guard','A Warden guards the Labyrinth, so armour fits the job.'],['Eyes do all the work','No face at all: only the glow. Very spooky, still bloodless.'],['Halberd shows reach','The long blade hints at Intercept: it cuts you off.'],['Less animal','No natural reason to chase a bunny. The story link to Clover is weaker.']],con:3,
+  draw(m,acc=''){let s='';
+   s+=`<path d="M-20 -4 L-30 44 L-22 36 L-16 46 L-8 38 L0 46 L8 38 L16 46 L22 36 L30 44 L20 -4Z" fill="#5a1f3a" ${ink}/>`;
+   s+=`<path d="M-18 -6 L-16 40 H16 L18 -6 Q0 -12 -18 -6Z" fill="${MID}" ${ink}/><path d="M0 -8 V40 M-16 14 H16" stroke="${DARK}" stroke-width="2.4"/>`;
+   s+=mir(`<path d="M-18 -6 Q-30 -10 -30 2 L-18 6Z" fill="${W}" ${ink}/><path d="M-28 -6 l-4 -6 l6 2Z" fill="${BONE}" stroke="${K}" stroke-width="1.4"/>`);
+   s+=`<rect x="-14" y="38" width="11" height="10" rx="2" fill="${DARK}" ${ink}/><rect x="3" y="38" width="11" height="10" rx="2" fill="${DARK}" ${ink}/>`;
+   s+=`<path d="M-20 -10 L-20 -36 Q0 -54 20 -36 L20 -10 Q0 -4 -20 -10Z" fill="${MID}" ${ink}/>`;
+   s+=`<path d="M-12 -46 L-10 -62 L-6 -48 M-2 -50 L0 -68 L2 -50 M6 -48 L10 -62 L12 -46" fill="${BONE}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/>`;
+   s+=`<path d="M-16 -30 H16 V-18 Q0 -14 -16 -18Z" fill="${VOID}"/><path d="M0 -30 V-12" stroke="${MID}" stroke-width="2.4"/>`;
+   s+=eyes(m,8,-23,5.5);
+   s+=`<path d="M30 -60 V46" stroke="#6b4a2a" stroke-width="3.6" stroke-linecap="round"/><path d="M30 -60 Q46 -54 42 -38 L30 -42Z" fill="${BONE}" ${ink}/><path d="M30 -60 l-3 -8 l6 0Z" fill="${BONE}" stroke="${K}" stroke-width="1.6"/>`;
+   return s+acc}}
+};
+const MODES=[['patrol','Patrol','Walks its route'],['hunt','Hunt','Chases the Explorer'],['intercept','Intercept','Cuts you off ahead'],['lured','Lured','Hears a Signal Bell'],['down','Defeated','Folds flat, eyes out']];
+function fig(k,m='patrol',opt={}){const w=WD[k],t=m==='down'?'translate(0 18) scale(1 .62)':'';
+  return `<svg viewBox="-62 -74 124 136" role="img" aria-label="${w.name} ${w.kind}, ${m}">${opt.noStand?'':stand}<g filter="url(#cut)"><g class="${opt.bob?'bob':''}"><g transform="${t}">${w.draw(m,opt.acc||'')}</g></g></g>${fx(m)}${badge(m)}</svg>`}
+
+const order=['wolf','owl','knight'];
+document.getElementById('cards').innerHTML=order.map(k=>{const w=WD[k];return `<article class="card"><div class="hero">${k==='wolf'?'<span class="rec">Recommended</span>':''}${fig(k,'hunt',{bob:true})}</div>
+ <div class="body"><div><h3>${w.name}, ${w.kind}</h3><p class="tag">${w.tag}</p></div>
+ <div class="poses">${MODES.map(([m,l,d])=>`<div class="pose">${fig(k,m)}${l}<small>${d}</small></div>`).join('')}</div>
+ <ul class="fits">${w.fits.map(([a,b],i)=>`<li class="${i===w.con?'con':''}"><b>${a}.</b> ${b}</li>`).join('')}</ul></div></article>`}).join('');
+
+document.getElementById('badges').innerHTML=MODES.map(([m,l,d])=>`<div><svg viewBox="-14 -14 28 28" aria-hidden="true">${badge(m,0,0,12)}</svg><span><b>${l}</b><br>${d}</span></div>`).join('');
+
+/* Guild pieces: decoration in each Region Hue, never a new marker. */
+const GUILDS=[
+ ['Bramblewatch','Mosslight Grove','#5fcf9f',c=>`<path d="M-22 -36 Q0 -48 22 -36" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round"/>`+[-16,-6,6,16].map(x=>`<path d="M${x} -40 l-3 -6 l6 1Z" fill="${c}" stroke="${K}" stroke-width="1.2"/>`).join('')],
+ ['Kitewatch','Windcall Ridge','#4db8ff',c=>`<path d="M-24 10 L-46 -24" stroke="${K}" stroke-width="1.6"/><path d="M-46 -42 L-36 -28 L-46 -12 L-56 -28Z" fill="${c}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><path d="M-46 -42 V-12 M-56 -28 H-36" stroke="${K}" stroke-width="1.2"/>`],
+ ['Spanwatch','Sunspan Crossing','#ffb23c',c=>`<path d="M-20 -6 H20 V2 H-20Z" fill="${c}" stroke="${K}" stroke-width="2"/><path d="M-12 -6 v8 M0 -6 v8 M12 -6 v8" stroke="${K}" stroke-width="1.4"/>`],
+ ['Currentwatch','Tideglass Reach','#5b6ee8',c=>`<path d="M-22 10 Q-32 30 -26 44 M22 10 Q32 30 26 44" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round"/><path d="M-12 22 q6 -6 12 0 q6 6 12 0" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>`],
+ ['Chimewatch','Bellroot Summit','#ff6fae',c=>`<path d="M0 8 v8" stroke="${K}" stroke-width="2"/><path d="M-6 26 Q-6 15 0 14 Q6 15 6 26Z" fill="${c}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><circle cy="28" r="2" fill="${K}"/>`]];
+document.getElementById('guilds').innerHTML=GUILDS.map(([g,r,c,a])=>`<figure style="background:${c}2e">${fig('wolf','patrol',{acc:a(c)})}<figcaption>${g} Guild<span>${r}</span></figcaption></figure>`).join('');
+
+/* Board strip: Clover and the three Wardens in Hunt. */
+const clover=`<g transform="scale(.5)"><g filter="url(#cut)"><path d="M-16 2 Q-22 38 -10 44 H10 Q22 38 16 2 Q0 -6 -16 2Z" fill="#ffb3c7" stroke="${K}" stroke-width="2.6"/><g transform="translate(-9 -36) rotate(-14)"><path d="M0 2 C-11 -6 -11 -36 0 -40 C11 -36 11 -6 0 2Z" fill="#ffb3c7" stroke="${K}" stroke-width="2.6"/></g><g transform="translate(9 -36) rotate(12)"><path d="M0 2 C-11 -6 -11 -36 0 -40 C11 -36 11 -6 0 2Z" fill="#ffb3c7" stroke="${K}" stroke-width="2.6"/></g><circle cy="-20" r="21" fill="#ffb3c7" stroke="${K}" stroke-width="2.6"/><circle cx="-8" cy="-23" r="4.5" fill="${K}"/><circle cx="8" cy="-23" r="4.5" fill="${K}"/><path d="M-17 -3 Q0 7 17 -3 L17 5 Q0 15 -17 5Z" fill="#1fb5a8" stroke="${K}" stroke-width="2.6"/></g></g>`;
+(function(){const T=48,cols=12,rows=3,Wd=cols*T,H=rows*T;const map=['FFFWFFFFWFFF','..........W.','.W....W.....'];
+ let s=`<svg viewBox="0 -8 ${Wd} ${H+8}" role="img" aria-label="Clover and three Warden ideas on the board">`;
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const ch=map[y][x],px=x*T,py=y*T;
+  if(ch==='F')s+=`<rect x="${px+2}" y="${py+2}" width="${T-4}" height="${T-4}" rx="7" fill="${SKY}" stroke="${K}" stroke-width="2"/><path d="M${px+12} ${py+30} q0 -8 8 -7 q3 -7 10 -3 q8 -1 7 10z" fill="#fff"/>`;
+  else{s+=`<rect x="${px}" y="${py}" width="${T}" height="${T}" fill="#6cc24a" stroke="#58a83a"/>`;if(ch==='W')s+=`<rect x="${px+4}" y="${py+3}" width="${T-8}" height="${T-6}" rx="8" fill="${CREAM}" stroke="${K}" stroke-width="2.6"/>`}}
+ s+=`<g transform="translate(${1*T+24} ${1*T+30})">${clover}</g>`;
+ [['wolf',3,2],['owl',7,1],['knight',10,2]].forEach(([k,x,y])=>{s+=`<circle cx="${(x-1)*T+24}" cy="${y*T+24}" r="8" fill="none" stroke="${W}" stroke-width="3" stroke-dasharray="3 3"/><g transform="translate(${x*T+24} ${y*T+28}) scale(.48)"><g filter="url(#cut)">${WD[k].draw('hunt')}</g>${badge('hunt')}</g>`});
+ document.getElementById('strip').innerHTML=s+'</svg>'})();
+
+/* Gate Warden: Fangmoor, bigger, wearing the Gate key. Not a boss: same Warden Challenge rules. */
+document.getElementById('gate').innerHTML=`<svg viewBox="-110 -104 220 178" role="img" aria-label="Gate Warden Fangmoor in front of the Gate">
+ <rect x="-110" y="30" width="220" height="44" fill="#3b2a55"/><path d="M-60 40 V-40 Q0 -100 60 -40 V40" fill="#cdbfdf" stroke="${K}" stroke-width="4"/><path d="M-42 40 V-34 Q0 -78 42 -34 V40Z" fill="${VOID}"/><path d="M-30 40 V-24 M-10 40 V-34 M10 40 V-34 M30 40 V-24" stroke="${SUN}" stroke-width="4" stroke-linecap="round"/>
+ <g transform="translate(0 4) scale(1.25)"><g filter="url(#cut)">${WD.wolf.draw('patrol',`<g transform="translate(0 24)"><circle r="6" fill="none" stroke="${SUN}" stroke-width="3.4"/><rect x="-2" y="5" width="4" height="12" fill="${SUN}" stroke="${K}" stroke-width="1"/><rect x="2" y="12" width="5" height="3" fill="${SUN}"/></g>`)}</g>${badge('patrol')}</g>
+ <rect x="-52" y="58" width="104" height="22" rx="11" fill="${W}" stroke="${K}" stroke-width="2.6"/><text y="74" text-anchor="middle" font-family="Chewy" font-size="15" fill="#fff">Gate Warden</text></svg>`;
+</script>

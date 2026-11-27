@@ -1,0 +1,521 @@
+<title>Echo Maze Popup Screens</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Chewy&display=swap">
+<style>
+/* Layout: one long picture book. Each chapter is a spread; each screen is a pop-up page on paper. Single-theme by choice (paper book). */
+:root{
+  --paper:#fbf3e2; --paper-2:#f2e4c4; --card:#fffaf0;
+  --ink:#3a2449; --ink-soft:#5e4a6b;
+  --meadow:#6cc24a; --meadow-deep:#3f7f2a;
+  --sky:#4db8ff; --sky-soft:#bfe6ff; --sky-deep:#2a86c4;
+  --coral:#ff5a3c; --sun:#ffd98a;
+  --shadow:rgba(58,36,73,.22);
+  --display:"Chewy","Comic Sans MS","Trebuchet MS",system-ui,sans-serif;
+  --body:"Andika","Verdana","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.55 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3,.disp{font-family:var(--display);font-weight:400;letter-spacing:.01em;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6vw,4rem);line-height:1}
+h2{font-size:clamp(1.8rem,4vw,2.6rem);line-height:1.05}
+h3{font-size:1.35rem;line-height:1.15}
+p{margin:0}
+a{color:var(--ink)}
+:focus-visible{outline:3px solid var(--sky-deep);outline-offset:2px}
+
+/* page head */
+.head{padding-block:40px 24px;display:grid;gap:20px}
+.head p.lede{max-width:62ch;font-size:1.08rem;color:var(--ink-soft)}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.stat{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:12px 14px;box-shadow:4px 4px 0 var(--shadow)}
+.stat b{display:block;font-family:var(--display);font-weight:400;font-size:1.2rem}
+.stat.yes{background:#e6f6dc}.stat.no{background:#ffe3dc}
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{text-decoration:none;background:var(--sky-soft);border:2px solid var(--ink);border-radius:999px;padding:4px 14px;font-weight:700}
+
+/* chapters */
+.chapter{padding-block:40px 8px;border-top:3px dashed var(--paper-2);display:grid;gap:20px}
+.chapter>header{display:grid;gap:6px;max-width:70ch}
+.chapter>header p{color:var(--ink-soft)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:24px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:24px}
+figure{margin:0;display:grid;gap:10px;min-width:0}
+figcaption{display:grid;gap:4px;max-width:70ch}
+figcaption b{font-family:var(--display);font-weight:400;font-size:1.2rem}
+figcaption span{color:var(--ink-soft);font-size:.95rem}
+.from{font-size:.85rem;color:var(--sky-deep);font-weight:700}
+
+/* screen frames */
+.screen{background:var(--paper);border:3px solid var(--ink);border-radius:18px;overflow:hidden;position:relative;box-shadow:6px 6px 0 var(--shadow);max-width:100%}
+.screen.desk{aspect-ratio:16/10}
+.screen.phone{width:min(100%,340px);aspect-ratio:375/780;border-radius:34px;margin-inline:auto;border-width:6px}
+.screen .scroll{position:absolute;inset:0;overflow:hidden}
+.paperbg{background:radial-gradient(circle at 12% 18%,rgba(108,194,74,.16),transparent 38%),radial-gradient(circle at 86% 30%,rgba(77,184,255,.18),transparent 40%),radial-gradient(circle at 60% 92%,rgba(255,217,138,.35),transparent 42%),var(--paper)}
+
+/* shared ui pieces */
+.wordmark{font-family:var(--display);font-size:1.5rem;line-height:1;color:var(--ink)}
+.tab{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:6px 16px 8px;background:var(--card);border:2px solid var(--ink);border-radius:12px 12px 6px 6px;font:700 .92rem/1 var(--body);color:var(--ink);box-shadow:0 4px 0 var(--ink);white-space:nowrap}
+.tab.go{background:var(--meadow)}
+.tab.hot{background:var(--coral);color:#fff}
+.tab.sky{background:var(--sky-soft)}
+.tab.ghost{background:transparent;box-shadow:none}
+.tab .k{font-size:.72rem;opacity:.75;font-weight:400}
+.tabs{display:flex;flex-wrap:wrap;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:2px solid var(--ink);border-radius:999px;background:var(--card);font-size:.8rem;font-weight:700}
+.ribbons{display:flex;gap:8px}
+.ribbon{position:relative;background:var(--sky);color:var(--ink);border:2px solid var(--ink);border-top:0;padding:6px 10px 14px;min-width:68px;text-align:center;clip-path:polygon(0 0,100% 0,100% 100%,50% 82%,0 100%)}
+.ribbon small{display:block;font-size:.68rem;font-weight:700;line-height:1.1}
+.ribbon b{font-family:var(--display);font-weight:400;font-size:1.35rem;line-height:1}
+.ribbon.v{background:var(--coral);color:#fff}
+.ribbon.g{background:var(--meadow)}
+.ribbon.s{background:var(--sun)}
+.ribbon.torn{clip-path:polygon(0 0,100% 0,100% 60%,80% 70%,92% 80%,60% 76%,50% 100%,30% 72%,0 100%);opacity:.9}
+.pop{background:var(--card);border:3px solid var(--ink);border-radius:18px;box-shadow:0 8px 0 var(--ink),0 18px 30px var(--shadow);padding:20px;position:relative}
+.pop::after{content:"";position:absolute;top:-3px;right:-3px;width:34px;height:34px;background:linear-gradient(225deg,var(--paper) 50%,var(--sky-soft) 50%);border-left:3px solid var(--ink);border-bottom:3px solid var(--ink);border-radius:0 16px 0 10px}
+.pop h3{font-size:1.5rem;margin-bottom:6px}
+.pop .sub{color:var(--ink-soft);font-size:.92rem}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.ans{border:2px solid var(--ink);border-radius:12px;padding:10px 12px;background:#fff;font-weight:700;font-size:1.05rem;display:flex;gap:10px;align-items:center;min-height:48px}
+.ans i{font-style:normal;font-family:var(--display);font-size:1.1rem;background:var(--sky-soft);border:2px solid var(--ink);border-radius:8px;width:28px;height:28px;display:grid;place-items:center;flex:none}
+.ans.right{background:#e2f6d6;border-color:var(--meadow-deep)}
+.ans.wrong{background:#ffe1d9;text-decoration:line-through}
+.lens{margin-top:12px;background:#eaf6ff;border:2px dashed var(--sky-deep);border-radius:12px;padding:10px 12px;font-size:.95rem}
+.lens b{font-family:var(--display);font-weight:400;font-size:1.05rem}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.note{background:var(--sun);border:2px solid var(--ink);border-radius:12px;padding:10px 14px;font-size:.95rem;max-width:70ch}
+.overlay{position:absolute;inset:0;background:rgba(58,36,73,.35);display:grid;place-items:center;padding:4%}
+.overlay .pop{width:min(560px,100%)}
+table.t{width:100%;border-collapse:collapse;font-size:.9rem;font-variant-numeric:tabular-nums}
+table.t th{text-align:left;font-size:.78rem;color:var(--ink-soft);padding:4px 8px;border-bottom:2px solid var(--ink)}
+table.t td{padding:6px 8px;border-bottom:1px dashed #cdbb98}
+.lantern{display:inline-flex;gap:3px}
+.lantern i{width:12px;height:16px;border:2px solid var(--ink);border-radius:4px 4px 6px 6px;background:#fff}
+.lantern i.on{background:var(--sun);box-shadow:0 0 6px var(--sun)}
+.toggle{width:44px;height:26px;border:2px solid var(--ink);border-radius:999px;background:#fff;position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--ink-soft)}
+.toggle.on{background:var(--meadow)}
+.toggle.on::after{left:20px;background:var(--ink)}
+.set{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 0;border-bottom:1px dashed #cdbb98}
+.set small{display:block;color:var(--ink-soft)}
+.bubble{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:8px 12px;font-size:.88rem;box-shadow:3px 3px 0 var(--shadow)}
+.swatch{width:30px;height:30px;border-radius:50%;border:2px solid var(--ink)}
+.swatch.sel{outline:3px solid var(--ink);outline-offset:2px}
+.field{border:2px solid var(--ink);border-radius:10px;background:#fff;padding:8px 10px;font-weight:700}
+.list{display:grid;gap:8px}
+.drawer{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-top:3px solid var(--ink);padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.inspo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.inspo div{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:12px 14px}
+.inspo b{display:block;font-family:var(--display);font-weight:400;font-size:1.1rem}
+.inspo span{font-size:.92rem;color:var(--ink-soft)}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.bob{animation:bob 2.4s ease-in-out infinite;transform-box:fill-box}
+@keyframes ripple{from{r:20;opacity:.8}to{r:120;opacity:0}}
+.ripple{animation:ripple 2.2s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.bob,.ripple{animation:none}}
+@media (max-width:640px){.grid2{grid-template-columns:1fr !important}.overlay{grid-template-columns:1fr !important}.answers{grid-template-columns:1fr}.screen.desk{aspect-ratio:auto;min-height:420px}}
+</style>
+
+<div class="wrap">
+<header class="head">
+  <div class="wordmark" style="font-size:1.2rem">Echo Maze review book</div>
+  <h1>Every screen, as a pop-up book</h1>
+  <p class="lede">This page shows each player-facing screen and the landing page in the Popup theme. The new piece is the Echo Atlas as a pop-up book: a stamp sheet for the whole Quest and a tunnel book for each land. All art is drawn in code. Nothing here is built in the game.</p>
+  <div class="status">
+    <div class="stat yes"><b>Approved</b>The Popup theme: paper flaps for Fog, ribbon bookmarks for the Readout, pull-tabs for controls.</div>
+    <div class="stat"><b>For your review</b>Every layout on this page, the Echo Atlas book, and the screen copy.</div>
+    <div class="stat no"><b>Not approved, not changed</b>Game logic, Question bank, Quest Level rules, harness, tests, design.md.</div>
+  </div>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#landing">Landing</a><a href="#journey">Echo Atlas</a><a href="#setup">Start a Quest</a><a href="#play">Play</a><a href="#warden">Warden Challenge</a><a href="#endings">Gate and Sigils</a><a href="#around">Around the book</a><a href="#inspo">How the Atlas works</a>
+  </nav>
+</header>
+
+<!-- LANDING -->
+<section class="chapter" id="landing">
+  <header><h2>Landing</h2><p>The marketing page at <code>/</code>. The hero swaps the static pilot chart for one pop-up land from the Echo Atlas, so a visitor sees Clover, a Warden, and the Quest before they play.</p></header>
+  <div class="grid2" style="grid-template-columns:minmax(0,2.2fr) minmax(0,1fr)">
+    <figure>
+      <div class="screen paperbg" style="aspect-ratio:auto"><div style="padding:18px 24px;display:grid;gap:22px">
+        <div class="spread"><span class="wordmark">Echo Maze</span><span class="tab">Sign in</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px;align-items:center">
+          <div style="display:grid;gap:14px">
+            <h1 style="font-size:clamp(2rem,4.4vw,3.2rem)">Recover every Echo. Find the Gate.</h1>
+            <p style="font-size:1.05rem">Outsmart each Warden with what you know, then escape through the Gate. Twenty Labyrinths, five lands, one Quest.</p>
+            <div class="tabs"><span class="tab go">Enter the Maze</span><span class="tab">Sign in</span></div>
+            <p style="font-size:.85rem;color:var(--ink-soft)">Free Guest Run. Lifetime access is $5.99 USD once, bought by an adult.</p>
+          </div>
+          <div id="land-hero"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px">
+          <div class="pop" style="padding:14px"><h3 style="font-size:1.15rem">1. Recover Echoes</h3><p class="sub">Lift the Fog flaps and gather every lost Echo.</p></div>
+          <div class="pop" style="padding:14px"><h3 style="font-size:1.15rem">2. Answer a Warden</h3><p class="sub">A Warden Question clears the path. Every Question has a Hint.</p></div>
+          <div class="pop" style="padding:14px"><h3 style="font-size:1.15rem">3. Reach the Gate</h3><p class="sub">Escape when every Echo is safe.</p></div>
+        </div>
+        <div style="display:grid;gap:10px">
+          <h3>Pick the Quest Level that fits you</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px" id="land-levels"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px;align-items:start">
+          <div style="display:grid;gap:6px"><h3>Play your way</h3><p>Play one Guest Run. A free Explorer account adds three more Runs and saves your name, colours, and Global Scoreboard entries.</p></div>
+          <div class="pop" style="padding:14px;background:#fff6de"><h3 style="font-size:1.2rem">Lifetime Membership</h3><p class="disp" style="font-size:1.6rem">$5.99 USD once</p><p class="sub">Unlimited Runs. No subscription. Same fair Warden rules, with no paid power. Ask a grown-up to help.</p></div>
+        </div>
+      </div></div>
+      <figcaption><b>Landing, desktop 1280</b><span>Same sections as today: hero, three steps, Quest Levels, account and Lifetime Membership. Steps are numbered because they are a real order.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen phone paperbg"><div class="scroll" style="padding:18px 16px;display:grid;gap:14px;align-content:start">
+        <div class="spread"><span class="wordmark" style="font-size:1.2rem">Echo Maze</span><span class="tab" style="min-height:44px">Sign in</span></div>
+        <h1 style="font-size:2rem">Recover every Echo. Find the Gate.</h1>
+        <p style="font-size:.95rem">Outsmart each Warden with what you know.</p>
+        <span class="tab go" style="min-height:48px;font-size:1rem">Enter the Maze</span>
+        <div id="land-hero-phone"></div>
+        <div class="pop" style="padding:12px"><h3 style="font-size:1.05rem">1. Recover Echoes</h3><p class="sub">Lift the Fog flaps.</p></div>
+      </div></div>
+      <figcaption><b>Landing, phone 375</b><span>One column. The pop-up land sits under the main button.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- JOURNEY -->
+<section class="chapter" id="journey">
+  <header><h2>Echo Atlas as a pop-up book</h2><p>The proposal: the Echo Atlas is a book the Explorer carries. The left page is a stamp sheet, one perforated stamp per Labyrinth and one row per land. The right page is the open land as a tunnel book: four cut-paper layers, one per Labyrinth, with the Gate Warden at the back. Index tabs on the edge turn to each land.</p></header>
+  <figure>
+    <div class="screen" style="aspect-ratio:auto"><div id="journey-desk"></div></div>
+    <figcaption><b>Echo Atlas, desktop 1280</b><span>Clover stands in the layer for Labyrinth 7. Cleared stamps carry an ink postmark. Locked stamps are pale with a lock. Gate Warden stamps show slit eyes. A row that is complete earns its Sigil seal. The bar at the bottom starts the current Labyrinth.</span></figcaption>
+  </figure>
+  <div class="grid3">
+    <figure>
+      <div class="screen phone"><div class="scroll" id="journey-phone"></div></div>
+      <figcaption><b>Echo Atlas, phone 375</b><span>The index tabs move to the top edge. The tunnel book fills the width, and the four stamps for this land sit under it. The bottom sheet starts the current Labyrinth.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="pop" style="display:grid;gap:10px">
+        <div class="spread"><h3>Labyrinth 8</h3><span class="chip" style="background:var(--coral);color:#fff">Gate Warden</span></div>
+        <p class="sub">Windcall Ridge. Developing band. Kitewatch Guild.</p>
+        <div class="row"><span class="chip">4 Echoes</span><span class="chip">2 Wardens</span><span class="chip">15 by 15</span></div>
+        <p>Clear it to earn the <b>Rising Wind Sigil</b>.</p>
+        <div class="note" style="font-size:.88rem">Opens after Labyrinth 7.</div>
+        <div class="tabs"><span class="tab" style="opacity:.55">Play Labyrinth 8</span><span class="tab ghost">Close</span></div>
+      </div>
+      <figcaption><b>Locked stamp, tapped</b><span>A tap on a locked stamp or layer opens its card. It says what waits there and what unlocks it. The play tab stays faded.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="pop" style="display:grid;gap:10px">
+        <div class="spread"><h3>Labyrinth 3</h3><span class="chip" style="background:var(--meadow)">Cleared</span></div>
+        <p class="sub">Mosslight Grove. Foundation band.</p>
+        <table class="t"><tr><th>Best time</th><th>Moves</th><th>Echoes</th></tr><tr><td>2:58</td><td>64</td><td>3 of 3</td></tr></table>
+        <div class="tabs"><span class="tab go">Play again</span><span class="tab">Watch Run Replay</span></div>
+      </div>
+      <figcaption><b>Cleared stamp, tapped</b><span>Shows the best Run Record and offers a replay.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- SETUP -->
+<section class="chapter" id="setup">
+  <header><h2>Start a Quest</h2><p>The Quest setup has three steps, as today. Each step is a page with pull-tab choices. Plain words, large targets, one choice per page.</p></header>
+  <div class="grid3" id="setup-steps"></div>
+  <div class="grid2">
+    <figure>
+      <div class="screen desk paperbg"><div class="scroll"><div id="fl-board" style="position:absolute;left:4%;top:8%;width:52%"></div>
+        <div style="position:absolute;right:4%;top:14%;width:38%" class="pop"><span class="chip">Step 2 of 4</span><h3 style="margin-top:8px">Take your first Move</h3><p>Press an arrow key, or swipe on the board. Each Move lifts the Fog next to you.</p><div class="tabs" style="margin-top:12px"><span class="tab go">Next</span><span class="tab ghost">Skip First Light</span></div></div>
+      </div></div>
+      <figcaption><b>First Light Tutorial</b><span>A paper pointer hand shows the Move. The tutorial can be skipped at every step.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen desk paperbg"><div class="overlay"><div class="pop" style="display:grid;gap:12px">
+        <h3>Choose which Quest to keep</h3><p class="sub">This device and your Explorer account have different Quests. Keep one. The other one ends.</p>
+        <div class="grid2" style="gap:12px;grid-template-columns:1fr 1fr">
+          <div class="pop" style="padding:12px;box-shadow:0 4px 0 var(--ink)"><b>On this device</b><p class="sub">Trail Scout, Labyrinth 7</p><span class="tab go" style="margin-top:8px">Keep this one</span></div>
+          <div class="pop" style="padding:12px;box-shadow:0 4px 0 var(--ink)"><b>In your account</b><p class="sub">Bright Start, Labyrinth 12</p><span class="tab" style="margin-top:8px">Keep this one</span></div>
+        </div>
+      </div></div></div>
+      <figcaption><b>Quest conflict</b><span>Two equal cards. The words say plainly that one Quest ends.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- PLAY -->
+<section class="chapter" id="play">
+  <header><h2>Play</h2><p>The board is a page in the book. The Readout hangs from the top edge as ribbon bookmarks. Controls are pull-tabs along the bottom edge. Fog flaps all look the same, so they never give away the route.</p></header>
+  <figure>
+    <div class="screen desk paperbg" id="play-desk"></div>
+    <figcaption><b>Play screen, desktop 1280</b><span>Board on the left page. Event line and Chart notes tab on the right page. Keyboard keys show on each pull-tab.</span></figcaption>
+  </figure>
+  <div class="grid2">
+    <figure>
+      <div class="screen desk paperbg" id="play-pulse"></div>
+      <figcaption><b>Pulse in progress</b><span>The flaps near the Explorer pop open in a ripple, then fold back. The Pulse bookmark drops by one.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen desk paperbg" id="play-notes"></div>
+      <figcaption><b>Chart notes open</b><span>A fold-out page with the objective, the Trail Compass, and the adventure log.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen desk paperbg" id="play-paused"></div>
+      <figcaption><b>Paused</b><span>The book half-closes over the board, so no one can plan while paused.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen phone paperbg"><div class="scroll" id="play-phone"></div></div>
+      <figcaption><b>Play screen, phone 375</b><span>Bookmarks wrap to two rows. A large paper pad sits under the board. Pull-tabs stay at least 44 px tall.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- WARDEN -->
+<section class="chapter" id="warden">
+  <header><h2>Warden Challenge</h2><p>The Question card pops up from the board like a page in a book. Every card has Read Aloud, a free Hint, and Question Skip. Harder Quest Levels add steps and reasons. They never add smaller text or a darker look.</p></header>
+  <div class="grid2">
+    <figure>
+      <div class="screen desk paperbg" id="challenge-desk"></div>
+      <figcaption><b>Warden Challenge, desktop</b><span>The Warden pops up beside the card. The rule line says what a wrong answer costs. Your first Question Skip in each Labyrinth is free.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen phone paperbg"><div class="scroll" id="challenge-phone"></div></div>
+      <figcaption><b>Warden Challenge, phone</b><span>Answers stack in one column with large targets.</span></figcaption>
+    </figure>
+  </div>
+  <div class="note"><b>Sample Questions.</b> The Questions below are examples to show depth, not new bank content. The Question bank and Quest Level rules stay as they are.</div>
+  <div class="grid3" id="ladder"></div>
+  <div class="grid2">
+    <figure>
+      <div class="pop">
+        <div class="spread"><span class="chip" style="background:var(--meadow)">Right answer</span><span class="tab sky">Read Aloud</span></div>
+        <h3 style="margin-top:10px">Mia has 7 shells. She finds 5 more. How many shells now?</h3>
+        <div class="answers"><div class="ans"><i>A</i>10</div><div class="ans"><i>B</i>11</div><div class="ans right"><i>C</i>12</div><div class="ans"><i>D</i>13</div></div>
+        <div class="lens"><b>Echo Lens.</b> 7 and 5 more: count on 8, 9, 10, 11, 12. So 12 shells.</div>
+        <p style="margin-top:10px">The Warden folds flat. The path is open.</p>
+        <div class="tabs" style="margin-top:10px"><span class="tab go">Back to the Labyrinth</span></div>
+      </div>
+      <figcaption><b>Right answer, with Echo Lens</b><span>The Echo Lens shows only after an answer. The Warden folds down into the page.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="pop">
+        <div class="spread"><span class="chip" style="background:var(--coral);color:#fff">Not this time</span><div class="ribbons"><div class="ribbon v torn"><small>Vitality</small><b>2</b></div></div></div>
+        <h3 style="margin-top:10px">Which number comes next? 2, 6, 12, 20, 30, ?</h3>
+        <div class="answers"><div class="ans wrong"><i>A</i>40</div><div class="ans right"><i>B</i>42</div><div class="ans"><i>C</i>44</div><div class="ans"><i>D</i>36</div></div>
+        <div class="lens"><b>Echo Lens.</b> The gaps grow by 2: 4, 6, 8, 10. The next gap is 12, so 30 and 12 make 42.</div>
+        <p style="margin-top:10px">One Vitality bookmark tears. You keep going with 2.</p>
+        <div class="tabs" style="margin-top:10px"><span class="tab go">Back to the Labyrinth</span></div>
+      </div>
+      <figcaption><b>Wrong answer</b><span>The right answer is still shown, with the reason. The cost is plain and calm.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ENDINGS -->
+<section class="chapter" id="endings">
+  <header><h2>Gate and Sigils</h2><p>End of a Labyrinth, end of a land, and the end of a Run.</p></header>
+  <div class="grid3">
+    <figure>
+      <div class="screen desk paperbg" style="aspect-ratio:4/5" id="gate"></div>
+      <figcaption><b>Gate reached</b><span>The Gate pops up from the page. The Run Record shows time, Moves, Echoes, and Questions.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen desk paperbg" style="aspect-ratio:4/5" id="sigil"></div>
+      <figcaption><b>Sigil Ceremony</b><span>After the Gate Warden of a land. The land's landmark pops up with its Sigil. The ceremony can be skipped.</span></figcaption>
+    </figure>
+    <figure>
+      <div class="screen desk paperbg" style="aspect-ratio:4/5" id="defeat"></div>
+      <figcaption><b>Run ends</b><span>The last Vitality bookmark falls. The words are kind and say what to try next.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- AROUND -->
+<section class="chapter" id="around">
+  <header><h2>Around the book</h2><p>The other player-facing dialogs. Each one is a pop-up page with one title, plain words, and one main pull-tab.</p></header>
+  <div class="grid2" id="around-grid"></div>
+</section>
+
+<!-- INSPO -->
+<section class="chapter" id="inspo">
+  <header><h2>How the Atlas works</h2><p>Each part of the Atlas is a real paper mechanism, so it can be built from paper, scissors, and glue.</p></header>
+  <div class="inspo">
+    <div><b>Tunnel book</b><span>Cut layers stand one behind the other. Each layer is one Labyrinth, so the land reads front to back, and the Gate Warden waits at the back.</span></div>
+    <div><b>Stamp sheet</b><span>Twenty perforated stamps show the whole Quest on one page. A postmark means cleared. A child counts progress without a scroll.</span></div>
+    <div><b>Index tabs</b><span>Tabs on the page edge turn to a land, like a real atlas. Each tab says how many Labyrinths are cleared.</span></div>
+    <div><b>Sigil seals</b><span>A wax-style seal closes each stamp row. It fills in when the Gate Warden of that land falls.</span></div>
+    <div><b>One action</b><span>The bar under the book has one main pull-tab: Play Labyrinth 7.</span></div>
+    <div><b>Left out</b><span>Pan, zoom, and a large canvas. The whole Quest fits on one spread.</span></div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ---------- tiny helpers ---------- */
+const $=id=>document.getElementById(id);
+const C={paper:'#fbf3e2',card:'#fffaf0',ink:'#3a2449',soft:'#5e4a6b',meadow:'#6cc24a',deep:'#3f7f2a',sky:'#4db8ff',skySoft:'#bfe6ff',skyDeep:'#2a86c4',coral:'#ff5a3c',sun:'#ffd98a'};
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function maze(c,seed){const n=c*2+1,g=Array.from({length:n},()=>Array(n).fill(1)),r=rng(seed),seen=new Set(['0,0']),st=[[0,0]];g[1][1]=0;
+  while(st.length){const[x,y]=st[st.length-1];const nb=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[x+dx,y+dy,dx,dy]).filter(([a,b])=>a>=0&&b>=0&&a<c&&b<c&&!seen.has(a+','+b));
+    if(!nb.length){st.pop();continue}const[a,b,dx,dy]=nb[Math.floor(r()*nb.length)];g[2*y+1+dy][2*x+1+dx]=0;g[2*b+1][2*a+1]=0;seen.add(a+','+b);st.push([a,b])}
+  for(let i=0;i<c;i++){const x=1+Math.floor(r()*(n-2)),y=1+Math.floor(r()*(n-2));if((x+y)%2===1)g[y][x]=0}return g}
+const puppet=(x,y,s=1)=>`<g transform="translate(${x} ${y}) scale(${s})"><ellipse cy="15" rx="11" ry="3.5" fill="rgba(58,36,73,.25)"/><g stroke="${C.ink}" stroke-width="1.6" stroke-linejoin="round"><path d="M-4 -8 C-9 -11 -9 -21 -5 -22 C-1 -21 -1 -12 -2 -9Z" fill="#ffb3c7"/><path d="M4 -8 C9 -11 9 -21 5 -22 C1 -21 1 -12 2 -9Z" fill="#ffb3c7"/><path d="M-9 14 Q-11 3 -5 1 H5 Q11 3 9 14Z" fill="#ffb3c7"/><circle cy="-3" r="8" fill="#ffb3c7"/><path d="M-8 2 Q0 7 8 2 L8 5.5 Q0 10.5 -8 5.5Z" fill="#1fb5a8"/></g><path d="M-5 -10 C-7 -13 -7 -18 -5 -19 M5 -10 C7 -13 7 -18 5 -19" stroke="#ff7fa3" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="-3.2" cy="-4" r="1.8" fill="${C.ink}"/><circle cx="3.2" cy="-4" r="1.8" fill="${C.ink}"/><circle cx="-2.6" cy="-4.6" r=".6" fill="#fff"/><circle cx="3.8" cy="-4.6" r=".6" fill="#fff"/><path d="M-1.2 -1 L1.2 -1 L0 .4Z" fill="${C.ink}"/></g>`;
+const warden=(x,y,s=1)=>`<g transform="translate(${x} ${y}) scale(${s})"><ellipse cy="13" rx="11" ry="3.5" fill="rgba(58,36,73,.25)"/><path d="M-11 12 L-9 2 Q-10 -5 -6 -8 L-9 -17 L-2 -11 Q0 -11.5 2 -11 L9 -17 L6 -8 Q10 -5 9 2 L11 12 L7 9 L4 12 L1 9 L-2 12 L-5 9 L-8 12Z" fill="#2b1747" stroke="#140a22" stroke-width="1.4" stroke-linejoin="round"/><path d="M-6.5 -12 L-4 -9 M6.5 -12 L4 -9" stroke="#6b3fc8" stroke-width="1.4"/><ellipse cy="1" rx="5" ry="4" fill="#4a2a85"/><circle cx="-3.6" cy="-3.4" r="3" fill="#ff5a3c" opacity=".35"/><circle cx="3.6" cy="-3.4" r="3" fill="#ff5a3c" opacity=".35"/><path d="M-6.5 -5 L-1.2 -3 L-6 -2Z M6.5 -5 L1.2 -3 L6 -2Z" fill="#ff5a3c"/><path d="M-3 3 L-2 6.5 L-1 3Z M3 3 L2 6.5 L1 3Z" fill="#efe4c8"/></g>`;
+const echo=(x,y,d,s=1)=>`<g transform="translate(${x} ${y}) scale(${s})"><circle r="9.5" fill="${C.coral}" stroke="${C.ink}" stroke-width="2"/><circle r="6.5" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="2 2"/><text y="4.5" font-size="13" text-anchor="middle" font-family="Chewy,sans-serif" fill="#fff">${d}</text></g>`;
+const gateArt=(x,y,s=1)=>`<g transform="translate(${x} ${y}) scale(${s})"><path d="M-10 11 V-2 Q-10 -12 0 -12 Q10 -12 10 -2 V11Z" fill="${C.sun}" stroke="${C.ink}" stroke-width="2"/><path d="M-5 11 V0 Q-5 -6 0 -6 Q5 -6 5 0 V11Z" fill="${C.ink}"/></g>`;
+
+/* board: maze page with Fog flaps */
+function board(o={}){const c=o.cells||6,g=maze(c,o.seed||7),n=g.length,t=24,W=n*t;const[ex,ey]=o.ex||[5,5];const r=o.reveal??3;
+  const vis=(x,y)=>o.all||Math.max(Math.abs(x-ex),Math.abs(y-ey))<=r||(o.trail||[]).some(([a,b])=>Math.abs(a-x)+Math.abs(b-y)<=1);
+  let s=`<svg viewBox="-6 -6 ${W+12} ${W+12}" width="100%" role="img" aria-label="${o.label||'Labyrinth page'}"><rect x="-6" y="-6" width="${W+12}" height="${W+12}" rx="14" fill="${C.card}" stroke="${C.ink}" stroke-width="3"/>`;
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const px=x*t,py=y*t;
+    if(vis(x,y)){ if(g[y][x]) s+=`<rect x="${px+1}" y="${py+1}" width="${t-2}" height="${t-2}" rx="5" fill="${C.meadow}"/><rect x="${px+1}" y="${py+t-7}" width="${t-2}" height="6" rx="3" fill="${C.deep}"/>`;
+      else s+=`<rect x="${px}" y="${py}" width="${t}" height="${t}" fill="#fff6e3"/>`; }
+    else { const d=Math.max(Math.abs(x-ex),Math.abs(y-ey)); const open=o.pulse&&d<=r+3;
+      if(open){ s+=`<rect x="${px}" y="${py}" width="${t}" height="${t}" fill="${g[y][x]?C.meadow:'#fff6e3'}" opacity=".9"/><path d="M${px+1} ${py+1} h${t-2} l-6 ${t-8} h${-(t-14)}Z" fill="${C.skySoft}" stroke="${C.skyDeep}" stroke-width="1" opacity=".9"/>`; }
+      else s+=`<rect x="${px+1.5}" y="${py+1.5}" width="${t-3}" height="${t-3}" rx="4" fill="${C.sky}" stroke="${C.skyDeep}" stroke-width="1"/><path d="M${px+t-9} ${py+1.5} h6 a1.5 1.5 0 0 1 1.5 1.5 v6Z" fill="${C.skySoft}"/>`; } }
+  if(o.trailLine) s+=`<polyline points="${o.trailLine.map(([a,b])=>`${a*t+t/2},${b*t+t/2}`).join(' ')}" fill="none" stroke="${C.coral}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 7"/>`;
+  if(o.pulse) s+=`<circle class="ripple" cx="${ex*t+t/2}" cy="${ey*t+t/2}" r="60" fill="none" stroke="${C.coral}" stroke-width="3"/><circle cx="${ex*t+t/2}" cy="${ey*t+t/2}" r="${(r+3.5)*t}" fill="none" stroke="${C.coral}" stroke-width="2" stroke-dasharray="6 6" opacity=".7"/>`;
+  (o.echoes||[]).forEach(([x,y,d])=>{if(vis(x,y)||o.pulse)s+=echo(x*t+t/2,y*t+t/2,d)});
+  (o.wardens||[]).forEach(([x,y])=>{s+=warden(x*t+t/2,y*t+t/2)});
+  if(o.gate) s+=gateArt(o.gate[0]*t+t/2,o.gate[1]*t+t/2,1.1);
+  if(o.next) s+=`<circle cx="${o.next[0]*t+t/2}" cy="${o.next[1]*t+t/2}" r="11" fill="none" stroke="${C.ink}" stroke-width="2" stroke-dasharray="4 3"/>`;
+  s+=puppet(ex*t+t/2,ey*t+t/2,1.05);
+  if(o.hand) s+=`<g transform="translate(${(ex+2)*t} ${(ey+1)*t+6}) rotate(-20)"><path d="M0 0 l18 -4 a4 4 0 0 1 1 8 l-8 2 l10 0 a4 4 0 0 1 0 8 l-14 0 q-10 0 -12 -8Z" fill="#ffe3c2" stroke="${C.ink}" stroke-width="2"/></g>`;
+  return s+'</svg>'}
+
+const readout=(o={})=>`<div class="ribbons" style="flex-wrap:wrap">
+ <div class="ribbon g"><small>Labyrinth</small><b>${o.lab||7}</b></div>
+ <div class="ribbon"><small>Echoes</small><b>${o.echo||'1/4'}</b></div>
+ <div class="ribbon v ${o.torn?'torn':''}"><small>Vitality</small><b>${o.vit??3}</b></div>
+ <div class="ribbon s"><small>Pulse</small><b>${o.pulse??2}</b></div>
+ <div class="ribbon" style="background:#fff"><small>Moves</small><b>${o.moves||24}</b></div></div>`;
+const controls=(p=false)=>`<div class="tabs"><span class="tab ${p?'hot':''}">Pulse <span class="k">Space</span></span><span class="tab">Signal Bell <span class="k">B</span></span><span class="tab sky">Chart notes <span class="k">N</span></span><span class="tab">Pause <span class="k">Esc</span></span></div>`;
+const B={ex:[5,5],echoes:[[7,5,2],[3,3,1],[9,9,3]],wardens:[[5,8]],next:[6,5]};
+
+function playFrame(id,opts={}){
+  $(id).innerHTML=`<div style="position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr auto;padding:0 3% 2.5%;gap:1.5%">
+   <div class="spread" style="align-items:flex-start"><div style="padding-top:12px;display:grid;gap:2px"><span class="wordmark" style="font-size:1.3rem">Echo Maze</span><span style="font-size:.8rem;color:var(--ink-soft)">Trail Scout. Windcall Ridge.</span></div>${readout(opts.read)}</div>
+   <div style="display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:3%;min-height:0;align-items:center">
+     <div style="min-height:0;max-height:100%;aspect-ratio:1;justify-self:center;width:100%;max-width:100%">${board({...B,...opts.board})}</div>
+     <div style="display:grid;gap:10px;align-content:center;min-width:0">${opts.right||`<div class="bubble" style="font-size:.95rem">You lifted a Fog flap. An Echo is close.</div><div class="bubble">Labyrinth 7 of 20. Find 4 Echoes, then the Gate.</div><span class="tab sky" style="justify-self:start">Open Chart notes</span>`}</div>
+   </div>
+   ${controls(opts.pulse)}</div>${opts.over||''}`}
+
+/* ---------- Echo Atlas: stamp sheet and tunnel book ---------- */
+const LANDS=[['Mosslight Grove','Foundation','#cdeec0','#6cc24a'],['Windcall Ridge','Developing','#cbe9ff','#4db8ff'],['Sunspan Crossing','Capable','#ffe9b8','#f0b84a'],['Tideglass Reach','Advanced','#c8efe9','#3fb6a6'],['Bellroot Summit','Mastery','#e6d8f5','#9a7bd0']];
+const SIGILS=['First Echo Sigil','Rising Wind Sigil','Joined Path Sigil','Turning Tide Sigil','Last Light Sigil'];
+const CUR=7;
+const stateOf=n=>n<CUR?'done':n===CUR?'current':'locked';
+const slitEyes=(x,y,k=1)=>`<g transform="translate(${x} ${y}) scale(${k})"><rect x="-12" y="-7" width="24" height="14" rx="4" fill="#2b1747"/><path d="M-9 -3 L-2 -1 L-9 1Z M9 -3 L2 -1 L9 1Z" fill="${C.coral}"/></g>`;
+const check=(x,y,k=1)=>`<g transform="translate(${x} ${y}) scale(${k})"><circle r="8" fill="${C.meadow}" stroke="${C.ink}" stroke-width="1.5"/><path d="M-3.5 0 l2.5 3 l5 -6" stroke="${C.ink}" stroke-width="2" fill="none" stroke-linecap="round"/></g>`;
+const lock=(x,y,k=1)=>`<g transform="translate(${x} ${y}) scale(${k})" fill="none" stroke="${C.soft}" stroke-width="1.8"><rect x="-6" y="-2" width="12" height="9" rx="2"/><path d="M-3.5 -2 v-3 a3.5 3.5 0 0 1 7 0 v3"/></g>`;
+
+/* one Labyrinth as a perforated stamp */
+function stamp(x,y,n,w=92,h=76){const st=stateOf(n),land=LANDS[Math.floor((n-1)/4)],gw=n%4===0,q=w/92;
+  let s=`<g transform="translate(${x} ${y})">`;
+  if(st==='current') s+=`<rect x="-6" y="-6" width="${w+12}" height="${h+12}" rx="10" fill="none" stroke="${C.coral}" stroke-width="3.5"/>`;
+  s+=`<rect width="${w}" height="${h}" rx="3" fill="${C.card}"/><rect width="${w}" height="${h}" rx="3" fill="none" stroke="${C.paper}" stroke-width="5" stroke-dasharray="0 7" stroke-linecap="round"/>`;
+  s+=`<rect x="6" y="6" width="${w-12}" height="${h-12}" rx="2" fill="${st==='locked'?'#efe7d6':land[3]}" stroke="${C.ink}" stroke-width="1.5"/>`;
+  s+=`<text x="${w/2}" y="${h/2+8}" text-anchor="middle" font-family="Chewy,sans-serif" font-size="${30*q}" fill="${st==='locked'?C.soft:C.ink}">${n}</text>`;
+  if(st==='done') s+=`<g opacity=".6" fill="none" stroke="${C.ink}" stroke-width="1.4" transform="translate(${w} 0) scale(${q}) translate(-92 0)"><circle cx="70" cy="22" r="13"/><path d="M42 16 q6 -4 12 0 t12 0 t12 0 t12 0 M42 24 q6 -4 12 0 t12 0 t12 0 t12 0"/></g>`;
+  if(st==='current') s+=puppet(w-20*q,h-24*q,.7*q);
+  if(st==='locked') s+=lock(w-18*q,18*q,q);
+  if(gw) s+=slitEyes(22*q,h-17*q,.8*q);
+  return s+'</g>'}
+
+/* the Sigil seal at the end of each row */
+function seal(x,y,r,earned){return `<g transform="translate(${x} ${y})">${earned?`<circle r="${r}" fill="${C.sun}" stroke="${C.ink}" stroke-width="2"/><path d="M0 -12 l3.8 7.6 l8.2 1.2 l-6 5.8 l1.4 8.2 l-7.4 -3.9 l-7.4 3.9 l1.4 -8.2 l-6 -5.8 l8.2 -1.2Z" fill="${C.coral}" stroke="${C.ink}" stroke-width="1.2"/>`:`<circle r="${r}" fill="none" stroke="${C.soft}" stroke-width="2" stroke-dasharray="4 4"/><path d="M0 -12 l3.8 7.6 l8.2 1.2 l-6 5.8 l1.4 8.2 l-7.4 -3.9 l-7.4 3.9 l1.4 -8.2 l-6 -5.8 l8.2 -1.2Z" fill="none" stroke="${C.soft}" stroke-width="1.2" opacity=".6"/>`}</g>`}
+
+/* the open land as a tunnel book: four cut-paper layers, front to back = Labyrinths 5 to 8 */
+function tunnel(L0,T0,W,H,o={}){const k=W/430,a=30*k,b=38*k,labs=[5,6,7,8];
+  const cols=['#2a86c4','#4db8ff','#8fd0ff','#cbe9ff'];
+  const box=i=>{const d=a+i*b;return{L:L0+d,R:L0+W-d,T:T0+d,B:T0+H-d}};
+  let s=`<rect x="${L0}" y="${T0}" width="${W}" height="${H}" fill="#eef8ff"/>`;
+  const kx=L0+W/2,ky=box(3).T+46*k;
+  s+=`<g transform="translate(${kx} ${ky}) scale(${k})" opacity=".55"><path d="M0 -24 L18 0 L0 28 L-18 0Z" fill="${C.sun}" stroke="${C.soft}" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 28 q-8 10 0 18 t0 18" stroke="${C.soft}" stroke-width="2" fill="none" stroke-dasharray="4 4"/></g>`;
+  for(let i=3;i>=0;i--){const{L,R,T,B}=box(i),r=26*k,cx=(L+R)/2+(i%2?28:-28)*k;
+    const p=`M${L0} ${T0} H${L0+W} V${T0+H} H${L0}Z M${L} ${B} V${T+r} Q${L} ${T} ${L+r} ${T} H${R-r} Q${R} ${T} ${R} ${T+r} V${B} Q${cx} ${B-46*k} ${L} ${B}Z`;
+    s+=`<path d="${p}" fill="rgba(58,36,73,.22)" fill-rule="evenodd" transform="translate(${3*k} ${5*k})"/><path d="${p}" fill="${cols[i]}" fill-rule="evenodd" stroke="${C.ink}" stroke-width="${2*k}"/>`;
+    if(i===3) s+=warden(L0+W*.62,B-16*k,1.6*k);
+    if(i===2) s+=`<g class="bob">${puppet(L0+W*.36,B-18*k,1.8*k)}</g>`}
+  labs.forEach((n,i)=>{const{L,T}=box(i),st=stateOf(n),tw=112*k,tx=L+30*k,ty=T-28*k,gw=n%4===0;
+    s+=`<g><rect x="${tx}" y="${ty}" width="${tw}" height="${24*k}" rx="${5*k}" fill="${C.card}" stroke="${C.ink}" stroke-width="${1.5*k}"/><text x="${tx+8*k}" y="${ty+17*k}" font-family="Chewy,sans-serif" font-size="${13*k}" fill="${C.ink}">Labyrinth ${n}</text>`;
+    const ix=tx+tw-13*k,iy=ty+12*k;
+    s+=gw?slitEyes(ix,iy,.75*k):st==='done'?check(ix,iy,.95*k):st==='current'?`<circle cx="${ix}" cy="${iy}" r="${6*k}" fill="${C.coral}" stroke="${C.ink}" stroke-width="${1.2*k}"/>`:lock(ix,iy,k);
+    s+='</g>'});
+  return s}
+
+function atlasDesk(){
+  let s=`<svg viewBox="0 0 1160 720" width="100%" role="img" aria-label="Echo Atlas as an open pop-up book. Left page: twenty Labyrinth stamps. Right page: Windcall Ridge as a tunnel book.">`;
+  s+=`<rect x="20" y="16" width="1060" height="680" rx="22" fill="#17a398" stroke="${C.ink}" stroke-width="3"/>`;
+  LANDS.forEach((l,r)=>{const y=60+r*124,sel=r===1,x2=sel?1150:1136;
+    s+=`<path d="M1060 ${y} H${x2-14} Q${x2} ${y} ${x2} ${y+14} V${y+96} Q${x2} ${y+110} ${x2-14} ${y+110} H1060Z" fill="${sel?l[3]:l[2]}" stroke="${C.ink}" stroke-width="2"/>`;
+    s+=`<text x="1084" y="${y+34}" font-family="Chewy,sans-serif" font-size="15" fill="${C.ink}">${l[0].split(' ')[0]}</text><text x="1084" y="${y+52}" font-family="Andika,sans-serif" font-size="10.5" fill="${C.ink}">${l[1]}</text><text x="1084" y="${y+70}" font-family="Andika,sans-serif" font-size="10.5" fill="${C.ink}">${r===0?'4 of 4':r===1?'2 of 4':'Locked'}</text>`;});
+  s+=`<rect x="38" y="32" width="532" height="648" rx="6" fill="${C.card}" stroke="${C.ink}" stroke-width="2"/><rect x="576" y="32" width="488" height="648" rx="6" fill="${C.card}" stroke="${C.ink}" stroke-width="2"/>`;
+  s+=`<rect x="540" y="33" width="30" height="646" fill="url(#gut)"/><rect x="577" y="33" width="30" height="646" fill="url(#gut2)"/><defs><linearGradient id="gut"><stop offset="0" stop-color="#3a2449" stop-opacity="0"/><stop offset="1" stop-color="#3a2449" stop-opacity=".14"/></linearGradient><linearGradient id="gut2"><stop offset="0" stop-color="#3a2449" stop-opacity=".14"/><stop offset="1" stop-color="#3a2449" stop-opacity="0"/></linearGradient></defs>`;
+  s+=`<text x="66" y="82" font-family="Chewy,sans-serif" font-size="28" fill="${C.ink}">Quest stamps</text><text x="66" y="106" font-family="Andika,sans-serif" font-size="13" fill="${C.soft}">6 of 20 Labyrinths cleared. One row is one land.</text>`;
+  s+=`<rect x="52" y="${124+98}" width="504" height="92" rx="12" fill="${LANDS[1][2]}" opacity=".7"/>`;
+  for(let r=0;r<5;r++){for(let c=0;c<4;c++) s+=stamp(66+c*104,132+r*98,r*4+c+1);
+    s+=seal(516,132+r*98+38,22,r===0)}
+  s+=`<g font-family="Andika,sans-serif" font-size="11.5" fill="${C.ink}" transform="translate(66 640)">${check(8,0)}<text x="22" y="4">Cleared</text>${slitEyes(108,0,.8)}<text x="126" y="4">Gate Warden</text>${seal(232,0,10,true)}<text x="248" y="4">Sigil earned</text>${lock(338,0)}<text x="352" y="4">Locked</text></g>`;
+  s+=`<text x="604" y="82" font-family="Chewy,sans-serif" font-size="28" fill="${C.ink}">Windcall Ridge</text><text x="604" y="106" font-family="Andika,sans-serif" font-size="13" fill="${C.soft}">Developing band. Clear Labyrinth 8 to earn the ${SIGILS[1]}.</text>`;
+  s+=tunnel(606,124,430,430);
+  s+=`<text x="604" y="590" font-family="Chewy,sans-serif" font-size="19" fill="${C.ink}">Labyrinth 7</text><text x="604" y="612" font-family="Andika,sans-serif" font-size="13" fill="${C.ink}">4 Echoes hide in the Fog. 2 Wardens patrol. 15 by 15.</text>`;
+  s+='</svg>';
+  return `<div style="position:relative;padding-bottom:64px">${s}<div class="drawer"><div class="tabs"><span class="tab">Previous land</span><span class="tab" style="opacity:.55">Next land</span></div><span class="tab go">Play Labyrinth 7</span></div></div>`}
+
+function atlasPhone(){
+  let s=`<svg viewBox="0 0 340 640" width="100%" role="img" aria-label="Echo Atlas on a phone: Windcall Ridge as a tunnel book and its four stamps"><rect width="340" height="640" fill="${C.card}"/>`;
+  LANDS.forEach((l,r)=>{const x=6+r*66,sel=r===1;s+=`<path d="M${x} 50 V${sel?8:16} Q${x} ${sel?2:10} ${x+8} ${sel?2:10} H${x+56} Q${x+64} ${sel?2:10} ${x+64} ${sel?8:16} V50Z" fill="${sel?l[3]:l[2]}" stroke="${C.ink}" stroke-width="2"/><text x="${x+32}" y="34" text-anchor="middle" font-family="Chewy,sans-serif" font-size="12" fill="${C.ink}">${l[0].split(' ')[0]}</text>`});
+  s+=`<line x1="0" y1="50" x2="340" y2="50" stroke="${C.ink}" stroke-width="2"/>`;
+  s+=`<text x="16" y="84" font-family="Chewy,sans-serif" font-size="22" fill="${C.ink}">Windcall Ridge</text><text x="16" y="104" font-family="Andika,sans-serif" font-size="12" fill="${C.soft}">Developing band. 2 of 4 cleared.</text>`;
+  s+=tunnel(16,118,308,308);
+  s+=`<text x="16" y="458" font-family="Chewy,sans-serif" font-size="16" fill="${C.ink}">Stamps in this land</text>`;
+  [5,6,7,8].forEach((n,i)=>{s+=stamp(16+i*66,472,n,58,52)});
+  s+=seal(306,498,16,false);
+  s+=`<text x="16" y="554" font-family="Andika,sans-serif" font-size="12" fill="${C.soft}">Quest: 6 of 20 Labyrinths cleared.</text></svg>`;
+  return `<div style="position:absolute;inset:0;overflow:auto">${s}</div><div class="drawer" style="border-radius:20px 20px 0 0;display:grid;gap:8px"><div class="spread"><b class="disp" style="font-size:1.2rem">Labyrinth 7</b><span class="chip">4 Echoes</span></div><span class="tab go" style="min-height:48px">Play Labyrinth 7</span></div>`}
+
+function miniAtlas(){return `<svg viewBox="0 0 420 380" width="100%" role="img" aria-label="A pop-up land: Clover on Labyrinth 7, a Warden behind"><rect x="6" y="6" width="408" height="368" rx="16" fill="#17a398" stroke="${C.ink}" stroke-width="3"/><rect x="20" y="20" width="380" height="340" rx="6" fill="${C.card}"/>${tunnel(34,34,352,312)}</svg>`}
+
+/* ---------- render ---------- */
+$('land-hero').innerHTML=miniAtlas();$('land-hero-phone').innerHTML=miniAtlas();
+$('land-levels').innerHTML=[['Bright Start','Gentle','Early explorer','Add within 20, colours, shapes, everyday nature.'],['Trail Scout','Balanced','Growing explorer','Times tables to 10, short reading clues, life science.'],['Maze Master','Bold','Confident explorer','Fractions, many-step sums, space science, logic.']].map(([n,b,a,d],i)=>`<div class="pop" style="padding:14px;display:grid;gap:4px;background:${['#e6f6dc','#e3f3ff','#fff0d2'][i]}"><span class="chip" style="justify-self:start">${b}</span><h3 style="font-size:1.25rem">${n}</h3><p class="sub">${a}. ${d}</p></div>`).join('');
+$('journey-desk').innerHTML=atlasDesk();$('journey-phone').innerHTML=atlasPhone();
+
+$('setup-steps').innerHTML=[
+ ['Step 1 of 3','Choose your Intention',[['Review','Play your current Quest Level and Learning Deck again.'],['Explore','Try any Quest Level and Learning Deck.'],['Challenge','Move up to a harder Quest Level.']],0],
+ ['Step 2 of 3','Choose a Learning Deck',[['Mixed Trail','A bit of everything.'],['Number Trail','Counting, sums, and patterns.'],['Word Trail','Word meanings and reading clues.'],['Nature Trail','Plants, animals, weather, and space.']],0],
+ ['Step 3 of 3','Choose your Quest Level',[['Bright Start','Gentle. Early explorer.'],['Trail Scout','Balanced. Growing explorer.'],['Maze Master','Bold. Confident explorer.']],1]
+].map(([st,t,opts,sel],i)=>`<figure><div class="pop" style="display:grid;gap:10px"><span class="chip" style="justify-self:start">${st}</span><h3>${t}</h3><div class="list">${opts.map(([a,b],j)=>`<div class="ans ${j===sel?'right':''}" style="font-size:.95rem;display:grid;gap:0"><span>${a}</span><span style="font-weight:400;font-size:.85rem;color:var(--ink-soft)">${b}</span></div>`).join('')}</div><div class="tabs">${i?'<span class="tab ghost">Back</span>':''}<span class="tab go">${i===2?'Start Quest':'Next'}</span></div></div><figcaption><b>${t}</b><span>${['The three Intentions from today, in plain words.','Four Learning Decks. Each one names what it holds.','The Quest Level is a paper wheel with three stops. Badge and audience come from the current Quest Level data.'][i]}</span></figcaption></figure>`).join('');
+$('fl-board').innerHTML=board({...B,hand:true,reveal:2});
+
+playFrame('play-desk');
+playFrame('play-pulse',{pulse:true,read:{pulse:1},board:{pulse:true,reveal:2},right:`<div class="bubble" style="font-size:1rem"><b class="disp">Pulse!</b> The Fog folds back for a moment.</div><div class="bubble">2 Echoes found nearby. 1 Pulse left.</div>`});
+playFrame('play-notes',{right:`<div class="pop" style="padding:14px;display:grid;gap:8px;box-shadow:0 5px 0 var(--ink)"><div class="spread"><h3 style="font-size:1.25rem">Chart notes</h3><span class="tab ghost" style="min-height:32px">Close</span></div><div><b>Objective</b><p style="font-size:.9rem">Recover 4 Echoes. Then reach the Gate.</p></div><div><b>Trail Compass</b><p style="font-size:.9rem">Nearest Echo: 2 Moves east.</p></div><div><b>Adventure log</b><ul style="margin:0;padding-left:18px;font-size:.88rem"><li>Echo 1 recovered.</li><li>Pulse used. 1 left.</li><li>A Warden blocks the south path.</li></ul></div></div>`});
+playFrame('play-paused',{over:`<div class="overlay" style="background:rgba(58,36,73,.25)"><div style="position:absolute;left:0;top:0;bottom:0;width:52%;background:linear-gradient(90deg,#e9d7b0,#f6ebd2);border-right:4px solid var(--ink);box-shadow:8px 0 14px var(--shadow)"></div><div class="pop" style="position:relative;width:min(360px,90%);display:grid;gap:10px;justify-items:start"><h3>Run paused</h3><p class="sub">The book stays closed until you come back.</p><div class="tabs"><span class="tab go">Resume <span class="k">Esc</span></span><span class="tab">Explorer Access Settings</span><span class="tab ghost">Leave Run</span></div></div></div>`});
+$('play-phone').innerHTML=`<div style="padding:12px;display:grid;gap:10px"><div class="spread"><span class="wordmark" style="font-size:1.1rem">Echo Maze</span><span class="tab" style="min-height:44px">Pause</span></div><div style="transform:scale(.82);transform-origin:left top;margin-bottom:-18px">${readout()}</div>${board(B)}<div style="display:grid;grid-template-columns:repeat(3,48px);gap:6px;justify-content:center">${['','Up','','Left','','Right','','Down',''].map(l=>l?`<span class="tab" style="min-height:48px;padding:4px;font-size:.78rem">${l}</span>`:'<span></span>').join('')}</div><div class="tabs" style="justify-content:center"><span class="tab" style="min-height:44px">Pulse</span><span class="tab" style="min-height:44px">Signal Bell</span><span class="tab sky" style="min-height:44px">Chart notes</span></div></div>`;
+
+const challengeCard=(q,a,hint,lvl,right)=>`<div class="pop" style="display:grid;gap:8px"><div class="spread"><span class="chip">${lvl}</span><span class="tab sky" style="min-height:36px">Read Aloud</span></div><h3>${q}</h3><div class="answers">${a.map((x,i)=>`<div class="ans"><i>${'ABCD'[i]}</i>${x}</div>`).join('')}</div>${hint?`<div class="lens" style="background:#fff8e0;border-color:#c89a2e"><b>Hint.</b> ${hint}</div>`:''}<div class="spread"><div class="tabs"><span class="tab">Show Hint</span><span class="tab">Question Skip <span class="k">free</span></span></div></div><p style="font-size:.82rem;color:var(--ink-soft)">A wrong answer costs 1 Vitality.</p></div>`;
+$('challenge-desk').innerHTML=`<div style="position:absolute;inset:0;opacity:.5">${''}</div><div class="overlay" style="background:rgba(58,36,73,.3);grid-template-columns:auto minmax(0,1fr);gap:4%"><svg viewBox="-30 -40 60 70" width="90" aria-hidden="true">${warden(0,0,2.1)}</svg><div style="max-width:520px">${challengeCard('A bus has 4 rows with 6 seats. 3 seats are empty. How many children ride?',['18','21','24','27'],'','Trail Scout. Capable band.')}</div></div>`;
+$('challenge-desk').insertAdjacentHTML('afterbegin',`<div style="position:absolute;left:4%;top:16%;width:46%;opacity:.6">${board(B)}</div>`);
+$('challenge-phone').innerHTML=`<div style="padding:12px;display:grid;gap:10px"><div class="row"><svg viewBox="-30 -40 60 70" width="56" aria-hidden="true">${warden(0,0,2.1)}</svg><h3 style="font-size:1.2rem">A Warden blocks the path.</h3></div>${challengeCard('Mia has 7 shells. She finds 5 more. How many shells now?',['10','11','12','13'],'Count on from 7: 8, 9, 10 and so on.','Bright Start')}</div>`;
+$('ladder').innerHTML=[['Bright Start','Foundation band','Mia has 7 shells. She finds 5 more. How many shells now?',['10','11','12','13'],'One step. Count on.'],['Trail Scout','Capable band','A bus has 4 rows with 6 seats. 3 seats are empty. How many children ride?',['18','21','24','27'],'Two steps. Multiply, then take away.'],['Maze Master','Mastery band','Which number comes next? 2, 6, 12, 20, 30, ?',['40','42','44','36'],'Find the rule in the gaps. An adult has to think too.']].map(([l,b,q,a,w])=>`<figure>${challengeCard(q,a,'',l+'. '+b)}<figcaption><b>${l}</b><span>${w}</span></figcaption></figure>`).join('');
+
+const endCard=(art,title,body,tabs)=>`<div style="position:absolute;inset:0;display:grid;place-items:center;padding:6%"><div style="display:grid;gap:12px;justify-items:center;text-align:center;width:100%">${art}<h3 style="font-size:1.7rem">${title}</h3>${body}<div class="tabs" style="justify-content:center">${tabs}</div></div></div>`;
+$('gate').innerHTML=endCard(`<svg viewBox="-60 -50 120 80" width="58%" aria-hidden="true"><ellipse cy="22" rx="56" ry="8" fill="rgba(58,36,73,.2)"/>${gateArt(0,0,3.6)}${puppet(30,12,1.4)}</svg>`,'Gate reached.',`<table class="t" style="max-width:300px"><tr><th>Time</th><th>Moves</th><th>Echoes</th><th>Questions</th></tr><tr><td>3:42</td><td>86</td><td>3 of 3</td><td>4 of 5</td></tr></table>`,'<span class="tab go">Continue Quest</span><span class="tab">New Quest</span><span class="tab ghost">Practice</span>');
+$('sigil').innerHTML=endCard(`<svg viewBox="-70 -70 140 120" width="62%" aria-hidden="true"><g opacity=".6">${Array.from({length:12},(_,i)=>`<rect x="-3" y="-68" width="6" height="22" rx="3" fill="${C.sun}" transform="rotate(${i*30})"/>`).join('')}</g><path d="M-44 30 Q-40 -10 0 -30 Q40 -10 44 30Z" fill="${C.meadow}" stroke="${C.ink}" stroke-width="2.5"/><path d="M-20 30 l10 -40 l10 40Z M4 30 l12 -30 l12 30Z" fill="${C.deep}" stroke="${C.ink}" stroke-width="2"/><g transform="translate(0 -40)"><circle r="20" fill="${C.sun}" stroke="${C.ink}" stroke-width="2.5"/><path d="M0 -11 l3.6 7.4 l8 1.2 l-5.8 5.6 l1.4 8 l-7.2 -3.8 l-7.2 3.8 l1.4 -8 l-5.8 -5.6 l8 -1.2Z" fill="${C.coral}" stroke="${C.ink}" stroke-width="1.5"/></g></svg>`,'Mosslight Grove cleared!',`<p>You earned the <b>First Echo Sigil</b>. Windcall Ridge is next.</p>`,'<span class="tab go">See the journey</span><span class="tab ghost">Skip ceremony</span>');
+$('defeat').innerHTML=endCard(`<svg viewBox="-60 -50 120 90" width="50%" aria-hidden="true"><g transform="rotate(-18)"><path d="M-14 -40 h28 v52 l-14 -10 l-14 10Z" fill="${C.coral}" stroke="${C.ink}" stroke-width="2.5"/><text y="-12" text-anchor="middle" font-family="Chewy,sans-serif" font-size="20" fill="#fff">0</text></g>${puppet(30,24,1.3)}</svg>`,'The Labyrinth wins this time.',`<p>You found 2 of 3 Echoes. Try the same Labyrinth again, or practise the Questions first.</p>`,'<span class="tab go">Try again</span><span class="tab">Play This Seed</span><span class="tab ghost">Practice</span>');
+
+const A=[];
+const dlg=(title,inner,cap,desc,from)=>A.push(`<figure><div class="pop" style="display:grid;gap:12px;align-content:start"><div class="spread"><h3>${title}</h3><span class="tab ghost" style="min-height:34px">Close</span></div>${inner}</div><figcaption><b>${cap}</b><span>${desc}</span>${from?`<span class="from">${from}</span>`:''}</figcaption></figure>`);
+dlg('Daily Shared Labyrinth',`<p class="sub">Everyone plays the same Labyrinth today. One try counts for the board.</p><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:12px;align-items:start"><div>${board({ex:[3,3],cells:5,seed:21,reveal:2,echoes:[[5,3,1]]})}</div><div style="min-width:0"><b>Verified Daily Board</b><table class="t"><tr><th>#</th><th>Explorer</th><th>Time</th></tr><tr><td>1</td><td>MossFox</td><td>1:58</td></tr><tr><td>2</td><td>KiteRunner</td><td>2:11</td></tr><tr><td>3</td><td>You</td><td>2:40</td></tr></table></div></div><span class="tab go" style="justify-self:start">Play today's Labyrinth</span>`,'Daily Shared Labyrinth','One seed for everyone. Names on the board are examples.');
+dlg('What you have practised',`<div class="list">${[['Adding within 20',4],['Word meanings',3],['Shapes and colours',5],['Plants and animals',2]].map(([s,n])=>`<div class="spread"><span>${s}</span><span class="lantern">${[1,2,3,4,5].map(i=>`<i class="${i<=n?'on':''}"></i>`).join('')}</span></div>`).join('')}</div><span class="tab go" style="justify-self:start">Return to Play</span>`,'Lantern Journal','Each skill is a row of paper lanterns. More lit lanterns mean more practice.');
+dlg('Lantern Trail Workshop',`<b>Choose a learning goal</b><div class="answers" style="margin-top:0"><div class="ans right">Number Trail</div><div class="ans">Word Trail</div><div class="ans">Nature Trail</div><div class="ans">Warden Tactics Lab</div></div><p class="sub">Practice Lantern Runs cost no Vitality and do not count for the Quest.</p><span class="tab go" style="justify-self:start">Start practice</span>`,'Practice Lantern','Pick a goal, then practise with no risk.');
+dlg('Warden Tactics Lab',`<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center"><div>${board({ex:[3,5],cells:5,seed:33,reveal:2,wardens:[[5,5]],next:[4,5]})}</div><div class="list"><p style="font-size:.9rem"><b>Drill 2.</b> Get past the Warden with one Pulse.</p><div class="tabs"><span class="tab">Move up</span><span class="tab">Move right</span><span class="tab hot">Use Pulse</span></div><div class="tabs"><span class="tab ghost">Restart Drill</span><span class="tab ghost">Back to Drills</span></div></div></div>`,'Tactics Lab','Short drills on one small page.');
+dlg('Run Records',`<table class="t"><tr><th>Date</th><th>Quest Level</th><th>Labyrinth</th><th>Time</th><th>Result</th></tr><tr><td>Nov 26</td><td>Trail Scout</td><td>6</td><td>3:12</td><td>Gate</td></tr><tr><td>Nov 25</td><td>Trail Scout</td><td>5</td><td>4:01</td><td>Gate</td></tr><tr><td>Nov 25</td><td>Trail Scout</td><td>5</td><td>2:20</td><td>Run ended</td></tr></table><div class="tabs"><span class="tab go">Watch Run Replay</span><span class="tab">Play This Seed</span></div>`,'Run Records','Your Runs as a list. Example rows.');
+dlg('Run Replay',`${board({ex:[7,5],trailLine:[[1,1],[1,3],[3,3],[3,5],[5,5],[7,5]],trail:[[1,1],[1,2],[1,3],[2,3],[3,3],[3,4],[3,5],[4,5],[5,5],[6,5]],reveal:1,echoes:[[3,3,1]]})}<div class="row"><span class="tab">Play</span><div style="flex:1;min-width:120px;height:12px;border:2px solid var(--ink);border-radius:999px;background:linear-gradient(90deg,var(--coral) 48%,#fff 48%)"></div><span style="font-variant-numeric:tabular-nums;font-size:.9rem">Move 42 of 86</span></div>`,'Run Replay','The trail draws itself as a dotted ribbon across the page.');
+dlg('Make the maze yours.',`<label style="display:grid;gap:4px"><b>Public username</b><span class="field">KiteRunner</span></label><div><b>Explorer scarf</b><div class="row" style="margin-top:6px">${['#1fb5a8','#ff5a3c','#6cc24a','#4db8ff','#ffd98a'].map((c,i)=>`<span class="swatch ${i?'':'sel'}" style="background:${c}"></span>`).join('')}</div></div><div class="row"><svg viewBox="-18 -34 36 58" width="54" aria-hidden="true">${puppet(0,0,1.4)}</svg><p class="sub">Your Explorer on every page.</p></div><span class="tab go" style="justify-self:start">Save</span>`,'Player Profile','Name and colours. No real names asked.');
+dlg('Casual Global Scoreboard',`<table class="t"><tr><th>#</th><th>Explorer</th><th>Quest Level</th><th>Labyrinths</th></tr><tr><td>1</td><td>BellrootBee</td><td>Maze Master</td><td>20</td></tr><tr><td>2</td><td>MossFox</td><td>Trail Scout</td><td>18</td></tr><tr><td>3</td><td>TidePebble</td><td>Bright Start</td><td>17</td></tr></table><p class="sub">Public usernames only. Example rows.</p>`,'Global Scoreboard','A calm list, with Quest Level shown so a young player sees where they fit.');
+dlg('Lifetime Membership',`<p class="disp" style="font-size:2rem">$5.99 USD once</p><ul style="margin:0;padding-left:18px"><li>Unlimited Runs for this Explorer account</li><li>No subscription or renewal</li><li>Same fair Warden rules, with no paid power</li></ul><div class="note">Ask a parent or grown-up to help. Guest play stays available.</div><span class="tab go" style="justify-self:start">Continue with a grown-up</span>`,'Lifetime Membership','The price is plain. The button names the grown-up step.');
+dlg('Explorer Access Settings',`<div>${[['Trail Compass','Says where the nearest Echo is. Good for keyboard and screen readers.',1],['Read Aloud','Reads each Warden Question out loud.',1],['Calm motion','Flaps fade instead of pop.',0],['Larger text','Makes all words bigger.',0],['Quiet Expedition','Turns off music and sounds.',0]].map(([a,b,on])=>`<div class="set"><div><b>${a}</b><small>${b}</small></div><span class="toggle ${on?'on':''}"></span></div>`).join('')}</div>`,'Explorer Access Settings','Each setting says what it does in one line.');
+$('around-grid').innerHTML=A.join('');
+</script>
