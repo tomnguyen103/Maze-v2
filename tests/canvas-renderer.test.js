@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean }} [options]
+ * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean, ownLayerContexts?: boolean }} [options]
  */
-function stubCanvas({ width = 640, height = width, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart } = {}) {
+function stubCanvas({ width = 640, height = width, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart, ownLayerContexts = false } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -81,11 +81,25 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     tiles.push(tile);
     return /** @type {never} */ (tile);
   };
-  // Each layer draws on the shared recording context, so the paints record in layer order.
-  /** @type {Array<{ width: number, height: number }>} */
+  // A layer draws on the shared recording context unless it asks for its own, so the paints record in layer order.
+  /** @type {Array<{ width: number, height: number, context: any }>} */
   const layers = [];
+  const ownContext = () => {
+    /** @type {Record<string | symbol, any>} */
+    const state = { fills: [] };
+    return new Proxy(state, {
+      get: (target, name) => {
+        if (name in target) return target[name];
+        if (name === "createRadialGradient") return () => ({ addColorStop() {} });
+        return () => {
+          if (name === "fill") target.fills.push(target.fillStyle);
+        };
+      }
+    });
+  };
   const createLayer = (/** @type {number} */ layerWidth, /** @type {number} */ layerHeight) => {
-    const layer = { width: layerWidth, height: layerHeight, getContext: () => context };
+    const layerContext = ownLayerContexts ? ownContext() : context;
+    const layer = { width: layerWidth, height: layerHeight, context: layerContext, getContext: () => layerContext };
     layers.push(layer);
     return /** @type {never} */ (layer);
   };
@@ -2347,6 +2361,83 @@ describe("R1b layered renderer", () => {
     // Left 18 plus Math.round(line * 375 / 2) plus the half pixel: 0, 188 (rounded from 187.5) and 375.
     const topTicks = /** @type {number[][]} */ (neat.context.moveTo.mock.calls).filter((_call, index) => index % 4 === 0).map(([x]) => x);
     expect(topTicks).toEqual([18.5, 206.5, 393.5]);
+  });
+
+/** @param {number} ratio @param {() => void} body */
+  function atRatio(ratio, body) {
+    const original = window.devicePixelRatio;
+    window.devicePixelRatio = ratio;
+    try {
+      body();
+    } finally {
+      window.devicePixelRatio = original;
+    }
+  }
+
+  it("US-01.2 repaints both layers on a device ratio change that keeps the backing size", () => {
+    const { canvas, chartPaints, clips, renderer } = layered();
+
+    atRatio(1, () => renderer.render(run));
+    // Browser zoom: half the CSS box at twice the ratio gives the same 640 pixel backing size.
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 320 });
+    atRatio(2, () => renderer.render(run));
+
+    expect([canvas.width, canvas.height]).toEqual([640, 640]);
+    expect([chartPaints(), clips.length]).toEqual([2, 2]);
+  });
+
+  it("US-01.2 repaints the chart on a width-only backing change", () => {
+    const { canvas, chartPaints, renderer } = layered({ width: 640, height: 640 });
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 480, height: 640 });
+    renderer.render(run);
+
+    expect([canvas.width, canvas.height]).toEqual([480, 640]);
+    expect(chartPaints()).toBe(2);
+  });
+
+  it("US-01.2 repaints the chart on a height-only backing change", () => {
+    const { canvas, chartPaints, renderer } = layered({ width: 640, height: 640 });
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 640, height: 480 });
+    renderer.render(run);
+
+    expect([canvas.width, canvas.height]).toEqual([640, 480]);
+    expect(chartPaints()).toBe(2);
+  });
+
+  it("US-01.2 paints each pass on its own layer and draws the marks on the visible canvas", () => {
+    const { calls, canvas, context, layers, renderer } = stubCanvas({ ownLayerContexts: true });
+    const passage = document.body.style.getPropertyValue("--color-passage");
+    /** @type {string[]} */
+    const visibleFills = [];
+    let style = "";
+    Object.defineProperty(context, "fillStyle", { configurable: true, get: () => style, set: (value) => { style = value; } });
+    const fill = context.fill;
+    context.fill = vi.fn(() => {
+      visibleFills.push(style);
+      fill();
+    });
+
+    renderer.render(run);
+
+    const [chart, fog] = layers;
+    // (a) Water and land fill on the chart layer, never on the visible canvas.
+    expect(chart.context.fills).toContain(passage);
+    expect(visibleFills).not.toContain(passage);
+    // (b) The visible canvas blits the Fog layer first, then draws the marks.
+    expect(context.drawImage.mock.calls).toEqual([[fog, 0, 0]]);
+    expect(calls[0]).toBe("drawImage");
+    // (d) The Explorer ring draws after the blit, on the visible context.
+    expect(calls.slice(1)).toContain("arc");
+
+    // (c) A new backing size resizes both layers with the visible canvas.
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 240 });
+    renderer.render(run);
+    for (const layer of layers) expect([layer.width, layer.height]).toEqual([canvas.width, canvas.height]);
+    expect([canvas.width, canvas.height]).toEqual([320, 240]);
   });
 
   it("R-05 draws no Echo outside the known set", () => {

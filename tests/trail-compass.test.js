@@ -551,6 +551,18 @@ describe("Trail Compass parity with the board", () => {
     );
   });
 
+  it("leaves a Windway unnamed when its known destination is not a passage (US-03.1, B-83)", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
+    );
+    const [windway] = run.windways;
+    const { row, col } = windway.destination;
+    run.labyrinth[row][col] = 0;
+    run.pulseVisible = [];
+    run.revealed = [`${row},${col}`];
+    expect(describeCompassState(run)).not.toContain("A Windway starts");
+  });
+
   it("leaves a Windway unnamed when neither end is known (US-03.2, B-83)", () => {
     const run = structuredClone(
       runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
