@@ -1,5 +1,6 @@
 import "./run-replay.css";
 import { createCanvasRenderer } from "./canvas-renderer.js";
+import { motionReduced } from "./reduced-motion.js";
 import { buildRunReplayTimeline } from "./run-replay.js";
 
 /**
@@ -134,7 +135,7 @@ export function createRunReplayView({
     if (!timeline || index >= timeline.actionCount) {
       showIndex(0);
     }
-    if (prefersReducedMotion()) {
+    if (motionReduced()) {
       showIndex(index + 1);
       return;
     }
@@ -306,10 +307,6 @@ function controlButton(label) {
   button.className = "control-button";
   button.textContent = label;
   return button;
-}
-
-function prefersReducedMotion() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /** @param {EventTarget | null} target */

@@ -119,6 +119,7 @@ import {
 } from "./player/access-settings-continuity.js";
 import { announceCopyResult } from "./game/shell/copy-result.js";
 import { createPlayerController } from "./player/player-controller.js";
+import { createMotionPlayer } from "./game/motion-player.js";
 import {
   createLanternJournal
 } from "./learning/lantern-journal.js";
@@ -3641,6 +3642,9 @@ function isDemoBlocked() {
   return demoAccessPending && activeDaily === null && !activeFirstLight;
 }
 
+// The look motion chunk loads on first play and never when motion is reduced.
+const playMotion = createMotionPlayer(() => import("@look/motion.js"));
+
 /** @param {Parameters<typeof applyAction>[1]} action */
 function transition(action) {
   const previous = run;
@@ -3669,6 +3673,16 @@ function transition(action) {
   const wardenMode = summarizeWardenMode(run);
   const eventChanged =
     eventType !== previous.event.type || run.moves !== previous.moves;
+
+  if (eventChanged && eventType === "pulse") {
+    playMotion("flapRipple", elements.canvasFrame, run);
+  }
+  if (!previous.gate.open && run.gate.open) {
+    playMotion("gatePopUp", elements.canvasFrame, run);
+  }
+  if (eventChanged && eventType === "escaped") {
+    playMotion("paperConfetti", elements.canvasFrame, run);
+  }
 
   if (eventChanged) {
     showEvent(eventMessage);
@@ -4492,6 +4506,8 @@ async function finishRun() {
     terminal.regionTheme !== null;
   setTerminalPresentationPending(true);
 
+  /** @type {boolean | undefined} */
+  let playCeremony;
   try {
   let atlasModule = null;
   let atlasSummaryModule = null;
@@ -4528,6 +4544,7 @@ async function finishRun() {
   } catch {
     // Storage access cannot strand the saved terminal result.
   }
+  playCeremony = sigilCeremony;
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
     : sigilCeremony
@@ -4608,6 +4625,9 @@ async function finishRun() {
   }
   if (!elements.resultDialog.open) {
     elements.resultDialog.showModal();
+  }
+  if (playCeremony) {
+    playMotion("ceremonyPopUp", elements.resultDialog);
   }
 }
 

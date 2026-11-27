@@ -114,7 +114,7 @@ describe("WP-02 — the landing LCP text paints before any JS runs", () => {
 describe("P-01 — the game budget measures what a player waits for", () => {
   it("sums every chunk a Run needs, not just the entry", () => {
     const script = source("scripts/check-bundle-budget.mjs");
-    expect(script).toContain('prefixes: ["main-", "game-session-", "canvas-renderer-"]');
+    expect(script).toContain('prefixes: ["main-", "game-session-", "canvas-renderer-", "reduced-motion-"]');
     // Several prefixes, one total.
     expect(script).toContain("budget.prefixes ?? [budget.prefix]");
     expect(script).toContain("gzipKb +=");
