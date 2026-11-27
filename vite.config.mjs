@@ -29,7 +29,10 @@ export default defineConfig(({ mode }) => {
       // checked summary gate also detects any future partial run.
       pool: "threads",
       maxWorkers: 1,
-      fileParallelism: false
+      fileParallelism: false,
+      // Node 25+ ships a global `localStorage` that shadows the DOM test
+      // environment's Storage, so storage-backed tests read `undefined`.
+      execArgv: ["--no-experimental-webstorage"]
     },
     build: {
       outDir: "dist",

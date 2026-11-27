@@ -18,10 +18,15 @@ const GENERATED = [
   "coverage"
 ];
 
+/** Static design mockups: never served, ignored by `eslint.config.mjs` too. */
+const MOCKUPS = "docs/design/mockups/";
+
 /** Every stylesheet and HTML document the browser actually loads. */
 const SHEETS = globSync("**/*.{css,html}", {
   cwd: root,
-  exclude: (path) => GENERATED.some((dir) => path.split(/[\\/]/).includes(dir))
+  exclude: (path) =>
+    GENERATED.some((dir) => path.split(/[\\/]/).includes(dir)) ||
+    path.replace(/\\/g, "/").startsWith(MOCKUPS)
 });
 
 describe("custom properties", () => {
