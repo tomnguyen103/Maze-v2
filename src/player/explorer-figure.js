@@ -18,9 +18,10 @@ const isFigure = (value) => EXPLORER_FIGURES.includes(/** @type {ExplorerFigure}
  * @param {FigureStorage | undefined} [storage]
  * @returns {ExplorerFigure}
  */
-export function loadExplorerFigure(storage = globalThis.localStorage) {
+export function loadExplorerFigure(storage) {
   try {
-    const value = storage.getItem(EXPLORER_FIGURE_STORAGE_KEY);
+    // The localStorage getter can throw a SecurityError, so it resolves inside the try.
+    const value = (storage ?? globalThis.localStorage).getItem(EXPLORER_FIGURE_STORAGE_KEY);
     return isFigure(value) ? value : "clover";
   } catch {
     return "clover";
@@ -44,8 +45,9 @@ export function saveExplorerFigure(figure, storage = globalThis.localStorage) {
  * @param {FigureStorage | undefined} [storage]
  * @returns {ExplorerFigure}
  */
-export function explorerFigureForPlay(storage = globalThis.localStorage) {
+export function explorerFigureForPlay(storage) {
   try {
+    storage ??= globalThis.localStorage;
     if (storage.getItem(CLASS_EXPEDITION_ACTIVE_KEY) === "true") return "clover";
     // shortcut: the art has no user id, so any stored Classroom selection counts as Class Play; it errs toward Clover on a shared device.
     for (let index = 0; index < (storage.length ?? 0); index += 1) {

@@ -55,6 +55,23 @@ describe("Explorer Figure storage", () => {
     expect(explorerFigureForPlay(throwing)).toBe("clover");
   });
 
+  it("gives Clover when the localStorage getter itself throws", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("SecurityError");
+      }
+    });
+    try {
+      expect(loadExplorerFigure()).toBe("clover");
+      expect(explorerFigureForPlay()).toBe("clover");
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else delete (/** @type {any} */ (globalThis)).localStorage;
+    }
+  });
+
   it("lets a save error reach the caller", () => {
     expect(() => saveExplorerFigure("pip", throwing)).toThrow("blocked");
   });
