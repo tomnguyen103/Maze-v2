@@ -11,20 +11,23 @@ export const BOARD_TOKENS = [
   "--color-pulse", "--color-board-warden"
 ];
 
-const css = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
-const light = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
-const rows = new Map([...light.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((hit) => [hit[1], hit[2].trim()]));
+/** @param {"pilot" | "popup"} look @returns {Map<string, string>} the light-scope rows of the look tokens file */
+function lightRows(look) {
+  const css = readFileSync(resolve(process.cwd(), `src/looks/${look}/tokens.css`), "utf8");
+  const light = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
+  return new Map([...light.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((hit) => [hit[1], hit[2].trim()]));
+}
 
-/** @param {string} name @returns {string} */
-function resolveToken(name) {
-  const value = rows.get(name) ?? "";
+/** @param {string} name @param {"pilot" | "popup"} [look] @returns {string} the light value after each var() reference */
+export function resolveBoardToken(name, look = "pilot") {
+  const value = lightRows(look).get(name) ?? "";
   const reference = value.match(/^var\((--[\w-]+)\)$/);
-  return reference ? resolveToken(reference[1]) : value;
+  return reference ? resolveBoardToken(reference[1], look) : value;
 }
 
 /** Sets the light-scope value of each board token on the body, unless the test set it already. */
-export function seedBoardTokens() {
+export function seedBoardTokens(look = /** @type {"pilot" | "popup"} */ ("pilot")) {
   for (const name of BOARD_TOKENS) {
-    if (!document.body.style.getPropertyValue(name)) document.body.style.setProperty(name, resolveToken(name));
+    if (!document.body.style.getPropertyValue(name)) document.body.style.setProperty(name, resolveBoardToken(name, look));
   }
 }

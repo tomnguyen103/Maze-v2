@@ -31,7 +31,8 @@
 /* Hint, skip, and the command bar tabs stay text buttons. */
 :root .challenge-support > .control-button,
 :root .challenge-skip > .control-button,
-:root .command-bar .command-bar__actions > * {
+:root .command-bar .command-bar__actions > *,
+:root :is(.challenge-support > .control-button, .challenge-skip > .control-button, .command-bar .command-bar__actions > *):active {
   border-color: transparent;
   box-shadow: none;
   transform: none;
@@ -56,10 +57,23 @@
   background: var(--color-signal-deep);
 }
 
-/* Hover lifts a pull-tab one step; the fill stays, so each contrast pair holds. */
-:root :is(.primary-button, .danger-button):hover:not(:disabled, :active) {
-  box-shadow: 0 6px 0 var(--color-ink);
-  transform: translateY(-2px);
+/* Hover lifts a pull-tab one step; the fill stays, so each contrast pair holds. A touch tap fires no lift. */
+@media (hover: hover) {
+  :root :is(.primary-button, .danger-button):hover:not(:disabled, :active) {
+    box-shadow: 0 6px 0 var(--color-ink);
+    transform: translateY(-2px);
+  }
+}
+
+/* The pressed Run Replay tab takes deep coral: ink or cream on plain coral fails 4.5:1. */
+:root .run-replay-controls .control-button[aria-pressed="true"] {
+  color: var(--color-on-signal-deep);
+  background: var(--color-signal-deep);
+}
+
+/* The 4px tab lift needs a wider gap, so one direction tab never touches the next. */
+:root .touch-controls {
+  gap: var(--space-2);
 }
 
 /* Paper cards: every dialog, and the board panel. */
@@ -166,4 +180,9 @@
 :root :focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* A paper gap past the 4px lift keeps the ring apart from the ink outline in light and Night. */
+:root :is(.control-button, .control-link, .theme-button, .pause-button, .direction-button, .pulse-button, .primary-button, .danger-button):focus-visible {
+  outline-offset: 6px;
 }
