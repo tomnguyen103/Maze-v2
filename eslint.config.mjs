@@ -10,6 +10,7 @@ export default [
       "coverage/**",
       "design-system/**",
       "dist/**",
+      "dist-look-popup/**",
       "docs/design/mockups/**",
       "graphify-out/**",
       "node_modules/**",

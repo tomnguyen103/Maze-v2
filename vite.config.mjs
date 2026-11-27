@@ -1,5 +1,93 @@
 import { defineConfig } from "vitest/config";
+import { readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
+
+/** The looks a build can ship. `pilot` is the default; `popup` is the rebuild. */
+export const LOOKS = ["pilot", "popup"];
+
+/**
+ * Maps the `VITE_LOOK` value to a look name. An empty value means `pilot`;
+ * any other unknown value throws, so a typo never ships the wrong look.
+ *
+ * @param {string | undefined} value
+ */
+export function resolveLook(value) {
+  const look = value || "pilot";
+  if (!LOOKS.includes(look)) {
+    throw new Error(
+      `VITE_LOOK must be one of: ${LOOKS.join(", ")}. Got "${look}".`
+    );
+  }
+  return look;
+}
+
+/**
+ * The browser bar colours of a look: the `--color-paper` literal of the light
+ * block and of the Night block in its tokens.css.
+ *
+ * @param {string} look
+ */
+function barColors(look) {
+  const css = readFileSync(
+    new URL(`./src/looks/${look}/tokens.css`, import.meta.url),
+    "utf8"
+  );
+  const paper = /--color-paper:\s*(oklch\([^)]*\))/;
+  const light = css.match(paper)?.[1];
+  const dark = css.slice(css.indexOf(':root[data-theme="dark"]')).match(paper)?.[1];
+  // An empty match would make `replaceAll("", …)` insert the colour everywhere.
+  if (!light || !dark) {
+    throw new Error(`src/looks/${look}/tokens.css has no light or Night --color-paper.`);
+  }
+  return { light, dark };
+}
+
+/**
+ * Returns the function that replaces each Pilot bar colour in a text with the
+ * Popup bar colour.
+ */
+export function popupBarSwap() {
+  const pilot = barColors("pilot");
+  const popup = barColors("popup");
+  /** @param {string} text */
+  return (text) =>
+    text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
+}
+
+/**
+ * Popup build only. The meta tags, theme-boot.js, and THEME_COLORS repeat the
+ * Pilot bar colours by hand, so this plugin swaps them for the Popup values
+ * and leaves those three Pilot sources untouched.
+ *
+ * @returns {import("vite").Plugin}
+ */
+function popupBarColors() {
+  const swap = popupBarSwap();
+  let outDir = "";
+  let isBuild = false;
+  return {
+    name: "popup-bar-colors",
+    configResolved: (config) => {
+      outDir = config.build.outDir;
+      isBuild = config.command === "build";
+    },
+    transformIndexHtml: swap,
+    transform(code, id) {
+      return id.endsWith("src/player/theme.js")
+        ? { code: swap(code), map: null }
+        : null;
+    },
+    closeBundle() {
+      // The dev server also calls this hook when it closes, and it writes no outDir.
+      if (!isBuild) {
+        return;
+      }
+      const boot = `${outDir}/theme-boot.js`;
+      writeFileSync(boot, swap(readFileSync(boot, "utf8")));
+    }
+  };
+}
 
 /** @type {import("vite").ResolveModulePreloadDependenciesFn} */
 const resolveModulePreloadDependencies = (
@@ -21,7 +109,16 @@ const resolveModulePreloadDependencies = (
 };
 
 export default defineConfig(({ mode }) => {
+  const look = resolveLook(
+    loadEnv(mode, globalThis.process.cwd(), "").VITE_LOOK
+  );
   const base = {
+    // `@look` names the look folder: tokens.css, fonts.js, surface.css.
+    resolve: {
+      alias: {
+        "@look": fileURLToPath(new URL(`./src/looks/${look}/`, import.meta.url))
+      }
+    },
     test: {
       include: ["tests/*.test.js"],
       // The default fork pool has repeatedly lost workers on this Windows
@@ -29,10 +126,14 @@ export default defineConfig(({ mode }) => {
       // checked summary gate also detects any future partial run.
       pool: "threads",
       maxWorkers: 1,
-      fileParallelism: false
+      fileParallelism: false,
+      // Node 25+ ships a global `localStorage` that shadows the DOM test
+      // environment's Storage, so storage-backed tests read `undefined`.
+      execArgv: ["--no-experimental-webstorage"]
     },
     build: {
-      outDir: "dist",
+      // The popup build gets its own folder so the default `dist` stays Pilot.
+      outDir: look === "popup" ? "dist-look-popup" : "dist",
       sourcemap: true,
       rolldownOptions: {
         output: {
@@ -132,6 +233,7 @@ export default defineConfig(({ mode }) => {
   return {
     ...base,
     plugins: [
+      ...(look === "popup" ? [popupBarColors()] : []),
       {
         name: "question-api",
         configureServer: applyMiddlewares,

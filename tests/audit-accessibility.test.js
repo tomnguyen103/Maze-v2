@@ -85,7 +85,7 @@ function contrast(foreground, background) {
 
 /** @param {string} name */
 function token(name) {
-  const tokens = source("tokens.css");
+  const tokens = source("src/looks/pilot/tokens.css");
   const match = tokens.match(
     new RegExp(
       name + String.raw`:\s*oklch\(([\d.]+)% ([\d.]+) ([\d.]+)`
@@ -238,7 +238,7 @@ describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
 
 describe("TYPE — body copy has a real 16px floor", () => {
   it("defines a named type scale instead of one compact token", () => {
-    const tokens = source("tokens.css");
+    const tokens = source("src/looks/pilot/tokens.css");
     expect(tokens).toContain("--text-body: 1rem;");
     expect(tokens).toContain("--text-label: 0.875rem;");
   });
@@ -367,7 +367,7 @@ const TEXT_PAIRS = [
 ];
 
 describe("US-01 — Pilot Chart palette tokens", () => {
-  const css = source("tokens.css");
+  const css = source("src/looks/pilot/tokens.css");
   const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
   const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
   const lightBlock = css.slice(0, systemNightStart);
@@ -481,7 +481,7 @@ const SURFACE_SHEETS = [
 ];
 
 describe("US-06 — dialogs and learning surfaces use Pilot Chart tokens", () => {
-  const css = source("tokens.css");
+  const css = source("src/looks/pilot/tokens.css");
   const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
   const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
   const blocks = [

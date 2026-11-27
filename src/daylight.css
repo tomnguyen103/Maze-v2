@@ -1,4 +1,5 @@
-@import "../tokens.css";
+@import "@look/tokens.css";
+@import "@look/surface.css";
 
 /*
   Pilot Chart. White chart paper, buff land, blue water screens, black line and

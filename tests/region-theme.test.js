@@ -6,7 +6,7 @@ import { renderAtlasIllustrationMarkup } from "../src/game/quest-atlas-view.js";
 
 const ATLAS_REGION_IDS = ["foundation", "developing", "capable", "advanced", "mastery"];
 const NEUTRAL_WASH = "color-mix(in oklab, var(--color-ink-muted) 60%, var(--color-ink))";
-const tokensCss = readFileSync(resolve(process.cwd(), "tokens.css"), "utf8");
+const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
 const atlasCss = readFileSync(resolve(process.cwd(), "src/game/quest-atlas.css"), "utf8");
 
 /** @param {string} selector */

@@ -1,0 +1,255 @@
+<title>Echo Maze Explorer ideas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Chewy&display=swap">
+<style>
+/* Single deliberate theme: the approved Popup palette (teal book, cream plate, coral, sun, meadow, sky). */
+:root{--teal:#17a398;--plate:#fff8e7;--coral:#ff5a3c;--sun:#ffc93c;--meadow:#6cc24a;--sky:#4db8ff;--ink:#3a2449;--soft:#5e4a6b;
+  --display:"Chewy","Trebuchet MS",system-ui,sans-serif;--body:"Andika","Verdana",system-ui,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plate);color:var(--ink);font:16px/1.55 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:64px}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(2.4rem,6vw,3.8rem)}h2{font-size:clamp(1.7rem,4vw,2.4rem)}h3{font-size:1.9rem}
+p{margin:0}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+header.top{padding:40px 0 28px;display:grid;gap:14px;max-width:72ch}
+header.top p{font-size:1.08rem;color:var(--soft)}
+.note{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:10px 14px;font-size:.95rem;box-shadow:4px 4px 0 rgba(58,36,73,.18)}
+.before{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.cards{display:grid;gap:28px}
+.card{background:#fff;border:3px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 rgba(58,36,73,.2);overflow:hidden;
+  display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr)}
+.hero{background:var(--teal);display:grid;place-items:center;padding:18px;position:relative;border-right:3px solid var(--ink)}
+.hero svg{width:100%;max-width:260px}
+.rec{position:absolute;top:14px;left:14px;background:var(--sun);border:2px solid var(--ink);border-radius:999px;padding:2px 12px;font-weight:700;font-size:.85rem}
+.body{padding:22px;display:grid;gap:14px;align-content:start;min-width:0}
+.tag{color:var(--soft);font-size:1.05rem}
+.poses{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.pose{background:var(--plate);border:2px solid var(--ink);border-radius:14px;padding:6px 6px 8px;text-align:center;font-weight:700;font-size:.85rem}
+.pose svg{width:100%;max-height:130px}
+.fits{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px 18px;margin:0;padding:0;list-style:none}
+.fits li{padding-left:22px;position:relative;font-size:.95rem}
+.fits li::before{content:"";position:absolute;left:0;top:.45em;width:12px;height:12px;border-radius:50%;background:var(--coral);border:2px solid var(--ink)}
+.fits b{font-weight:700}
+section{padding-top:40px;display:grid;gap:16px}
+section>p{max-width:72ch;color:var(--soft)}
+.strip{background:var(--teal);border:3px solid var(--ink);border-radius:20px;padding:14px;overflow:hidden}
+.strip svg{width:100%;display:block}
+.scarves{display:flex;flex-wrap:wrap;gap:12px}
+.scarves figure{margin:0;background:var(--teal);border:2px solid var(--ink);border-radius:16px;padding:6px;width:132px;text-align:center}
+.scarves figcaption{background:var(--plate);border-radius:10px;font-weight:700;font-size:.82rem;padding:2px}
+.picker{background:#fff;border:3px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 rgba(58,36,73,.2);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);overflow:hidden}
+.pk-side{padding:22px;display:grid;gap:16px;align-content:start}
+.picker fieldset{border:0;margin:0;padding:0;display:grid;gap:8px}
+.picker legend{font-weight:700;margin-bottom:8px}
+.pk-chars{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.pk-chars label{position:relative;background:var(--plate);border:2px solid var(--ink);border-radius:16px;padding:6px 4px 8px;text-align:center;cursor:pointer;font-weight:700;font-size:.9rem;min-height:44px}
+.pk-chars label:has(input:checked){background:var(--sun);box-shadow:0 0 0 3px var(--ink) inset}
+.pk-chars input,.pk-cols input{position:absolute;opacity:0;width:1px;height:1px}
+.pk-chars label:has(input:focus-visible),.pk-cols label:has(input:focus-visible){outline:3px solid var(--ink);outline-offset:3px}
+.pk-chars svg{width:100%;max-height:96px}
+.pk-def{display:block;font-size:.75rem;font-weight:400;color:var(--soft)}
+.pk-cols{display:flex;gap:12px;flex-wrap:wrap}
+.pk-cols label{display:flex;align-items:center;gap:8px;border:2px solid var(--ink);border-radius:999px;padding:6px 14px 6px 6px;cursor:pointer;font-weight:700;font-size:.9rem;min-height:44px;background:#fff;position:relative}
+.pk-cols label:has(input:checked){background:var(--plate);box-shadow:0 0 0 3px var(--ink) inset}
+.pk-cols i{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink)}
+.pk-actions{display:flex;gap:10px;flex-wrap:wrap}
+.pk-btn{font:700 1rem var(--body);background:var(--coral);color:var(--ink);border:3px solid var(--ink);border-radius:14px;padding:10px 20px;min-height:44px;cursor:pointer;box-shadow:3px 3px 0 var(--ink)}
+.pk-btn.ghost{background:#fff;color:var(--ink)}
+.pk-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.pk-msg{min-height:1.5em;color:var(--soft)}
+.pk-preview{background:var(--teal);border-left:3px solid var(--ink);display:grid;place-items:center;align-content:center;padding:18px;gap:8px;text-align:center;color:var(--ink)}
+.pk-preview svg{width:100%;max-width:230px}
+.pk-preview b{font-family:var(--display);font-weight:400;font-size:1.8rem}
+@media (max-width:760px){.picker{grid-template-columns:1fr}.pk-preview{border-left:0;border-top:3px solid var(--ink);order:-1}.pk-preview svg{max-width:160px}.pk-chars{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.bob{animation:bob 2.6s ease-in-out infinite}
+@keyframes ring{from{opacity:.9;transform:scale(.6)}to{opacity:0;transform:scale(1.25)}}
+.ring{animation:ring 2s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@media (prefers-reduced-motion:reduce){.bob,.ring{animation:none}}
+@media (max-width:760px){.card{grid-template-columns:1fr}.hero{border-right:0;border-bottom:3px solid var(--ink)}.hero svg{max-width:200px}.poses{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="cut" x="-40%" y="-40%" width="180%" height="180%">
+    <feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="d"/>
+    <feFlood flood-color="#ffffff"/><feComposite in2="d" operator="in" result="w"/>
+    <feOffset in="d" dx="3" dy="4" result="o"/><feFlood flood-color="#3a2449" flood-opacity=".32"/><feComposite in2="o" operator="in" result="sh"/>
+    <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs></svg>
+
+<div class="wrap">
+<header class="top">
+  <h1>Meet your Explorer</h1>
+  <p>Five ideas for the main character, each one a paper cut-out on a stand to fit the Popup book. Each idea shows four moods: ready, Pulse, a wrong answer, and Gate reached.</p>
+  <div class="before note"><svg viewBox="-30 -30 60 60" width="56" aria-label="Current Explorer"><circle r="22" fill="#ffc93c" stroke="#3a2449" stroke-width="3"/><circle cx="-7" cy="-4" r="3" fill="#3a2449"/><circle cx="7" cy="-4" r="3" fill="#3a2449"/><path d="M-8 6 q8 8 16 0" stroke="#3a2449" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    <p style="flex:1;min-width:220px"><b>The current Explorer:</b> a smiley disc. It has no body, no story, and only one mood, so a child cannot tell what it feels or what it can do.</p></div>
+</header>
+
+<div class="cards" id="cards"></div>
+
+<section>
+  <h2>On the board, at play size</h2>
+  <p>Each idea on a strip of the approved board, at 48 px a tile. The figure stands up out of the page, so it reads over the meadow floor, the cream walls, and the sky Fog flaps.</p>
+  <div class="strip" id="strip"></div>
+</section>
+
+<section>
+  <h2>Pick your Explorer in Settings</h2>
+  <p>A new choice in the Player Profile. Clover is the default for every new Explorer. The four existing Explorer colours now go on the scarf. Both choices are looks only: they change no Run, score, or progress. Try it below.</p>
+  <form class="picker" id="picker" onsubmit="return false">
+    <div class="pk-side">
+      <h3>Your Explorer</h3>
+      <fieldset><legend>Character</legend><div class="pk-chars" id="pkChars"></div></fieldset>
+      <fieldset><legend>Scarf colour</legend><div class="pk-cols" id="pkCols"></div></fieldset>
+      <div class="pk-actions"><button type="button" class="pk-btn" id="pkSave">Save</button><button type="button" class="pk-btn ghost" id="pkReset">Use Clover again</button></div>
+      <p class="pk-msg" id="pkMsg" role="status"></p>
+    </div>
+    <div class="pk-preview" id="pkPreview" aria-live="polite"></div>
+  </form>
+</section>
+
+<section>
+  <div class="note"><b>What this page is.</b> Ideas for review only. "Explorer" stays the game term; Clover, Pip, Lumi, Fen, and Tuck are proposed names. Only the Popup theme is approved. Nothing in the game has changed.</div>
+</section>
+</div>
+
+<script>
+const K='#3a2449',SW=2.6,CORAL='#ff5a3c',SUN='#ffc93c',CREAM='#fff8e7';
+const mir=p=>`<g>${p}</g><g transform="scale(-1 1)">${p}</g>`;
+function eyes(p,x,y,s=1){const one=dx=>{const X=dx*x;
+  if(p==='cheer')return `<path d="M${X-5*s} ${y+1} q${5*s} -7 ${10*s} 0" fill="none" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+  if(p==='oops')return `<path d="M${X-4*dx} ${y-4} l${7*dx} 4 l${-7*dx} 4" fill="none" stroke="${K}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  let e=`<ellipse cx="${X}" cy="${y}" rx="${4.8*s}" ry="${5.8*s}" fill="#fff" stroke="${K}" stroke-width="2"/><circle cx="${X+dx*.8}" cy="${y+1}" r="${3*s}" fill="${K}"/><circle cx="${X+dx*.8+1.2}" cy="${y-.6}" r="1.1" fill="#fff"/>`;
+  if(p==='pulse')e+=`<path d="M${X-5*dx} ${y-10} L${X+5*dx} ${y-7.5}" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/>`;
+  return e};return one(-1)+one(1)}
+function mouth(p,y){
+  if(p==='pulse')return `<ellipse cx="0" cy="${y+1}" rx="3" ry="3.6" fill="${K}"/>`;
+  if(p==='oops')return `<path d="M-6 ${y+1} q3 -3 6 0 q3 3 6 0" fill="none" stroke="${K}" stroke-width="2.4" stroke-linecap="round"/>`;
+  if(p==='cheer')return `<path d="M-7 ${y-1} q7 11 14 0z" fill="#b8323a" stroke="${K}" stroke-width="2.2" stroke-linejoin="round"/><path d="M-3 ${y+4} q3 -3 6 0" fill="${CORAL}"/>`;
+  return `<path d="M-4.5 ${y} q4.5 4.5 9 0" fill="none" stroke="${K}" stroke-width="2.4" stroke-linecap="round"/>`}
+const cheeks=(x,y)=>`<circle cx="${-x}" cy="${y}" r="3.6" fill="${CORAL}" opacity=".45"/><circle cx="${x}" cy="${y}" r="3.6" fill="${CORAL}" opacity=".45"/>`;
+function hand(p,s){if(p==='spread')return[s*40,4];if(p==='pulse')return s>0?[30,-8]:[-20,30];if(p==='oops')return[s*21,-32];if(p==='cheer')return[s*27,-42];return[s*21,30]}
+function arm(p,s,col){const[hx,hy]=hand(p,s),sx=s*13,sy=6,cx=s*26,cy=(sy+hy)/2;const d=`M${sx} ${sy} Q${cx} ${cy} ${hx} ${hy}`;
+  return `<path d="${d}" stroke="${K}" stroke-width="11" fill="none" stroke-linecap="round"/><path d="${d}" stroke="${col}" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="${hx}" cy="${hy}" r="5" fill="${col}" stroke="${K}" stroke-width="${SW}"/>`}
+function wing(p,s,col){const[hx,hy]=hand(p,s),sh=[s*12,2],hip=[s*14,28],m=[(hx+hip[0])/2,(hy+hip[1])/2];
+  const pull=(a,b)=>{const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;return[mx+(0-mx)*.28,my+(10-my)*.28]};const c1=pull([hx,hy],m),c2=pull(m,hip);
+  return `<path d="M${sh[0]} ${sh[1]} L${hx} ${hy} Q${c1[0]} ${c1[1]} ${m[0]} ${m[1]} Q${c2[0]} ${c2[1]} ${hip[0]} ${hip[1]} Z" fill="${col}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M${sh[0]} ${sh[1]} L${m[0]} ${m[1]}" stroke="#5a6bb0" stroke-width="1.6"/><circle cx="${hx}" cy="${hy}" r="3.6" fill="${col}" stroke="${K}" stroke-width="2"/>`}
+const scarf=c=>`<path d="M-17 -3 Q0 7 17 -3 L17 5 Q0 15 -17 5Z" fill="${c}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M7 7 l7 17 l-7 -2 l-4 5 l-1 -18z" fill="${c}" stroke="${K}" stroke-width="2.2" stroke-linejoin="round"/>`;
+function fx(p,kind){
+  if(p==='pulse')return `<g fill="none" stroke="${CORAL}" stroke-width="3.2" stroke-linecap="round"><path class="ring" d="M30 -38 a22 22 0 0 1 0 32"/><path class="ring" style="animation-delay:.35s" d="M38 -46 a32 32 0 0 1 0 48"/><path class="ring" style="animation-delay:.7s" d="M46 -54 a42 42 0 0 1 0 64"/></g>`;
+  if(p==='oops')return `<path d="M24 -58 q5 8 0 11 q-5 -3 0 -11z" fill="${'#4db8ff'}" stroke="${K}" stroke-width="2"/><g fill="${SUN}" stroke="${K}" stroke-width="1.6"><path d="M-30 -60 l2 5 l5 1 l-4 3 l1 5 l-4 -3 l-4 3 l1 -5 l-4 -3 l5 -1z"/><path d="M-40 -44 l1.5 3.5 l3.5 .5 l-2.8 2.2 l.8 3.6 l-3 -2 l-3 2 l.8 -3.6 l-2.8 -2.2 l3.5 -.5z"/></g>`;
+  if(p==='cheer')return `<g stroke="${K}" stroke-width="1.6">${[[-40,-60,CORAL,20],[38,-64,SUN,-15],[-46,-20,'#4db8ff',40],[44,-24,'#6cc24a',-30],[0,-76,'#ff4f8b',10],[-24,-74,'#6cc24a',-25],[26,-78,'#4db8ff',35]].map(([x,y,c,r])=>`<rect x="${x}" y="${y}" width="8" height="5" rx="1" fill="${c}" transform="rotate(${r} ${x+4} ${y+2.5})"/>`).join('')}</g>`;
+  return ''}
+const stand=`<path d="M-24 47 h48 l7 11 h-62z" fill="#f0c987" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-24 47 h48" stroke="#b98a4a" stroke-width="2"/>`;
+
+const CH={
+ pip:{name:'Pip',kind:'the Echo Bat',col:'#2f3d7a',tag:'A small bat who hears Echoes in the Fog. Pip finds the way by sound.',
+  fits:[['Pulse makes sense','A Pulse is Pip\'s sound call. The rings show it.'],['Name and game agree','Bats hear echoes; this game is Echo Maze.'],['Reads at small size','A dark shape with big ears stands out on green and blue.'],['Kind, not scary','Round face, scarf, and big eyes. Bats are friends here.']],
+  draw(p,sc){const B=this.col;let s='';
+   s+=mir(`<path d="M-19 -32 Q-42 -42 -40 -60 Q-22 -58 -6 -42Z" fill="${B}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-18 -37 Q-34 -44 -34 -54 Q-22 -52 -11 -43Z" fill="${CORAL}" opacity=".85"/>`);
+   s+=wing(p==='idle'?'spread':p,-1,B)+wing(p==='idle'?'spread':p,1,B);
+   s+=`<path d="M-15 2 Q-19 36 -10 44 H10 Q19 36 15 2 Q0 -6 -15 2Z" fill="${B}" stroke="${K}" stroke-width="${SW}"/><ellipse cx="0" cy="24" rx="9" ry="12" fill="#e9e1ff" opacity=".9"/>`;
+   s+=`<ellipse cx="-7" cy="45" rx="6" ry="3.5" fill="${B}" stroke="${K}" stroke-width="2"/><ellipse cx="7" cy="45" rx="6" ry="3.5" fill="${B}" stroke="${K}" stroke-width="2"/>`;
+   s+=`<circle cx="0" cy="-22" r="22" fill="${B}" stroke="${K}" stroke-width="${SW}"/><path d="M-16 -22 Q-16 -36 -6 -32 Q0 -30 6 -32 Q16 -36 16 -22 Q16 -6 0 -5 Q-16 -6 -16 -22Z" fill="${CREAM}"/><path d="M-2 -40 q2 -8 6 -9 q-1 6 -2 9z" fill="${B}" stroke="${K}" stroke-width="2"/>`;
+   s+=eyes(p,7.5,-23)+cheeks(12,-14)+mouth(p,-13)+(p==='idle'?`<path d="M2 -12.5 l1.5 3 l1.5 -3z" fill="#fff" stroke="${K}" stroke-width="1"/>`:'');
+   s+=scarf(sc);return s}},
+ lumi:{name:'Lumi',kind:'the Lantern Kid',col:SUN,tag:'A kid in a rain hood with a paper lantern. The lantern lights the next step.',
+  fits:[['Ties to Lanterns','Lantern Journal and Lantern Trail already exist.'],['Pulse is light','The lantern flares and the Fog flaps open.'],['A person','Any child can see themself in the hood.'],['Warm look','Yellow coat and orange boots stay cheerful.']],
+  draw(p,sc){let s='';const lx=hand(p,1);
+   s+=arm(p,-1,SUN);
+   s+=`<path d="M-15 0 L-21 40 Q0 46 21 40 L15 0Z" fill="${SUN}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M0 4 V40" stroke="${K}" stroke-width="1.8"/><circle cx="-4" cy="14" r="1.8" fill="${K}"/><circle cx="-4" cy="26" r="1.8" fill="${K}"/><rect x="5" y="22" width="9" height="8" rx="2" fill="none" stroke="${K}" stroke-width="1.8"/>`;
+   s+=`<rect x="-14" y="39" width="11" height="9" rx="3" fill="${CORAL}" stroke="${K}" stroke-width="2"/><rect x="3" y="39" width="11" height="9" rx="3" fill="${CORAL}" stroke="${K}" stroke-width="2"/>`;
+   s+=`<circle cx="0" cy="-24" r="25" fill="${SUN}" stroke="${K}" stroke-width="${SW}"/><circle cx="0" cy="-21" r="17.5" fill="#f2c39b" stroke="${K}" stroke-width="2"/><path d="M-16 -26 Q-8 -18 -2 -30 Q4 -19 16 -26 Q12 -40 0 -40 Q-12 -40 -16 -26Z" fill="#4a2c22"/><path d="M-26 -28 Q0 -62 26 -28 Q0 -44 -26 -28Z" fill="${SUN}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/>`;
+   s+=eyes(p,7,-21,.92)+cheeks(11,-13)+mouth(p,-12);
+   s+=scarf(sc);
+   s+=arm(p,1,SUN);
+   const g=p==='pulse'?26:14;s+=`<g transform="translate(${lx[0]+4} ${lx[1]+12})"><circle r="${g}" fill="${SUN}" opacity="${p==='pulse'?.55:.35}"/>${p==='pulse'?`<g stroke="${SUN}" stroke-width="3" stroke-linecap="round">${Array.from({length:8},(_,i)=>`<line x1="0" y1="-${g+4}" x2="0" y2="-${g+12}" transform="rotate(${i*45})"/>`).join('')}</g>`:''}<path d="M-4 -16 q4 -7 8 0" fill="none" stroke="${K}" stroke-width="2"/><rect x="-8" y="-12" width="16" height="20" rx="7" fill="${CORAL}" stroke="${K}" stroke-width="2.2"/><path d="M-4 -11 v18 M4 -11 v18" stroke="#c23a24" stroke-width="1.5"/><rect x="-5" y="-14" width="10" height="3" rx="1" fill="${K}"/><rect x="-5" y="7" width="10" height="3" rx="1" fill="${K}"/></g>`;
+   return s}},
+ fen:{name:'Fen',kind:'the Paper Fox',col:'#ff8a3d',tag:'A folded paper fox with a chart scroll. Fen is quick and clever.',
+  fits:[['Made of paper','Origami folds match the pop-up book.'],['Clever helper','Foxes feel smart, good for Warden Questions.'],['Strong colour','Orange pops on the green and blue board.'],['Tail shows mood','The tail lifts up or droops down.']],
+  draw(p,sc){const O=this.col;let s='';const up=p==='cheer'||p==='pulse';
+   s+=`<path d="M-12 32 L${up?-46:-44} ${up?-6:20} L${up?-34:-36} ${up?-20:2} L-18 14Z" fill="${O}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M${up?-46:-44} ${up?-6:20} L${up?-34:-36} ${up?-20:2} L${up?-43:-42} ${up?-15:8}Z" fill="${CREAM}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/>`;
+   s+=arm(p,-1,O);
+   s+=`<path d="M-14 0 L-18 42 L18 42 L14 0Z" fill="${O}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-10 2 L0 30 L10 2Z" fill="${CREAM}" stroke="${K}" stroke-width="1.8" stroke-linejoin="round"/><path d="M-16 22 L-6 42 M16 22 L6 42" stroke="#c9601f" stroke-width="1.6"/>`;
+   s+=`<ellipse cx="-8" cy="44" rx="6.5" ry="3.5" fill="#4a2c22" stroke="${K}" stroke-width="2"/><ellipse cx="8" cy="44" rx="6.5" ry="3.5" fill="#4a2c22" stroke="${K}" stroke-width="2"/>`;
+   s+=mir(`<path d="M-24 -30 L-21 -60 L-7 -38Z" fill="${O}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-20 -34 L-19 -52 L-11 -39Z" fill="#4a2c22"/>`);
+   s+=`<path d="M-26 -30 L-12 -40 L0 -36 L12 -40 L26 -30 L0 -2Z" fill="${O}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/>`+mir(`<path d="M-26 -30 L0 -2 L-4 -20Z" fill="${CREAM}" stroke="${K}" stroke-width="1.8" stroke-linejoin="round"/>`)+`<path d="M0 -36 L0 -14" stroke="#c9601f" stroke-width="1.6"/><path d="M-3.5 -7 h7 l-3.5 5z" fill="${K}"/>`;
+   s+=eyes(p,9.5,-24,.9);
+   if(p==='cheer')s+=`<path d="M-4 -1 q4 6 8 0" fill="#b8323a" stroke="${K}" stroke-width="2"/>`;
+   if(p==='oops')s+=`<path d="M-4 1 q2 -2 4 0 q2 2 4 0" fill="none" stroke="${K}" stroke-width="2"/>`;
+   s+=scarf(sc);s+=arm(p,1,O);
+   const h=hand(p,1);if(p==='idle')s+=`<g transform="translate(${h[0]+2} ${h[1]-2}) rotate(70)"><rect x="-4" y="-12" width="8" height="24" rx="3" fill="${CREAM}" stroke="${K}" stroke-width="2"/><rect x="-6" y="-13" width="12" height="4" rx="2" fill="${CORAL}" stroke="${K}" stroke-width="1.6"/></g>`;
+   return s}},
+ clover:{name:'Clover',kind:'the Warren Bunny',col:'#ffb3c7',tag:'A bunny from a warren, which is a maze under the ground. Clover hears Echoes with long ears.',
+  fits:[['Born in a maze','A rabbit warren is a maze, so a Labyrinth is home for Clover.'],['Ears show mood','Ears go up for a Pulse and one ear flops for a wrong answer.'],['Pink pops','Pink stands out on the green floor and the blue Fog.'],['Loved by all ages','A bunny is gentle for Bright Start and still cool for Maze Master.']],
+  draw(p,sc){const P=this.col;let s='';
+   const ear=(x,rot,flop)=>`<g transform="translate(${x} -36) rotate(${rot})"><path d="M0 2 C-11 -6 -11 -36 0 ${flop?-34:-40} C11 -36 11 -6 0 2Z" fill="${P}" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M0 -4 C-5 -10 -5 -28 0 ${flop?-28:-33} C5 -28 5 -10 0 -4Z" fill="#ff6f91"/></g>`;
+   const er={idle:[-14,12],pulse:[-4,4],oops:[-18,105],cheer:[-22,22]}[p];
+   s+=ear(-9,er[0],false)+ear(9,er[1],p==='oops');
+   s+=`<circle cx="-17" cy="32" r="7" fill="#fff" stroke="${K}" stroke-width="2.2"/>`;
+   s+=arm(p,-1,P);
+   s+=`<path d="M-16 2 Q-22 38 -10 44 H10 Q22 38 16 2 Q0 -6 -16 2Z" fill="${P}" stroke="${K}" stroke-width="${SW}"/><ellipse cx="0" cy="25" rx="9" ry="12" fill="${CREAM}"/>`;
+   s+=`<ellipse cx="-9" cy="45" rx="9" ry="4.5" fill="${CREAM}" stroke="${K}" stroke-width="2"/><ellipse cx="9" cy="45" rx="9" ry="4.5" fill="${CREAM}" stroke="${K}" stroke-width="2"/>`;
+   s+=`<circle cx="0" cy="-20" r="21" fill="${P}" stroke="${K}" stroke-width="${SW}"/><ellipse cx="0" cy="-11" rx="10" ry="7" fill="${CREAM}"/>`;
+   s+=eyes(p,8,-23)+cheeks(13,-13);
+   s+=`<path d="M-3 -15 h6 l-3 3.5z" fill="#ff6f91" stroke="${K}" stroke-width="1.4" stroke-linejoin="round"/>`+mouth(p,-10);
+   if(p==='idle')s+=`<rect x="-2.6" y="-8.5" width="5.2" height="4.5" rx="1" fill="#fff" stroke="${K}" stroke-width="1.2"/>`;
+   s+=`<g stroke="${K}" stroke-width="1.3" stroke-linecap="round" opacity=".7"><path d="M-9 -13 l-11 -2 M-9 -10 l-11 2 M9 -13 l11 -2 M9 -10 l11 2"/></g>`;
+   s+=scarf(sc);s+=arm(p,1,P);return s}},
+ tuck:{name:'Tuck',kind:'the Acorn Scout',col:'#f0c987',tag:'A small acorn scout with a sprout on top and a Signal Bell in hand.',
+  fits:[['Grows with the Quest','The sprout can grow a leaf each land, from Mosslight Grove to Bellroot Summit.'],['Signal Bell in hand','Tuck carries the bell the game already has.'],['Very young friendly','Round and soft, good for Bright Start.'],['Hard to read small','Brown and tan blend with the cream walls.']],
+  draw(p,sc){const T=this.col;let s='';
+   s+=arm(p,-1,T);
+   s+=`<ellipse cx="0" cy="22" rx="18" ry="22" fill="${T}" stroke="${K}" stroke-width="${SW}"/><ellipse cx="0" cy="26" rx="10" ry="12" fill="${CREAM}" opacity=".8"/>`;
+   s+=`<ellipse cx="-8" cy="45" rx="6" ry="3.5" fill="#9b5b2e" stroke="${K}" stroke-width="2"/><ellipse cx="8" cy="45" rx="6" ry="3.5" fill="#9b5b2e" stroke="${K}" stroke-width="2"/>`;
+   s+=`<circle cx="0" cy="-19" r="19" fill="#f6d7a8" stroke="${K}" stroke-width="${SW}"/><path d="M-25 -24 Q0 -60 25 -24 Q0 -32 -25 -24Z" fill="#9b5b2e" stroke="${K}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M-16 -32 l6 -8 M-6 -35 l6 -9 M4 -35 l6 -8 M14 -31 l4 -6" stroke="#6e3c1b" stroke-width="1.8"/>`;
+   s+=`<path d="M0 -43 q1 -10 -2 -16" stroke="#3f7f2a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M-2 -58 q-14 -6 -16 4 q10 4 16 -4z" fill="#6cc24a" stroke="${K}" stroke-width="2"/><path d="M-1 -56 q12 -10 16 0 q-8 6 -16 0z" fill="#6cc24a" stroke="${K}" stroke-width="2"/>`;
+   s+=eyes(p,7,-18,.9)+cheeks(11,-10)+mouth(p,-9);
+   s+=scarf(sc);s+=arm(p,1,T);
+   const h=hand(p,1);s+=`<g transform="translate(${h[0]+3} ${h[1]+9}) rotate(${p==='pulse'?-25:0})"><path d="M-8 6 Q-8 -8 0 -9 Q8 -8 8 6 L10 9 H-10Z" fill="${SUN}" stroke="${K}" stroke-width="2.2" stroke-linejoin="round"/><circle cy="11" r="2.6" fill="${K}"/><circle cy="-11" r="2" fill="none" stroke="${K}" stroke-width="1.8"/></g>`;
+   return s}}
+};
+const POSES=[['idle','Ready'],['pulse','Pulse'],['oops','Wrong answer'],['cheer','Gate reached']];
+function fig(key,p='idle',sc='#ff5a3c',opts={}){const c=CH[key];const t=p==='oops'?'rotate(-7) translate(-2 0)':p==='cheer'?'translate(0 -8)':'';
+  return `<svg viewBox="-62 -84 124 148" role="img" aria-label="${c.name} ${c.kind}, ${p}">${opts.noStand?'':stand}<g filter="url(#cut)"><g class="${opts.bob?'bob':''}"><g transform="${t}">${c.draw(p,sc)}</g></g></g>${fx(p)}</svg>`}
+
+const order=['clover','pip','lumi','fen','tuck'],scarfFor={clover:'#4db8ff',pip:'#ff5a3c',lumi:'#4db8ff',fen:'#6cc24a',tuck:'#ff5a3c'};
+document.getElementById('cards').innerHTML=order.map((k,i)=>{const c=CH[k];return `<article class="card"><div class="hero">${k==='clover'?'<span class="rec">Your idea</span>':k==='pip'?'<span class="rec">Recommended</span>':''}${fig(k,'idle',scarfFor[k],{bob:true})}</div>
+ <div class="body"><div><h3>${c.name}, ${c.kind}</h3><p class="tag">${c.tag}</p></div>
+ <div class="poses">${POSES.map(([p,l])=>`<div class="pose">${fig(k,p,scarfFor[k])}${l}</div>`).join('')}</div>
+ <ul class="fits">${c.fits.map(([a,b])=>`<li><b>${a}.</b> ${b}</li>`).join('')}</ul></div></article>`}).join('');
+
+/* board strip using the approved board look */
+(function(){const T=48,cols=20,rows=3,W=cols*T,H=rows*T;
+ const map=['FFFFWFFFFFWFFFFFWFFF','.E..W.....W...E.W...','..W.....W.....W.....'];
+ let s=`<svg viewBox="-4 -40 ${W+8} ${H+44}" role="img" aria-label="Five Explorer ideas on the board at play size">`;
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const ch=map[y][x],px=x*T,py=y*T;
+  if(ch==='F')s+=`<rect x="${px+2}" y="${py+2}" width="${T-4}" height="${T-4}" rx="7" fill="#4db8ff" stroke="${K}" stroke-width="2"/><path d="M${px+12} ${py+30} q0 -8 8 -7 q3 -7 10 -3 q8 -1 7 10z" fill="#fff"/><circle cx="${px+T-9}" cy="${py+9}" r="2.6" fill="#2a86c4"/>`;
+  else{s+=`<rect x="${px}" y="${py}" width="${T}" height="${T}" fill="#6cc24a" stroke="#58a83a" stroke-width="1"/>`;
+   if(ch==='W')s+=`<rect x="${px+4}" y="${py+3}" width="${T-8}" height="${T-6}" rx="8" fill="#fff8e7" stroke="${K}" stroke-width="2.6"/><rect x="${px+4}" y="${py+T-9}" width="${T-8}" height="6" rx="3" fill="#e6d7b5"/>`;
+   if(ch==='E')s+=`<circle cx="${px+T/2}" cy="${py+T/2}" r="13" fill="#ff5a3c" stroke="${K}" stroke-width="2.6"/><text x="${px+T/2}" y="${py+T/2+6}" text-anchor="middle" font-family="Chewy" font-size="17" fill="#fff">2</text>`;}}
+ const spots=[[2,2],[6,1],[9,2],[13,1],[17,2]];
+ order.forEach((k,i)=>{const[x,y]=spots[i];s+=`<g transform="translate(${x*T+T/2} ${y*T+T/2-10}) scale(.5)">${CH&&`<g filter="url(#cut)">${CH[k].draw('idle',scarfFor[k])}</g>`}</g><text x="${x*T+T/2}" y="${-14}" text-anchor="middle" font-family="Chewy" font-size="18" fill="#fff8e7">${CH[k].name}</text>`});
+ s+=`<g transform="translate(${4*T+T/2} ${2*T+T/2})"><rect x="-17" y="-17" width="34" height="34" rx="8" fill="#7a4be0" stroke="${K}" stroke-width="2.6"/><circle cx="-6" cy="-3" r="4" fill="#fff"/><circle cx="6" cy="-3" r="4" fill="#fff"/><circle cx="-5" cy="-2" r="2" fill="${K}"/><circle cx="7" cy="-2" r="2" fill="${K}"/><path d="M-10 -10 l7 3 M10 -10 l-7 3" stroke="${K}" stroke-width="2.4" stroke-linecap="round"/></g>`;
+ document.getElementById('strip').innerHTML=s+'</svg>'})();
+
+/* Settings picker mock: Clover is the default; scarf colours reuse the existing Explorer palettes. */
+const PALS=[['teal','Signal teal','#1fb5a8'],['sunset','Sunset coral','#ff5a3c'],['violet','Quest violet','#8a5cf0'],['gold','Lantern gold','#ffc93c']];
+const DEF={ch:'clover',pal:'teal'};let saved={...DEF};
+document.getElementById('pkChars').innerHTML=order.map(k=>`<label><input type="radio" name="ch" value="${k}" ${k===DEF.ch?'checked':''}>${fig(k,'idle',PALS[0][2],{noStand:true})}${CH[k].name}${k===DEF.ch?'<span class="pk-def">Default</span>':''}</label>`).join('');
+document.getElementById('pkCols').innerHTML=PALS.map(([id,n,c])=>`<label><input type="radio" name="pal" value="${id}" ${id===DEF.pal?'checked':''}><i style="background:${c}"></i>${n}</label>`).join('');
+const pk=document.getElementById('picker'),msg=document.getElementById('pkMsg');
+const cur=()=>({ch:pk.ch.value,pal:pk.pal.value});
+function paint(){const{ch,pal}=cur(),c=PALS.find(p=>p[0]===pal)[2];
+  document.getElementById('pkPreview').innerHTML=`${fig(ch,'cheer',c,{bob:true})}<b>${CH[ch].name}</b><span>${CH[ch].kind}</span>`;
+  msg.textContent=(ch!==saved.ch||pal!==saved.pal)?'Not saved yet.':''}
+pk.addEventListener('change',paint);
+document.getElementById('pkSave').onclick=()=>{saved=cur();msg.textContent=`Saved. ${CH[saved.ch].name} is your Explorer.`};
+document.getElementById('pkReset').onclick=()=>{pk.ch.value=DEF.ch;pk.pal.value=DEF.pal;paint()};
+paint();
+</script>

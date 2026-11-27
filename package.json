@@ -17,7 +17,9 @@
     "test:e2e": "vite build --mode e2e && playwright test --project=desktop --project=mobile",
     "test:e2e:xbrowser": "vite build --mode e2e && playwright test --project=firefox --project=webkit --project=iphone --workers=3",
     "build": "vite build",
+    "build:popup": "node scripts/build-popup.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "check:bundle:popup": "node scripts/check-bundle-budget.mjs popup",
     "security:secrets": "gitleaks git --config .gitleaks.toml --redact --log-level info .",
     "verify:audit": "node scripts/verify-audit-chain.mjs",
     "audit:provision": "node scripts/provision-audit-runtime-role.mjs",
@@ -29,7 +31,7 @@
     "webhooks:prune": "node scripts/prune-webhook-inbox.mjs",
     "classify:lifetime-purchases": "node scripts/classify-lifetime-purchases.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run check:bundle",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run check:bundle && npm run build:popup && npm run check:bundle:popup",
     "check:full": "npm run check && npm run test:e2e && npm run test:e2e:xbrowser"
   },
   "engines": {
@@ -42,6 +44,8 @@
     "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource/andika": "5.3.0",
+    "@fontsource/chewy": "5.3.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
     "@opentelemetry/instrumentation-http": "^0.221.0",
     "@opentelemetry/instrumentation-pg": "^0.73.0",
