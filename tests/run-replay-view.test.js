@@ -121,6 +121,30 @@ describe("Run Replay view", () => {
     vi.useRealTimers();
   });
 
+  it("steps once and starts no timer when Reduced Effects is on (B-84)", () => {
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    document.documentElement.dataset.accessEffects = "reduced";
+    const render = vi.fn();
+    const view = createRunReplayView({
+      buildTimeline: () => TIMELINE,
+      rendererFactory: () => ({ render, resize: vi.fn() })
+    });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("trigger")
+    );
+    view.show({ seed: "TRAIL-3" }, trigger);
+    const play = /** @type {HTMLButtonElement} */ (
+      document.querySelector("[data-run-replay-play]")
+    );
+    play.click();
+    expect(render).toHaveBeenLastCalledWith(TIMELINE.states[1]);
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(play.textContent).toBe("Play");
+    delete document.documentElement.dataset.accessEffects;
+    vi.useRealTimers();
+  });
+
   it("tells the renderer to soften the Fangmoor art only for a Bright Start record", () => {
     /** @type {(() => boolean) | undefined} */
     let isBrightStart;

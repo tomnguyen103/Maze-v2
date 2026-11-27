@@ -19,9 +19,10 @@ const budgets = [
   // `main-` alone let the two heaviest pieces — the engine and the renderer —
   // grow outside the ceiling this budget exists to hold, so the gate reported
   // 26% less than the real weight and passed at 99% headroom.
+  // `reduced-motion-` is the small shared Reduced Motion check that the game loads at start.
   {
     label: "game JavaScript",
-    prefixes: ["main-", "game-session-", "canvas-renderer-"],
+    prefixes: ["main-", "game-session-", "canvas-renderer-", "reduced-motion-"],
     suffix: ".js",
     maxKb: 42
   },
@@ -154,6 +155,9 @@ const budgets = [
   },
   // Popup board art (six figures) measures 2.84 KB gzip; the limit is that plus 10%, rounded up. The Pilot stub is under 0.1 KB.
   { label: "board art JavaScript", prefix: "board-art-", suffix: ".js", maxKb: 4 },
+  // Popup motion (four one-shot motions) measures 0.81 KB gzip; the limit is 2 KB. The Pilot stub is under 0.1 KB.
+  // The motion chunk does not load under reduced motion or reduced effects.
+  { label: "motion JavaScript", prefix: "motion-", suffix: ".js", maxKb: 2 },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

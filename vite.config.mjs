@@ -179,6 +179,11 @@ export default defineConfig(({ mode }) => {
               {
                 name: "quest-rules",
                 test: /src[/\\]game[/\\](run-ruleset|quest-constants|quest-progress|quest-content|compare-keys|unique-id)[.]js$/
+              },
+              {
+                // The Reduced Motion check is shared by the game and Run Replay. Its own chunk keeps the renderer chunk name stable.
+                name: "reduced-motion",
+                test: /src[/\\]game[/\\]reduced-motion[.]js$/
               }
             ]
           }

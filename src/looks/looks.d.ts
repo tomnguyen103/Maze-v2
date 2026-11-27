@@ -14,3 +14,8 @@ declare module "@look/board-art.js" {
   } | null;
   export default art;
 }
+declare module "@look/motion.js" {
+  /** The look's board and ceremony motions, or null when the look plays none. */
+  const motion: Record<string, (...args: any[]) => void> | null;
+  export default motion;
+}

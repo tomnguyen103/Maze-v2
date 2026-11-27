@@ -302,6 +302,19 @@ Popup keeps the Pilot radius, spacing, and motion tokens, and adds three surface
 
 A pull-tab has a 2px ink outline and a 4px ink lift, and a press flattens the lift to 2px. The primary pull-tab uses `--cover-fill`, and the danger pull-tab uses `--color-signal-deep`. Each dialog and the board panel is a paper card with a 3px ink outline. Each Readout metric hangs as a bookmark: sun, with `--board-ink` text so it stays dark in Night, and Vitality takes `--color-signal-deep`. The Readout digits use Andika at 700 weight with tabular figures (I7). Popup rules take a `:root` prefix, because the look sheet loads before the daylight and game sheets.
 
+### Popup motion
+
+Popup adds four paper motions in `src/looks/popup/motion.js`. Each one plays once, never delays the next input, and removes its own element at the end.
+
+| Motion | Trigger | Duration | Easing | Property |
+| :-- | :-- | :-- | :-- | :-- |
+| Flap ripple | Pulse action | 300ms | `ease-out` | ring transform and opacity |
+| Gate pop-up | Gate opens | 240ms | `ease-out` | paper tab `scaleY` and opacity |
+| Paper confetti | `escaped` event | 300ms | `ease-out` | 12 pieces, transform and opacity |
+| Ceremony pop-up | Sigil Ceremony result | 300ms | `ease-out` | panel `perspective(600px) rotateX(60deg)` to none |
+
+Reduced motion or reduced effects loads no motion chunk.
+
 ## Invariants
 
 | ID | Rule |

@@ -283,3 +283,47 @@
 .landing-hero__trail {
   display: none;
 }
+
+/* Motion layer: paper decorations over the board. The pieces ignore input and never change layout.
+   The layer covers the board canvas only. The frame padding holds the coordinate labels. */
+.motion-layer {
+  position: absolute;
+  inset: var(--frame-pad, 0);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.motion-layer > * {
+  position: absolute;
+  pointer-events: none;
+}
+
+.motion-ripple {
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+}
+
+.motion-gate-tab {
+  width: 6%;
+  height: 8%;
+  border: 2px solid var(--ink);
+  border-radius: 0.375rem 0.375rem 0 0;
+  background: var(--sun);
+  transform-origin: bottom;
+}
+
+.motion-confetti {
+  width: 0.5rem;
+  height: 0.75rem;
+  border: 1px solid var(--ink);
+  background: var(--coral);
+}
+
+.motion-confetti-1 {
+  background: var(--sky);
+}
+
+.motion-confetti-2 {
+  background: var(--sun);
+}
