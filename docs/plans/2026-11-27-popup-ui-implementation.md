@@ -24,7 +24,7 @@ Each row has one recommendation. The run adopts the recommendation unless the ow
 | D7 | Cover colour | Add `--cover-deep` `#0d5b55` for each text and pull-tab label on the cover (7.63:1 on card). The bright `#17a398` stays for the cover art. This changes the approved look a little | Keep the bright cover and put each label on a sun or card plate |
 | D8 | Admin and Class pages | Tokens and fonts only. No Popup art, no flaps | Full Popup restyle: needs mockups and adds two large slices |
 | D9 | Fonts | Chewy for the wordmark, scene titles, and Echo digits on the board. Andika for all other text. Geist Mono stays only where a Seed code or Run id shows | Keep Archivo for titles |
-| D10 | Readout digits (I7) | Andika tabular digits at 600 weight. No Chewy for numbers that change during a Run | Chewy digits: they change width, so the Readout reflows |
+| D10 | Readout digits (I7) | Andika tabular digits at 700 weight, the bold file that loads. No Chewy for numbers that change during a Run | Chewy digits: they change width, so the Readout reflows |
 | D11 | Character art form | Canvas paths in a lazy art chunk, sized by spike R0c | WebP sprite sheet: only if R0c shows it is smaller and sharp at 24 px |
 | D12 | Echo Atlas data | The new Atlas reads the derived model of ADR 0008 (`projectAtlas`, `projectQuestAtlas`). No new stored state | New stored Atlas state: needs a migration and gives a second truth |
 | D13 | Records, Lantern Journal, Tactics Lab, Run Replay, Daily Constellation, Echo Postcard, Lifetime, offline continuity | Tokens, fonts, and paper card frames only. A mockup round follows later for each surface the owner wants richer | Mock each now before code |

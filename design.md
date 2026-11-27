@@ -292,7 +292,15 @@ At `prefers-contrast: more`, muted ink, soft lines, and board stipple take full 
 
 The fonts are local files. Chewy (`@fontsource/chewy`) draws the wordmark, scene titles, and board Echo digits. Andika (`@fontsource/andika`, weights 400 and 700) draws body text. Geist Mono stays for seed codes and Run ids. The first paint loads the Latin subset only, and the content security policy stays `'self'`.
 
-Popup keeps the Pilot radius, spacing, and motion tokens until slice R1 sets the tile, dialog, and pull-tab radius tokens and the single paper-lift token.
+Popup keeps the Pilot radius, spacing, and motion tokens, and adds three surface tokens in `tokens.css`. Surface rules live in `src/looks/popup/surface.css`.
+
+| Token | Value | Role |
+| :-- | :-- | :-- |
+| `--radius-pull-tab` | `0.75rem 0.75rem 0.375rem 0.375rem` | Pull-tab button corners |
+| `--radius-dialog` | `1.125rem` | Dialog and board panel corners |
+| `--paper-lift` | `0 8px 0 var(--ink), 0 18px 30px oklch(30.5% 0.07 310.3 / 22%)` | Hard ink lift and soft shadow under each paper card |
+
+A pull-tab has a 2px ink outline and a 4px ink lift, and a press flattens the lift to 2px. The primary pull-tab uses `--cover-fill`, and the danger pull-tab uses `--color-signal-deep`. Each dialog and the board panel is a paper card with a 3px ink outline. Each Readout metric hangs as a bookmark: sun, with `--board-ink` text so it stays dark in Night, and Vitality takes `--color-signal-deep`. The Readout digits use Andika at 700 weight with tabular figures (I7). Popup rules take a `:root` prefix, because the look sheet loads before the daylight and game sheets.
 
 ## Invariants
 
@@ -304,7 +312,7 @@ Popup keeps the Pilot radius, spacing, and motion tokens until slice R1 sets the
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |
-| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. |
+| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. In Popup, the Readout numbers use tabular Andika instead (plan D10). |
 
 ## Canonical export
 
