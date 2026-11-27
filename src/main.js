@@ -1810,6 +1810,7 @@ async function startRun(locator, daily = null, recoveredRun = null) {
   activeFirstLight = false;
   offlineContinuityActive = false;
   activeDaily = daily;
+  runResultState = null;
   dailyQuestionIndex = 0;
   document.body.dataset.runMode = daily ? "daily" : "quest";
   completedQuestIdle = false;
@@ -1914,6 +1915,7 @@ function startFirstLight() {
   deferredCloudQuest = null;
   activeFirstLight = true;
   activeDaily = null;
+  runResultState = null;
   mustChooseLevel = false;
   completedQuestIdle = false;
   document.body.dataset.runMode = "first-light";
@@ -3289,6 +3291,10 @@ async function resumePendingRun() {
 }
 
 function showDemoAccountGate() {
+  // A gate without an end card on screen belongs to no finished Run, so a late sign-in restores no art.
+  if (!elements.resultDialog.open) {
+    runResultState = null;
+  }
   elements.resultKicker.textContent = "Demo complete";
   elements.resultTitle.textContent = "Create an account for three free Runs.";
   elements.resultSummary.textContent =
