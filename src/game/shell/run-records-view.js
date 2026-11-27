@@ -7,10 +7,30 @@ import { getClassicRunRuleset, normalizeRunRuleset } from "../run-ruleset.js";
  * @param {ReturnType<typeof import("../storage.js").loadRunRecords>} runRecords
  * @param {{
  *   formatTime: (elapsedMs: number) => string,
+ *   formatRunRulesetLabel: (ruleset: any, labyrinthNumber: number) => string,
+ *   announce: (message: string) => void
+ * }} options
+ * @returns {boolean} false when the list could not render
+ */
+export function renderRunRecords(list, runRecords, { announce, ...format }) {
+  try {
+    fillRunRecords(list, runRecords, format);
+    return true;
+  } catch {
+    announce("Run Records is unavailable. Try again.");
+    return false;
+  }
+}
+
+/**
+ * @param {HTMLOListElement} list
+ * @param {ReturnType<typeof import("../storage.js").loadRunRecords>} runRecords
+ * @param {{
+ *   formatTime: (elapsedMs: number) => string,
  *   formatRunRulesetLabel: (ruleset: any, labyrinthNumber: number) => string
  * }} format
  */
-export function renderRunRecords(list, runRecords, { formatTime, formatRunRulesetLabel }) {
+function fillRunRecords(list, runRecords, { formatTime, formatRunRulesetLabel }) {
   if (runRecords.length === 0) {
     const empty = document.createElement("li");
     empty.className = "run-records__empty";

@@ -747,6 +747,8 @@
         <p
           class="daily-board__status"
           id="daily-board-status"
+          data-loading="Loading verified escapes…"
+          data-error="Verified Daily services are unavailable. Local Daily play still works."
           role="status"
           aria-live="polite"
           aria-label="Verified Daily Board status"
@@ -766,7 +768,12 @@
         >
           Retry verified board
         </button>
-        <p class="daily-board__note" id="daily-board-note"></p>
+        <p
+          class="daily-board__note"
+          id="daily-board-note"
+          data-guest="Guest Daily stays casual. Sign in and create a username to join the verified board."
+          data-signed-in="Signed-in escapes with a saved username are checked by replay before they join this board."
+        ></p>
       </section>
       <section
         class="daily-constellation"

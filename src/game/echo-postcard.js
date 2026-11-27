@@ -148,8 +148,9 @@ export function parseEchoPostcard(value) {
 
 /**
  * Copies the Daily link or the Echo Postcard link for the current Run.
+ * `dailyWrite` is the Daily clipboard write that the caller started in the click.
  * @param {{
- *   dailyDate: string | null,
+ *   dailyWrite: Promise<void> | null,
  *   run: { seed: string, ruleset: any },
  *   levelId: string,
  *   labyrinthNumber: number,
@@ -158,17 +159,15 @@ export function parseEchoPostcard(value) {
  * }} parts
  */
 export async function copySeedLink({
-  dailyDate,
+  dailyWrite,
   run,
   levelId,
   labyrinthNumber,
   announce,
   showEvent
 }) {
-  if (dailyDate) {
-    const url = new URL("/play", window.location.origin);
-    url.searchParams.set("daily", dailyDate);
-    await navigator.clipboard.writeText(url.toString());
+  if (dailyWrite) {
+    await dailyWrite;
     announce("Today’s Daily link copied.");
     showEvent("Daily link copied. It contains only the public UTC date.");
     return;
@@ -186,4 +185,26 @@ export async function copySeedLink({
   showEvent(
     "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
   );
+}
+
+/**
+ * Finishes the Daily link copy that the click started.
+ * @param {Promise<void>} write
+ * @param {HTMLButtonElement} button
+ * @param {string} date
+ * @param {(message: string) => void} announce
+ */
+export async function finishDailyCopy(write, button, date, announce) {
+  try {
+    await write;
+    button.textContent = "Copied";
+    announce("Today’s Daily link copied. It contains only the public UTC date.");
+    window.setTimeout(() => {
+      if (button.isConnected) {
+        button.textContent = "Copy today’s link";
+      }
+    }, 1400);
+  } catch {
+    announce(`Copy failed. Today’s Daily date is ${date} UTC.`);
+  }
 }

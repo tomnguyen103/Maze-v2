@@ -2050,6 +2050,107 @@ test("announces a notice when the Atlas opener chunk fails, then opens it on the
   await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
 });
 
+test("clears the Records busy state when the Records view throws", async ({
+  page
+}) => {
+  await page.route("**/assets/run-records-view-*.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: 'export function renderRunRecords() { throw new Error("stub"); }'
+    })
+  );
+  await page.goto("/?seed=RECORDS-THROW");
+  await expectGameReady(page);
+
+  const opener = page.getByRole("button", { name: "Records", exact: true });
+  await opener.click();
+  await expect(opener).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#records-dialog")).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("resumes the paused Run when the Replay opener chunk fails", async ({
+  page
+}) => {
+  const plan = milestoneWinningPlan("TRAIL-VIEW-4");
+  const replay = createTerminalRunReplay(
+    plan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    plan.finalRun
+  );
+  if (!replay) {
+    throw new Error("Expected a retained Replay fixture.");
+  }
+  await page.addInitScript(({ retainedReplay }) => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([
+      {
+        elapsedMs: retainedReplay.terminal.elapsedMs,
+        moves: retainedReplay.terminal.moves,
+        seed: "TRAIL-VIEW-4",
+        outcome: "escaped",
+        echoesCollected: retainedReplay.terminal.echoesCollected,
+        echoTotal: retainedReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: retainedReplay
+      }
+    ]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_replay_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { retainedReplay: replay });
+  await page.route("**/assets/run-replay-opener-*.js", (route) => route.abort());
+  await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=5");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed TRAIL-VIEW-4"
+  }).click();
+
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.getByRole("dialog", { name: "Watch Trail" })).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("reopens the Atlas and keeps the Run paused when the Workshop opener chunk fails", async ({
+  page
+}) => {
+  await page.route("**/assets/workshop-opener-*.js", (route) => route.abort());
+  await page.goto("/?seed=ATLAS-WORKSHOP-FAIL&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await atlas.getByRole("button", { name: "Open Workshop" }).click();
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lantern Trail Workshop is unavailable."
+  );
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
 test("pans from the labeled viewport and centers the current landmark", async ({
   page
 }) => {

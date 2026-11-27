@@ -4,10 +4,9 @@ let requestId = 0;
  * Loaded when the Daily dialog opens. `board` holds the elements; `load`
  * fetches the verified entries; `errorStatus` maps a failure to an HTTP status.
  * @param {{
- *   note: HTMLElement, list: HTMLElement, retry: HTMLElement, status: HTMLElement, date: HTMLElement
+ *   list: HTMLElement, retry: HTMLElement, status: HTMLElement, date: HTMLElement
  * }} board
  * @param {{
- *   hasAuthenticatedUser: () => boolean,
  *   load: () => Promise<{ date: string, entries?: unknown }>,
  *   errorStatus: (error: unknown) => number
  * }} source
@@ -15,11 +14,6 @@ let requestId = 0;
  */
 export async function refreshVerifiedDailyBoard(board, source, day) {
   const thisRequest = ++requestId;
-  renderDailyBoardParticipation(board.note, source.hasAuthenticatedUser());
-  board.list.replaceChildren();
-  board.retry.hidden = true;
-  board.status.dataset.state = "loading";
-  board.status.textContent = "Loading verified escapes…";
   try {
     const result = await source.load();
     if (thisRequest !== requestId || board.date.textContent !== day) {
@@ -44,16 +38,6 @@ export async function refreshVerifiedDailyBoard(board, source, day) {
       ? "Network could not reach the Verified Daily Board. Local Daily play still works."
       : "Verified Daily services are unavailable. Local Daily play still works.";
   }
-}
-
-/**
- * @param {HTMLElement} note
- * @param {boolean} signedIn
- */
-export function renderDailyBoardParticipation(note, signedIn) {
-  note.textContent = signedIn
-    ? "Signed-in escapes with a saved username are checked by replay before they join this board."
-    : "Guest Daily stays casual. Sign in and create a username to join the verified board.";
 }
 
 /**

@@ -544,11 +544,17 @@ const accessSettingsContinuity = createAccessSettingsContinuity({
 /** @type {Promise<ReturnType<typeof import("./player/quest-conflict-view.js").createQuestConflictView>> | null} */
 let questConflictViewPromise = null;
 let questConflictViewRetry = false;
-/** @type {Promise<ReturnType<typeof import("./player/lifetime-view.js").createLifetimeView>> | null} */
-let lifetimeViewPromise = null;
 /** @type {ReturnType<typeof import("./player/lifetime-view.js").createLifetimeView> | null} */
 let loadedLifetimeView = null;
-let lifetimeViewRetry = false;
+const createLoadedLifetimeView = (
+  /** @type {typeof import("./player/lifetime-view.js")} */ { createLifetimeView }
+) => createLifetimeView({ onUnlock: openLifetimeCheckout });
+const loadLifetimeView = lazyShellView(
+  () => import("./player/lifetime-view.js").then(createLoadedLifetimeView),
+  // @ts-expect-error Vite treats the query as a distinct retry chunk.
+  () => import("./player/lifetime-view.js?retry=1").then(createLoadedLifetimeView),
+  "Lifetime Membership"
+);
 const loadRunRecordsView = lazyShellView(
   () => import("./game/shell/run-records-view.js"),
   // @ts-expect-error Vite treats the query as a distinct retry chunk.
@@ -571,7 +577,11 @@ const loadLanternJournalRender = lazyShellView(
   () => import("./game/shell/lantern-journal-render.js"),
   // @ts-expect-error Vite treats the query as a distinct retry chunk.
   () => import("./game/shell/lantern-journal-render.js?retry=1"),
-  "Lantern Journal"
+  "Lantern Journal",
+  // The open flow announces once, so this only sets the copy it uses.
+  (retrying) => {
+    lanternJournalUiFailedTwice ||= retrying;
+  }
 );
 const loadWorkshopOpener = lazyShellView(
   () => import("./game/shell/workshop-opener.js"),
@@ -618,7 +628,11 @@ const dailyBoardElements = {
 const lifetimeView = {
   /** @returns {Promise<boolean>} false when the import fails, so no Run starts */
   confirmLastFreeRun: () =>
-    withLifetimeView((view) => view.confirmLastFreeRun(), false),
+    withLifetimeView(
+      (view) => view.confirmLastFreeRun(),
+      false,
+      "; no Run was used"
+    ),
   /**
    * @param {string} [message]
    * @param {"idle" | "success" | "error"} [state]
@@ -797,7 +811,18 @@ elements.dailyStart.addEventListener("click", () => {
   startDailyRun();
 });
 elements.dailyCopy.addEventListener("click", async () => {
-  await copyDailyLink(elements.dailyCopy);
+  const write = writeDailyLink();
+  try {
+    const { finishDailyCopy } = await import("./game/echo-postcard.js");
+    await finishDailyCopy(
+      write,
+      elements.dailyCopy,
+      currentDailyContract().date,
+      announce
+    );
+  } catch {
+    announce("Copy failed. Try again.");
+  }
 });
 elements.dailyConstellationRetry.addEventListener("click", () => {
   // Re-read the record rather than assuming it: the retry control must not be
@@ -979,7 +1004,8 @@ elements.gateStagingSkip.addEventListener("click", () => {
  */
 async function showQuestAtlas(trigger, options) {
   const opener = await loadQuestAtlasOpener();
-  await opener?.showQuestAtlas(
+  if (!opener) return resumePausedRun(options?.resumePausedRun);
+  await opener.showQuestAtlas(
     {
       getRun: () => run,
       getRunRecords: () => runRecords,
@@ -994,6 +1020,13 @@ async function showQuestAtlas(trigger, options) {
   );
 }
 
+/** @param {boolean} [resume] */
+function resumePausedRun(resume) {
+  if (resume && run.status === "paused") {
+    togglePause();
+  }
+}
+
 /**
  * @param {typeof runRecords[number]} record
  * @param {HTMLElement} trigger
@@ -1001,7 +1034,8 @@ async function showQuestAtlas(trigger, options) {
  */
 async function openRunReplay(record, trigger, resumeRun) {
   const opener = await loadRunReplayOpener();
-  await opener?.openRunReplay(
+  if (!opener) return resumePausedRun(resumeRun);
+  await opener.openRunReplay(
     { getRun: () => run, togglePause, announce },
     record,
     trigger,
@@ -1009,22 +1043,22 @@ async function openRunReplay(record, trigger, resumeRun) {
   );
 }
 
-elements.recordsButton.addEventListener("click", () => {
+elements.recordsButton.addEventListener("click", async () => {
   if (elements.recordsButton.hasAttribute("aria-busy")) {
     return;
   }
   elements.recordsButton.setAttribute("aria-busy", "true");
-  void renderRunRecords().then((rendered) => {
-    elements.recordsButton.removeAttribute("aria-busy");
-    if (!rendered) {
-      return;
-    }
-    resumeAfterRecords = run.status === "active";
-    if (resumeAfterRecords) {
-      togglePause();
-    }
-    elements.recordsDialog.showModal();
-  });
+  const rendered = await renderRunRecords().finally(() =>
+    elements.recordsButton.removeAttribute("aria-busy")
+  );
+  if (!rendered) {
+    return;
+  }
+  resumeAfterRecords = run.status === "active";
+  if (resumeAfterRecords) {
+    togglePause();
+  }
+  elements.recordsDialog.showModal();
 });
 // A keyboard/screen-reader user who has never opened Settings has no way to
 // learn Trail Compass exists, since the region it controls stays
@@ -1208,7 +1242,13 @@ async function renderLanternJournal() {
  */
 async function openWorkshop(selection) {
   const opener = await loadWorkshopOpener();
-  await opener?.openWorkshop(
+  if (!opener) {
+    if (selection.origin === "atlas") {
+      return showQuestAtlas(elements.workshopButton, selection);
+    }
+    return;
+  }
+  await opener.openWorkshop(
     {
       getRun: () => run,
       togglePause,
@@ -1396,9 +1436,11 @@ elements.seedCopy.addEventListener("click", async () => {
     return;
   }
   try {
+    // Start the Daily write before any await: WebKit drops the click's user activation.
+    const dailyWrite = activeDaily ? writeDailyLink() : null;
     const { copySeedLink } = await import("./game/echo-postcard.js");
     await copySeedLink({
-      dailyDate: activeDaily ? currentDailyContract().date : null,
+      dailyWrite,
       run,
       levelId: currentLevel.id,
       labyrinthNumber: currentLabyrinthNumber,
@@ -2128,23 +2170,6 @@ function closeDailyDialog() {
   resumeAfterDaily = false;
 }
 
-/** @param {HTMLButtonElement} button */
-async function copyDailyLink(button) {
-  const currentDaily = currentDailyContract();
-  try {
-    await navigator.clipboard.writeText(createDailyShareLink(currentDaily));
-    button.textContent = "Copied";
-    announce("Today’s Daily link copied. It contains only the public UTC date.");
-    window.setTimeout(() => {
-      if (button.isConnected) {
-        button.textContent = "Copy today’s link";
-      }
-    }, 1400);
-  } catch {
-    announce(`Copy failed. Today’s Daily date is ${currentDaily.date} UTC.`);
-  }
-}
-
 function returnToQuest() {
   window.location.assign("/play");
 }
@@ -2802,6 +2827,12 @@ async function canStartAnotherLabyrinth(locator, resumingAdmittedRun = false) {
       freeRunsRemaining: Number(access.freeRunsRemaining ?? 0),
       state: String(access.state ?? "")
     };
+    if (latestRunAccess.state === "free" && latestRunAccess.freeRunsRemaining <= 1) {
+      // The last free Run confirms through the Lifetime view: import it while idle.
+      (window.requestIdleCallback ?? setTimeout)(() =>
+        import("./player/lifetime-view.js").catch(() => {})
+      );
+    }
     if (access.allowed) {
       markGuestDemoComplete();
       void prepareOfflineContinuity(locator).catch(() => {});
@@ -2853,20 +2884,22 @@ function showRunAccessGate(access) {
 
 /**
  * One cached import per shell view. A failed import resets the promise,
- * announces a notice, and the next call imports the `?retry=1` chunk.
+ * announces a notice once, and the next call imports the `?retry=1` chunk.
+ * A call that joins a pending import stays silent.
  * @template T
  * @param {() => Promise<T>} first
  * @param {() => Promise<T>} retry
  * @param {string} name
- * @param {() => void} [onFail] replaces the notice when the caller shows its own
- * @returns {() => Promise<T | null>}
+ * @param {(retrying: boolean) => void} [onFail] replaces the notice when the caller shows its own
+ * @returns {(note?: string) => Promise<T | null>} note: text after "Try again"
  */
 function lazyShellView(first, retry, name, onFail) {
   /** @type {Promise<T> | null} */
   let promise = null;
   let retried = false;
-  return async () => {
-    const retrying = retried;
+  return async (note = "") => {
+    // Only the call that starts the import can announce its failure.
+    const retrying = !promise && retried;
     promise ??= retrying ? retry() : first();
     retried = true;
     const loading = promise;
@@ -2875,16 +2908,16 @@ function lazyShellView(first, retry, name, onFail) {
     } catch {
       if (promise === loading) {
         promise = null;
+        if (onFail) {
+          onFail(retrying);
+        } else {
+          announce(
+            `${name} is unavailable. ${
+              retrying ? "Reload to try again." : `Try again${note}.`
+            }`
+          );
+        }
       }
-      if (onFail) {
-        onFail();
-        return null;
-      }
-      announce(
-        retrying
-          ? `${name} is unavailable. Reload to try again.`
-          : `${name} is unavailable. Try again.`
-      );
       return null;
     }
   };
@@ -2893,30 +2926,57 @@ function lazyShellView(first, retry, name, onFail) {
 /** @returns {Promise<boolean>} */
 async function renderRunRecords() {
   const view = await loadRunRecordsView();
-  view?.renderRunRecords(elements.runRecords, runRecords, {
-    formatTime,
-    formatRunRulesetLabel
-  });
-  return view !== null;
+  return (
+    view?.renderRunRecords(elements.runRecords, runRecords, {
+      formatTime,
+      formatRunRulesetLabel,
+      announce
+    }) ?? false
+  );
+}
+
+let dailyBoardRequest = 0;
+
+// The board copy lives in index.html so it shows before the board chunk loads.
+function renderDailyBoardNote() {
+  dailyBoardElements.note.textContent =
+    dailyBoardElements.note.dataset[
+      playerController.hasAuthenticatedUser() ? "signedIn" : "guest"
+    ] ?? "";
+}
+
+/**
+ * @param {"loading" | "error"} state
+ */
+function setDailyBoardStatus(state) {
+  dailyBoardElements.list.replaceChildren();
+  dailyBoardElements.retry.hidden = state !== "error";
+  dailyBoardElements.status.dataset.state = state;
+  dailyBoardElements.status.textContent =
+    dailyBoardElements.status.dataset[state] ?? "";
 }
 
 /** @param {ReturnType<typeof createDailyContract>} daily */
 async function refreshVerifiedDailyBoard(daily) {
+  const request = ++dailyBoardRequest;
+  renderDailyBoardNote();
+  setDailyBoardStatus("loading");
   dailyBoardElements.list.parentElement?.setAttribute("aria-busy", "true");
   const board = await loadVerifiedDailyBoard();
+  if (
+    request !== dailyBoardRequest ||
+    dailyBoardElements.date.textContent !== daily.date
+  ) {
+    return;
+  }
   dailyBoardElements.list.parentElement?.removeAttribute("aria-busy");
   if (!board) {
-    dailyBoardElements.list.replaceChildren();
-    dailyBoardElements.retry.hidden = false;
-    dailyBoardElements.status.dataset.state = "error";
-    dailyBoardElements.status.textContent =
-      "Verified Daily services are unavailable. Local Daily play still works.";
+    setDailyBoardStatus("error");
     return;
   }
   await board.refreshVerifiedDailyBoard(
     dailyBoardElements,
     {
-      hasAuthenticatedUser: () => playerController.hasAuthenticatedUser(),
       load: () => playerController.getVerifiedDailyLeaderboard(),
       errorStatus
     },
@@ -2928,35 +2988,16 @@ async function refreshVerifiedDailyBoard(daily) {
  * @template T
  * @param {(view: NonNullable<typeof loadedLifetimeView>) => T | Promise<T>} use
  * @param {T} fallback
+ * @param {string} [note] text after "Try again" when a Run is at stake
  * @returns {Promise<T>}
  */
-async function withLifetimeView(use, fallback) {
-  const retrying = lifetimeViewRetry;
-  if (!lifetimeViewPromise) {
-    const viewModule = retrying
-      // @ts-expect-error Vite treats the query as a distinct retry chunk.
-      ? import("./player/lifetime-view.js?retry=1")
-      : import("./player/lifetime-view.js");
-    lifetimeViewRetry = true;
-    lifetimeViewPromise = viewModule.then(({ createLifetimeView }) =>
-      createLifetimeView({ onUnlock: openLifetimeCheckout })
-    );
-  }
-  const loading = lifetimeViewPromise;
-  try {
-    loadedLifetimeView = await loading;
-  } catch {
-    if (lifetimeViewPromise === loading) {
-      lifetimeViewPromise = null;
-    }
-    announce(
-      retrying
-        ? "Lifetime Membership is unavailable. Reload to try again."
-        : "Lifetime Membership is unavailable. Try again; no Run was used."
-    );
+async function withLifetimeView(use, fallback, note) {
+  const view = await loadLifetimeView(note);
+  if (!view) {
     return fallback;
   }
-  return use(loadedLifetimeView);
+  loadedLifetimeView = view;
+  return use(view);
 }
 
 async function openLifetimeCheckout() {
@@ -3212,12 +3253,7 @@ function syncDemoAccountAction(signedIn) {
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
   if (elements.dailyDialog.open) {
-    void loadVerifiedDailyBoard().then((board) =>
-      board?.renderDailyBoardParticipation(
-        elements.dailyBoardNote,
-        playerController.hasAuthenticatedUser()
-      )
-    );
+    renderDailyBoardNote();
   }
   const userId = signedIn ? playerController.getAuthenticatedUserId() : null;
   if (playerController.auth() && hasRunReplayOwnerMismatch(userId)) {
@@ -4805,6 +4841,11 @@ function createSeed() {
 /** @param {typeof run} gameRun */
 function labyrinthFingerprint(gameRun) {
   return gameRun.labyrinth.map((row) => row.join("")).join("/");
+}
+
+/** Starts the clipboard write inside the click: WebKit drops the activation after an await. */
+async function writeDailyLink() {
+  await navigator.clipboard.writeText(createDailyShareLink(currentDailyContract()));
 }
 
 /** @param {ReturnType<typeof createDailyContract>} daily */
