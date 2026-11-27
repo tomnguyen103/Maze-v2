@@ -44,6 +44,18 @@ function barColors(look) {
 }
 
 /**
+ * Returns the function that replaces each Pilot bar colour in a text with the
+ * Popup bar colour.
+ */
+export function popupBarSwap() {
+  const pilot = barColors("pilot");
+  const popup = barColors("popup");
+  /** @param {string} text */
+  return (text) =>
+    text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
+}
+
+/**
  * Popup build only. The meta tags, theme-boot.js, and THEME_COLORS repeat the
  * Pilot bar colours by hand, so this plugin swaps them for the Popup values
  * and leaves those three Pilot sources untouched.
@@ -51,11 +63,7 @@ function barColors(look) {
  * @returns {import("vite").Plugin}
  */
 function popupBarColors() {
-  const pilot = barColors("pilot");
-  const popup = barColors("popup");
-  /** @param {string} text */
-  const swap = (text) =>
-    text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
+  const swap = popupBarSwap();
   let outDir = "";
   let isBuild = false;
   return {

@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import config, { resolveLook } from "../vite.config.mjs";
+import config, { popupBarSwap, resolveLook } from "../vite.config.mjs";
 
 /** @param {string | undefined} look */
 function aliasFor(look) {
@@ -34,4 +35,26 @@ describe("look flag", () => {
     expect(() => resolveLook("neon")).toThrow(/pilot.*popup/);
     expect(() => aliasFor("neon")).toThrow(/pilot.*popup/);
   });
+});
+
+describe("popup bar colours", () => {
+  const pilot = { light: "oklch(99% 0.004 95)", dark: "oklch(21% 0.03 250)" };
+  const popup = { light: "oklch(96.6% 0.024 85.8)", dark: "oklch(20% 0.05 310)" };
+  const swap = popupBarSwap();
+
+  for (const file of ["index.html", "public/theme-boot.js", "src/player/theme.js"]) {
+    it(`swaps both Pilot bar colours in ${file} for the Popup ones`, () => {
+      const text = readFileSync(
+        fileURLToPath(new URL(`../${file}`, import.meta.url)),
+        "utf8"
+      );
+      expect(text).toContain(pilot.light);
+      expect(text).toContain(pilot.dark);
+      const swapped = swap(text);
+      expect(swapped).toContain(popup.light);
+      expect(swapped).toContain(popup.dark);
+      expect(swapped).not.toContain(pilot.light);
+      expect(swapped).not.toContain(pilot.dark);
+    });
+  }
 });

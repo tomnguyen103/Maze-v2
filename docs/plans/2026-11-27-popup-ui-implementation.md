@@ -137,7 +137,7 @@ Rule: no board mark depends on fill colour alone. Each mark has an ink outline a
 | Archivo, Atkinson Hyperlegible Next | in `package.json` today | Pilot look only; removed in R9 | Bytes freed at R9 |
 | Geist Mono | in `package.json` today | Seed code and Run id only (D9) | Each use listed |
 
-Pass criterion: the shared styles row stays at or under 13 KB in each look, and the first play paint loads at most two font files. Popup font files enter the offline asset package, so offline continuity shows the same faces.
+Pass criterion: the shared styles row stays at or under 13 KB in each look, and the first play paint loads at most two font files. Popup font files enter the offline asset package, so offline continuity shows the same faces. The server sets that package in `OFFLINE_ASSET_PACKAGE`, and the client holds no font list. R0a defers this step: the Popup font URLs join that value in the slice that ships Popup.
 
 ### 4.5 Variants
 
