@@ -256,6 +256,44 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 - Drop shadows on the play screen panels.
 - Pure black (`#000000`).
 
+## Popup look (under the look flag)
+
+The Popup look replaces Pilot Chart at slice R9 of `docs/plans/2026-11-27-popup-ui-implementation.md`. Until then both looks ship from one source tree. `VITE_LOOK` selects the look at build time (ADR 0064). Each section above describes Pilot Chart and stays in force for the `pilot` look.
+
+Popup is a pop-up storybook. Warm paper holds cards. Plum ink draws text and every outline. Coral is the one accent.
+
+The Popup token file is `src/looks/popup/tokens.css`. It gives every Pilot variable name a Popup value, so each existing rule keeps working. It adds the primitives in this table. Each colour is `oklch()`.
+
+| Token | Value | Role |
+| :-- | :-- | :-- |
+| `--paper` | `oklch(96.6% 0.024 85.8)` | Page ground |
+| `--card` | `oklch(98.6% 0.014 84.6)` | Card, dialog, Question page |
+| `--ink` | `oklch(30.5% 0.07 310.3)` | Text, outlines, Land edges |
+| `--ink-soft` | `oklch(44.3% 0.058 311.6)` | Secondary text |
+| `--meadow` | `oklch(73.4% 0.177 137.9)` | Passage tiles, with an ink outline |
+| `--sky` | `oklch(75.1% 0.141 241.4)` | Fog flaps |
+| `--sky-deep` | `oklch(59.6% 0.126 243.2)` | Flap fold edge |
+| `--coral` | `oklch(68.5% 0.206 32.5)` | Danger and Vitality loss marks only |
+| `--coral-deep` | `oklch(55.9% 0.166 32.2)` | Coral text on paper, short labels only |
+| `--sun` | `oklch(90.1% 0.106 84.7)` | Echo, Gate light, Readout ribbons |
+| `--cover` | `oklch(64.6% 0.109 186.2)` | Book cover art |
+| `--cover-deep` | `oklch(42.6% 0.07 186.8)` | Cover text in light mode |
+| `--cover-fill` | `oklch(42.6% 0.07 186.8)` | Primary pull-tab fill in both modes |
+| `--clover` | `oklch(84.4% 0.092 2)` | Clover body |
+| `--scarf` | `oklch(69.8% 0.117 185.5)` | Clover scarf |
+| `--fur` | `oklch(26% 0.086 299.6)` | Fangmoor fur |
+| `--focus` | `oklch(36% 0.15 285)` | Focus ring, 3:1 on paper, card, and cover |
+
+Night is a lamp-lit page. The page is deep plum (`oklch(20% 0.05 310)`), the card is a lighter plum, and the ink is cream (`oklch(95% 0.03 86)`). Night redefines `--paper`, `--card`, `--ink`, `--ink-soft`, `--coral-deep`, `--cover-deep`, `--focus`, and the soft tints. The board keeps its light role primitives (`--board-paper`, `--board-ink`), so a tile reads the same in both modes. `--color-on-fill` stays card cream in both modes, and `--cover-fill` stays teal.
+
+The settled contrast bars are 7:1 for body and title text, 4.5:1 for other text, and 3:1 for each mark and control boundary. `tests/popup-contrast.test.js` computes each pair with the WCAG 2 formula, in light and in Night. The pairs that fail alone (coral, meadow, sky, and clover on their grounds) pass only with an ink outline. No board mark depends on fill colour alone.
+
+At `prefers-contrast: more`, muted ink, soft lines, and board stipple take full ink. Under `forced-colors: active`, system colours replace the palette and each mark keeps its shape.
+
+The fonts are local files. Chewy (`@fontsource/chewy`) draws the wordmark, scene titles, and board Echo digits. Andika (`@fontsource/andika`, weights 400 and 700) draws body text. Geist Mono stays for seed codes and Run ids. The first paint loads the Latin subset only, and the content security policy stays `'self'`.
+
+Popup keeps the Pilot radius, spacing, and motion tokens until slice R1 sets the tile, dialog, and pull-tab radius tokens and the single paper-lift token.
+
 ## Invariants
 
 | ID | Rule |
@@ -270,5 +308,5 @@ Each mark names its token in `tokens.css` and the ground it sits on. Non-text ma
 
 ## Canonical export
 
-`tokens.css` is the canonical token export. Every app surface and the dashboards use its
+`src/looks/<look>/tokens.css` is the canonical token export of each look. Every app surface and the dashboards use its
 custom properties.

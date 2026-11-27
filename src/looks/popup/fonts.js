@@ -1,3 +1,4 @@
-import "@fontsource-variable/archivo/wdth.css";
-import "@fontsource-variable/atkinson-hyperlegible-next";
+import "@fontsource/chewy/latin-400.css";
+import "@fontsource/andika/latin-400.css";
+import "@fontsource/andika/latin-700.css";
 import "@fontsource-variable/geist-mono";

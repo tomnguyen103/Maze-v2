@@ -283,3 +283,48 @@ describe("shared base styles", () => {
     expect(rules("body")).toMatch(/font-size:\s*1rem/);
   });
 });
+
+describe("popup look tokens", () => {
+  const read = (/** @type {string} */ look) =>
+    readFileSync(root + `src/looks/${look}/tokens.css`, "utf8").replace(/\r\n/g, "\n");
+  const popup = read("popup");
+  const names = (/** @type {string} */ css) =>
+    new Set([...css.matchAll(/^\s*(--[\w-]+)\s*:/gm)].map((match) => match[1]));
+
+  it("defines every Pilot variable name", () => {
+    const missing = [...names(read("pilot"))].filter((name) => !names(popup).has(name));
+    expect(missing).toEqual([]);
+  });
+
+  it("writes every colour as oklch, outside the forced-colors block", () => {
+    const outside = popup.slice(0, popup.indexOf("@media (forced-colors: active)"));
+    expect(outside).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\bcolor-mix\(/i);
+    expect(popup.slice(outside.length)).not.toMatch(/oklch\(/);
+  });
+
+  it("keeps the two Night blocks identical", () => {
+    const media = popup.slice(
+      popup.indexOf("@media (prefers-color-scheme: dark)"),
+      popup.indexOf(':root[data-theme="dark"]')
+    );
+    const forced = popup.slice(
+      popup.indexOf(':root[data-theme="dark"]'),
+      popup.indexOf("@media (prefers-contrast: more)")
+    );
+    const body = (/** @type {string} */ block) =>
+      [...block.matchAll(/^\s*(--[\w-]+|color-scheme):[^;]+;/gm)].map((match) =>
+        match[0].trim()
+      );
+    expect(body(media)).toEqual(body(forced));
+    expect(body(forced).length).toBeGreaterThan(10);
+  });
+
+  it("declares a literal --color-paper in the light and both Night blocks", () => {
+    expect(popup.match(/^\s*--color-paper: oklch\([^)]*\);/gm)).toHaveLength(3);
+  });
+
+  it("answers high contrast and forced colours", () => {
+    expect(popup).toContain("@media (prefers-contrast: more)");
+    expect(popup).toContain("@media (forced-colors: active)");
+  });
+});

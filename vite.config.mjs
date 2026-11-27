@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
 
@@ -19,6 +20,56 @@ export function resolveLook(value) {
     );
   }
   return look;
+}
+
+/**
+ * The browser bar colours of a look: the `--color-paper` literal of the light
+ * block and of the Night block in its tokens.css.
+ *
+ * @param {string} look
+ */
+function barColors(look) {
+  const css = readFileSync(
+    new URL(`./src/looks/${look}/tokens.css`, import.meta.url),
+    "utf8"
+  );
+  const paper = /--color-paper:\s*(oklch\([^)]*\))/;
+  return {
+    light: css.match(paper)?.[1] ?? "",
+    dark: css.slice(css.indexOf(':root[data-theme="dark"]')).match(paper)?.[1] ?? ""
+  };
+}
+
+/**
+ * Popup build only. The meta tags, theme-boot.js, and THEME_COLORS repeat the
+ * Pilot bar colours by hand, so this plugin swaps them for the Popup values
+ * and leaves those three Pilot sources untouched.
+ *
+ * @returns {import("vite").Plugin}
+ */
+function popupBarColors() {
+  const pilot = barColors("pilot");
+  const popup = barColors("popup");
+  /** @param {string} text */
+  const swap = (text) =>
+    text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
+  let outDir = "";
+  return {
+    name: "popup-bar-colors",
+    configResolved: (config) => {
+      outDir = config.build.outDir;
+    },
+    transformIndexHtml: swap,
+    transform(code, id) {
+      return id.endsWith("src/player/theme.js")
+        ? { code: swap(code), map: null }
+        : null;
+    },
+    closeBundle() {
+      const boot = `${outDir}/theme-boot.js`;
+      writeFileSync(boot, swap(readFileSync(boot, "utf8")));
+    }
+  };
 }
 
 /** @type {import("vite").ResolveModulePreloadDependenciesFn} */
@@ -165,6 +216,7 @@ export default defineConfig(({ mode }) => {
   return {
     ...base,
     plugins: [
+      ...(look === "popup" ? [popupBarColors()] : []),
       {
         name: "question-api",
         configureServer: applyMiddlewares,
