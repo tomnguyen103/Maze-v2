@@ -280,3 +280,36 @@
   --color-pulse: oklch(74% 0.13 250 / 30%);
   --color-playground-daylight: oklch(34% 0.06 232);
 }
+
+@media (forced-colors: active) {
+  /* Forced colours map the board tokens to system colours. */
+  :root:root:not([data-theme="light"]),
+  :root:root[data-theme="light"] {
+    --color-ink: CanvasText;
+    --color-on-fill: Canvas;
+    /* Badges and the sealed Gate X draw night over on-fill, so night takes the text colour. */
+    --color-night-deep: CanvasText;
+    /* The board: known land is Highlight with HighlightText ink, the passage is Canvas, and the Fog is GrayText. */
+    --color-fog: GrayText;
+    --color-fog-soft: GrayText;
+    --color-fog-dot: Canvas;
+    --color-land: Highlight;
+    --color-hatch: HighlightText;
+    --color-coastline: CanvasText;
+    --color-passage: Canvas;
+    --color-danger-line: CanvasText;
+    --color-board-gate: CanvasText;
+    --color-board-warden: CanvasText;
+    --color-board-light: Highlight;
+    --color-board-light-on-fill: CanvasText;
+    --color-board-casing: Canvas;
+    --color-board-explorer-ring: CanvasText;
+    --color-board-explorer-disc: Canvas;
+    --color-board-explorer: Highlight;
+    --color-board-ink: HighlightText;
+    --color-board-cover: Canvas;
+    --color-board-cover-ink: CanvasText;
+    --color-board-echo: Highlight;
+    --color-board-echo-text: HighlightText;
+  }
+}

@@ -278,7 +278,8 @@ describe("SHELL-07 — night is declared, and both ways", () => {
     const explicitAt = tokens.lastIndexOf(':root[data-theme="dark"]');
     expect(mediaAt).toBeLessThan(explicitAt);
     const media = tokens.slice(mediaAt, explicitAt);
-    const explicit = tokens.slice(explicitAt);
+    // The explicit block ends where the forced-colors block starts.
+    const explicit = tokens.slice(explicitAt, tokens.indexOf("@media (forced-colors: active)"));
     const declared = (/** @type {string} */ block) =>
       [...block.matchAll(/(--[a-z0-9-]+):/g)].map((match) => match[1]).sort();
     expect(declared(explicit)).toEqual(declared(media));

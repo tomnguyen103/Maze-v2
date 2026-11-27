@@ -5,6 +5,7 @@ import {
   getDifficultyBand,
   getLabyrinthConfig,
   getQuestLevel,
+  isBrightStartQuestRun,
   isGateWardenMilestone
 } from "../src/questions/quest-levels.js";
 
@@ -94,5 +95,15 @@ describe("Quest Level progression", () => {
     expect(getQuestLevel("bright-start").number).toBe(1);
     expect(getQuestLevel("trail-scout").number).toBe(2);
     expect(getQuestLevel("maze-master").number).toBe(3);
+  });
+});
+
+describe("Bright Start Quest Run", () => {
+  it("shows the soft Fangmoor on a Bright Start Quest Run alone", () => {
+    expect(isBrightStartQuestRun("bright-start", { daily: false, firstLight: false })).toBe(true);
+    // A Daily Run and the First Light Tutorial keep the Bright Start level but are not Quest Runs.
+    expect(isBrightStartQuestRun("bright-start", { daily: true, firstLight: false })).toBe(false);
+    expect(isBrightStartQuestRun("bright-start", { daily: false, firstLight: true })).toBe(false);
+    expect(isBrightStartQuestRun("trail-scout", { daily: false, firstLight: false })).toBe(false);
   });
 });
