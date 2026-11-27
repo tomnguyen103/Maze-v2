@@ -65,8 +65,9 @@
   }
 }
 
-/* The pressed Run Replay tab takes deep coral: ink or cream on plain coral fails 4.5:1. */
+/* The pressed Run Replay tab takes deep coral: ink or cream on plain coral fails 4.5:1. It keeps the pull-tab border, so a press does not shift it. */
 :root .run-replay-controls .control-button[aria-pressed="true"] {
+  border: 2px solid var(--color-ink);
   color: var(--color-on-signal-deep);
   background: var(--color-signal-deep);
 }
@@ -185,4 +186,9 @@
 /* A paper gap past the 4px lift keeps the ring apart from the ink outline in light and Night. */
 :root :is(.control-button, .control-link, .theme-button, .pause-button, .direction-button, .pulse-button, .primary-button, .danger-button):focus-visible {
   outline-offset: 6px;
+}
+
+/* Text buttons have no lift, and the Command Bar scrolls: the ring stays inside, as in daylight. */
+:root :is(.command-bar__actions, .challenge-support, .challenge-skip) .control-button:focus-visible {
+  outline-offset: -0.2rem;
 }
