@@ -278,3 +278,8 @@
   max-width: 6rem;
   aspect-ratio: 1;
 }
+
+/* The landing course line belongs to the Pilot chart. The Popup hero is a board crop, so the line hides. */
+.landing-hero__trail {
+  display: none;
+}
