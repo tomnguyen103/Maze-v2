@@ -167,9 +167,9 @@ const GLOW = { patrol: "#ffd23c", hunt: CORAL, intercept: "#ffd23c", lured: "#4d
 /** @type {Record<Mode, string>} */
 const BADGE = { patrol: "#fff", hunt: CORAL, intercept: SUN, lured: "#4db8ff" };
 
-/** @param {Ctx} c @param {Mode} m @param {number} k @param {boolean} flat */
-function wolf(c, m, k, flat) {
-  const hunt = m === "hunt";
+/** @param {Ctx} c @param {Mode} m @param {number} k @param {boolean} flat @param {boolean} soft */
+function wolf(c, m, k, flat, soft) {
+  const hunt = m === "hunt", lured = m === "lured";
   const ear = hunt ? "M-22 -22 L-38 -46 L-12 -36Z" : "M-22 -24 L-30 -60 L-10 -38Z";
   D(c, "M-22 4 L-30 44 L-22 38 L-16 48 L-8 40 L0 48 L8 40 L16 48 L22 38 L30 44 L22 4 Z", DARK, K, SW);
   D(c, "M-12 6 L-8 26 L-4 18 L0 30 L4 18 L8 26 L12 6Z", MID);
@@ -183,21 +183,26 @@ function wolf(c, m, k, flat) {
   D(c, "M-10 -14 Q0 -18 10 -14 L7 4 Q0 9 -7 4Z", MID);
   const [dx, dy] = LOOK[m], o = hunt ? 4 : 3, x = 11, y = -24, w = 7;
   for (const s of [-1, 1]) {
+    if (lured) { D(c, `M${s * x - 5} ${y} Q${s * x} ${y + 5} ${s * x + 5} ${y}`, 0, GLOW[m], 2.6); continue; }
     c.save();
-    // High contrast and forced colours skip the eye glow.
-    if (!flat) { c.shadowColor = GLOW[m]; c.shadowBlur = 4.8 * k; }
+    // High contrast and forced colours skip the eye glow; Bright Start halves it.
+    if (!flat) { c.shadowColor = GLOW[m]; c.shadowBlur = (soft ? 2.4 : 4.8) * k; }
     const d = `M${s * (x + w)} ${y - o} Q${s * x} ${y - o - 4} ${s * (x - w)} ${y + 2} Q${s * x} ${y + 3} ${s * (x + w)} ${y - o}Z`;
     D(c, d, GLOW[m]); D(c, d, GLOW[m]);
     c.restore();
     E(c, s * x + dx, y - 1 + dy, 1.3, hunt ? 3.4 : 2.6, VOID);
   }
   D(c, "M-4 -12 Q0 -14 4 -12 L0 -7Z", VOID);
-  const j = hunt ? 10 : m === "lured" ? 3 : 6;
-  D(c, `M-8 1 Q0 ${2 + j} 8 1 Z`, VOID);
-  D(c, `M-7 1 l2 ${j * .7} l2 ${-j * .7} M3 1 l2 ${j * .7} l2 ${-j * .7}`, BONE, BONE, 1);
-  // The Mode badge keeps a shape cue, so the Mode never rests on colour alone.
+  if (soft) D(c, "M-7 2 Q0 8 7 2", 0, VOID, 2.2);
+  else {
+    const j = hunt ? 10 : lured ? 3 : 6;
+    D(c, `M-8 1 Q0 ${2 + j} 8 1 Z`, VOID);
+    D(c, `M-7 1 l2 ${j * .7} l2 ${-j * .7} M3 1 l2 ${j * .7} l2 ${-j * .7}`, BONE, BONE, 1);
+  }
+  // The Mode badge keeps a shape cue, so the Mode never rests on colour alone: round, or a rounded square when Lured.
   c.save(); c.translate(30, -44);
-  E(c, 0, 0, 11, 11, BADGE[m], K, 2.4);
+  if (lured) R(c, -11, -11, 22, 22, 6, BADGE[m], K, 2.4);
+  else E(c, 0, 0, 11, 11, BADGE[m], K, 2.4);
   if (m === "patrol") { E(c, -3.5, 2, 2.6, 3.6, K); E(c, 3.5, -2.5, 2.6, 3.6, K); }
   if (hunt) { R(c, -1.8, -7, 3.6, 9, 1.8, "#fff"); E(c, 0, 5.2, 2, 2, "#fff"); }
   if (m === "intercept") D(c, "M-6 4 Q-2 -6 6 -4 M6 -4 l-4 -3 M6 -4 l-3 4", 0, K, 2.4);
@@ -216,14 +221,15 @@ export default {
    * @param {Mode | "idle"} mode The Warden Mode; ignored for the Explorer Figures.
    * @param {number} size
    * @param {boolean} flat True skips the glow.
+   * @param {boolean} [soft] True draws the Bright Start Fangmoor: a closed jaw and half the eye glow.
    */
-  drawFigure(ctx, key, mode, size, flat) {
+  drawFigure(ctx, key, mode, size, flat, soft = false) {
     const warden = key === "fangmoor", side = warden ? 124 : 130;
     ctx.save();
     ctx.translate(size / 2, size / 2);
     ctx.scale(size / side, size / side);
     ctx.translate(0, warden ? 7 : 14);
-    if (warden) wolf(ctx, /** @type {Mode} */ (mode), size / side, flat);
+    if (warden) wolf(ctx, /** @type {Mode} */ (mode), size / side, flat, soft);
     else {
       const name = key === "explorer" ? explorerFigureForPlay() : key;
       (Object.hasOwn(FIGURES, name) ? FIGURES[name] : clover)(ctx);
