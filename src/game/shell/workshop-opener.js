@@ -37,6 +37,8 @@ let workshopOpenPending = false;
 export async function openWorkshop(deps, selection) {
   const { journalDialog, practiceDialog, getRun, togglePause } = deps;
   if (workshopOpenPending || practiceDialog.open) return;
+  // The Journal closed while this chunk loaded, so the Explorer moved on.
+  if (selection.origin === "journal" && !journalDialog.open) return;
   workshopOpenPending = true;
   try {
     if (selection.origin === "journal") {

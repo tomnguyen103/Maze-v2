@@ -103,11 +103,17 @@ export async function showQuestAtlas(
       );
       return;
     }
-    const { projectAtlas } = await (atlasProjectionRetry
-      // @ts-expect-error Vite treats the query as a distinct retry chunk.
-      ? import("../quest-atlas.js?retry=1")
-      : import("../quest-atlas.js"));
-    atlasProjectionRetry = true;
+    let projectAtlas;
+    try {
+      ({ projectAtlas } = await (atlasProjectionRetry
+        // @ts-expect-error Vite treats the query as a distinct retry chunk.
+        ? import("../quest-atlas.js?retry=1")
+        : import("../quest-atlas.js")));
+    } catch (error) {
+      // Only a failed import needs the cache-busting retry chunk next time.
+      atlasProjectionRetry = true;
+      throw error;
+    }
     const watchTrailLandmarkIds = await compatibleReplayLandmarkIds(deps);
     atlasView.show(await projectAtlas(deps.getQuestProgress(), {
       watchTrailLandmarkIds,

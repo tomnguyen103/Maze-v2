@@ -21,10 +21,11 @@ export async function openRunReplay(
   trigger,
   resumeRun
 ) {
-  resumeAfterRunReplay = resumeRun;
   if (runReplayOpening || !record.replay) {
     return;
   }
+  // After the guard, so an ignored request cannot overwrite the accepted flag.
+  resumeAfterRunReplay = resumeRun;
   runReplayOpening = true;
   const retrying = runReplayViewRetry;
   try {

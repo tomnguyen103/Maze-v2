@@ -172,27 +172,34 @@ for (const budget of budgets) {
   // A budget may name several prefixes: what matters to a player is the total
   // they wait for, not how the bundler happened to split it.
   const prefixes = budget.prefixes ?? [budget.prefix];
+  // Every asset per prefix counts: a `?retry=1` import emits a second chunk with the same prefix.
   const matched = prefixes.map((prefix) =>
-    files.find(
+    files.filter(
       (candidate) =>
         candidate.startsWith(prefix) && candidate.endsWith(budget.suffix)
     )
   );
-  if (matched.some((file) => !file)) {
+  if (matched.some((group) => group.length === 0)) {
     if (budget.optional) {
       process.stdout.write(`SKIP ${budget.label}: not built
 `);
       continue;
     }
-    const missing = prefixes.filter((_, at) => !matched[at]);
+    const missing = prefixes.filter((_, at) => matched[at].length === 0);
     throw new Error(
       `[${look}] Could not find ${budget.label} in ${outDirectories[look]}/assets (${missing.join(", ")}).`
     );
   }
+  // Each retry duplicate is a separate download, so it faces the row limit alone.
+  // Prefixes of one row sum (total wait); duplicates under one prefix do not.
   let gzipKb = 0;
-  for (const file of matched) {
-    const bytes = await readFile(new URL(String(file), assetsDirectory));
-    gzipKb += gzipSync(bytes).byteLength / 1024;
+  for (const group of matched) {
+    let largest = 0;
+    for (const file of group) {
+      const bytes = await readFile(new URL(file, assetsDirectory));
+      largest = Math.max(largest, gzipSync(bytes).byteLength / 1024);
+    }
+    gzipKb += largest;
   }
   const result = `[${look}] ${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
   if (gzipKb > budget.maxKb) {

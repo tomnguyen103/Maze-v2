@@ -115,6 +115,7 @@ import {
 import {
   createAccessSettingsContinuity
 } from "./player/access-settings-continuity.js";
+import { announceCopyResult } from "./game/shell/copy-result.js";
 import { createPlayerController } from "./player/player-controller.js";
 import {
   createLanternJournal
@@ -810,8 +811,14 @@ elements.dailyDialog.addEventListener("cancel", (event) => {
 elements.dailyStart.addEventListener("click", () => {
   startDailyRun();
 });
+const DAILY_COPY_MESSAGES = {
+  copied: "Today’s Daily link copied.",
+  failed: "Copy failed. Try again."
+};
 elements.dailyCopy.addEventListener("click", async () => {
   const write = writeDailyLink();
+  // Handle the rejection now: the chunk import below can outlast it.
+  write.catch(() => {});
   try {
     const { finishDailyCopy } = await import("./game/echo-postcard.js");
     await finishDailyCopy(
@@ -821,7 +828,7 @@ elements.dailyCopy.addEventListener("click", async () => {
       announce
     );
   } catch {
-    announce("Copy failed. Try again.");
+    await announceCopyResult(write, DAILY_COPY_MESSAGES, announce);
   }
 });
 elements.dailyConstellationRetry.addEventListener("click", () => {
@@ -1051,7 +1058,8 @@ elements.recordsButton.addEventListener("click", async () => {
   const rendered = await renderRunRecords().finally(() =>
     elements.recordsButton.removeAttribute("aria-busy")
   );
-  if (!rendered) {
+  // A Warden challenge can start while the Records render loads.
+  if (!rendered || run.status === "challenge") {
     return;
   }
   resumeAfterRecords = run.status === "active";
@@ -1435,9 +1443,12 @@ elements.seedCopy.addEventListener("click", async () => {
     announce("First Light uses one fixed practice seed and has no share link.");
     return;
   }
+  /** @type {Promise<void> | null} */
+  let dailyWrite = null;
   try {
     // Start the Daily write before any await: WebKit drops the click's user activation.
-    const dailyWrite = activeDaily ? writeDailyLink() : null;
+    dailyWrite = activeDaily ? writeDailyLink() : null;
+    dailyWrite?.catch(() => {});
     const { copySeedLink } = await import("./game/echo-postcard.js");
     await copySeedLink({
       dailyWrite,
@@ -1448,7 +1459,16 @@ elements.seedCopy.addEventListener("click", async () => {
       showEvent
     });
   } catch {
-    announce(`Echo Postcard copy failed. Current seed ${run.seed}.`);
+    const failed = `Echo Postcard copy failed. Current seed ${run.seed}.`;
+    if (dailyWrite) {
+      await announceCopyResult(
+        dailyWrite,
+        { copied: DAILY_COPY_MESSAGES.copied, failed },
+        announce
+      );
+    } else {
+      announce(failed);
+    }
   }
 });
 
@@ -3123,22 +3143,26 @@ async function resolveLifetimeReturn() {
 /** @param {Promise<boolean>} opened resolves false when the dialog could not load */
 function enterRunOnLifetimeClose(opened) {
   const offerFirstLight = firstLightEntryPending;
-  const enterOnClose = () => {
+  const enter = (/** @type {boolean} */ keepSession) => {
     // The close event is queued, so a dialog that reopened since then wins.
     if (lifetimeUnlockResumed || elements.lifetimeDialog.open) {
       return;
     }
     elements.lifetimeDialog.removeEventListener("close", enterOnClose);
-    pendingLifetimeSessionId = "";
-    removeCheckoutParameters(new URL(window.location.href));
+    // A view that never loaded was not dismissed, so the next Unlock may retry the confirm.
+    if (!keepSession) {
+      pendingLifetimeSessionId = "";
+      removeCheckoutParameters(new URL(window.location.href));
+    }
     firstLightEntryPending = offerFirstLight;
     void initializeRunEntry();
   };
+  const enterOnClose = () => enter(false);
   elements.lifetimeDialog.addEventListener("close", enterOnClose);
   // No dialog will open, so no close event will enter the Run.
   void opened.then((shown) => {
     if (!shown) {
-      enterOnClose();
+      enter(true);
     }
   });
 }
