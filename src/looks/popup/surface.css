@@ -253,6 +253,14 @@
   box-shadow: inset 0 0 0 3px var(--board-ink);
 }
 
+/* Forced colours drop the background and shadow, so the checked card needs a system-colour ring. */
+@media (forced-colors: active) {
+  :root .explorer-figure-option:has(input:checked) {
+    outline: 3px solid Highlight;
+    outline-offset: -6px;
+  }
+}
+
 :root .explorer-figure-option input {
   position: absolute;
   width: 1px;

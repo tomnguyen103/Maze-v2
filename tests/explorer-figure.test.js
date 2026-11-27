@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CLASS_EXPEDITION_ACTIVE_KEY } from "../src/classroom/class-expedition-selection.js";
+import { saveSelectedClassroom } from "../src/classroom/classroom-selection.js";
 import {
   EXPLORER_FIGURE_STORAGE_KEY,
   EXPLORER_FIGURES,
@@ -13,7 +14,12 @@ function createStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
   return {
     getItem: (/** @type {string} */ key) => values.get(key) ?? null,
-    setItem: (/** @type {string} */ key, /** @type {string} */ value) => void values.set(key, value)
+    setItem: (/** @type {string} */ key, /** @type {string} */ value) => void values.set(key, value),
+    removeItem: (/** @type {string} */ key) => void values.delete(key),
+    key: (/** @type {number} */ index) => [...values.keys()][index] ?? null,
+    get length() {
+      return values.size;
+    }
   };
 }
 
@@ -59,6 +65,15 @@ describe("Explorer Figure storage", () => {
     expect(explorerFigureForPlay(storage)).toBe("fen");
     storage.setItem(CLASS_EXPEDITION_ACTIVE_KEY, "true");
     expect(explorerFigureForPlay(storage)).toBe("clover");
+  });
+
+  it("gives Clover in plain Class Play, which sets no Class Expedition flag", () => {
+    const storage = createStorage();
+    saveExplorerFigure("tuck", storage);
+    expect(saveSelectedClassroom("org_class123", storage, "user_student1")).toBe(true);
+    expect(storage.getItem(CLASS_EXPEDITION_ACTIVE_KEY)).toBeNull();
+    expect(explorerFigureForPlay(storage)).toBe("clover");
+    expect(loadExplorerFigure(storage)).toBe("tuck");
   });
 
   it("saves Clover for a figure outside the list", () => {

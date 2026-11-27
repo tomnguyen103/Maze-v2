@@ -85,9 +85,9 @@ export function createAccessSettingsView({
   elements.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      // The pick saves first, so the repaint in onApply draws it.
-      if (picker && !picker.hidden) saveExplorerFigure(readFigure(), storage);
       savedSettings = saveAccessSettings(readControls(elements), storage);
+      // The pick saves before the repaint in onApply, so the board draws it.
+      if (picker && !picker.hidden) saveExplorerFigure(readFigure(), storage);
       onApply(savedSettings);
       elements.status.textContent = "Saving settings…";
       const result = await onSave(savedSettings);
@@ -109,7 +109,8 @@ export function createAccessSettingsView({
     try {
       savedSettings = saveAccessSettings(DEFAULT_ACCESS_SETTINGS, storage);
       syncControls(savedSettings);
-      if (picker && !picker.hidden) syncFigure(saveExplorerFigure("clover", storage));
+      // Reset also works before the lazy picker shows, so it skips the hidden check.
+      if (picker) syncFigure(saveExplorerFigure("clover", storage));
       onApply(savedSettings);
       elements.status.textContent = "Restoring canonical design…";
       const result = await onSave(savedSettings);

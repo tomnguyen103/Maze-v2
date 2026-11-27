@@ -1,7 +1,10 @@
 import { CLASS_EXPEDITION_ACTIVE_KEY } from "../classroom/class-expedition-selection.js";
 
 /** @typedef {"clover" | "pip" | "lumi" | "fen" | "tuck"} ExplorerFigure */
-/** @typedef {Pick<Storage, "getItem" | "setItem">} FigureStorage */
+/** @typedef {Pick<Storage, "getItem" | "setItem"> & Partial<Pick<Storage, "key" | "length">>} FigureStorage */
+
+// Plain Class Play stores the Classroom under this prefix plus the user id (src/classroom/classroom-selection.js).
+const CLASSROOM_SELECTION_PREFIX = "echo-maze:selected-classroom:v1:";
 
 export const EXPLORER_FIGURE_STORAGE_KEY = "echo-maze:explorer-figure:v1";
 /** @type {readonly ExplorerFigure[]} */
@@ -37,13 +40,18 @@ export function saveExplorerFigure(figure, storage = globalThis.localStorage) {
 }
 
 /**
- * The figure to draw. Class Play always draws Clover (D14).
+ * The figure to draw. Class Play (plain or a Class Expedition) always draws Clover (D14).
  * @param {FigureStorage | undefined} [storage]
  * @returns {ExplorerFigure}
  */
 export function explorerFigureForPlay(storage = globalThis.localStorage) {
   try {
     if (storage.getItem(CLASS_EXPEDITION_ACTIVE_KEY) === "true") return "clover";
+    // shortcut: the art has no user id, so any stored Classroom selection counts as Class Play; it errs toward Clover on a shared device.
+    for (let index = 0; index < (storage.length ?? 0); index += 1) {
+      const key = storage.key?.(index);
+      if (key?.startsWith(CLASSROOM_SELECTION_PREFIX) && storage.getItem(key)?.startsWith("org_")) return "clover";
+    }
   } catch {
     return "clover";
   }
