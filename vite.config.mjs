@@ -55,15 +55,45 @@ export function popupBarSwap() {
     text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
 }
 
+const PILOT_HERO = [
+  ["/landing-chart-light.webp", "/landing-popup-light.webp"],
+  ["/landing-chart-night.webp", "/landing-popup-night.webp"],
+  [
+    "Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix.",
+    "Echo Maze board: paper tiles, Clover the Explorer, a Fangmoor Warden, an Echo, and the Gate."
+  ]
+];
+
+/**
+ * Returns the function that replaces the Pilot landing hero images and alt
+ * text in a text with the Popup ones.
+ */
+export function popupHeroSwap() {
+  // A missing Pilot string would turn the swap into a silent no-op.
+  for (const file of ["index.html", "src/landing/landing-controller.js"]) {
+    const text = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+    for (const [pilot] of PILOT_HERO) {
+      if (!text.includes(pilot)) {
+        throw new Error(`${file} no longer contains the Pilot hero string: ${pilot}`);
+      }
+    }
+  }
+  /** @param {string} text */
+  return (text) =>
+    PILOT_HERO.reduce((out, [pilot, popup]) => out.replaceAll(pilot, popup), text);
+}
+
 /**
  * Popup build only. The meta tags, theme-boot.js, and THEME_COLORS repeat the
  * Pilot bar colours by hand, so this plugin swaps them for the Popup values
- * and leaves those three Pilot sources untouched.
+ * and leaves those three Pilot sources untouched. It also swaps the landing
+ * hero images and alt text in index.html and landing-controller.js.
  *
  * @returns {import("vite").Plugin}
  */
 function popupBarColors() {
   const swap = popupBarSwap();
+  const heroSwap = popupHeroSwap();
   let outDir = "";
   let isBuild = false;
   return {
@@ -72,10 +102,13 @@ function popupBarColors() {
       outDir = config.build.outDir;
       isBuild = config.command === "build";
     },
-    transformIndexHtml: swap,
+    transformIndexHtml: (html) => heroSwap(swap(html)),
     transform(code, id) {
-      return id.endsWith("src/player/theme.js")
-        ? { code: swap(code), map: null }
+      if (id.endsWith("src/player/theme.js")) {
+        return { code: swap(code), map: null };
+      }
+      return id.endsWith("src/landing/landing-controller.js")
+        ? { code: heroSwap(code), map: null }
         : null;
     },
     closeBundle() {
