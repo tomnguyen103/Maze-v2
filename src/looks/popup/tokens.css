@@ -94,6 +94,9 @@
   --color-board-explorer-disc: var(--board-paper);
   --color-board-explorer: var(--clover);
   --color-board-ink: var(--board-ink);
+  /* The pause cover is the card with the deep cover teal on it (D7). */
+  --color-board-cover: var(--card);
+  --color-board-cover-ink: var(--cover-deep);
   --color-danger-line: var(--coral);
   --color-board-echo: var(--sun);
   --color-board-echo-text: var(--board-ink);

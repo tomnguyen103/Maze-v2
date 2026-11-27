@@ -185,6 +185,20 @@ export function createCanvasRenderer(
     // Each frame starts from the default line, text, and fill state.
     context.save();
     context.clearRect(0, 0, canvas.width, canvas.height);
+    if (run.status === "paused") {
+      // The cover is opaque, so nothing of the board shows on a paused Run.
+      context.fillStyle = palette.cover;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = palette.coverInk;
+      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+      drawNeatline(size);
+      context.restore();
+      requestArt();
+      return;
+    }
     context.fillStyle = fogFill();
     context.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -249,13 +263,7 @@ export function createCanvasRenderer(
     }
     drawExplorer(run.explorer, tile);
 
-    if (run.status === "paused") {
-      const fontSize = Math.max(22, canvas.width * 0.045);
-      drawBand(fontSize * 2.6);
-      context.fillStyle = palette.boardInk;
-      context.font = `700 ${fontSize}px ${palette.fontBody}`;
-      context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
-    } else if (run.status === "challenge") {
+    if (run.status === "challenge") {
       const fontSize = Math.max(22, canvas.width * 0.045);
       const subSize = Math.max(14, canvas.width * 0.022);
       const gap = Math.max(28, canvas.width * 0.055);
@@ -1088,6 +1096,8 @@ function readPalette() {
     echoText: color("--color-board-echo-text"),
     boardInk: color("--color-board-ink"),
     casing: color("--color-board-casing"),
+    cover: color("--color-board-cover"),
+    coverInk: color("--color-board-cover-ink"),
     explorer: color("--color-board-explorer"),
     explorerDisc: color("--color-board-explorer-disc"),
     explorerRing: color("--color-board-explorer-ring"),

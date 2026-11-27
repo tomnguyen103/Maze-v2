@@ -337,7 +337,9 @@ const BOARD_PAIRS = /** @type {const} */ ([
   // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
   ["--color-board-explorer", DISC, 3],
   ["--color-board-explorer-ring", DISC, 4.5],
-  // The paused band and the challenge band write the board ink on the land.
+  // The pause cover writes its ink on the cover fill.
+  ["--color-board-cover-ink", "--color-board-cover", 4.5],
+  // The challenge band writes the board ink on the land.
   ["--color-board-ink", "--color-land", 4.5],
   // Pulse is a wash, so it needs only to show.
   ["--color-pulse", "--color-passage", 1.2],
@@ -999,13 +1001,13 @@ describe("Canvas renderer", () => {
     }
   });
 
-  it("writes the pause text in ink on a paper band between two ink rules", () => {
-    const { context, renderer } = stubCanvas();
+  it("A-40 covers the whole board on pause and draws no mark under the cover", () => {
+    const { calls, context, renderer } = stubCanvas();
     const run = questRun("PALETTE-REREAD", "bright-start", 1);
-    /** @type {string[][]} */
+    /** @type {Array<{ style: string, w: number, h: number }>} */
+    const rects = [];
+    /** @type {string[]} */
     const textFills = [];
-    /** @type {Array<{ style: string, y: number, w: number, h: number }>} */
-    const bands = [];
     let fillStyle = "";
     Object.defineProperty(context, "fillStyle", {
       get: () => fillStyle,
@@ -1013,23 +1015,25 @@ describe("Canvas renderer", () => {
         fillStyle = value;
       }
     });
-    context.fillText = vi.fn((text) => textFills.push([text, fillStyle]));
-    context.fillRect = vi.fn((_x, y, w, h) => {
-      bands.push({ style: fillStyle, y, w, h });
+    context.fillRect = vi.fn((_x, _y, w, h) => {
+      rects.push({ style: fillStyle, w, h });
     });
-    document.body.style.setProperty("--color-board-ink", "rgb(4, 4, 4)");
-    document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
-    document.body.style.setProperty("--color-overlay", "rgb(1, 1, 1)");
+    context.fillText = vi.fn((text) => textFills.push(`${text}|${fillStyle}`));
+    document.body.style.setProperty("--color-board-cover", "rgb(250, 251, 252)");
+    document.body.style.setProperty("--color-board-cover-ink", "rgb(4, 4, 4)");
+    const here = `${run.explorer.row},${run.explorer.col}`;
 
-    renderer.render({ ...run, pulseVisible: [], revealed: [], status: "paused" });
+    renderer.render({
+      ...run,
+      pulseVisible: [],
+      revealed: [here],
+      status: "paused",
+      wardens: [{ row: run.explorer.row, col: run.explorer.col, id: 0, mode: "hunt" }]
+    });
 
-    expect(textFills).toContainEqual(["PAUSED", "rgb(4, 4, 4)"]);
-    expect(bands.some((band) => band.style === "rgb(1, 1, 1)")).toBe(false);
-    const paper = bands.find((band) => band.style === "rgb(250, 251, 252)" && band.w === 640);
-    expect(paper).toBeDefined();
-    expect(paper && paper.h).toBeLessThan(640 / 2);
-    const rules = bands.filter((band) => band.style === "rgb(4, 4, 4)" && band.w === 640);
-    expect(rules.map((rule) => rule.y)).toEqual([paper?.y, (paper?.y ?? 0) + (paper?.h ?? 0) - 1]);
+    expect(rects).toEqual([{ style: "rgb(250, 251, 252)", w: 640, h: 640 }]);
+    expect(textFills).toEqual(["PAUSED|rgb(4, 4, 4)"]);
+    expect(calls.filter((call) => call !== "fillRect")).toEqual([]);
   });
 
   it("US-02.1 puts the Signal light on the Gate Warden challenge band only", () => {

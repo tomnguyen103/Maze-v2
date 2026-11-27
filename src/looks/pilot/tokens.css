@@ -77,6 +77,9 @@
   --color-board-explorer-disc: var(--color-paper);
   --color-board-explorer: var(--color-explorer);
   --color-board-ink: var(--color-ink);
+  /* The pause cover is opaque paper with the board ink on it. */
+  --color-board-cover: var(--color-land);
+  --color-board-cover-ink: var(--color-board-ink);
   --color-danger-line: var(--color-ink);
   --color-board-echo: var(--color-echo);
   --color-board-echo-text: oklch(100% 0 0);

@@ -8,7 +8,7 @@ export const BOARD_TOKENS = [
   "--color-board-explorer-ring", "--font-body", "--font-utility", "--color-fog", "--color-fog-dot",
   "--color-board-gate", "--color-hatch", "--color-ink", "--color-land", "--color-board-light",
   "--color-board-light-on-fill", "--color-night-deep", "--color-on-fill", "--color-passage",
-  "--color-pulse", "--color-board-warden"
+  "--color-pulse", "--color-board-warden", "--color-board-cover", "--color-board-cover-ink"
 ];
 
 /** @param {"pilot" | "popup"} look @returns {Map<string, string>} the light-scope rows of the look tokens file */

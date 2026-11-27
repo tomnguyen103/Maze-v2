@@ -1129,10 +1129,65 @@ kbd {
   text-align: center;
 }
 
-/* The Warden mark copies the rounded canvas creature. */
-.legend-mark--warden {
-  border-radius: 50% 50% 0.12rem 0.12rem;
-  background: var(--color-warden);
+/* Terrain swatches copy the board fills. */
+.legend-mark--passage,
+.legend-mark--land,
+.legend-mark--fog,
+.legend-mark--pulse {
+  border: 1px solid var(--color-line);
+}
+
+.legend-mark--passage {
+  background: var(--color-passage);
+}
+
+.legend-mark--land {
+  background: var(--color-land);
+}
+
+.legend-mark--fog {
+  background: var(--color-fog);
+}
+
+.legend-mark--pulse {
+  background: linear-gradient(var(--color-pulse), var(--color-pulse)), var(--color-passage);
+}
+
+.legend-mark--coastline::before {
+  display: block;
+  margin-top: 0.3rem;
+  border-top: 0.16rem solid var(--color-coastline);
+  content: "";
+}
+
+/* Each Warden Mode copies its canvas silhouette in the board Warden colour. */
+.legend-mark--warden-patrol {
+  border-radius: 50%;
+  background: var(--color-board-warden);
+}
+
+.legend-mark--warden-hunt {
+  background: var(--color-board-warden);
+  clip-path: polygon(50% 0, 100% 50%, 100% 75%, 50% 100%, 0 75%, 0 50%);
+}
+
+.legend-mark--warden-intercept {
+  background: var(--color-board-warden);
+  clip-path: polygon(50% 0, 100% 40%, 100% 100%, 50% 70%, 0 100%, 0 40%);
+}
+
+.legend-mark--warden-lured {
+  border-radius: 50%;
+  background: radial-gradient(
+    var(--color-board-warden) 34%,
+    transparent 38% 60%,
+    var(--color-board-warden) 64%
+  );
+}
+
+.legend-mark--danger {
+  border: 0.14rem dotted var(--color-danger-line);
+  border-radius: 50%;
 }
 
 .legend-mark--windway::before {
