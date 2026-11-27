@@ -303,6 +303,19 @@ describe("Popup Atlas stamp forms", () => {
     expect(plain).toEqual([]);
   });
 
+  it("keeps keyboard focus apart from the stamp state in forced colours", () => {
+    const forced = popupAtlasCss.slice(popupAtlasCss.indexOf("@media (forced-colors: active)"));
+    const rule = (/** @type {string} */ selector) => forced.match(
+      new RegExp(String.raw`:root \.atlas-landmark${selector}\s*\{([^}]*)\}`)
+    )?.[1] ?? "";
+    // The state marks use the border, so the focus outline does not hide them.
+    expect(rule(String.raw`\[aria-current="step"\]`)).toMatch(/border:[^;]*dashed/);
+    expect(rule(String.raw`\[aria-pressed="true"\]`)).toMatch(/border:[^;]*double/);
+    expect(rule(String.raw`\[aria-current="step"\]`)).not.toMatch(/outline/);
+    expect(rule(String.raw`\[aria-pressed="true"\]`)).not.toMatch(/outline/);
+    expect(rule(":focus-visible")).toMatch(/outline:[^;]*solid CanvasText/);
+  });
+
   it("keeps the Pilot Atlas sheet free of rules", () => {
     const pilotAtlasCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/atlas.css"), "utf8");
     expect(pilotAtlasCss.replace(/\/\*[\s\S]*?\*\//g, "").trim()).toBe("");

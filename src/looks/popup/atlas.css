@@ -417,15 +417,19 @@
     white-space: normal;
   }
 
-  /* Forced colours drop box-shadow: the current and selected stamps get an outline. */
+  /* Forced colours drop box-shadow: the border style marks the current and selected stamps. */
   :root .atlas-landmark[aria-current="step"] {
-    outline: 3px dashed CanvasText;
-    outline-offset: 2px;
+    border: 3px dashed CanvasText;
   }
 
   :root .atlas-landmark[aria-pressed="true"] {
-    outline: 3px solid Highlight;
-    outline-offset: 2px;
+    border: 4px double Highlight;
+  }
+
+  /* The outline marks keyboard focus only, so focus and state stay apart. */
+  :root .atlas-landmark:focus-visible {
+    outline: 3px solid CanvasText;
+    outline-offset: 3px;
   }
 }
 
