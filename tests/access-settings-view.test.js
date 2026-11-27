@@ -238,7 +238,7 @@ describe("Explorer Access Settings dialog", () => {
       expect(picker().hidden).toBe(true);
     });
 
-    it("shows the picker, draws five previews, saves the pick, restores it on Cancel and checks Clover on Reset", async () => {
+    it("shows the picker, draws five previews, saves the pick, restores it on Cancel and saves Clover on Reset", async () => {
       const drawFigure = vi.fn();
       const storage = createStorage();
       const view = createAccessSettingsView({
@@ -273,8 +273,9 @@ describe("Explorer Access Settings dialog", () => {
 
       view.show(trigger());
       document.getElementById("access-settings-reset")?.click();
+      // Reset commits the canonical design at once, so it commits Clover too.
       expect(radio("clover").checked).toBe(true);
-      expect(storage.getItem("echo-maze:explorer-figure:v1")).toBe("lumi");
+      expect(storage.getItem("echo-maze:explorer-figure:v1")).toBe("clover");
     });
 
     it("keeps the dialog open and says so when the pick cannot save", async () => {

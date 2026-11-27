@@ -109,7 +109,7 @@ export function createAccessSettingsView({
     try {
       savedSettings = saveAccessSettings(DEFAULT_ACCESS_SETTINGS, storage);
       syncControls(savedSettings);
-      syncFigure("clover");
+      if (picker && !picker.hidden) syncFigure(saveExplorerFigure("clover", storage));
       onApply(savedSettings);
       elements.status.textContent = "Restoring canonical design…";
       const result = await onSave(savedSettings);
