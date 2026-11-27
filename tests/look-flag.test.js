@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import config, { popupBarSwap, resolveLook } from "../vite.config.mjs";
+import config, { popupBarSwap, popupHeroSwap, resolveLook } from "../vite.config.mjs";
 
 /** @param {string | undefined} look */
 function aliasFor(look) {
@@ -65,6 +65,49 @@ describe("popup bar colours", () => {
       expect(swapped).toContain(popup.dark);
       expect(swapped).not.toContain(pilot.light);
       expect(swapped).not.toContain(pilot.dark);
+    });
+  }
+});
+
+describe("popup landing hero", () => {
+  const swap = popupHeroSwap();
+  const read = (/** @type {string} */ file) =>
+    readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
+
+  for (const file of ["index.html", "src/landing/landing-controller.js"]) {
+    it(`swaps both hero images and alts in ${file}`, () => {
+      const text = read(file);
+      expect(text).toContain("landing-chart-light.webp");
+      expect(text).toContain("Echo Maze pilot chart");
+      const swapped = swap(text);
+      expect(swapped).toContain('src="/landing-popup-light.webp"');
+      expect(swapped).toContain('src="/landing-popup-night.webp"');
+      expect(swapped.match(/alt="Echo Maze board: paper tiles/g)).toHaveLength(2);
+      expect(swapped).not.toContain("landing-chart-");
+      expect(swapped).not.toContain("Echo Maze pilot chart");
+    });
+  }
+
+  for (const name of ["light", "night"]) {
+    it(`keeps landing-popup-${name}.webp within 40 KB and 640x480`, () => {
+      const file = fileURLToPath(
+        new URL(`../public/landing-popup-${name}.webp`, import.meta.url)
+      );
+      expect(statSync(file).size).toBeLessThanOrEqual(40960);
+      const head = readFileSync(file).subarray(0, 32);
+      expect(head.toString("ascii", 0, 4)).toBe("RIFF");
+      expect(head.toString("ascii", 8, 12)).toBe("WEBP");
+      const kind = head.toString("ascii", 12, 16);
+      let size;
+      if (kind === "VP8 ") {
+        size = [head.readUInt16LE(26) & 0x3fff, head.readUInt16LE(28) & 0x3fff];
+      } else if (kind === "VP8L") {
+        const bits = head.readUInt32LE(21);
+        size = [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1];
+      } else {
+        size = [head.readUIntLE(24, 3) + 1, head.readUIntLE(27, 3) + 1];
+      }
+      expect(size).toEqual([640, 480]);
     });
   }
 });
