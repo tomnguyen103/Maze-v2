@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean }} [options]
+ * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown> }} [options]
  */
-function stubCanvas({ width = 640, neatline = false, seed = true } = {}) {
+function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () => new Promise(() => {}) } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -135,7 +135,8 @@ function stubCanvas({ width = 640, neatline = false, seed = true } = {}) {
   if (seed) seedBoardTokens();
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
-    createTile
+    createTile,
+    /** @type {never} */ (loadArt)
   );
   return {
     calls,
@@ -421,6 +422,80 @@ describe("Canvas renderer", () => {
   afterEach(() => {
     document.body.removeAttribute("style");
     document.documentElement.removeAttribute("data-access-contrast");
+  });
+
+  describe("board art", () => {
+    const run = () => {
+      const base = questRun("BOARD-ART", "trail-scout", 9);
+      return {
+        ...base,
+        pulseVisible: [],
+        revealed: ["1,1", "0,1"],
+        wardens: [
+          { row: 1, col: 1, id: 0, mode: /** @type {const} */ ("patrol") },
+          { row: 0, col: 1, id: 1, mode: /** @type {const} */ ("hunt") },
+          { row: 0, col: 0, id: 2, mode: /** @type {const} */ ("lured") }
+        ]
+      };
+    };
+    const flush = () => new Promise((done) => setTimeout(done, 0));
+    const shapeCalls = () => {
+      const plain = stubCanvas({ loadArt: () => Promise.resolve(null) });
+      plain.renderer.render(run());
+      return plain.calls.join(" ");
+    };
+
+    it("draws the shape marks while loadArt never resolves", async () => {
+      const art = { drawFigure: vi.fn() };
+      const drawn = stubCanvas({ loadArt: () => new Promise(() => {}) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure).not.toHaveBeenCalled();
+      expect(drawn.calls.join(" ")).toBe(shapeCalls());
+    });
+
+    it("draws the shape marks and throws nothing when loadArt rejects", async () => {
+      const drawn = stubCanvas({ loadArt: () => Promise.reject(new Error("offline")) });
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      await flush();
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      expect(drawn.calls.join(" ")).toContain(shapeCalls());
+    });
+
+    it("draws the shape marks when the art is null", async () => {
+      const loadArt = vi.fn(() => Promise.resolve(null));
+      const drawn = stubCanvas({ loadArt });
+      drawn.renderer.render(run());
+      await flush();
+      drawn.renderer.render(run());
+      expect(loadArt).toHaveBeenCalledTimes(1);
+      expect(drawn.calls.slice(-shapeCalls().split(" ").length).join(" ")).toBe(shapeCalls());
+    });
+
+    it("draws one Explorer and one figure per visible Warden with its Mode, then renders again once", async () => {
+      const art = { drawFigure: vi.fn() };
+      const loadArt = vi.fn(() => Promise.resolve(art));
+      const drawn = stubCanvas({ loadArt });
+      drawn.renderer.render(run());
+      expect(art.drawFigure).not.toHaveBeenCalled();
+      await flush();
+      expect(loadArt).toHaveBeenCalledTimes(1);
+      const figures = art.drawFigure.mock.calls.map(([, key, mode]) => `${key}:${mode}`);
+      expect(figures).toEqual(["fangmoor:patrol", "fangmoor:hunt", "clover:idle"]);
+      // The figure fills 0.9 of one tile.
+      expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 0.9);
+      expect(art.drawFigure.mock.calls[0][4]).toBe(false);
+    });
+
+    it("keeps the danger ring under the Warden art and skips the glow in high contrast", async () => {
+      document.documentElement.dataset.accessContrast = "strong";
+      const art = { drawFigure: vi.fn() };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure.mock.calls.every((call) => call[4] === true)).toBe(true);
+      expect(drawn.context.setLineDash).toHaveBeenCalled();
+    });
   });
 
   it("draws numbered Echo Bridge pairs through Fog", () => {

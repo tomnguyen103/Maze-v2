@@ -62,9 +62,17 @@ function createDetachedCanvas(width, height) {
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
+ * @param {() => Promise<unknown>} [loadArt] Loads the look's board art; null or a rejection keeps the shape marks.
  */
-export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) {
+export function createCanvasRenderer(
+  canvas,
+  createTile = createDetachedCanvas,
+  loadArt = () => import("@look/board-art.js")
+) {
   const context = getCanvasContext(canvas);
+  /** @type {any} */
+  let art = null;
+  let artRequested = false;
 
   let palette = readPalette();
   let deviceRatio = 1;
@@ -273,6 +281,23 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     }
     drawNeatline(size);
     context.restore();
+    requestArt();
+  }
+
+  // The art loads once, after the first paint, so it never delays the first board.
+  function requestArt() {
+    if (artRequested) return;
+    artRequested = true;
+    // A failed or empty load keeps the shape marks, with no retry in this page.
+    Promise.resolve()
+      .then(loadArt)
+      .then((/** @type {any} */ loaded) => {
+        const found = loaded && "drawFigure" in loaded ? loaded : loaded?.default;
+        if (!found) return;
+        art = found;
+        if (lastRun) render(lastRun);
+      })
+      .catch(() => {});
   }
 
   /**
@@ -512,9 +537,22 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.stroke();
   }
 
+  /** @param {"clover" | "fangmoor"} key @param {string} mode @param {number} x @param {number} y @param {number} tile */
+  function drawArt(key, mode, x, y, tile) {
+    const side = tile * 0.9 * palette.markScale;
+    context.save();
+    context.translate(x - side / 2, y - side / 2);
+    art?.drawFigure(context, key, mode, side, palette.flat);
+    context.restore();
+  }
+
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
+    if (art) {
+      drawArt("clover", "idle", x, y, tile);
+      return;
+    }
     const scale = palette.markScale;
     const radius = tile * 0.32 * scale;
 
@@ -863,6 +901,10 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
     context.lineWidth = Math.max(1, tile * 0.02 * scale);
     context.stroke();
     context.setLineDash([]);
+    if (art) {
+      drawArt("fangmoor", warden.mode, x, y, tile);
+      return;
+    }
     // Each mode has its own silhouette: Patrol round, Hunt pointed,
     // Intercept chevron, Lured ringed.
     context.beginPath();
@@ -1051,6 +1093,10 @@ function readPalette() {
     explorerRing: color("--color-board-explorer-ring"),
     fontBody: color("--font-body"),
     fontMono: color("--font-utility"),
+    // High contrast and forced colours keep the art but drop the glow.
+    flat:
+      document.documentElement.dataset.accessContrast === "strong" ||
+      Boolean(window.matchMedia?.("(forced-colors: active)")?.matches),
     fog: color("--color-fog"),
     fogDot: color("--color-fog-dot"),
     gate: color("--color-board-gate"),
