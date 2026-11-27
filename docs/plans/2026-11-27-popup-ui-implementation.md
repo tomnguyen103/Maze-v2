@@ -316,6 +316,24 @@ Derived from the Needs column. Every step before R9 is behind the flag, so produ
 
 - The game row has 77 bytes free today. If S0 and S4 do not give 3 KB, R2 waits, and so do R7a and R9.
 - Two looks double the CSS and font work until R9. The flag keeps each build inside its rows, but the gate runs twice.
-- Clover at 24 px may not read (R0b). The fallback is a 32 px tile with a scroll frame at 375 px.
+- Clover at 24 px may not read (R0b). Closed by the R0b spike (`docs/research/2026-11-27-popup-art-spike.md`): a tile needs at least 48 device px, so tile CSS px = max(24, ceil(48 / devicePixelRatio)). At DPR 1 the tile is 48 px, not 32 px, and the frame scrolls at 375 px (B-10).
 - Fangmoor may still be too scary for Bright Start. D5 gives a softer form; the owner decides from the R2c capture.
 - Night Popup is not mocked. R0a mocks it before code, so the owner sees it before R1.
+
+## 14. Run status, 2026-11-27
+
+The first run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Production shows Pilot.
+
+| Slice | Status | Where |
+| --- | --- | --- |
+| R0a | Merged | #303 (tokens, fonts, look flag, ADR 0064) |
+| R0b, R0c | Merged | #308 (art spike: the 48 device px tile rule, canvas paths, art row estimate 4 KB) |
+| R1 | Partial: R1-token merged | #304 (token read with no fallback, repaint on a theme change). The layers are not built |
+| R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. The R4 JS findings (B-10 frame follow, B-02) are not built |
+| R2, R2b, R2c, R5, R7a | Parked | Need 3 KB free on the game row (section 6 row). Rebuild plan section 2.4 lines 160 and 163: S0 and the first four S4 parts give at most 1.92 KB, and S4 measures after S3 of rebuild M1 |
+| R3, R6c, R7b | Parked | Need the R1 layers and the motion chunk, which need game-row bytes |
+| R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
+| R8 | Partial | ADR 0064 merged. The superseding ADRs wait for R2 |
+| R9 | Parked | Needs R8 and each gen1 surface in Popup |
+
+The board art, the layered renderer, and motion are not built. The next step is rebuild M0 and M1 (order step 1), which gives the headroom for R2.
