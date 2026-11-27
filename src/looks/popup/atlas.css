@@ -1,0 +1,402 @@
+/*
+ * Popup Atlas: a pop-up book. The viewport is the cover, each Region is a stamp sheet row
+ * with an index tab, and each landmark is a stamp whose form follows its AtlasNodeState.
+ * This sheet loads after quest-atlas.css, so every rule takes a :root prefix.
+ */
+:root .atlas-regions {
+  --atlas-star: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  --atlas-star-line: polygon(evenodd, 50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%, 50% 0, 50% 15.6%, 57.7% 40.1%, 83.6% 40.1%, 62.6% 55.5%, 70.3% 79.3%, 50% 64.6%, 29.7% 79.3%, 37.4% 55.5%, 16.4% 40.1%, 42.3% 40.1%, 50% 15.6%);
+}
+
+/* The book cover and its cream page. */
+:root .atlas-viewport {
+  padding: var(--space-4);
+  border: 3px solid var(--ink);
+  border-radius: var(--radius-dialog);
+  background: var(--sky-deep);
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+:root .atlas-canvas {
+  padding: var(--space-8);
+  border: 2px solid var(--ink);
+  border-radius: calc(var(--radius-dialog) - 0.25rem);
+  background: var(--card);
+}
+
+/* The map view is a stamp sheet: one Region row after another, in Region order. */
+:root .atlas-regions[data-view="map"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+}
+
+:root .atlas-regions[data-view] .atlas-region {
+  --tunnel-step: 0.5rem;
+  grid-column: 1;
+  grid-row: auto;
+  grid-template-areas: "tab stamps seal";
+  grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr) minmax(5.5rem, 7rem);
+  align-items: center;
+  padding: var(--space-3);
+  border: 2px dashed var(--ink-soft);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+:root .atlas-regions[data-view] .atlas-region__heading {
+  grid-area: tab;
+}
+
+/* Four stamps in one row per Region sheet. */
+:root .atlas-regions[data-view] .atlas-nodes {
+  grid-area: stamps;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+:root .atlas-regions[data-view] .atlas-sigil {
+  grid-area: seal;
+}
+
+/* The open land is a tunnel book: three stacked paper layers behind the stamps. */
+:root .atlas-regions[data-view="map"] .atlas-region:has([aria-current="step"]) {
+  border-style: solid;
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 var(--tunnel-step) var(--territory),
+    0 0 0 calc(var(--tunnel-step) + 2px) var(--ink),
+    0 0 0 calc(var(--tunnel-step) * 2 + 2px) var(--sky),
+    0 0 0 calc(var(--tunnel-step) * 2 + 4px) var(--ink),
+    0 0 0 calc(var(--tunnel-step) * 3 + 4px) var(--sky-deep),
+    0 0 0 calc(var(--tunnel-step) * 3 + 6px) var(--ink),
+    0 var(--space-2) 0 calc(var(--tunnel-step) * 3 + 6px) var(--ink);
+}
+
+/* The index tab: the Region tint with an ink edge, rounded on its outer corners only. */
+:root .atlas-region__heading h3 {
+  display: block;
+  width: fit-content;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: 0.75rem 0.375rem 0.375rem 0.75rem;
+  background: var(--territory, var(--region-windcall));
+  color: var(--color-board-ink);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+:root .atlas-region__heading h3::before {
+  content: none;
+}
+
+:root .atlas-region__heading span {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--ink-soft);
+}
+
+:root .atlas-regions[data-view] .atlas-region__heading h3 {
+  margin-inline-start: calc(-1 * (var(--space-3) + 2px));
+}
+
+/* The open tab sticks out further than the others. */
+:root .atlas-regions[data-view="map"] .atlas-region:has([aria-current="step"]) .atlas-region__heading h3 {
+  margin-inline-start: calc(-1 * (var(--space-3) + 2px + var(--space-5)));
+  padding-block: var(--space-3);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+/* The Region Sigil seal: a sun disc and coral star when restored, dashed outlines when not. */
+:root .atlas-sigil {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  max-width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  text-align: center;
+}
+
+:root .atlas-sigil::before {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 2px dashed var(--ink-soft);
+  border-radius: 50%;
+  content: "";
+}
+
+:root .atlas-sigil::after {
+  position: absolute;
+  top: calc(var(--space-2) + 0.625rem);
+  left: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--ink-soft);
+  clip-path: var(--atlas-star-line);
+  content: "";
+  transform: translateX(-50%);
+}
+
+:root .atlas-sigil[data-restored="true"] {
+  color: var(--ink);
+  background: transparent;
+}
+
+:root .atlas-sigil[data-restored="true"]::before {
+  border: 2px solid var(--ink);
+  background: var(--sun);
+}
+
+:root .atlas-sigil[data-restored="true"]::after {
+  background: var(--coral);
+  clip-path: var(--atlas-star);
+}
+
+/* A landmark is a postage stamp: ink edge, punched perforation, Chewy number. */
+:root .atlas-landmark {
+  min-height: 5.5rem;
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-body);
+  outline: 4px dotted var(--card);
+  outline-offset: -4px;
+}
+
+:root .atlas-landmark:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: 0.2rem;
+}
+
+:root .atlas-landmark[aria-pressed="true"] {
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--ink);
+}
+
+:root .atlas-landmark[aria-pressed="true"]:is([data-state="current"], [aria-current="step"]) {
+  box-shadow: 0 0 0 3px var(--sun), 0 0 0 5px var(--card), 0 0 0 7px var(--ink);
+}
+
+:root button.atlas-landmark[data-state] strong {
+  display: block;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* A tinted face keeps the fixed board ink in both schemes; a cream face takes the scheme ink. */
+:root button.atlas-landmark:is([data-state="completed"], [data-state="completed-milestone"]) strong {
+  color: var(--color-board-ink);
+}
+
+:root .atlas-landmark > span:not([class]) {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.125rem var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+}
+
+:root .atlas-landmark .atlas-node__milestone,
+:root .atlas-landmark .atlas-node__state-mark:not([data-state-mark="signal"]) {
+  display: none;
+}
+
+/* The Clover pin marks the current stamp, milestone or not. */
+:root .atlas-landmark .atlas-node__state-mark[data-state-mark="signal"] {
+  right: var(--space-2);
+  bottom: var(--space-2);
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--clover);
+  clip-path: none;
+}
+
+:root .atlas-landmark[data-state="completed"] {
+  background: var(--territory, var(--region-windcall));
+}
+
+:root .atlas-landmark[data-state="completed"]::after {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  content: "";
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+:root .atlas-landmark[data-state="current"] {
+  box-shadow: 0 0 0 3px var(--sun);
+}
+
+/* The bottom padding keeps the state label clear of the Clover pin. */
+:root .atlas-landmark[aria-current="step"] {
+  padding-bottom: calc(var(--space-2) + 1.25rem);
+  box-shadow: 0 0 0 3px var(--sun);
+}
+
+:root .atlas-landmark[data-state="ahead"] {
+  background: var(--color-paper-deep);
+}
+
+:root button.atlas-landmark[data-state="ahead"] strong {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+/* The sealed envelope: a hollow flap along the top edge and a Sigil star outline. */
+:root .atlas-landmark[data-state="milestone"] {
+  padding-top: 2.25rem;
+}
+
+:root .atlas-landmark[data-state="milestone"]::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1.75rem;
+  background: var(--ink);
+  clip-path: polygon(evenodd, 0 0, 100% 0, 50% 100%, 0 0, 12px 3px, calc(100% - 12px) 3px, 50% calc(100% - 7px), 12px 3px);
+  content: "";
+  pointer-events: none;
+}
+
+:root .atlas-landmark[data-state="milestone"]::after {
+  position: absolute;
+  top: 2.25rem;
+  right: var(--space-2);
+  width: 1.25rem;
+  height: 1.25rem;
+  background: var(--ink-soft);
+  clip-path: var(--atlas-star-line);
+  content: "";
+  pointer-events: none;
+}
+
+/* The pressed wax seal: the number sits on a coral disc under a sun star. */
+:root .atlas-landmark[data-state="completed-milestone"] {
+  align-content: start;
+  justify-items: start;
+}
+
+:root button.atlas-landmark[data-state="completed-milestone"] strong {
+  position: relative;
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  padding-top: 0.75rem;
+  place-items: center;
+  border: 3px solid var(--coral-deep);
+  border-radius: 50%;
+  background: var(--coral);
+}
+
+:root button.atlas-landmark[data-state="completed-milestone"] strong::before {
+  position: absolute;
+  top: 0.1875rem;
+  left: 50%;
+  width: 0.875rem;
+  height: 0.875rem;
+  background: var(--sun);
+  clip-path: var(--atlas-star);
+  content: "";
+  transform: translateX(-50%);
+}
+
+/* On a phone the cover is a thin edge and each index tab sits on the top edge of its row. */
+@media (max-width: 48rem) {
+  :root .atlas-viewport {
+    padding: var(--space-2);
+    border-width: 2px;
+    box-shadow: none;
+  }
+
+  :root .atlas-canvas {
+    padding: var(--space-4);
+  }
+
+  :root .atlas-regions[data-view="map"] {
+    gap: var(--space-6);
+  }
+
+  :root .atlas-regions[data-view] .atlas-region {
+    --tunnel-step: 0.25rem;
+    grid-template-areas: "tab" "stamps" "seal";
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-2);
+    border-radius: 0.75rem var(--radius-md) var(--radius-md) var(--radius-md);
+  }
+
+  :root .atlas-regions[data-view] .atlas-region__heading h3,
+  :root .atlas-regions[data-view="map"] .atlas-region:has([aria-current="step"]) .atlas-region__heading h3 {
+    margin: calc(-1 * (var(--space-2) + 2px)) 0 0 calc(-1 * (var(--space-2) + 2px));
+    border-radius: var(--radius-pull-tab);
+  }
+
+  :root .atlas-regions[data-view="map"] .atlas-nodes {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  /* The list view keeps each state label on screen, so its stamps take two per row. */
+  :root .atlas-regions[data-view="list"] .atlas-nodes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :root .atlas-regions[data-view] .atlas-sigil {
+    justify-self: center;
+  }
+
+  :root .atlas-landmark {
+    padding-inline: var(--space-1);
+  }
+
+  /* A phone stamp is too narrow for the label: the stamp form and the detail sheet show the state, and the label stays in the accessible name. */
+  :root .atlas-regions[data-view="map"] .atlas-landmark > span:not([class]) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 22rem) {
+  :root .atlas-regions[data-view="map"] .atlas-nodes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (forced-colors: active) {
+  :root .atlas-landmark {
+    border-color: CanvasText;
+  }
+
+  :root .atlas-landmark::before,
+  :root .atlas-landmark::after,
+  :root .atlas-sigil::before,
+  :root .atlas-sigil::after,
+  :root button.atlas-landmark strong::before {
+    display: none;
+  }
+}

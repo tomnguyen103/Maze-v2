@@ -1820,7 +1820,7 @@ test("lazy Atlas keeps semantic map and list parity across a URL reload", async 
     .poll(() =>
       page.evaluate(() =>
         performance.getEntriesByType("resource")
-          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+          .some((entry) => /\/assets\/atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
       )
     )
     .toBe(false);
@@ -1845,7 +1845,8 @@ test("lazy Atlas keeps semantic map and list parity across a URL reload", async 
     .poll(() =>
       page.evaluate(() =>
         performance.getEntriesByType("resource")
-          .some((entry) => /quest-atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
+          // Vite names the lazy Atlas CSS asset after its last CSS import, @look/atlas.css.
+          .some((entry) => /\/assets\/atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
       )
     )
     .toBe(true);

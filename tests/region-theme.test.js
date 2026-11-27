@@ -246,3 +246,31 @@ describe("Region Theme", () => {
     expect(getRegionTheme("unknown")).toBeNull();
   });
 });
+
+describe("Popup Atlas stamp forms", () => {
+  const popupAtlasCss = readFileSync(resolve(process.cwd(), "src/looks/popup/atlas.css"), "utf8");
+  const STATES = ["completed", "current", "ahead", "milestone", "completed-milestone"];
+
+  /** @param {string} state */
+  const stateRule = (state) =>
+    popupAtlasCss.match(new RegExp(String.raw`\.atlas-landmark\[data-state="${state}"\] \{([^}]*)\}`))?.[1];
+
+  it("holds one stamp rule for each of the five Atlas states", () => {
+    for (const state of STATES) {
+      expect(stateRule(state), state).toBeTypeOf("string");
+    }
+  });
+
+  it("gives each state a different stamp rule body", () => {
+    expect(new Set(STATES.map(stateRule)).size).toBe(STATES.length);
+  });
+
+  it("uses tokens only, with no literal colour", () => {
+    expect(popupAtlasCss).not.toMatch(/#[0-9a-f]{3,8}|(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/i);
+  });
+
+  it("keeps the Pilot Atlas sheet free of rules", () => {
+    const pilotAtlasCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/atlas.css"), "utf8");
+    expect(pilotAtlasCss.replace(/\/\*[\s\S]*?\*\//g, "").trim()).toBe("");
+  });
+});
