@@ -349,7 +349,7 @@
 .admin-field textarea {
   min-height: 12rem;
   resize: vertical;
-  font-family: var(--font-utility);
+  font-family: var(--font-code);
 }
 
 .admin-appearance-option {

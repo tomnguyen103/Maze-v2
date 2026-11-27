@@ -962,7 +962,7 @@ kbd {
 .seed-copy strong {
   overflow: hidden;
   max-width: 12rem;
-  font-family: var(--font-utility);
+  font-family: var(--font-code);
   font-size: var(--text-label);
   font-weight: 600;
   text-overflow: ellipsis;
