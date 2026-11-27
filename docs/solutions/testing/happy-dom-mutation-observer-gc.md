@@ -1,7 +1,7 @@
 ---
 title: A happy-dom MutationObserver stops after a garbage collection
 category: testing
-trigger: "Test timed out" or a vi.waitFor timeout on a repaint that a data attribute change starts, in one run out of five to ten
+trigger: '"Test timed out" or a vi.waitFor timeout on a repaint that a data attribute change starts, in one run out of five to ten'
 ---
 
 ## Problem

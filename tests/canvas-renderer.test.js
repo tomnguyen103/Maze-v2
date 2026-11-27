@@ -360,6 +360,19 @@ const STRONG_ONLY_PAIRS = /** @type {const} */ ([
   ["--color-coastline", "--color-fog", 3]
 ]);
 
+/** The on-fill colour that the Windway tests give the Windway source disc. */
+const WINDWAY_DISC = "rgb(251, 252, 253)";
+
+/**
+ * Return the Windway source discs: on-fill arcs that no other mark on a plain board draws.
+ * @param {Array<{ kind: "fill" | "stroke", style: string, path: string[] }>} paints
+ */
+function windwayDiscs(paints) {
+  return paints.filter(
+    (paint) => paint.kind === "fill" && paint.style === WINDWAY_DISC && paint.path[0]?.startsWith("arc(")
+  );
+}
+
 /**
  * Records every fill and stroke with its paint style and the path behind it.
  * @param {ReturnType<typeof stubCanvas>["context"]} context
@@ -1957,6 +1970,7 @@ describe("R1a renderer findings", () => {
   });
 
   it("B-83 draws a Windway from one known end without revealing the partner tile", () => {
+    document.body.style.setProperty("--color-on-fill", WINDWAY_DISC);
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
     const passage = document.body.style.getPropertyValue("--color-passage");
@@ -1970,10 +1984,11 @@ describe("R1a renderer findings", () => {
 
     // Tile 0,0 is a passage. Its water rect would show if the pair rule revealed it.
     expect(paints.filter((paint) => paint.kind === "fill" && paint.style === passage)).toEqual([]);
-    expect(paints.some((paint) => paint.kind === "stroke" && paint.path.some((step) => step.startsWith("arc(")))).toBe(true);
+    expect(windwayDiscs(paints)).toHaveLength(1);
   });
 
   it("B-83 draws a Windway from the destination end alone", () => {
+    document.body.style.setProperty("--color-on-fill", WINDWAY_DISC);
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
 
@@ -1984,7 +1999,7 @@ describe("R1a renderer findings", () => {
       })
     );
 
-    expect(paints.some((paint) => paint.kind === "stroke" && paint.path.some((step) => step.startsWith("arc(")))).toBe(true);
+    expect(windwayDiscs(paints)).toHaveLength(1);
   });
 
   it("US-03.1 repaints the last Run when the contrast preference changes", () => {
@@ -2126,7 +2141,8 @@ describe("R1a renderer findings", () => {
       const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
       expect(value("--color-ink")).toBe("CanvasText");
       expect(value("--color-on-fill")).toBe("Canvas");
-      expect(value("--color-night-deep")).toBe("Canvas");
+      // drawLabel fills the badge with night and writes on-fill text, so the two must differ.
+      expect(value("--color-night-deep")).toBe("CanvasText");
     });
 
     it("paints a Run when every board token holds a system colour keyword", () => {

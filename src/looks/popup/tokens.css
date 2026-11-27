@@ -258,6 +258,8 @@
     --color-panel: Canvas;
     --color-nav: Canvas;
     --color-on-fill: Canvas;
+    /* Badges and the sealed Gate X draw night over on-fill, so night takes the text colour. */
+    --color-night-deep: CanvasText;
     --color-signal-deep: LinkText;
     --color-explorer: CanvasText;
     --color-warden: CanvasText;
