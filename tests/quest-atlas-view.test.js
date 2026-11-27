@@ -82,6 +82,27 @@ describe("Echo Atlas view", () => {
     expect(document.activeElement?.id).toBe("atlas-title");
   });
 
+  it("renders five Regions and twenty landmarks that each carry one of the five Atlas states", () => {
+    const view = createQuestAtlasView();
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("atlas-trigger")
+    );
+
+    view.show(
+      projectQuestAtlas(advanceQuest(createQuestProgress("trail-scout", 4))),
+      trigger
+    );
+
+    const states = [...document.querySelectorAll(".atlas-landmark")].map(
+      (landmark) => /** @type {HTMLElement} */ (landmark).dataset.state
+    );
+    expect(document.querySelectorAll(".atlas-region")).toHaveLength(5);
+    expect(states).toHaveLength(20);
+    expect(new Set(states)).toEqual(
+      new Set(["completed", "current", "ahead", "milestone", "completed-milestone"])
+    );
+  });
+
   it("names the selected Learning Deck in Atlas and result summaries", () => {
     if (!NUMBER_TRAIL) {
       throw new Error("Published Number Trail fixture is missing.");
