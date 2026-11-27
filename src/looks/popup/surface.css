@@ -1,6 +1,147 @@
-/* Popup surface rules. */
+/*
+ * Popup surface rules. This sheet loads before every daylight and game rule, so each rule
+ * here takes a :root prefix (one extra class of specificity) and never uses !important.
+ * Rules use --color-ink for lines: daylight's .primary-button redefines --ink locally.
+ */
+
+/* Chewy ships one weight. A bold request keeps the true glyphs, not a smeared fake bold. */
+:root {
+  font-synthesis-weight: none;
+}
 
 /* The bright band is the full sky fill, so its caption takes full ink to reach 4.5:1. */
 .classroom-constellation-marker[data-band="bright"] p {
   color: var(--color-ink);
+}
+
+/* Pull-tab buttons: ink outline, a tab shape, and a hard ink lift that a press flattens. */
+:root :is(.control-button, .control-link, .theme-button, .pause-button, .direction-button, .pulse-button, .primary-button, .danger-button) {
+  border: 2px solid var(--color-ink);
+  border-radius: var(--radius-pull-tab);
+  background: var(--color-panel);
+  box-shadow: 0 4px 0 var(--color-ink);
+  font-weight: 700;
+}
+
+:root :is(.control-button, .control-link, .theme-button, .pause-button, .direction-button, .pulse-button, .primary-button, .danger-button):active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--color-ink);
+  transform: translateY(2px);
+}
+
+/* Hint and skip stay text buttons. */
+:root .challenge-support > .control-button,
+:root .challenge-skip > .control-button {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Primary takes the cover teal and danger takes deep coral; both pairs hold in light and Night. */
+:root .primary-button {
+  color: var(--color-on-fill);
+  border-color: var(--color-ink);
+  background: var(--cover-fill);
+}
+
+:root .primary-button:is(:hover, :active):not(:disabled) {
+  border-color: var(--color-ink);
+  background: var(--cover-fill);
+}
+
+:root .danger-button,
+:root .danger-button:is(:hover, :active):not(:disabled) {
+  color: var(--color-on-signal-deep);
+  border-color: var(--color-ink);
+  background: var(--color-signal-deep);
+}
+
+/* Paper cards: every dialog, and the board panel. */
+:root :is(.atlas-dialog, .access-settings-dialog, .first-light-dialog, .level-dialog, .daily-dialog, .challenge-dialog, .journal-dialog, .practice-dialog, .records-dialog, .player-dialog, .scoreboard-dialog, .lifetime-dialog, .quest-conflict-dialog, .result-dialog, .run-replay-dialog),
+:root .labyrinth-panel {
+  border: 3px solid var(--color-ink);
+  border-radius: var(--radius-dialog);
+  background: var(--color-panel);
+  box-shadow: var(--paper-lift);
+}
+
+:root .labyrinth-panel {
+  padding: var(--space-3);
+}
+
+:root dialog > .dialog-heading,
+:root .level-dialog__header {
+  border-bottom: 2px solid var(--color-ink);
+}
+
+/* Titles: Chewy has one weight, so a heavier weight would fake a bold. */
+:root :is(dialog h2, .landing-hero h1, .landing-page h2, .atlas-detail h3, .atlas-region__heading h3, .records-empty h3) {
+  font-family: var(--font-display);
+  font-stretch: normal;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+/* Readout: each metric hangs from the top edge as a bookmark. Sun and coral carry dark or cream text in both modes. */
+:root .readout {
+  border-block: 0;
+}
+
+:root .run-metrics {
+  gap: var(--space-2);
+}
+
+:root .run-metrics div {
+  padding: 6px 10px 14px;
+  border: 2px solid var(--color-ink);
+  border-top: 0;
+  color: var(--board-ink);
+  background: var(--sun);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  text-align: center;
+}
+
+:root .run-metrics div:nth-child(4) {
+  color: var(--color-on-signal-deep);
+  background: var(--color-signal-deep);
+}
+
+:root .run-metrics dt {
+  margin: 0;
+  color: inherit;
+  font-family: var(--font-body);
+  font-stretch: normal;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+:root .run-metrics dd {
+  /* D10: tabular Andika digits keep a fixed width, so the Readout never reflows mid-Run. */
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+/* Phone: the four ribbons stay on one row, so the cells tighten. */
+@media (max-width: 48rem) {
+  :root .run-metrics {
+    gap: var(--space-1);
+  }
+
+  :root .run-metrics div {
+    padding: 4px 2px 10px;
+  }
+
+  :root .run-metrics dd {
+    font-size: 1.05rem;
+  }
+}
+
+:root :focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }

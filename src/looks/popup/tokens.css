@@ -152,6 +152,10 @@
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.375rem;
+  /* Popup surfaces: a pull-tab has a round top and a squarer base. The lift sits under each paper card. */
+  --radius-pull-tab: 0.75rem 0.75rem 0.375rem 0.375rem;
+  --radius-dialog: 1.125rem;
+  --paper-lift: 0 8px 0 var(--ink), 0 18px 30px oklch(30.5% 0.07 310.3 / 22%);
 
   --duration-press: 120ms;
   --duration-reveal: 240ms;
