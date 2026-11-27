@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Popup art spike</title>
+<style>
+  /* Popup floor: --color-passage is var(--meadow) in src/looks/popup/tokens.css. */
+  :root { --floor: oklch(73.4% 0.177 137.9); }
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 16px; background: #fff8e7; color: #3a2449; }
+  table { border-collapse: collapse; }
+  th, td { padding: 6px 10px; text-align: center; vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; }
+  figure { margin: 0; display: grid; justify-items: center; gap: 2px; }
+  figcaption { font-size: 10px; }
+  canvas { background: var(--floor); display: block; }
+  #sheet { background: transparent; outline: 1px dashed #3a2449; }
+  output { font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Popup art spike</h1>
+<table id="grid"></table>
+
+<h2>Sprite sheet, 32 px at DPR 3</h2>
+<canvas id="sheet"></canvas>
+<p>WebP (q 0.9): <output id="webp-bytes">pending</output> bytes. PNG: <output id="png-bytes">pending</output> bytes.</p>
+
+<script type="module">
+import { drawFigure } from './art.js';
+
+const MODES = ['patrol', 'hunt', 'intercept', 'lured', 'down'];
+const ROWS = [
+  ...['clover', 'pip', 'lumi', 'fen', 'tuck'].map(k => [k, 'idle']),
+  ...MODES.map(m => ['fangmoor', m])
+];
+const SIZES = [24, 32], DPRS = [1, 2, 3];
+
+const grid = document.getElementById('grid');
+grid.insertAdjacentHTML('beforeend',
+  `<tr><th></th>${SIZES.flatMap(s => DPRS.map(d => `<th>${s}px @${d}x</th>`)).join('')}</tr>`);
+for (const [key, mode] of ROWS) {
+  const tr = grid.insertRow();
+  tr.insertCell().textContent = `${key} ${mode}`;
+  for (const size of SIZES) for (const dpr of DPRS) {
+    const cell = `${key}-${mode}-${size}-${dpr}`;
+    const cv = document.createElement('canvas');
+    cv.width = size * dpr; cv.height = size * dpr;
+    cv.style.width = cv.style.height = `${size}px`;
+    cv.dataset.cell = cell;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+    drawFigure(ctx, key, mode, size);
+    const fig = document.createElement('figure');
+    const cap = document.createElement('figcaption');
+    cap.textContent = cell;
+    fig.append(cv, cap);
+    tr.insertCell().append(fig);
+  }
+}
+
+// Sprite sheet: one transparent row, 32 px tiles at DPR 3.
+const S = 32, D = 3, sheet = document.getElementById('sheet');
+sheet.width = S * D * ROWS.length; sheet.height = S * D;
+sheet.style.width = `${S * ROWS.length}px`; sheet.style.height = `${S}px`;
+const sctx = sheet.getContext('2d');
+ROWS.forEach(([key, mode], i) => {
+  sctx.save();
+  sctx.translate(i * S * D, 0);
+  sctx.scale(D, D);
+  drawFigure(sctx, key, mode, S);
+  sctx.restore();
+});
+const bytes = (type, q) => new Promise(r => sheet.toBlob(b => r(b.size), type, q));
+document.getElementById('webp-bytes').textContent = await bytes('image/webp', 0.9);
+document.getElementById('png-bytes').textContent = await bytes('image/png');
+</script>
+</body>
+</html>
