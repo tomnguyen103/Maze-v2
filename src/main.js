@@ -691,6 +691,7 @@ let offlineContinuityActive;
 let demoAccessPending = hasCompletedGuestDemo();
 /** @type {{ seed: string, levelId: string, labyrinthNumber: number, ruleset: { atlasRegionId: string, revision: string } } | null} */
 let playSeedTarget = null;
+let resultCardStartPending = false;
 /** The end-card state of the last Quest Run; a late sign-in restores it after the demo gate. */
 /** @type {"gate" | "sigil" | "defeat" | null} */
 let runResultState = null;
@@ -1401,6 +1402,9 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 });
 elements.freshRun.addEventListener("click", () => {
+  if (resultCardStartPending) {
+    return;
+  }
   if (activeDaily) {
     startDailyRun();
     return;
@@ -1430,7 +1434,7 @@ elements.replay.addEventListener("click", async () => {
     return;
   }
   if (action === "continue" || action === "retry") {
-    await startFreshRun();
+    await runResultCardStart(() => startFreshRun());
     return;
   }
   if (action === "dismiss-access") {
@@ -1445,28 +1449,51 @@ elements.replay.addEventListener("click", async () => {
 });
 elements.resultPlaySeed.addEventListener("click", async () => {
   const target = playSeedTarget;
-  if (!target || elements.resultPlaySeed.disabled) {
+  if (!target) {
     return;
   }
-  elements.resultPlaySeed.disabled = true;
-  try {
-    // startRun closes the card. A refused start keeps the card open, so the player can choose again.
-    await startSharedRun(
-      target.seed,
-      target.levelId,
-      target.labyrinthNumber,
-      false,
-      undefined,
-      target.ruleset
-    );
-  } catch {
-    const failed = "That seed could not start. Try Retry Labyrinth.";
-    announce(failed);
-    showEvent(failed);
-  } finally {
-    elements.resultPlaySeed.disabled = false;
-  }
+  await runResultCardStart(async () => {
+    try {
+      // startRun closes the card. A refused start keeps the card open, so the player can choose again.
+      await startSharedRun(
+        target.seed,
+        target.levelId,
+        target.labyrinthNumber,
+        false,
+        undefined,
+        target.ruleset
+      );
+    } catch {
+      const failed = "That seed could not start. Try Retry Labyrinth.";
+      announce(failed);
+      showEvent(failed);
+    }
+  });
 });
+
+/**
+ * Runs one start from the result card at a time. Each start overwrites the
+ * shared active-run locator during admission, so a second start must wait.
+ * @param {() => Promise<unknown>} start
+ */
+async function runResultCardStart(start) {
+  if (resultCardStartPending) {
+    return;
+  }
+  const buttons = [elements.replay, elements.freshRun, elements.resultPlaySeed];
+  resultCardStartPending = true;
+  for (const button of buttons) {
+    button.disabled = true;
+  }
+  try {
+    await start();
+  } finally {
+    resultCardStartPending = false;
+    for (const button of buttons) {
+      button.disabled = false;
+    }
+  }
+}
 elements.sound.addEventListener("click", async () => {
   const enabled = await loadAudio()
     .then((loadedAudio) => loadedAudio.toggle())
@@ -4443,6 +4470,8 @@ async function finishRun() {
     return;
   }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
+  // A cloud Quest response can replace currentLevel during the awaits below.
+  const finishedLevel = currentLevel;
   const runId = activeRunLocator?.runId;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
@@ -4476,7 +4505,7 @@ async function finishRun() {
     echoesCollected,
     echoTotal: run.echoes.length,
     questId: questProgress.questId,
-    questLevelId: currentLevel.id,
+    questLevelId: finishedLevel.id,
     labyrinthNumber: currentLabyrinthNumber,
     atlasRegionId: run.ruleset.atlasRegionId,
     rulesetRevision: run.ruleset.revision,
@@ -4504,7 +4533,7 @@ async function finishRun() {
           atlasRegionId: run.ruleset.atlasRegionId,
           rulesetRevision: run.ruleset.revision
         },
-        currentLevel.id,
+        finishedLevel.id,
         finishedLabyrinthNumber
       );
       questProgress = saveQuestProgress(advanceQuest(questProgress));
@@ -4522,8 +4551,8 @@ async function finishRun() {
   const terminal = {
     run,
     progress: questProgress,
-    levelId: currentLevel.id,
-    levelName: currentLevel.name,
+    levelId: finishedLevel.id,
+    levelName: finishedLevel.name,
     labyrinthNumber: finishedLabyrinthNumber,
     echoesCollected,
     standing: resultStanding(),

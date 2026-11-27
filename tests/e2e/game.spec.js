@@ -5699,16 +5699,24 @@ test("plays the lost seed again and keeps the Quest", async ({
   const questId = await readQuestId();
   expect(questId).toEqual(expect.any(String));
 
-  // Two clicks in one task: the first disables the button, so the second fires no click event.
+  // Clicks in one task: the first start disables every start control on the
+  // card, so a second Play This Seed or a Retry Labyrinth fires no click event.
   const guardedSecondClick = await page
     .locator("#result-play-seed")
     .evaluate((button) => {
-      if (!(button instanceof HTMLButtonElement)) {
+      const replay = document.querySelector("#replay-run");
+      const freshRun = document.querySelector("#fresh-run");
+      if (
+        !(button instanceof HTMLButtonElement) ||
+        !(replay instanceof HTMLButtonElement) ||
+        !(freshRun instanceof HTMLButtonElement)
+      ) {
         return false;
       }
       button.click();
-      const guarded = button.disabled;
+      const guarded = button.disabled && replay.disabled && freshRun.disabled;
       button.click();
+      replay.click();
       return guarded;
     });
   expect(guardedSecondClick).toBe(true);
