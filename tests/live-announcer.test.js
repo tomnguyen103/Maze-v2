@@ -23,20 +23,25 @@ describe("Live announcer (B-52)", () => {
       return frames.length;
     });
 
+    // Production order: a Move starts a Challenge, the announcement runs,
+    // then showModal() opens the dialog in the same task.
+    announceInto(region, "A Warden blocks the path.");
     dialog.showModal();
-    announceInto(region, "Wrong answer.");
-    // The move happens at once; the text waits one frame.
+    frames.shift()?.(0);
+    // The move waits one frame; the text waits one more.
     expect(region.parentElement).toBe(dialog);
     expect(region.textContent).toBe("");
     frames.shift()?.(0);
-    expect(region.textContent).toBe("Wrong answer.");
+    expect(region.textContent).toBe("A Warden blocks the path.");
 
+    // Production order: a correct answer is announced, then the dialog closes.
+    announceInto(region, "Correct answer.");
     dialog.close();
-    announceInto(region, "Back on the board.");
+    frames.shift()?.(0);
     expect(region.parentElement).toBe(root);
     expect(region.nextElementSibling?.id).toBe("after");
     frames.shift()?.(0);
-    expect(region.textContent).toBe("Back on the board.");
+    expect(region.textContent).toBe("Correct answer.");
   });
 
   it("prefers the open dialog that holds focus", () => {
@@ -45,7 +50,10 @@ describe("Live announcer (B-52)", () => {
       <dialog id="lower"></dialog>
       <p id="live" aria-live="polite"></p>`;
     const region = /** @type {HTMLElement} */ (document.getElementById("live"));
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 0;
+    });
     const upper = /** @type {HTMLDialogElement} */ (document.getElementById("upper"));
     const lower = /** @type {HTMLDialogElement} */ (document.getElementById("lower"));
     lower.show();
