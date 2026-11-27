@@ -757,7 +757,7 @@ function resolveMove(run, directionName) {
       ...next,
       event: {
         type: "gate-locked",
-        message: `${remainingEchoes(next)} Echoes remain. Gate locked.`
+        message: `${remainingEchoes(next)} ${remainingEchoes(next) === 1 ? "Echo remains" : "Echoes remain"}. Gate locked.`
       }
     };
   }

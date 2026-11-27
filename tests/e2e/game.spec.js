@@ -6807,7 +6807,7 @@ test("plays nonvisually with Trail Compass and reveals no hidden state", async (
 
   await page.locator("#compass-describe").click();
   const live = page.locator("#live-region");
-  await expect(live).toContainText(/row \d+, column \d+/);
+  await expect(live).toContainText(/You are at [A-Z][0-9]+\./);
   const described = String(await live.textContent());
   // At the DAYLIGHT-0 start the Gate and every Echo sit in Fog: the engine
   // confirms nothing beyond the reveal radius, so the Compass must not
@@ -6825,7 +6825,7 @@ test("plays nonvisually with Trail Compass and reveals no hidden state", async (
     }
   });
   await page.keyboard.press(KEY_BY_DIRECTION[WINNING_PATH[0]]);
-  await expect(live).toContainText("At row");
+  await expect(live).toContainText(/At [A-Z][0-9]+\./);
 
   await page.locator("#compass-listen").click();
   await expect(live).toContainText(/Listen: |Nothing revealed/);
@@ -6873,7 +6873,7 @@ test("enters Quiet Expedition without changing the Personal Run", async ({
     "Quiet Expedition"
   );
   await page.locator("#compass-describe").click();
-  await expect(page.locator("#live-region")).toContainText(/row \d+, column \d+/);
+  await expect(page.locator("#live-region")).toContainText(/You are at [A-Z][0-9]+\./);
 
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
