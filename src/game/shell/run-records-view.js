@@ -67,7 +67,11 @@ function fillRunRecords(list, runRecords, { formatTime, formatRunRulesetLabel })
       title.textContent =
         `#${index + 1} ${outcome} / ${level.name} / ${formatTime(record.elapsedMs)}`;
       detail.textContent =
-        `Labyrinth ${record.labyrinthNumber ?? 1} / ${formatRunRulesetLabel(ruleset, record.labyrinthNumber ?? 1)} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / ${record.seed}`;
+        `Labyrinth ${record.labyrinthNumber ?? 1} / ${formatRunRulesetLabel(ruleset, record.labyrinthNumber ?? 1)} / ${record.echoesCollected} / ${record.echoTotal ?? 3} Echoes / ${record.moves} moves / `;
+      const seed = document.createElement("span");
+      seed.className = "run-records__seed";
+      seed.textContent = record.seed;
+      detail.append(seed);
       replay.type = "button";
       replay.className = "control-button";
       replay.dataset.seed = record.seed;

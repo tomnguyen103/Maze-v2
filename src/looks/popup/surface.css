@@ -399,6 +399,11 @@
   overflow-wrap: break-word;
 }
 
+/* Plan D9: the end-card Seed code shows in the code font. */
+:root #result-seed {
+  font-family: var(--font-code);
+}
+
 /* The heading block centres under the centred art. */
 :root .result-dialog[data-result-state] > :is(#result-kicker, #result-title, #result-summary) {
   display: block;
