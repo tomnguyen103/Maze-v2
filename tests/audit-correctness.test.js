@@ -299,8 +299,8 @@ describe("BE-F-01 — one escaped rejection must not kill the server", () => {
 
 describe("FE-F-01 / FE-F-05 — the Atlas loader must not duplicate listeners", () => {
   it("discards the cached view only when the import itself failed", () => {
-    const text = source("src/main.js");
-    const start = text.indexOf("async function showQuestAtlas(");
+    const text = source("src/game/shell/quest-atlas-opener.js");
+    const start = text.indexOf("export async function showQuestAtlas(");
     const body = text.slice(start, text.indexOf("\n}", start));
     expect(start).toBeGreaterThan(-1);
 
@@ -317,8 +317,8 @@ describe("FE-F-01 / FE-F-05 — the Atlas loader must not duplicate listeners", 
   });
 
   it("tells the player to reload once the retry chunk is spent", () => {
-    const text = source("src/main.js");
-    const start = text.indexOf("async function showQuestAtlas(");
+    const text = source("src/game/shell/quest-atlas-opener.js");
+    const start = text.indexOf("export async function showQuestAtlas(");
     const body = text.slice(start, text.indexOf("\n}", start));
     expect(body).toContain("retrying");
     expect(body).toMatch(/retrying\s*\n?\s*\?/);

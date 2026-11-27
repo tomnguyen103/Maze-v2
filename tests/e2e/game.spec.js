@@ -675,11 +675,9 @@ async function answerCorrectlyIfChallenged(page, getCurrentQuestion) {
 }
 
 test("presents transparent lifetime pricing in a focused dialog", async ({ page }) => {
-  await page.goto("/play");
-  await page.locator("#lifetime-dialog").evaluate(
-    /** @param {HTMLDialogElement} dialog */
-    (dialog) => dialog.showModal()
-  );
+  // The copy renders when the lazy view loads, so open the dialog through it.
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
 
   await expect(
     page.getByRole("heading", { name: "Unlock every future Run" })
@@ -732,6 +730,94 @@ test("US-03.1 opens membership from the owner link, then Not now enters the Run"
   await expect(
     page.getByRole("group", { name: "Choose a Practice Intention" })
   ).toBeVisible();
+});
+
+test("announces a notice when the Lifetime dialog chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/lifetime-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lifetime Membership is unavailable."
+  );
+  await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+  // The failed import leaves the page usable: the Run entry still shows.
+  await expect(
+    page.getByRole("group", { name: "Choose a Practice Intention" })
+  ).toBeVisible();
+
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+  await expect(page.locator("#lifetime-dialog")).toBeVisible();
+  expect(requests).toBe(2);
+});
+
+test("enters the Run once when a failed confirm meets a failed Lifetime chunk, and keeps the Checkout return", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/lifetime-view-*.js", async (route) => {
+    requests += 1;
+    await route.abort();
+  });
+  // Signed out, so the confirm fails.
+  await page.goto("/play?checkout=success&session_id=cs_test_return");
+  await expectGameReady(page);
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lifetime Membership is unavailable."
+  );
+  await expect(
+    page.getByRole("group", { name: "Choose a Practice Intention" })
+  ).toBeVisible();
+  // A loop would confirm and import again; one import proves the Run entry skipped the return.
+  await page.waitForTimeout(500);
+  expect(requests).toBe(1);
+  expect(new URL(page.url()).searchParams.get("session_id")).toBe(
+    "cs_test_return"
+  );
+});
+
+test("announces a notice when the Records chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/run-records-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=RECORDS-RETRY");
+  await expectGameReady(page);
+
+  const opener = page.getByRole("button", { name: "Records", exact: true });
+  await opener.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Run Records is unavailable."
+  );
+  await expect(page.locator("#records-dialog")).not.toBeVisible();
+  await expect(opener).not.toHaveAttribute("aria-busy", "true");
+
+  // No reload: the next open imports the retry chunk in the same page.
+  await opener.click();
+  await expect(page.getByRole("dialog", { name: "Run Records" })).toBeVisible();
+  await expect(page.locator("#run-records")).toContainText(
+    "No finished Runs recorded yet."
+  );
+  expect(requests).toBe(2);
 });
 
 for (const [name, path] of [
@@ -1958,6 +2044,137 @@ test("retries the Atlas view after its first chunk request fails", async ({
   await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
   expect(failedRequests).toBeGreaterThanOrEqual(1);
   expect(requests).toBeGreaterThan(failedRequests);
+});
+
+test("announces a notice when the Atlas opener chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  // Vite preloads the chunk before import() fetches it, so every request fails
+  // until the first open has failed.
+  let failing = true;
+  await page.route("**/assets/quest-atlas-opener-*.js", async (route) => {
+    if (failing) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/?seed=ATLAS-OPENER&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+  const atlasButton = page.getByRole("button", { name: "Atlas", exact: true });
+
+  await atlasButton.click();
+  await expect(page.locator("#live-region")).toContainText(
+    "Echo Atlas is unavailable."
+  );
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).not.toBeVisible();
+  await expect(atlasButton).not.toHaveAttribute("aria-busy", "true");
+
+  // No reload: the next open imports the retry chunk in the same page.
+  failing = false;
+  await atlasButton.click();
+  await expect(page.getByRole("dialog", { name: "Echo Atlas" })).toBeVisible();
+});
+
+test("clears the Records busy state when the Records view throws", async ({
+  page
+}) => {
+  await page.route("**/assets/run-records-view-*.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: 'export function renderRunRecords() { throw new Error("stub"); }'
+    })
+  );
+  await page.goto("/?seed=RECORDS-THROW");
+  await expectGameReady(page);
+
+  const opener = page.getByRole("button", { name: "Records", exact: true });
+  await opener.click();
+  await expect(opener).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#records-dialog")).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("resumes the paused Run when the Replay opener chunk fails", async ({
+  page
+}) => {
+  const plan = milestoneWinningPlan("TRAIL-VIEW-4");
+  const replay = createTerminalRunReplay(
+    plan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    plan.finalRun
+  );
+  if (!replay) {
+    throw new Error("Expected a retained Replay fixture.");
+  }
+  await page.addInitScript(({ retainedReplay }) => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([
+      {
+        elapsedMs: retainedReplay.terminal.elapsedMs,
+        moves: retainedReplay.terminal.moves,
+        seed: "TRAIL-VIEW-4",
+        outcome: "escaped",
+        echoesCollected: retainedReplay.terminal.echoesCollected,
+        echoTotal: retainedReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: retainedReplay
+      }
+    ]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_replay_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { retainedReplay: replay });
+  await page.route("**/assets/run-replay-opener-*.js", (route) => route.abort());
+  await page.goto("/?seed=TRAIL-SHELL&level=trail-scout&labyrinth=5");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Records", exact: true }).click();
+  const records = page.getByRole("dialog", { name: "Run Records" });
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await records.getByRole("button", {
+    name: "Watch retained Trail for seed TRAIL-VIEW-4"
+  }).click();
+
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+  await expect(page.getByRole("dialog", { name: "Watch Trail" })).not.toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
+});
+
+test("reopens the Atlas and keeps the Run paused when the Workshop opener chunk fails", async ({
+  page
+}) => {
+  await page.route("**/assets/workshop-opener-*.js", (route) => route.abort());
+  await page.goto("/?seed=ATLAS-WORKSHOP-FAIL&level=trail-scout&labyrinth=4");
+  await expectGameReady(page);
+
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  const atlas = page.getByRole("dialog", { name: "Echo Atlas" });
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await atlas.getByRole("button", { name: "Open Workshop" }).click();
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lantern Trail Workshop is unavailable."
+  );
+  await expect(atlas).toBeVisible();
+  await expect(page.locator("#run-state")).toHaveText("Paused");
+  await atlas.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#run-state")).toHaveText("Exploring");
 });
 
 test("pans from the labeled viewport and centers the current landmark", async ({
