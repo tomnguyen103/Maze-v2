@@ -425,6 +425,12 @@ readability without changing geometry, timing, rules, or score. They follow a
 signed-in Explorer across devices and remain device-bound for guests.
 _Avoid_: difficulty settings, gameplay assist
 
+**Explorer Figure**:
+The character that draws the Explorer on the Popup board: Clover (default), Pip,
+Lumi, Fen or Tuck. It is picked in Explorer Access Settings, stored on the device
+only, and changes looks only. Class Play always draws Clover.
+_Avoid_: Avatar, skin, character pick
+
 **Revealed Path Compass**:
 The presentation-only accessibility feature labeled **Trail Compass** for
 players. It provides a complete keyboard and screen-reader gameplay path through

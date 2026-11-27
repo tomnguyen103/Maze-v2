@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACCESS_SETTINGS_STORAGE_KEY,
   DEFAULT_ACCESS_SETTINGS
@@ -193,6 +193,115 @@ describe("Explorer Access Settings dialog", () => {
     ).toBe(true);
     expect(onApply).toHaveBeenLastCalledWith(cloud);
   });
+  describe("Explorer Figure picker", () => {
+    beforeEach(() => {
+      const options = ["clover", "pip", "lumi", "fen", "tuck"]
+        .map(
+          (value) =>
+            `<label><input type="radio" name="explorerFigure" value="${value}" /><canvas width="96" height="96"></canvas></label>`
+        )
+        .join("");
+      document
+        .getElementById("access-settings-form")
+        ?.insertAdjacentHTML(
+          "afterbegin",
+          `<fieldset id="access-explorer-figure" hidden>${options}</fieldset>`
+        );
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+        /** @type {never} */ ({})
+      );
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    const picker = () => /** @type {HTMLElement} */ (document.getElementById("access-explorer-figure"));
+    /** @param {string} value */
+    const radio = (value) =>
+      /** @type {HTMLInputElement} */ (
+        document.querySelector(`input[name="explorerFigure"][value="${value}"]`)
+      );
+    const trigger = () => /** @type {HTMLButtonElement} */ (document.getElementById("settings-trigger"));
+
+    it("stays hidden when the look has no art", async () => {
+      const loadArt = vi.fn(() => Promise.resolve({ default: null }));
+      createAccessSettingsView({ storage: createStorage(), loadArt });
+      await vi.waitFor(() => expect(loadArt).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(picker().hidden).toBe(true);
+    });
+
+    it("stays hidden when the art import rejects", async () => {
+      const loadArt = vi.fn(() => Promise.reject(new Error("offline")));
+      createAccessSettingsView({ storage: createStorage(), loadArt });
+      await vi.waitFor(() => expect(loadArt).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(picker().hidden).toBe(true);
+    });
+
+    it("shows the picker, draws five previews, saves the pick, restores it on Cancel and checks Clover on Reset", async () => {
+      const drawFigure = vi.fn();
+      const storage = createStorage();
+      const view = createAccessSettingsView({
+        storage,
+        loadArt: () => Promise.resolve({ default: { drawFigure } })
+      });
+      await vi.waitFor(() => expect(picker().hidden).toBe(false));
+      expect(drawFigure.mock.calls.map(([, key, mode]) => `${key}:${mode}`)).toEqual([
+        "clover:idle",
+        "pip:idle",
+        "lumi:idle",
+        "fen:idle",
+        "tuck:idle"
+      ]);
+      expect(radio("clover").checked).toBe(true);
+
+      view.show(trigger());
+      radio("lumi").checked = true;
+      radio("lumi").dispatchEvent(new Event("change", { bubbles: true }));
+      document.getElementById("access-settings-form")?.dispatchEvent(
+        new SubmitEvent("submit", { bubbles: true, cancelable: true })
+      );
+      await vi.waitFor(() =>
+        expect(storage.getItem("echo-maze:explorer-figure:v1")).toBe("lumi")
+      );
+
+      view.show(trigger());
+      radio("tuck").checked = true;
+      document.getElementById("access-settings-close")?.click();
+      expect(radio("lumi").checked).toBe(true);
+      expect(storage.getItem("echo-maze:explorer-figure:v1")).toBe("lumi");
+
+      view.show(trigger());
+      document.getElementById("access-settings-reset")?.click();
+      expect(radio("clover").checked).toBe(true);
+      expect(storage.getItem("echo-maze:explorer-figure:v1")).toBe("lumi");
+    });
+
+    it("keeps the dialog open and says so when the pick cannot save", async () => {
+      const storage = {
+        ...createStorage(),
+        setItem: () => {
+          throw new Error("quota");
+        }
+      };
+      const view = createAccessSettingsView({
+        storage,
+        loadArt: () => Promise.resolve({ default: { drawFigure: vi.fn() } })
+      });
+      await vi.waitFor(() => expect(picker().hidden).toBe(false));
+      view.show(trigger());
+      document.getElementById("access-settings-form")?.dispatchEvent(
+        new SubmitEvent("submit", { bubbles: true, cancelable: true })
+      );
+      await vi.waitFor(() =>
+        expect(document.getElementById("access-settings-status")?.textContent).toMatch(
+          /could not be saved/
+        )
+      );
+      expect(/** @type {HTMLDialogElement} */ (document.getElementById("access-settings-dialog")).open).toBe(true);
+    });
+  });
+
 });
 
 describe("Trail Compass and narration pace controls", () => {

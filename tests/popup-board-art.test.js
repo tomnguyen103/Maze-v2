@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import art from "../src/looks/popup/board-art.js";
 import pilotArt from "../src/looks/pilot/board-art.js";
+import { EXPLORER_FIGURE_STORAGE_KEY, EXPLORER_FIGURES } from "../src/player/explorer-figure.js";
 
 /** @type {string[]} */
 let paths = [];
@@ -53,6 +54,32 @@ describe("Popup board art", () => {
 
   it("draws the Explorer Clover with no throw", () => {
     expect(() => art.drawFigure(/** @type {never} */ (stubContext()), "clover", "idle", 100, false)).not.toThrow();
+  });
+
+  /** @param {string} key */
+  const draw = (key) => {
+    paths = [];
+    art.drawFigure(/** @type {never} */ (stubContext()), /** @type {never} */ (key), "idle", 100, false);
+    return paths.join("|");
+  };
+
+  it("draws each of the five Explorer Figures with a signature of its own", () => {
+    const signatures = EXPLORER_FIGURES.map(draw);
+    expect(new Set(signatures).size).toBe(5);
+  });
+
+  it('draws the stored pick for the key "explorer" and Clover for an unknown key', () => {
+    const store = new Map();
+    vi.stubGlobal("localStorage", {
+      getItem: (/** @type {string} */ k) => store.get(k) ?? null,
+      setItem: (/** @type {string} */ k, /** @type {string} */ v) => store.set(k, v)
+    });
+    expect(draw("explorer")).toBe(draw("clover"));
+    store.set(EXPLORER_FIGURE_STORAGE_KEY, "tuck");
+    expect(draw("explorer")).toBe(draw("tuck"));
+    expect(draw("explorer")).not.toBe(draw("clover"));
+    expect(draw("wolf")).toBe(draw("clover"));
+    expect(draw("toString")).toBe(draw("clover"));
   });
 
   it("draws each Warden Mode with no throw and a Mode badge path of its own", () => {

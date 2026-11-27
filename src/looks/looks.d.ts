@@ -5,7 +5,7 @@ declare module "@look/board-art.js" {
   const art: {
     drawFigure: (
       context: CanvasRenderingContext2D,
-      key: "clover" | "fangmoor",
+      key: "fangmoor" | "explorer" | "clover" | "pip" | "lumi" | "fen" | "tuck",
       mode: string,
       size: number,
       flat: boolean
