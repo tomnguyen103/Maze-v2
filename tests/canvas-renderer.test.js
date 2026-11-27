@@ -3,16 +3,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createCanvasRenderer } from "../src/game/canvas-renderer.js";
+import { MissingBoardTokenError, createCanvasRenderer } from "../src/game/canvas-renderer.js";
 import { createRun } from "../src/game/game-session.js";
 import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
+import { seedBoardTokens } from "./helpers/board-tokens.js";
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context" }} [options]
+ * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean }} [options]
  */
-function stubCanvas({ width = 640, neatline = false } = {}) {
+function stubCanvas({ width = 640, neatline = false, seed = true } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -131,6 +132,7 @@ function stubCanvas({ width = 640, neatline = false } = {}) {
       }
     });
   }
+  if (seed) seedBoardTokens();
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
     createTile
@@ -1505,28 +1507,48 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
-  it("US-01.3 makes every fallback palette colour equal the resolved light token", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/game/canvas-renderer.js"), "utf8");
-    const fallbackBlock = source.match(/const FALLBACK_PALETTE = \{([^}]*)\};/)?.[1] ?? "";
-    const fallbacks = new Map(
-      [...fallbackBlock.matchAll(/(\w+): "([^"]*)"/g)].map((hit) => [hit[1], hit[2]])
-    );
-    const reads = [...source.matchAll(/(\w+): color\("(--[\w-]+)", FALLBACK_PALETTE\.(\w+)\)/g)];
-    /** @param {string} name @returns {string} */
-    const resolveRaw = (name) => {
-      const value = LIGHT_TOKENS.get(name) ?? "";
-      const reference = value.match(/^var\((--[\w-]+)\)$/);
-      return reference ? resolveRaw(reference[1]) : value;
-    };
+  it("US-03.3 throws an error that names the token when a board token is empty", () => {
+    seedBoardTokens();
+    document.body.style.removeProperty("--color-passage");
+    expect(() => stubCanvas({ seed: false })).toThrow(MissingBoardTokenError);
+    expect(() => stubCanvas({ seed: false })).toThrow("--color-passage");
+  });
 
-    expect(reads.length).toBeGreaterThan(10);
-    for (const [, key, token, fallbackKey] of reads) {
-      expect(fallbackKey).toBe(key);
-      // Font stacks are not colours, so they stay out of this parity.
-      if (key.startsWith("font")) continue;
-      expect(fallbacks.get(key), `${key} fallback vs ${token}`).toBe(resolveRaw(token));
+  it("US-03.1 repaints the last Run with a new palette when the colour scheme changes", () => {
+    /** @type {() => void} */
+    let onChange = () => {};
+    vi.stubGlobal("matchMedia", () => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        onChange = listener;
+      }
+    }));
+    try {
+      const { renderer, tiles } = stubCanvas();
+      const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+      onChange();
+      expect(tiles).toHaveLength(0);
+      renderer.render({ ...run, pulseVisible: [], revealed: [] });
+      const built = tiles.length;
+      document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+      onChange();
+      expect(tiles.length).toBeGreaterThan(built);
+      expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(1, 2, 3)")).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
     }
-    expect([...fallbacks.keys()].sort()).toEqual(reads.map((hit) => hit[1]).sort());
+  });
+
+  it("US-03.1 repaints the last Run when data-theme changes", async () => {
+    const { renderer, tiles } = stubCanvas();
+    const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+    renderer.render({ ...run, pulseVisible: [], revealed: [] });
+    document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
+    document.documentElement.setAttribute("data-theme", "dark");
+    try {
+      await vi.waitFor(() => expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(4, 5, 6)")).toBe(true));
+    } finally {
+      document.documentElement.removeAttribute("data-theme");
+    }
   });
 
   it("US-03.1 draws the board focus ring on the frame edge and not on the canvas", () => {
