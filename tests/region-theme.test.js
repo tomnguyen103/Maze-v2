@@ -261,12 +261,46 @@ describe("Popup Atlas stamp forms", () => {
     }
   });
 
-  it("gives each state a different stamp rule body", () => {
-    expect(new Set(STATES.map(stateRule)).size).toBe(STATES.length);
+  it("gives each state its own stamp form", () => {
+    /** @type {Record<string, string>} */
+    const FORM_MARK = {
+      completed: "--territory",
+      current: "--sun",
+      ahead: "--color-paper-deep",
+      milestone: "clip-path",
+      "completed-milestone": "--coral"
+    };
+    const bodies = STATES.map((state) => stateRule(state)?.replace(/\s+/g, " ").trim());
+    expect(new Set(bodies).size).toBe(STATES.length);
+    for (const state of STATES) {
+      const formRules = popupAtlasCss.match(
+        new RegExp(String.raw`\.atlas-landmark\[data-state="${state}"\][^{]*\{[^}]*\}`, "g")
+      ) ?? [];
+      expect(formRules.join(" "), state).toContain(FORM_MARK[state]);
+    }
   });
 
   it("uses tokens only, with no literal colour", () => {
-    expect(popupAtlasCss).not.toMatch(/#[0-9a-f]{3,8}|(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/i);
+    const declarations = popupAtlasCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(declarations).not.toMatch(/#[0-9a-f]{3,8}|(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/i);
+    expect(declarations).not.toMatch(
+      /:\s*[^;{}]*\b(?:white|black|red|green|blue|yellow|orange|purple|gray|grey)\b/i
+    );
+  });
+
+  it("starts every selector with :root so the Popup rules win over the base file", () => {
+    const preludes = popupAtlasCss
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .match(/[^{};]+(?=\{)/g)
+      ?.map((prelude) => prelude.trim())
+      .filter((prelude) => !prelude.startsWith("@")) ?? [];
+    // Commas inside :is() and :has() do not start a new selector.
+    const plain = preludes
+      .flatMap((prelude) => prelude.replace(/\([^()]*\)/g, "()").split(","))
+      .map((part) => part.trim())
+      .filter((part) => !part.startsWith(":root"));
+    expect(preludes.length).toBeGreaterThan(20);
+    expect(plain).toEqual([]);
   });
 
   it("keeps the Pilot Atlas sheet free of rules", () => {

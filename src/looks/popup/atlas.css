@@ -236,7 +236,7 @@
   right: var(--space-1);
   width: 1.5rem;
   height: 1.5rem;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--color-board-ink);
   border-radius: 50%;
   content: "";
   opacity: 0.6;
@@ -399,4 +399,37 @@
   :root button.atlas-landmark strong::before {
     display: none;
   }
+
+  /* System colours replace the tint fills, so the text takes the system text colour. */
+  :root .atlas-region__heading h3,
+  :root button.atlas-landmark strong {
+    color: CanvasText;
+    -webkit-text-stroke: 0;
+  }
+
+  /* The stamp forms are gone, so the state label shows again on a phone. */
+  :root .atlas-regions[data-view="map"] .atlas-landmark > span:not([class]) {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  /* Forced colours drop box-shadow: the current and selected stamps get an outline. */
+  :root .atlas-landmark[aria-current="step"] {
+    outline: 3px dashed CanvasText;
+    outline-offset: 2px;
+  }
+
+  :root .atlas-landmark[aria-pressed="true"] {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+/* A raised stamp keeps its focus ring and selected ring above the next stamp. */
+:root .atlas-landmark:is(:focus-visible, [aria-pressed="true"]) {
+  z-index: 1;
 }
