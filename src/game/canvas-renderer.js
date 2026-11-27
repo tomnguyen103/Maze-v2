@@ -63,11 +63,13 @@ function createDetachedCanvas(width, height) {
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  * @param {() => Promise<unknown>} [loadArt] Loads the look's board art; null or a rejection keeps the shape marks.
+ * @param {() => boolean} [isBrightStart] True while the Bright Start Quest Level shows; it softens the Fangmoor art.
  */
 export function createCanvasRenderer(
   canvas,
   createTile = createDetachedCanvas,
-  loadArt = () => import("@look/board-art.js")
+  loadArt = () => import("@look/board-art.js"),
+  isBrightStart = () => false
 ) {
   const context = getCanvasContext(canvas);
   /** @type {any} */
@@ -551,10 +553,12 @@ export function createCanvasRenderer(
    */
   function drawArt(key, mode, x, y, tile) {
     const side = tile * 0.9 * palette.markScale;
+    // Read outside the try: a failing level getter must not switch off the art for the page.
+    const soft = key === "fangmoor" && isBrightStart();
     context.save();
     try {
       context.translate(x - side / 2, y - side / 2);
-      art.drawFigure(context, key, mode, side, palette.flat);
+      art.drawFigure(context, key, mode, side, palette.flat, soft);
       return true;
     } catch {
       // An engine without a canvas feature the art needs keeps the shape marks for this page.
