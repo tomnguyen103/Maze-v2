@@ -77,6 +77,8 @@ export function createCanvasRenderer(
   let artRequested = false;
 
   let palette = readPalette();
+  // The palette is cached: the first render, a repaint and a token attribute change read it again.
+  let paletteStale = true;
   let deviceRatio = 1;
   /** @type {Map<string, CanvasPattern | null>} */
   const patterns = new Map();
@@ -157,9 +159,11 @@ export function createCanvasRenderer(
   function resize() {
     const bounds = canvas.getBoundingClientRect();
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    // The Fog tile scales with the device ratio, so a new ratio drops the cached tiles.
+    if (ratio !== deviceRatio) patterns.clear();
     deviceRatio = ratio;
-    const width = Math.max(320, Math.round(bounds.width * ratio));
-    const height = Math.max(320, Math.round(bounds.height * ratio));
+    const width = Math.max(1, Math.round(bounds.width * ratio));
+    const height = Math.max(1, Math.round(bounds.height * ratio));
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
@@ -170,35 +174,38 @@ export function createCanvasRenderer(
   function render(run) {
     lastRun = run;
     // Read the tokens before resize() clears the canvas, so a missing token leaves the last board.
-    palette = readPalette();
+    if (paletteStale) {
+      palette = readPalette();
+      paletteStale = false;
+    }
     resize();
+    // Each frame starts from the default line, text, and fill state, and ends on it even when a mark throws.
+    context.save();
+    try {
+      paint(run);
+    } finally {
+      context.restore();
+    }
+    requestArt();
+  }
+
+  /** @param {GameRun} run */
+  function paint(run) {
     const size = run.labyrinth.length;
     const tile = canvas.width / size;
     const revealed = new Set([...run.revealed, ...run.pulseVisible]);
-    for (const windway of run.windways) {
-      const sourceKey = `${windway.source.row},${windway.source.col}`;
-      const destinationKey =
-        `${windway.destination.row},${windway.destination.col}`;
-      if (revealed.has(sourceKey) || revealed.has(destinationKey)) {
-        revealed.add(sourceKey);
-        revealed.add(destinationKey);
-      }
-    }
-    // Each frame starts from the default line, text, and fill state.
-    context.save();
+    const ratio = deviceRatio;
     context.clearRect(0, 0, canvas.width, canvas.height);
     if (run.status === "paused") {
       // The cover is opaque, so nothing of the board shows on a paused Run.
       context.fillStyle = palette.cover;
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.fillStyle = palette.coverInk;
-      context.font = `700 ${Math.max(22, canvas.width * 0.045)}px ${palette.fontBody}`;
+      context.font = `700 ${Math.max(22 * ratio, canvas.width * 0.045)}px ${palette.fontBody}`;
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
       drawNeatline(size);
-      context.restore();
-      requestArt();
       return;
     }
     context.fillStyle = fogFill();
@@ -237,10 +244,14 @@ export function createCanvasRenderer(
     drawCoastline(run, revealed, tile);
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
-      drawGate(run.gate, tile);
+      isolated(() => drawGate(run.gate, tile));
     }
     for (const windway of run.windways) {
-      if (revealed.has(`${windway.source.row},${windway.source.col}`)) {
+      // A Windway shows its mark when either end is known. The partner tile gets no terrain or other mark.
+      if (
+        revealed.has(`${windway.source.row},${windway.source.col}`) ||
+        revealed.has(`${windway.destination.row},${windway.destination.col}`)
+      ) {
         drawWindway(windway, tile);
       }
     }
@@ -258,17 +269,20 @@ export function createCanvasRenderer(
         drawEcho(echo, tile, echoIndex + 1);
       }
     }
+    // In a Warden Challenge the Wardens draw over the Explorer, so the Warden shows on its tile.
+    const challenge = run.status === "challenge";
+    if (challenge) drawExplorer(run.explorer, tile);
     for (const warden of run.wardens) {
       if (revealed.has(`${warden.row},${warden.col}`)) {
-        drawWarden(warden, tile);
+        isolated(() => drawWarden(warden, tile));
       }
     }
-    drawExplorer(run.explorer, tile);
+    if (!challenge) drawExplorer(run.explorer, tile);
 
-    if (run.status === "challenge") {
-      const fontSize = Math.max(22, canvas.width * 0.045);
-      const subSize = Math.max(14, canvas.width * 0.022);
-      const gap = Math.max(28, canvas.width * 0.055);
+    if (challenge) {
+      const fontSize = Math.max(22 * ratio, canvas.width * 0.045);
+      const subSize = Math.max(14 * ratio, canvas.width * 0.022);
+      const gap = Math.max(28 * ratio, canvas.width * 0.055);
       const gateWarden = run.challenge?.kind === "gate-warden";
       drawBand(gap + fontSize * 2.4);
       const headingY = canvas.height / 2 - gap / 2;
@@ -290,8 +304,16 @@ export function createCanvasRenderer(
       }
     }
     drawNeatline(size);
-    context.restore();
-    requestArt();
+  }
+
+  /** @param {() => void} draw Runs one mark with its own line, text and fill state. */
+  function isolated(draw) {
+    context.save();
+    try {
+      draw();
+    } finally {
+      context.restore();
+    }
   }
 
   // The art loads once, after the first paint, so it never delays the first board.
@@ -351,8 +373,7 @@ export function createCanvasRenderer(
     const unit = devicePixel();
     const left = Math.round((box.left - frameBox.left) * deviceRatio);
     const top = Math.round((box.top - frameBox.top) * deviceRatio);
-    // The board box in device pixels. The backing store clamps to 320 and cannot size the Neatline.
-    const side = Math.round(box.width * deviceRatio);
+    const side = canvas.width;
     const tick = 2 * unit;
     const gap = 2 * unit;
     const half = (unit % 2) / 2;
@@ -376,10 +397,12 @@ export function createCanvasRenderer(
     }
     neat.stroke();
     neat.fillStyle = palette.ink;
-    neat.font = gridFont(10 * deviceRatio);
+    // The Grid reference is 0.625 rem: 10 px at a 16 px root.
+    const gridSize = (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * 0.625 * deviceRatio;
+    neat.font = gridFont(gridSize);
     // Every tick stays. Label every k-th line, with k the smallest step whose pitch fits the widest label.
     const labelWidth = neat.measureText(String(size)).width + 2 * unit;
-    const rowWidth = Math.max(labelWidth, 10 * deviceRatio);
+    const rowWidth = Math.max(labelWidth, gridSize);
     const steps = [1, 2, 5, 10];
     const fits = (/** @type {number} */ candidate) => (candidate * side) / size >= rowWidth;
     const step = steps.find(fits) ?? steps[steps.length - 1];
@@ -434,7 +457,7 @@ export function createCanvasRenderer(
    * @param {number} fontScale
    */
   function drawLabel(text, x, y, tile, fontScale) {
-    const fontSize = Math.max(7, tile * fontScale * palette.markScale);
+    const fontSize = Math.max(7 * deviceRatio, tile * fontScale * palette.markScale);
     const width = Math.max(tile * 0.3, fontSize * (text.length * 0.68 + 0.9));
     const height = fontSize * 1.55;
     traceRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
@@ -553,8 +576,12 @@ export function createCanvasRenderer(
    */
   function drawArt(key, mode, x, y, tile) {
     const side = tile * 0.9 * palette.markScale;
-    // Read outside the try: a failing level getter must not switch off the art for the page.
-    const soft = key === "fangmoor" && isBrightStart();
+    let soft = false;
+    try {
+      soft = key === "fangmoor" && isBrightStart();
+    } catch {
+      // A failing level getter draws the full Fangmoor and keeps the art on for the page.
+    }
     context.save();
     try {
       context.translate(x - side / 2, y - side / 2);
@@ -615,7 +642,7 @@ export function createCanvasRenderer(
     context.save();
     context.fillStyle = palette.echoText;
     context.font =
-      `700 ${Math.max(8, tile * 0.22 * scale)}px ${palette.fontBody}`;
+      `700 ${Math.max(8 * deviceRatio, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(String(pairNumber), x, y);
@@ -1048,13 +1075,23 @@ export function createCanvasRenderer(
 
   // A scheme or theme change moves the tokens; the cached Fog and hatch patterns hold the old colours.
   function repaint() {
+    paletteStale = true;
     if (!lastRun) return;
     patterns.clear();
     render(lastRun);
   }
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", repaint);
+  window.matchMedia?.("(forced-colors: active)")?.addEventListener?.("change", repaint);
+  window.matchMedia?.("(prefers-contrast: more)")?.addEventListener?.("change", repaint);
+  // Each attribute moves a board token or the mark scale: the theme, the contrast, the large marks and the two palettes.
   new MutationObserver(repaint).observe(document.documentElement, {
-    attributeFilter: ["data-theme"],
+    attributeFilter: [
+      "data-theme",
+      "data-access-contrast",
+      "data-access-marks",
+      "data-explorer-palette",
+      "data-playground-palette"
+    ],
     attributes: true
   });
 

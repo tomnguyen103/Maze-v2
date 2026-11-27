@@ -533,6 +533,18 @@ describe("Trail Compass parity with the board", () => {
     expect(describeCompassState(run)).not.toContain("A Windway starts");
   });
 
+  it("keeps the unrevealed Windway partner tile in Fog, as the canvas does (R1a)", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
+    );
+    const [windway] = run.windways;
+    const destinationKey = `${windway.destination.row},${windway.destination.col}`;
+    run.revealed = [`${windway.source.row},${windway.source.col}`];
+    run.pulseVisible = [];
+    run.wardens = [{ ...run.wardens[0], row: windway.destination.row, col: windway.destination.col }];
+    expect(describeListenTargets(run).map((target) => target.key)).not.toContain(destinationKey);
+  });
+
   it("lists Wardens nearest first, then the Gate, then Echoes (B-53)", () => {
     const text = describeCompassState(listenFixture(null));
     expect(text).toMatch(

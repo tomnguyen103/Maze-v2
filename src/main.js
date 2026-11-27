@@ -105,6 +105,7 @@ import {
   getDifficultyBand,
   getLabyrinthConfig,
   getQuestLevel,
+  isBrightStartQuestRun,
   isGateWardenMilestone
 } from "./questions/quest-levels.js";
 import {
@@ -145,7 +146,9 @@ const HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER = Math.max(
 );
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
-const renderer = createCanvasRenderer(canvas, undefined, undefined, () => currentLevel.id === "bright-start");
+const renderer = createCanvasRenderer(canvas, undefined, undefined, () =>
+  isBrightStartQuestRun(currentLevel.id, { daily: activeDaily !== null, firstLight: activeFirstLight })
+);
 
 /** @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} question @param {"correct" | "wrong" | "hint" | "skip"} outcome */
 function recordLearningOutcome(question, outcome) {
@@ -1497,10 +1500,15 @@ canvas.addEventListener("pointerup", (event) => {
     : deltaY > 0 ? "down" : "up");
 });
 
-window.addEventListener("resize", () => {
-  renderer.resize();
-  renderer.render(run);
-});
+// One observer on the board frame covers the window, the layout and the Neatline margin. One frame coalesces the bursts.
+let boardFrameRepaint = 0;
+new ResizeObserver(() => {
+  if (boardFrameRepaint) return;
+  boardFrameRepaint = requestAnimationFrame(() => {
+    boardFrameRepaint = 0;
+    renderer.render(run);
+  });
+}).observe(elements.canvasFrame);
 
 // The fonts load lazily and `fonts.ready` can resolve early, so the board repaints once the Grid and body fonts settle.
 // The catch covers the load only: a render error stays visible.

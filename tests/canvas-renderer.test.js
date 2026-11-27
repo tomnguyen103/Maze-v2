@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean }} [options]
+ * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean }} [options]
  */
-function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart } = {}) {
+function stubCanvas({ width = 640, height = width, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -48,7 +48,7 @@ function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () =
     translate: vi.fn()
   };
   const canvas = {
-    getBoundingClientRect: () => ({ width, height: width }),
+    getBoundingClientRect: () => ({ width, height }),
     getContext: () => context,
     height: 640,
     width: 640
@@ -125,9 +125,9 @@ function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () =
       }
     });
     Object.assign(canvas, {
-      getBoundingClientRect: () => ({ left: 18, top: 18, width, height: width }),
+      getBoundingClientRect: () => ({ left: 18, top: 18, width, height }),
       parentElement: {
-        getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: width + 36 }),
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: height + 36 }),
         querySelector: () => (neatline === "no-overlay" ? null : overlay)
       }
     });
@@ -141,6 +141,7 @@ function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () =
   );
   return {
     calls,
+    canvas,
     context,
     fillRects,
     labels,
@@ -168,7 +169,11 @@ function scopeOf(selector) {
 const LIGHT = scopeOf(":root {");
 // Night appears twice in tokens.css: the system-dark media block and the explicit dark block.
 const NIGHT_SYSTEM = scopeOf(':root:not([data-theme="light"]) {');
-const NIGHT_EXPLICIT = tokensCss.slice(tokensCss.indexOf(':root[data-theme="dark"] {'));
+// The explicit Night block ends where the forced-colors block starts.
+const NIGHT_EXPLICIT = tokensCss.slice(
+  tokensCss.indexOf(':root[data-theme="dark"] {'),
+  tokensCss.indexOf("@media (forced-colors: active)")
+);
 
 /**
  * Reads one canvas token from a scope and throws when it is absent.
@@ -422,9 +427,11 @@ function board(overrides) {
 }
 
 describe("Canvas renderer", () => {
-  afterEach(() => {
-    document.body.removeAttribute("style");
+  afterEach(async () => {
     document.documentElement.removeAttribute("data-access-contrast");
+    // Let the attribute observers repaint while the board tokens still exist.
+    await new Promise((done) => setTimeout(done, 0));
+    document.body.removeAttribute("style");
   });
 
   describe("board art", () => {
@@ -707,7 +714,8 @@ describe("Canvas renderer", () => {
       renderer.render(run);
 
       // The Fog tile scales with the device ratio. The hatch tile stays 6 backing-store pixels at every ratio.
-      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16]);
+      // B-95: the ratio change clears the cache, so the hatch tile is built again.
+      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16, 6]);
     } finally {
       window.devicePixelRatio = originalDpr;
     }
@@ -938,7 +946,7 @@ describe("Canvas renderer", () => {
     const labyrinth = Array.from({ length: 23 }, (_, row) =>
       Array.from({ length: 23 }, (_, col) => (row === 0 && col === 1 ? 0 : 1))
     );
-    const { context, renderer } = stubCanvas({ width: 160 });
+    const { context, renderer } = stubCanvas({ width: 320 });
     const paints = recordPaints(context);
 
     renderer.render(board({ labyrinth, revealed: ["0,0", "0,1"] }));
@@ -965,7 +973,7 @@ describe("Canvas renderer", () => {
     expect(neat.overlay.width).toBe(0);
   });
 
-  it("US-03.1 sizes the Neatline from the board box when the backing store clamps to 320", () => {
+  it("US-03.1 sizes the Neatline from the board box of a small board", () => {
     const { neat, renderer } = stubCanvas({ neatline: true, width: 200 });
 
     renderer.render(board({ revealed: ["0,0"] }));
@@ -1079,16 +1087,54 @@ describe("Canvas renderer", () => {
     expect(lightOn(undefined)).toBe(false);
   });
 
-  it("reads the canvas palette again on every frame", () => {
-    const { renderer, tiles } = stubCanvas();
-    const run = questRun("PALETTE-REREAD", "bright-start", 1);
+  it("B-89 keeps the cached palette across frames and reads it again on a repaint attribute", async () => {
+    // happy-dom 20 holds its observer callbacks through a WeakRef, so a garbage collection can silence a real observer.
+    /** @type {{ callback: () => void, options: MutationObserverInit }[]} */
+    const observed = [];
+    vi.stubGlobal(
+      "MutationObserver",
+      class {
+        /** @param {() => void} callback */
+        constructor(callback) {
+          observed.push({ callback, options: {} });
+        }
+        /** @param {Node} _target @param {MutationObserverInit} options */
+        observe(_target, options) {
+          observed[observed.length - 1].options = options;
+        }
+      }
+    );
+    try {
+      const { renderer, tiles } = stubCanvas();
+      const run = questRun("PALETTE-REREAD", "bright-start", 1);
+      const frame = () => renderer.render({ ...run, pulseVisible: [], revealed: [] });
+      const settle = () => new Promise((done) => setTimeout(done, 0));
+      expect(observed).toHaveLength(1);
+      const { callback, options } = observed[0];
+      expect(options.attributeFilter).toEqual(
+        expect.arrayContaining(["data-access-contrast", "data-access-marks"])
+      );
 
-    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
-    renderer.render({ ...run, pulseVisible: [], revealed: [] });
-    document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
-    renderer.render({ ...run, pulseVisible: [], revealed: [] });
+      document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+      frame();
+      document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
+      frame();
+      // The second frame reuses the palette and the Fog pattern.
+      expect(tiles.map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)"]);
 
-    expect(tiles.map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)", "rgb(4, 5, 6)"]);
+      // happy-dom needs a tick before a computed style shows an inline change.
+      await settle();
+      // A token attribute change reads the palette again and repaints the last Run.
+      callback();
+      expect(tiles.at(-1)?.fills[0].style).toBe("rgb(4, 5, 6)");
+
+      document.body.style.setProperty("--color-fog", "rgb(7, 8, 9)");
+      await settle();
+      callback();
+      expect(tiles.at(-1)?.fills[0].style).toBe("rgb(7, 8, 9)");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -1786,5 +1832,346 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       paints.every((paint) => (typeof paint.style === "string" ? paint.style.length > 0 : /** @type {{ pattern?: boolean }} */ (paint.style)?.pattern === true))
     ).toBe(true);
     expect(paints.some((paint) => typeof paint.style === "string" && paint.style.startsWith("oklch("))).toBe(true);
+  });
+});
+
+describe("R1a renderer findings", () => {
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  afterEach(async () => {
+    document.documentElement.style.removeProperty("font-size");
+    document.documentElement.removeAttribute("data-access-contrast");
+    await settle();
+    document.body.removeAttribute("style");
+  });
+
+  /**
+   * Gives the stub context a line state that save and restore keep, and records the state at every stroke.
+   * @param {ReturnType<typeof stubCanvas>["context"]} context
+   */
+  function trackLineState(context) {
+    const state = { lineCap: "butt", lineJoin: "miter" };
+    /** @type {Array<{ lineCap: string, lineJoin: string }>} */
+    const strokes = [];
+    /** @type {Array<typeof state>} */
+    const stack = [];
+    for (const key of /** @type {const} */ (["lineCap", "lineJoin"])) {
+      Object.defineProperty(context, key, {
+        configurable: true,
+        get: () => state[key],
+        set: (value) => {
+          state[key] = value;
+        }
+      });
+    }
+    context.save = vi.fn(() => {
+      stack.push({ ...state });
+    });
+    context.restore = vi.fn(() => {
+      Object.assign(state, stack.pop());
+    });
+    context.stroke = vi.fn(() => {
+      strokes.push({ ...state });
+    });
+    return strokes;
+  }
+
+  /** @param {ReturnType<typeof stubCanvas>["context"]} context */
+  function trackFonts(context) {
+    /** @type {string[]} */
+    const fonts = [];
+    Object.defineProperty(context, "font", {
+      configurable: true,
+      get: () => fonts.at(-1) ?? "",
+      set: (value) => {
+        fonts.push(value);
+      }
+    });
+    return fonts;
+  }
+
+  /** @param {number} ratio @param {() => void} body */
+  function atDeviceRatio(ratio, body) {
+    const original = window.devicePixelRatio;
+    window.devicePixelRatio = ratio;
+    try {
+      body();
+    } finally {
+      window.devicePixelRatio = original;
+    }
+  }
+
+  it("B-81 restores the line cap and join after a Gate", () => {
+    const { context, renderer } = stubCanvas();
+    const strokes = trackLineState(context);
+
+    renderer.render(
+      board({
+        explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+        gate: { row: 0, col: 1, open: false },
+        revealed: ["0,1", "1,1"]
+      })
+    );
+
+    // The Explorer ring is the last stroke, drawn after the Gate.
+    expect(strokes.at(-1)).toEqual({ lineCap: "butt", lineJoin: "miter" });
+  });
+
+  it("B-81 restores the line cap and join after a Warden", () => {
+    const { context, renderer } = stubCanvas();
+    const strokes = trackLineState(context);
+
+    renderer.render(
+      board({
+        explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+        revealed: ["0,1", "1,1"],
+        wardens: [{ row: 0, col: 1, id: 0, mode: "hunt" }]
+      })
+    );
+
+    expect(strokes.at(-1)).toEqual({ lineCap: "butt", lineJoin: "miter" });
+  });
+
+  it("B-82 draws the Explorer before the Wardens in a Warden Challenge", () => {
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    // Unique colours keep other marks from matching.
+    const disc = "rgb(11, 11, 11)";
+    const warden = "rgb(22, 22, 22)";
+    document.body.style.setProperty("--color-board-explorer-disc", disc);
+    document.body.style.setProperty("--color-board-warden", warden);
+
+    renderer.render(
+      board({
+        explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+        revealed: ["1,1"],
+        status: "challenge",
+        wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }]
+      })
+    );
+
+    const explorerAt = paints.findIndex((paint) => paint.kind === "fill" && paint.style === disc);
+    const wardenAt = paints.findIndex((paint) => paint.kind === "fill" && paint.style === warden);
+    expect(explorerAt).toBeGreaterThanOrEqual(0);
+    expect(wardenAt).toBeGreaterThan(explorerAt);
+  });
+
+  it("B-83 draws a Windway from one known end without revealing the partner tile", () => {
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    const passage = document.body.style.getPropertyValue("--color-passage");
+
+    renderer.render(
+      board({
+        revealed: ["1,0"],
+        windways: [{ source: { row: 1, col: 0 }, destination: { row: 0, col: 0 }, direction: "up" }]
+      })
+    );
+
+    // Tile 0,0 is a passage. Its water rect would show if the pair rule revealed it.
+    expect(paints.filter((paint) => paint.kind === "fill" && paint.style === passage)).toEqual([]);
+    expect(paints.some((paint) => paint.kind === "stroke" && paint.path.some((step) => step.startsWith("arc(")))).toBe(true);
+  });
+
+  it("B-83 draws a Windway from the destination end alone", () => {
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(
+      board({
+        revealed: ["0,0"],
+        windways: [{ source: { row: 1, col: 0 }, destination: { row: 0, col: 0 }, direction: "up" }]
+      })
+    );
+
+    expect(paints.some((paint) => paint.kind === "stroke" && paint.path.some((step) => step.startsWith("arc(")))).toBe(true);
+  });
+
+  it("US-03.1 repaints the last Run when the contrast preference changes", () => {
+    /** @type {Record<string, () => void>} */
+    const listeners = {};
+    vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        listeners[query] = listener;
+      }
+    }));
+    try {
+      const { renderer, tiles } = stubCanvas();
+      const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
+      renderer.render({ ...run, pulseVisible: [], revealed: [] });
+      const built = tiles.length;
+      document.body.style.setProperty("--color-fog", "rgb(7, 8, 9)");
+      expect(listeners["(prefers-contrast: more)"]).toBeTypeOf("function");
+      listeners["(prefers-contrast: more)"]();
+      expect(tiles.length).toBeGreaterThan(built);
+      expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(7, 8, 9)")).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("B-85 restores the context when a mark throws", () => {
+    const { context, renderer } = stubCanvas();
+    context.fillRect = vi.fn(() => {
+      throw new Error("canvas lost");
+    });
+
+    expect(() => renderer.render(board({ revealed: ["0,0"] }))).toThrow("canvas lost");
+    expect(context.save.mock.calls.length).toBeGreaterThan(0);
+    expect(context.restore.mock.calls.length).toBe(context.save.mock.calls.length);
+  });
+
+  it("B-86 and B-24 sizes the backing store from a 400x300 box without a 320 clamp", () => {
+    const wide = stubCanvas({ width: 400, height: 300 });
+    wide.renderer.render(board({ revealed: ["0,0"] }));
+    expect([wide.canvas.width, wide.canvas.height]).toEqual([400, 300]);
+
+    const small = stubCanvas({ width: 200 });
+    small.renderer.render(board({ revealed: ["0,0"] }));
+    expect([small.canvas.width, small.canvas.height]).toEqual([200, 200]);
+  });
+
+  it("B-23 scales the font floors by the device ratio", () => {
+    atDeviceRatio(2, () => {
+      const paused = stubCanvas({ width: 200 });
+      const pausedFonts = trackFonts(paused.context);
+      paused.renderer.render(board({ status: "paused" }));
+      // 200 CSS pixels at ratio 2 is a 400 pixel store. The floor is 22 CSS pixels, so 44.
+      expect(pausedFonts.some((font) => font.startsWith("700 44px "))).toBe(true);
+
+      const challenge = stubCanvas({ width: 200 });
+      const challengeFonts = trackFonts(challenge.context);
+      challenge.renderer.render(
+        board({
+          explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+          revealed: ["1,1"],
+          status: "challenge",
+          wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }]
+        })
+      );
+      expect(challengeFonts.some((font) => font.startsWith("700 44px "))).toBe(true);
+      expect(challengeFonts.some((font) => font.startsWith("500 28px "))).toBe(true);
+    });
+  });
+
+  it("B-92 sizes the Grid reference font from the root font size", () => {
+    document.documentElement.style.fontSize = "20px";
+    const { neat, renderer } = stubCanvas({ neatline: true });
+
+    renderer.render(board({ revealed: ["0,0"] }));
+
+    // 0.625 of a 20 px root is 12.5 px.
+    expect(neat.fonts.length).toBeGreaterThan(0);
+    expect(neat.fonts.every((font) => font.startsWith("12.5px "))).toBe(true);
+  });
+
+  it("B-95 rebuilds the Fog and hatch patterns when the device ratio changes", () => {
+    const { renderer, tiles } = stubCanvas();
+    const run = board({ revealed: ["0,0", "0,1"] });
+    atDeviceRatio(1, () => renderer.render(run));
+    const first = tiles.length;
+    atDeviceRatio(1, () => renderer.render(run));
+    expect(tiles).toHaveLength(first);
+    atDeviceRatio(2, () => renderer.render(run));
+    expect(tiles.length).toBeGreaterThan(first);
+    // The hatch tile is 6 pixels at every ratio, so only a cleared cache builds it again.
+    expect(tiles.filter((tile) => tile.width === 6)).toHaveLength(2);
+  });
+
+  it("B-91 gives the game canvas an image role and fallback text", () => {
+    const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
+    const canvas = html.match(/<canvas\s+id="maze-canvas"[\s\S]*?<\/canvas>/)?.[0] ?? "";
+
+    expect(canvas).toMatch(/role="img"/);
+    expect(canvas).toMatch(/aria-label="[^"]+"/);
+    expect(canvas).toMatch(/>\s*\S[^<]*<\/canvas>/);
+  });
+
+  describe("B-93 forced colours", () => {
+    const SYSTEM = new Set(["Canvas", "CanvasText", "GrayText", "Highlight", "HighlightText"]);
+    const NAMES = [
+      "--color-fog",
+      "--color-fog-dot",
+      "--color-passage",
+      "--color-land",
+      "--color-coastline",
+      "--color-hatch",
+      "--color-danger-line",
+      ...BOARD_TOKENS.filter((name) => name.startsWith("--color-board-"))
+    ];
+
+    for (const look of /** @type {const} */ (["pilot", "popup"])) {
+      it(`maps every board token to a system colour in the ${look} tokens`, () => {
+        const css = readFileSync(resolve(process.cwd(), `src/looks/${look}/tokens.css`), "utf8");
+        const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+        const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+
+        for (const name of NAMES) expect(SYSTEM.has(value(name) ?? ""), `${look} ${name}`).toBe(true);
+        expect(value("--color-passage")).not.toBe(value("--color-land"));
+      });
+    }
+
+    for (const look of /** @type {const} */ (["pilot", "popup"])) {
+      it(`raises the ${look} forced-colors selector above the daylight palette rules`, () => {
+        const css = readFileSync(resolve(process.cwd(), `src/looks/${look}/tokens.css`), "utf8");
+        const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+        expect(forced).toContain(':root:root:not([data-theme="light"])');
+        expect(forced).toContain(':root:root[data-theme="light"]');
+      });
+    }
+
+    it("maps the Pilot ink, on-fill and night tokens to system colours", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
+      const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+      const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+      expect(value("--color-ink")).toBe("CanvasText");
+      expect(value("--color-on-fill")).toBe("Canvas");
+      expect(value("--color-night-deep")).toBe("Canvas");
+    });
+
+    it("paints a Run when every board token holds a system colour keyword", () => {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      const keywords = ["Canvas", "CanvasText", "GrayText", "Highlight", "HighlightText"];
+      NAMES.forEach((name, index) => document.body.style.setProperty(name, keywords[index % keywords.length]));
+      document.body.style.setProperty("--color-passage", "Canvas");
+      document.body.style.setProperty("--color-land", "Highlight");
+
+      expect(() =>
+        renderer.render(
+          board({
+            explorer: { row: 1, col: 1, vitality: 3, maxVitality: 3 },
+            revealed: ["0,0", "0,1", "1,0", "1,1"]
+          })
+        )
+      ).not.toThrow();
+      const styles = paints.map((paint) => paint.style);
+      expect(styles).toContain("Canvas");
+      expect(styles).toContain("Highlight");
+    });
+  });
+
+  describe("PR 312 follow-ups", () => {
+    const withWarden = () =>
+      board({
+        revealed: ["1,1"],
+        wardens: [{ row: 1, col: 1, id: 0, mode: "patrol" }]
+      });
+
+    it("A treats a throwing Bright Start getter as false and keeps the art on", async () => {
+      const art = { drawFigure: vi.fn() };
+      const { renderer } = stubCanvas({
+        loadArt: () => Promise.resolve(art),
+        isBrightStart: () => {
+          throw new Error("level lost");
+        }
+      });
+
+      expect(() => renderer.render(withWarden())).not.toThrow();
+      await settle();
+      expect(art.drawFigure).toHaveBeenCalled();
+      expect(art.drawFigure.mock.calls.every((call) => call[5] === false)).toBe(true);
+      expect(() => renderer.render(withWarden())).not.toThrow();
+    });
   });
 });

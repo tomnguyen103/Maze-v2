@@ -198,3 +198,12 @@ function normalizeLabyrinthNumber(labyrinthNumber) {
   }
   return labyrinthNumber;
 }
+
+/**
+ * The soft Fangmoor shows on a Bright Start Quest Run alone. A Daily Run and the First Light Tutorial can hold the Bright Start level but are not Quest Runs.
+ * @param {string} levelId
+ * @param {{ daily: boolean, firstLight: boolean }} kind
+ */
+export function isBrightStartQuestRun(levelId, { daily, firstLight }) {
+  return levelId === "bright-start" && !daily && !firstLight;
+}

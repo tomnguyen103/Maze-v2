@@ -1,8 +1,8 @@
 /**
  * Revealed Path Compass (player label: Trail Compass) — a presentation-only
  * nonvisual description layer over the canonical Run state. It reads exactly
- * what the canvas renderer draws: the revealed and pulse-visible tiles, the
- * windway pair rule, and the always-visible Trail Twist fixtures. It never
+ * what the canvas renderer draws: the revealed and pulse-visible tiles
+ * and the always-visible Trail Twist fixtures. It never
  * touches deterministic Run state and never describes Fog-hidden entities,
  * shortcuts, timing, or pathfinding.
  *
@@ -49,17 +49,8 @@ function counted(count, one, many) {
 
 /** @param {GameRun} run */
 function revealedTiles(run) {
+  // Renderer parity: a Windway partner tile stays in Fog until it is revealed itself.
   const revealed = new Set([...run.revealed, ...run.pulseVisible]);
-  // Renderer parity: a windway pair reveals as one unit.
-  for (const windway of run.windways) {
-    const sourceKey = `${windway.source.row},${windway.source.col}`;
-    const destinationKey =
-      `${windway.destination.row},${windway.destination.col}`;
-    if (revealed.has(sourceKey) || revealed.has(destinationKey)) {
-      revealed.add(sourceKey);
-      revealed.add(destinationKey);
-    }
-  }
   return revealed;
 }
 
