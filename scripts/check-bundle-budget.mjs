@@ -152,8 +152,8 @@ const budgets = [
     suffix: ".js",
     maxKb: 1
   },
-  // Popup board art measures 1.65 KB gzip; the limit is that plus 10%, rounded up. The Pilot stub is under 0.1 KB.
-  { label: "board art JavaScript", prefix: "board-art-", suffix: ".js", maxKb: 2 },
+  // Popup board art (six figures) measures 2.84 KB gzip; the limit is that plus 10%, rounded up. The Pilot stub is under 0.1 KB.
+  { label: "board art JavaScript", prefix: "board-art-", suffix: ".js", maxKb: 4 },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

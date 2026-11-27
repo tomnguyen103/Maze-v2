@@ -497,7 +497,7 @@ describe("Canvas renderer", () => {
       await flush();
       expect(loadArt).toHaveBeenCalledTimes(1);
       const figures = art.drawFigure.mock.calls.map(([, key, mode]) => `${key}:${mode}`);
-      expect(figures).toEqual(["fangmoor:patrol", "fangmoor:hunt", "clover:idle"]);
+      expect(figures).toEqual(["fangmoor:patrol", "fangmoor:hunt", "explorer:idle"]);
       // The figure fills 0.9 of one tile.
       expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 0.9);
       expect(art.drawFigure.mock.calls[0][4]).toBe(false);

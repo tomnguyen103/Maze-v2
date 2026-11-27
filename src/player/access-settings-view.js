@@ -3,6 +3,10 @@ import {
   loadAccessSettings,
   saveAccessSettings
 } from "./access-settings.js";
+import {
+  loadExplorerFigure,
+  saveExplorerFigure
+} from "./explorer-figure.js";
 import { createQuietExpeditionSettings } from "./quiet-expedition.js";
 
 /**
@@ -13,6 +17,7 @@ import { createQuietExpeditionSettings } from "./quiet-expedition.js";
 /**
  * @param {{
  *   storage?: AccessSettingsStorage,
+ *   loadArt?: () => Promise<{ default: { drawFigure: Function } | null } | null>,
  *   onApply?: (settings: AccessSettings) => void,
  *   onClose?: () => void,
  *   onSave?: (settings: AccessSettings) => void | Promise<{
@@ -24,6 +29,7 @@ import { createQuietExpeditionSettings } from "./quiet-expedition.js";
  */
 export function createAccessSettingsView({
   storage = globalThis.localStorage,
+  loadArt = () => import("@look/board-art.js"),
   onApply = () => {},
   onClose = () => {},
   onSave = () => {}
@@ -52,12 +58,18 @@ export function createAccessSettingsView({
     status: requiredElement("access-settings-status", HTMLElement),
     title: requiredElement("access-settings-title", HTMLElement)
   };
+  const picker = document.getElementById("access-explorer-figure");
+  const figureRadios = /** @type {HTMLInputElement[]} */ ([
+    ...(picker?.querySelectorAll('input[name="explorerFigure"]') ?? [])
+  ]);
   let savedSettings = loadAccessSettings(storage);
   /** @type {HTMLElement | null} */
   let returnFocus = null;
 
   onApply(savedSettings);
   syncControls(savedSettings);
+  syncFigure(loadExplorerFigure(storage));
+  void showFigurePicker().catch(() => {});
 
   elements.form.addEventListener("change", () => {
     elements.status.textContent = "Previewing. Save to keep these settings.";
@@ -74,6 +86,8 @@ export function createAccessSettingsView({
     event.preventDefault();
     try {
       savedSettings = saveAccessSettings(readControls(elements), storage);
+      // The pick saves before the repaint in onApply, so the board draws it.
+      if (picker && !picker.hidden) saveExplorerFigure(readFigure(), storage);
       onApply(savedSettings);
       elements.status.textContent = "Saving settings…";
       const result = await onSave(savedSettings);
@@ -95,6 +109,8 @@ export function createAccessSettingsView({
     try {
       savedSettings = saveAccessSettings(DEFAULT_ACCESS_SETTINGS, storage);
       syncControls(savedSettings);
+      // Reset also works before the lazy picker shows, so it skips the hidden check.
+      if (picker) syncFigure(saveExplorerFigure("clover", storage));
       onApply(savedSettings);
       elements.status.textContent = "Restoring canonical design…";
       const result = await onSave(savedSettings);
@@ -119,12 +135,42 @@ export function createAccessSettingsView({
     }
   });
   elements.dialog.addEventListener("close", () => {
+    syncFigure(loadExplorerFigure(storage));
     onApply(savedSettings);
     onClose();
     const target = returnFocus;
     returnFocus = null;
     target?.focus();
   });
+
+  /** @param {string} figure */
+  function syncFigure(figure) {
+    for (const radio of figureRadios) radio.checked = radio.value === figure;
+  }
+
+  function readFigure() {
+    return figureRadios.find((radio) => radio.checked)?.value ?? "clover";
+  }
+
+  // The picker stays hidden when the look has no art (Pilot) or the art fails.
+  async function showFigurePicker() {
+    if (!picker) return;
+    const art = (await loadArt())?.default;
+    if (!art) return;
+    const ratio = globalThis.devicePixelRatio || 1;
+    const flat =
+      globalThis.matchMedia?.("(forced-colors: active)").matches ||
+      readControls(elements).highContrast;
+    for (const radio of figureRadios) {
+      const canvas = radio.parentElement?.querySelector("canvas");
+      const context = canvas?.getContext("2d");
+      if (!canvas || !context) continue;
+      const side = Math.round(canvas.width * ratio);
+      canvas.width = canvas.height = side;
+      art.drawFigure(context, radio.value, "idle", side, flat);
+    }
+    picker.hidden = false;
+  }
 
   return {
     /** @param {AccessSettings} settings */
@@ -137,6 +183,7 @@ export function createAccessSettingsView({
     show(trigger) {
       returnFocus = trigger;
       syncControls(savedSettings);
+      syncFigure(loadExplorerFigure(storage));
       elements.status.textContent = "";
       if (!elements.dialog.open) {
         elements.dialog.showModal();

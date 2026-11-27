@@ -546,7 +546,7 @@ export function createCanvasRenderer(
   }
 
   /**
-   * @param {"clover" | "fangmoor"} key @param {string} mode @param {number} x @param {number} y @param {number} tile
+   * @param {"explorer" | "fangmoor"} key @param {string} mode @param {number} x @param {number} y @param {number} tile
    * @returns {boolean} False when the art failed and the caller draws the shape mark.
    */
   function drawArt(key, mode, x, y, tile) {
@@ -568,7 +568,7 @@ export function createCanvasRenderer(
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
-    if (art && drawArt("clover", "idle", x, y, tile)) return;
+    if (art && drawArt("explorer", "idle", x, y, tile)) return;
     const scale = palette.markScale;
     const radius = tile * 0.32 * scale;
 
