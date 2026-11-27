@@ -5553,6 +5553,7 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
     "data-result-state",
     "sigil"
   );
+  await expect(page.locator("#result-play-seed")).toBeHidden();
   await page.locator("#replay-run").focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#result-kicker")).toHaveText("Demo complete");
@@ -5698,9 +5699,31 @@ test("plays the lost seed again and keeps the Quest", async ({
   const questId = await readQuestId();
   expect(questId).toEqual(expect.any(String));
 
-  await page.locator("#result-play-seed").dblclick();
+  // Two clicks in one task: the first disables the button, so the second fires no click event.
+  const guardedSecondClick = await page
+    .locator("#result-play-seed")
+    .evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return false;
+      }
+      button.click();
+      const guarded = button.disabled;
+      button.click();
+      return guarded;
+    });
+  expect(guardedSecondClick).toBe(true);
   await expect(page.locator("#result-dialog")).not.toBeVisible();
+  await expect(page.locator("#moves-value")).toHaveText("000");
   await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
+  await expectGameReady(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({ seed: DEFEAT_SEED, levelId: "trail-scout" });
+  await expect(page.locator("#result-play-seed")).toBeEnabled();
   expect(await readQuestId()).toBe(questId);
 });
 

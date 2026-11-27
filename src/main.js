@@ -691,6 +691,9 @@ let offlineContinuityActive;
 let demoAccessPending = hasCompletedGuestDemo();
 /** @type {{ seed: string, levelId: string, labyrinthNumber: number, ruleset: { atlasRegionId: string, revision: string } } | null} */
 let playSeedTarget = null;
+/** The end-card state of the last Quest Run; a late sign-in restores it after the demo gate. */
+/** @type {"gate" | "sigil" | "defeat" | null} */
+let runResultState = null;
 let activeFirstLight = false;
 let firstLightEntryPending = false;
 let firstLightHandoff = false;
@@ -1447,7 +1450,7 @@ elements.resultPlaySeed.addEventListener("click", async () => {
   }
   elements.resultPlaySeed.disabled = true;
   try {
-    elements.resultDialog.close();
+    // startRun closes the card. A refused start keeps the card open, so the player can choose again.
     await startSharedRun(
       target.seed,
       target.levelId,
@@ -3310,6 +3313,9 @@ function syncDemoAccountAction(signedIn) {
     return;
   }
   demoAccessPending = false;
+  if (runResultState) {
+    elements.resultDialog.dataset.resultState = runResultState;
+  }
   const questComplete = questProgress.complete;
   elements.resultSummary.textContent = questComplete
     ? "Your account is ready. Begin a new Quest whenever you are ready."
@@ -3322,6 +3328,9 @@ function syncDemoAccountAction(signedIn) {
 /** @param {boolean} signedIn */
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
+  if (!signedIn) {
+    clearPlaySeed();
+  }
   if (elements.dailyDialog.open) {
     renderDailyBoardNote();
   }
@@ -4577,11 +4586,8 @@ async function finishRun() {
     // Storage access cannot strand the saved terminal result.
   }
   playCeremony = sigilCeremony;
-  elements.resultDialog.dataset.resultState = sigilMilestone
-    ? "sigil"
-    : won
-      ? "gate"
-      : "defeat";
+  runResultState = sigilMilestone ? "sigil" : won ? "gate" : "defeat";
+  elements.resultDialog.dataset.resultState = runResultState;
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
     : sigilCeremony
