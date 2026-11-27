@@ -334,9 +334,10 @@ The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Prod
 | R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. The R4 JS findings (B-10 frame follow, B-02) are not built |
 | R5 | Merged | #313 (Trail Compass text parity, live region in dialogs), with a fix in #315 |
 | R7a | Merged | #314 (landing hero from a real board crop) |
-| R3, R6c, R7b | Open | R3 needs only R1, so it is next. R6c and R7b follow R3 |
+| R3 | Merged | #318 (motion chunk: flap ripple, Gate pop-up, paper confetti, ceremony pop-up, reduced-motion gate) |
+| R6c, R7b | Open | Both need R3, so both are next |
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Partial | ADR 0064 merged. The superseding ADRs and the GLOSSARY terms wait for R3 |
 | R9 | Parked | Needs R8 and each gen1 surface in Popup |
 
-The game row measures 40.24 KB (Pilot) and 40.33 KB (Popup) of 42 KB after #317.
+The game row measures 40.63 KB (Pilot) and 40.72 KB (Popup) of 42 KB after #318. The motion chunk is 0.83 KB.
