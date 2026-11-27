@@ -4506,7 +4506,7 @@ async function finishRun() {
     echoTotal: run.echoes.length,
     questId: questProgress.questId,
     questLevelId: finishedLevel.id,
-    labyrinthNumber: currentLabyrinthNumber,
+    labyrinthNumber: finishedLabyrinthNumber,
     atlasRegionId: run.ruleset.atlasRegionId,
     rulesetRevision: run.ruleset.revision,
     ...(pendingRunReplay
@@ -4724,7 +4724,8 @@ async function finishRun() {
  * @param {boolean} won
  */
 function setSimpleResultCard(won) {
-  elements.resultDialog.dataset.resultState = won ? "gate" : "defeat";
+  runResultState = won ? "gate" : "defeat";
+  elements.resultDialog.dataset.resultState = runResultState;
   const collected = run.echoes.filter((echo) => echo.collected).length;
   elements.resultEchoes.textContent = `${collected} of ${run.echoes.length}`;
   clearPlaySeed();
