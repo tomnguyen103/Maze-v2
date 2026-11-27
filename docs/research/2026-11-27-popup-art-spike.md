@@ -42,7 +42,7 @@ Verdict for each figure (device px a tile in brackets):
 | Fangmoor, hunt | Colour only: red eyes and badge | Colour only | Pass: the "!" glyph reads | Pass |
 | Fangmoor, lured | Colour only: blue eyes and badge | Colour only | Pass: the note glyph reads | Pass |
 | Fangmoor, down | Pass: the low pose | Pass | Pass | Pass |
-| Fangmoor, patrol | Fail: the badge glyph is 2 to 3 device px | Fail: the glyph is about 5 device px | Pass: the "?" glyph reads | Pass |
+| Fangmoor, patrol | Fail: the badge glyph is 2 to 3 device px | Fail: the glyph is about 5 device px | Pass: the two footprint marks read | Pass |
 | Fangmoor, intercept | Fail: same reason | Fail: same reason | Pass: the arrow glyph reads | Pass |
 
 The Mode badge carries the Mode. Below 48 device px a tile, the badge has no room for a glyph, and patrol and intercept differ by badge colour only. Clover is the only Explorer that the plan tests. The other Explorers are drawn but not compared with each other.
