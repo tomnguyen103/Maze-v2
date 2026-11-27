@@ -69,11 +69,13 @@ const PILOT_HERO = [
  * text in a text with the Popup ones.
  */
 export function popupHeroSwap() {
-  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   // A missing Pilot string would turn the swap into a silent no-op.
-  for (const [pilot] of PILOT_HERO) {
-    if (!html.includes(pilot)) {
-      throw new Error(`index.html no longer contains the Pilot hero string: ${pilot}`);
+  for (const file of ["index.html", "src/landing/landing-controller.js"]) {
+    const text = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+    for (const [pilot] of PILOT_HERO) {
+      if (!text.includes(pilot)) {
+        throw new Error(`${file} no longer contains the Pilot hero string: ${pilot}`);
+      }
     }
   }
   /** @param {string} text */

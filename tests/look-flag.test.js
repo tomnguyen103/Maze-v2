@@ -100,11 +100,13 @@ describe("popup landing hero", () => {
       const kind = head.toString("ascii", 12, 16);
       let size;
       if (kind === "VP8 ") {
+        expect([...head.subarray(23, 26)]).toEqual([0x9d, 0x01, 0x2a]);
         size = [head.readUInt16LE(26) & 0x3fff, head.readUInt16LE(28) & 0x3fff];
       } else if (kind === "VP8L") {
         const bits = head.readUInt32LE(21);
         size = [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1];
       } else {
+        expect(kind).toBe("VP8X");
         size = [head.readUIntLE(24, 3) + 1, head.readUIntLE(27, 3) + 1];
       }
       expect(size).toEqual([640, 480]);
