@@ -98,6 +98,12 @@ const budgets = [
     suffix: ".js",
     maxKb: 2
   },
+  {
+    label: "Lifetime Membership JavaScript",
+    prefix: "lifetime-view-",
+    suffix: ".js",
+    maxKb: 2
+  },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
   // Loaded only on /admin. Budgeted from the start so phase 7's dashboard
   // grows against a number rather than unpoliced.

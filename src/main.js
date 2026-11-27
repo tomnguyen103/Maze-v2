@@ -107,9 +107,6 @@ import {
   isGateWardenMilestone
 } from "./questions/quest-levels.js";
 import {
-  createLifetimeView
-} from "./player/lifetime-view.js";
-import {
   LIFETIME_PRICE_ONCE
 } from "../shared/lifetime-product.js";
 import {
@@ -551,9 +548,36 @@ const accessSettingsContinuity = createAccessSettingsContinuity({
 /** @type {Promise<ReturnType<typeof import("./player/quest-conflict-view.js").createQuestConflictView>> | null} */
 let questConflictViewPromise = null;
 let questConflictViewRetry = false;
-const lifetimeView = createLifetimeView({
-  onUnlock: openLifetimeCheckout
-});
+/** @type {Promise<ReturnType<typeof import("./player/lifetime-view.js").createLifetimeView>> | null} */
+let lifetimeViewPromise = null;
+/** @type {ReturnType<typeof import("./player/lifetime-view.js").createLifetimeView> | null} */
+let loadedLifetimeView = null;
+let lifetimeViewRetry = false;
+/**
+ * The view loads on first need. `close` and `setStatus` never import: a view
+ * that never loaded has no dialog state to change.
+ */
+const lifetimeView = {
+  /** @returns {Promise<boolean>} false when the import fails, so no Run starts */
+  confirmLastFreeRun: () =>
+    withLifetimeView((view) => view.confirmLastFreeRun(), false),
+  /**
+   * @param {string} [message]
+   * @param {"idle" | "success" | "error"} [state]
+   * @returns {Promise<boolean>} false when the import fails
+   */
+  showMembership: (message, state) =>
+    withLifetimeView((view) => {
+      view.showMembership(message, state);
+      return true;
+    }, false),
+  close: () => loadedLifetimeView?.close(),
+  /**
+   * @param {string} message
+   * @param {"idle" | "loading" | "success" | "error"} [state]
+   */
+  setStatus: (message, state) => loadedLifetimeView?.setStatus(message, state)
+};
 let runRecords = loadRunRecords();
 let bestEscapeRecord = bestEscape(runRecords);
 let lastTick = performance.now();
@@ -3247,7 +3271,7 @@ function showRunAccessGate(access) {
     if (elements.resultDialog.open) {
       elements.resultDialog.close();
     }
-    lifetimeView.showMembership();
+    void lifetimeView.showMembership();
     announce(
       `No free Runs remain. Lifetime Membership is ${LIFETIME_PRICE_ONCE}. ${access.freeRunsRemaining} free Runs remaining.`
     );
@@ -3268,6 +3292,41 @@ function showRunAccessGate(access) {
     elements.resultDialog.showModal();
   }
   announce("Lifetime access needs attention before a new Run can start.");
+}
+
+/**
+ * @template T
+ * @param {(view: NonNullable<typeof loadedLifetimeView>) => T | Promise<T>} use
+ * @param {T} fallback
+ * @returns {Promise<T>}
+ */
+async function withLifetimeView(use, fallback) {
+  const retrying = lifetimeViewRetry;
+  if (!lifetimeViewPromise) {
+    const viewModule = retrying
+      // @ts-expect-error Vite treats the query as a distinct retry chunk.
+      ? import("./player/lifetime-view.js?retry=1")
+      : import("./player/lifetime-view.js");
+    lifetimeViewRetry = true;
+    lifetimeViewPromise = viewModule.then(({ createLifetimeView }) =>
+      createLifetimeView({ onUnlock: openLifetimeCheckout })
+    );
+  }
+  const loading = lifetimeViewPromise;
+  try {
+    loadedLifetimeView = await loading;
+  } catch {
+    if (lifetimeViewPromise === loading) {
+      lifetimeViewPromise = null;
+    }
+    announce(
+      retrying
+        ? "Lifetime Membership is unavailable. Reload to try again."
+        : "Lifetime Membership is unavailable. Try again; no Run was used."
+    );
+    return fallback;
+  }
+  return use(loadedLifetimeView);
 }
 
 async function openLifetimeCheckout() {
@@ -3318,7 +3377,7 @@ async function resumeAfterUnlock() {
       // A refusal opens its own dialog. Otherwise reopen this one, so the
       // Explorer can try again or choose "Not now".
       if (!document.querySelector("dialog[open]")) {
-        lifetimeView.showMembership(
+        void lifetimeView.showMembership(
           "Your saved Run did not start. Try again.",
           "error"
         );
@@ -3337,17 +3396,17 @@ async function resolveLifetimeReturn() {
     }
     url.searchParams.delete("membership");
     removeCheckoutParameters(url);
-    lifetimeView.showMembership();
-    enterRunOnLifetimeClose();
+    enterRunOnLifetimeClose(lifetimeView.showMembership());
     return false;
   }
   const sessionId = url.searchParams.get("session_id");
   if (checkout === "canceled") {
     removeCheckoutParameters(url);
-    lifetimeView.showMembership(
-      "Checkout canceled. Nothing was charged. Your Run is still saved."
+    enterRunOnLifetimeClose(
+      lifetimeView.showMembership(
+        "Checkout canceled. Nothing was charged. Your Run is still saved."
+      )
     );
-    enterRunOnLifetimeClose();
     return false;
   }
   if (
@@ -3356,11 +3415,12 @@ async function resolveLifetimeReturn() {
     !/^cs_[A-Za-z0-9_]{6,255}$/.test(sessionId)
   ) {
     removeCheckoutParameters(url);
-    lifetimeView.showMembership(
-      "Checkout could not be confirmed. Your Run is still saved.",
-      "error"
+    enterRunOnLifetimeClose(
+      lifetimeView.showMembership(
+        "Checkout could not be confirmed. Your Run is still saved.",
+        "error"
+      )
     );
-    enterRunOnLifetimeClose();
     return false;
   }
   try {
@@ -3371,11 +3431,12 @@ async function resolveLifetimeReturn() {
     lifetimeReturnConfirmed = activeRunLocator !== null;
     return true;
   } catch {
-    lifetimeView.showMembership(
-      "Payment confirmation is taking longer than expected. Try again; your saved Run is safe.",
-      "error"
+    enterRunOnLifetimeClose(
+      lifetimeView.showMembership(
+        "Payment confirmation is taking longer than expected. Try again; your saved Run is safe.",
+        "error"
+      )
     );
-    enterRunOnLifetimeClose();
     return false;
   }
 }
@@ -3388,7 +3449,8 @@ async function resolveLifetimeReturn() {
  * Checkout parameters and the pending Checkout Session, so neither the Run
  * entry nor a later Unlock retries a failed confirm.
  */
-function enterRunOnLifetimeClose() {
+/** @param {Promise<boolean>} opened resolves false when the dialog could not load */
+function enterRunOnLifetimeClose(opened) {
   const offerFirstLight = firstLightEntryPending;
   const enterOnClose = () => {
     // The close event is queued, so a dialog that reopened since then wins.
@@ -3402,6 +3464,12 @@ function enterRunOnLifetimeClose() {
     void initializeRunEntry();
   };
   elements.lifetimeDialog.addEventListener("close", enterOnClose);
+  // No dialog will open, so no close event will enter the Run.
+  void opened.then((shown) => {
+    if (!shown) {
+      enterOnClose();
+    }
+  });
 }
 
 /** @param {string} sessionId */

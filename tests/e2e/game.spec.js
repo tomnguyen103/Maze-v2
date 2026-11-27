@@ -675,11 +675,9 @@ async function answerCorrectlyIfChallenged(page, getCurrentQuestion) {
 }
 
 test("presents transparent lifetime pricing in a focused dialog", async ({ page }) => {
-  await page.goto("/play");
-  await page.locator("#lifetime-dialog").evaluate(
-    /** @param {HTMLDialogElement} dialog */
-    (dialog) => dialog.showModal()
-  );
+  // The copy renders when the lazy view loads, so open the dialog through it.
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
 
   await expect(
     page.getByRole("heading", { name: "Unlock every future Run" })
@@ -732,6 +730,36 @@ test("US-03.1 opens membership from the owner link, then Not now enters the Run"
   await expect(
     page.getByRole("group", { name: "Choose a Practice Intention" })
   ).toBeVisible();
+});
+
+test("announces a notice when the Lifetime dialog chunk fails, then opens it on the next visit", async ({
+  page
+}) => {
+  let requests = 0;
+  await page.route("**/assets/lifetime-view-*.js", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+
+  await expect(page.locator("#live-region")).toContainText(
+    "Lifetime Membership is unavailable."
+  );
+  await expect(page.locator("#lifetime-dialog")).not.toBeVisible();
+  // The failed import leaves the page usable: the Run entry still shows.
+  await expect(
+    page.getByRole("group", { name: "Choose a Practice Intention" })
+  ).toBeVisible();
+
+  await page.goto("/play?membership=open");
+  await expectGameReady(page);
+  await expect(page.locator("#lifetime-dialog")).toBeVisible();
+  expect(requests).toBe(2);
 });
 
 for (const [name, path] of [
