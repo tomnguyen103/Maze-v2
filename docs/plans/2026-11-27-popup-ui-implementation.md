@@ -335,7 +335,8 @@ The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Prod
 | R5 | Merged | #313 (Trail Compass text parity, live region in dialogs), with a fix in #315 |
 | R7a | Merged | #314 (landing hero from a real board crop) |
 | R3 | Merged | #318 (motion chunk: flap ripple, Gate pop-up, paper confetti, ceremony pop-up, reduced-motion gate) |
-| R6c, R7b | Open | Both need R3, so both are next |
+| R6c | Merged | #319 (gate, Sigil, and defeat end cards; Play This Seed; one start at a time from the card) |
+| R7b | Open | Needs R3, so it is next |
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Partial | ADR 0064 merged. The superseding ADRs and the GLOSSARY terms wait for R3 |
 | R9 | Parked | Needs R8 and each gen1 surface in Popup |
