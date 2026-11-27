@@ -59,19 +59,32 @@ function createDetachedCanvas(width, height) {
   return tile;
 }
 
+/** @typedef {{ canvas: OffscreenCanvas | HTMLCanvasElement, context: CanvasRenderingContext2D }} Layer */
+
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  * @param {() => Promise<unknown>} [loadArt] Loads the look's board art; null or a rejection keeps the shape marks.
  * @param {() => boolean} [isBrightStart] True while the Bright Start Quest Level shows; it softens the Fangmoor art.
+ * @param {typeof createDetachedCanvas} [createLayer] Builds the two offscreen layers: the chart and the Fog.
  */
 export function createCanvasRenderer(
   canvas,
   createTile = createDetachedCanvas,
   loadArt = () => import("@look/board-art.js"),
-  isBrightStart = () => false
+  isBrightStart = () => false,
+  createLayer = createDetachedCanvas
 ) {
-  const context = getCanvasContext(canvas);
+  const visible = getCanvasContext(canvas);
+  // A layer pass rebinds the drawing target; every other pass draws on the visible canvas.
+  let context = visible;
+  /** @type {Layer | null} */
+  let chartLayer = null;
+  /** @type {Layer | null} */
+  let fogLayer = null;
+  /** @type {unknown[]} */
+  let chartKey = [];
+  let fogKey = "";
   /** @type {any} */
   let art = null;
   let artRequested = false;
@@ -208,40 +221,22 @@ export function createCanvasRenderer(
       drawNeatline(size);
       return;
     }
-    context.fillStyle = fogFill();
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    /** @type {Array<[number, number]>} */
-    const pulseCells = [];
-    /** @type {Array<[number, number]>} */
-    const landCells = [];
-    /** @type {Array<[number, number]>} */
-    const waterCells = [];
-    for (let row = 0; row < size; row += 1) {
-      for (let col = 0; col < size; col += 1) {
-        const key = `${row},${col}`;
-        if (!revealed.has(key)) continue;
-        // ADR 0052 item 1: a passage (1) is water, a wall (0) is land.
-        if (run.labyrinth[row][col] === 1) {
-          waterCells.push([row, col]);
-        } else {
-          landCells.push([row, col]);
-        }
-        if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) {
-          pulseCells.push([row, col]);
-        }
-      }
+    const chart = (chartLayer ??= newLayer());
+    const fog = (fogLayer ??= newLayer());
+    // The chart repaints on a new labyrinth, a new backing size or a new palette; a Move never repaints it.
+    const nextChartKey = [run.labyrinth, canvas.width, canvas.height, palette];
+    const chartDirty = nextChartKey.some((part, index) => part !== chartKey[index]);
+    if (chartDirty) {
+      onLayer(chart, () => paintChart(run, tile));
+      chartKey = nextChartKey;
     }
-    drawWater(waterCells, tile);
-    drawLand(landCells, tile);
-    if (pulseCells.length > 0) {
-      // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
-      context.beginPath();
-      for (const [row, col] of pulseCells) traceTile(row, col, tile);
-      context.fillStyle = palette.pulse;
-      context.fill();
+    // The Fog repaints whole with the chart or when the known set changes, so no stale cell shows.
+    const nextFogKey = `${run.revealed.join(";")}|${run.pulseVisible.join(";")}`;
+    if (chartDirty || nextFogKey !== fogKey) {
+      onLayer(fog, () => paintFog(run, revealed, tile, chart.canvas));
+      fogKey = nextFogKey;
     }
-    drawCoastline(run, revealed, tile);
+    context.drawImage(fog.canvas, 0, 0);
 
     if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
       isolated(() => drawGate(run.gate, tile));
@@ -304,6 +299,82 @@ export function createCanvasRenderer(
       }
     }
     drawNeatline(size);
+  }
+
+  function newLayer() {
+    const layer = createLayer(canvas.width, canvas.height);
+    return { canvas: layer, context: getCanvasContext(/** @type {HTMLCanvasElement} */ (layer)) };
+  }
+
+  /**
+   * Runs one pass on a layer. A size write clears the layer and resets its state.
+   * @param {Layer} layer
+   * @param {() => void} pass
+   */
+  function onLayer(layer, pass) {
+    layer.canvas.width = canvas.width;
+    layer.canvas.height = canvas.height;
+    context = layer.context;
+    try {
+      pass();
+    } finally {
+      context = visible;
+    }
+  }
+
+  /**
+   * Water and land for every cell; the Fog layer clips the part that shows.
+   * @param {GameRun} run
+   * @param {number} tile
+   */
+  function paintChart(run, tile) {
+    /** @type {Array<[number, number]>} */
+    const landCells = [];
+    /** @type {Array<[number, number]>} */
+    const waterCells = [];
+    run.labyrinth.forEach((cells, row) =>
+      cells.forEach((cell, col) => {
+        // ADR 0052 item 1: a passage (1) is water, a wall (0) is land.
+        (cell === 1 ? waterCells : landCells).push([row, col]);
+      })
+    );
+    drawWater(waterCells, tile);
+    drawLand(landCells, tile);
+  }
+
+  /**
+   * The opaque Fog layer: the Fog fill, the chart through the known tiles, the Pulse tint and the Coastline.
+   * @param {GameRun} run
+   * @param {Set<string>} revealed
+   * @param {number} tile
+   * @param {CanvasImageSource} chart
+   */
+  function paintFog(run, revealed, tile, chart) {
+    context.fillStyle = fogFill();
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    /** @type {Array<[number, number]>} */
+    const pulseCells = [];
+    context.save();
+    context.beginPath();
+    for (let row = 0; row < run.labyrinth.length; row += 1) {
+      for (let col = 0; col < run.labyrinth.length; col += 1) {
+        const key = `${row},${col}`;
+        if (!revealed.has(key)) continue;
+        traceTile(row, col, tile);
+        if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) pulseCells.push([row, col]);
+      }
+    }
+    context.clip();
+    context.drawImage(chart, 0, 0);
+    context.restore();
+    if (pulseCells.length > 0) {
+      // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
+      context.beginPath();
+      for (const [row, col] of pulseCells) traceTile(row, col, tile);
+      context.fillStyle = palette.pulse;
+      context.fill();
+    }
+    drawCoastline(run, revealed, tile);
   }
 
   /** @param {() => void} draw Runs one mark with its own line, text and fill state. */
