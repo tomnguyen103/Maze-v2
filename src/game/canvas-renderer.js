@@ -545,22 +545,30 @@ export function createCanvasRenderer(
     context.stroke();
   }
 
-  /** @param {"clover" | "fangmoor"} key @param {string} mode @param {number} x @param {number} y @param {number} tile */
+  /**
+   * @param {"clover" | "fangmoor"} key @param {string} mode @param {number} x @param {number} y @param {number} tile
+   * @returns {boolean} False when the art failed and the caller draws the shape mark.
+   */
   function drawArt(key, mode, x, y, tile) {
     const side = tile * 0.9 * palette.markScale;
     context.save();
-    context.translate(x - side / 2, y - side / 2);
-    art?.drawFigure(context, key, mode, side, palette.flat);
-    context.restore();
+    try {
+      context.translate(x - side / 2, y - side / 2);
+      art.drawFigure(context, key, mode, side, palette.flat);
+      return true;
+    } catch {
+      // An engine without a canvas feature the art needs keeps the shape marks for this page.
+      art = null;
+      return false;
+    } finally {
+      context.restore();
+    }
   }
 
   /** @param {Explorer} explorer @param {number} tile */
   function drawExplorer(explorer, tile) {
     const { x, y } = centerOf(explorer, tile);
-    if (art) {
-      drawArt("clover", "idle", x, y, tile);
-      return;
-    }
+    if (art && drawArt("clover", "idle", x, y, tile)) return;
     const scale = palette.markScale;
     const radius = tile * 0.32 * scale;
 
@@ -909,10 +917,7 @@ export function createCanvasRenderer(
     context.lineWidth = Math.max(1, tile * 0.02 * scale);
     context.stroke();
     context.setLineDash([]);
-    if (art) {
-      drawArt("fangmoor", warden.mode, x, y, tile);
-      return;
-    }
+    if (art && drawArt("fangmoor", warden.mode, x, y, tile)) return;
     // Each mode has its own silhouette: Patrol round, Hunt pointed,
     // Intercept chevron, Lured ringed.
     context.beginPath();

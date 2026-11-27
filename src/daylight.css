@@ -1098,6 +1098,7 @@ kbd {
 .legend-mark--gate-sealed {
   position: relative;
   border: 0.14rem solid var(--color-warden);
+  background: var(--color-passage);
   border-radius: 0.4rem 0.4rem 0.1rem 0.1rem;
 }
 
@@ -1162,7 +1163,6 @@ kbd {
 
 /* Each Warden Mode copies its canvas silhouette on a Passage chip, because the board Warden ink is dark. */
 .legend-mark--coastline,
-.legend-mark--gate-sealed,
 .legend-mark[class*="--warden-"] {
   border: 1px solid var(--color-line);
   background: var(--color-passage);

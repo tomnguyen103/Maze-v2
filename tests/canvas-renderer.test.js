@@ -448,11 +448,25 @@ describe("Canvas renderer", () => {
     };
 
     it("draws the shape marks while loadArt never resolves", async () => {
-      const art = { drawFigure: vi.fn() };
       const drawn = stubCanvas({ loadArt: () => new Promise(() => {}) });
       drawn.renderer.render(run());
       await flush();
-      expect(art.drawFigure).not.toHaveBeenCalled();
+      expect(drawn.calls.join(" ")).toBe(shapeCalls());
+    });
+
+    it("drops the art and draws the shape marks when the art throws", async () => {
+      const art = {
+        drawFigure: vi.fn(() => {
+          throw new TypeError("roundRect is not a function");
+        })
+      };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure).toHaveBeenCalledTimes(1);
+      drawn.calls.length = 0;
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      expect(art.drawFigure).toHaveBeenCalledTimes(1);
       expect(drawn.calls.join(" ")).toBe(shapeCalls());
     });
 
