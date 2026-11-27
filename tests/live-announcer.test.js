@@ -4,6 +4,7 @@ import { announceInto } from "../src/game/live-announcer.js";
 
 describe("Live announcer (B-52)", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -61,5 +62,39 @@ describe("Live announcer (B-52)", () => {
     document.getElementById("focus-me")?.focus();
     announceInto(region, "Hello.");
     expect(region.parentElement).toBe(upper);
+  });
+
+  it("drops an older message when a newer call starts between its frames", () => {
+    document.body.innerHTML = `<p id="live" aria-live="polite"></p>`;
+    const region = /** @type {HTMLElement} */ (document.getElementById("live"));
+    /** @type {FrameRequestCallback[]} */
+    const frames = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+
+    announceInto(region, "Old.");
+    frames.shift()?.(0);
+    announceInto(region, "New.");
+    // Run the queued frames first in, first out. The old text must never appear.
+    while (frames.length > 0) {
+      frames.shift()?.(0);
+      expect(region.textContent).not.toBe("Old.");
+    }
+    expect(region.textContent).toBe("New.");
+  });
+
+  it("uses a timer when the tab is hidden", () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    const frame = vi.spyOn(window, "requestAnimationFrame");
+    document.body.innerHTML = `<p id="live" aria-live="polite"></p>`;
+    const region = /** @type {HTMLElement} */ (document.getElementById("live"));
+
+    announceInto(region, "Hidden.");
+    vi.runAllTimers();
+    expect(region.textContent).toBe("Hidden.");
+    expect(frame).not.toHaveBeenCalled();
   });
 });
