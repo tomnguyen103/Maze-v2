@@ -12,6 +12,7 @@ export default [
       "dist/**",
       "dist-look-popup/**",
       "docs/design/mockups/**",
+      "docs/research/popup-art-spike/**",
       "graphify-out/**",
       "node_modules/**",
       "playwright-report/**",
