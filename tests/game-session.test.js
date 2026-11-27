@@ -1234,6 +1234,7 @@ describe("GameSession", () => {
 
     expect(lockedVisit.status).toBe("active");
     expect(lockedVisit.gate.open).toBe(false);
+    expect(lockedVisit.event.message).toBe("1 Echo remains. Gate locked.");
 
     run = createRun("ONE-ECHO-9", {
       echoCount: 1,

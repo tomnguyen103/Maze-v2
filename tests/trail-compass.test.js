@@ -12,6 +12,15 @@ import {
   getQuestRunRuleset
 } from "../src/game/run-ruleset.js";
 
+/**
+ * The Grid reference of a tile: column letter, then row number.
+ *
+ * @param {{ row: number, col: number }} position
+ */
+function gridRef(position) {
+  return `${String.fromCharCode(65 + position.col)}${position.row + 1}`;
+}
+
 /** @param {Record<string, unknown>} [input] */
 function runFixture(input = {}) {
   return createRun("compass-seed-1", {
@@ -26,9 +35,7 @@ describe("Trail Compass descriptions", () => {
   it("describes the current tile, legal revealed exits, and resources", () => {
     const run = runFixture();
     const text = describeCompassState(run);
-    expect(text).toContain(
-      `row ${run.explorer.row + 1}, column ${run.explorer.col + 1}`
-    );
+    expect(text).toContain(`You are at ${gridRef(run.explorer)}.`);
     expect(text).toMatch(/Exits?:/);
     expect(text).toContain(`Vitality ${run.explorer.vitality}`);
     expect(text).toContain(`Pulses ${run.pulses}`);
@@ -47,15 +54,8 @@ describe("Trail Compass descriptions", () => {
     // The fixture must actually have hidden state for this test to bite.
     expect(hiddenEchoes.length + hiddenWardens.length).toBeGreaterThan(0);
     const text = describeCompassState(run);
-    for (const echo of hiddenEchoes) {
-      expect(text).not.toContain(
-        `row ${echo.row + 1}, column ${echo.col + 1}`
-      );
-    }
-    for (const warden of hiddenWardens) {
-      expect(text).not.toContain(
-        `row ${warden.row + 1}, column ${warden.col + 1}`
-      );
+    for (const hidden of [...hiddenEchoes, ...hiddenWardens]) {
+      expect(text).not.toMatch(new RegExp(`\\b${gridRef(hidden)}\\b`));
     }
     if (gateHidden) {
       expect(text).not.toMatch(/Gate/);
@@ -121,7 +121,7 @@ describe("Trail Compass controller", () => {
 
     document.getElementById("compass-describe")?.click();
     expect(announce).toHaveBeenCalledTimes(1);
-    expect(String(announce.mock.calls[0][0])).toContain("row");
+    expect(String(announce.mock.calls[0][0])).toContain("You are at");
 
     // Tones follow revealed entities and an explicit Listen press, never the
     // press alone and never automatically. Nothing is revealed in this Run, so
@@ -199,8 +199,14 @@ describe("Trail Compass exits match the engine", () => {
         atlasRegionId
       );
       const [name, engineDirection] = direction;
+      // B-51: the exit names its destination, as a Windway exit does. B-13:
+      // an Echo Bridge names its pair number.
+      const kind =
+        revision === "echo-bridges-v1"
+          ? `Echo Bridge ${/** @type {any} */ (shortcut).echoIndex + 1}`
+          : "a Tide Door";
       expect(namedExit(describeCompassState(run), name)).toBe(
-        `${name} open through a shortcut`
+        `${name} open through ${kind} to ${gridRef(shortcut.to)}`
       );
       expect(describeCompassAction(run)).toContain(name);
       const moved = applyAction(run, {
@@ -270,24 +276,25 @@ describe("Trail Compass exits match the engine", () => {
                 moved.event.type === "tide-door-travel"
               ) {
                 shortcutMoves[ruleset.revision] += 1;
-                expect(exit, context).toBe(`${name} open through a shortcut`);
+                expect(exit, context).toMatch(
+                  new RegExp(
+                    `^${name} open through (Echo Bridge \\d+|a Tide Door) to [A-Z]\\d+$`
+                  )
+                );
               }
               if (exit?.includes("Windway")) {
                 expect(exit, context).not.toContain(
-                  `row ${run.explorer.row + 1}, column ${run.explorer.col + 1}`
+                  `to ${gridRef(run.explorer)}`
                 );
                 if (exit.includes("back here")) {
                   windwayBackHere += 1;
                   expect(moved.explorer.row, context).toBe(run.explorer.row);
                   expect(moved.explorer.col, context).toBe(run.explorer.col);
                 } else {
-                  const target = exit.match(/row (\d+), column (\d+)$/);
+                  const target = exit.match(/to ([A-Z]\d+)$/);
                   expect(target, context).not.toBeNull();
                   windwayCarries += 1;
-                  expect(
-                    { row: moved.explorer.row + 1, col: moved.explorer.col + 1 },
-                    context
-                  ).toEqual({ row: Number(target?.[1]), col: Number(target?.[2]) });
+                  expect(gridRef(moved.explorer), context).toBe(target?.[1]);
                 }
               }
               if (!blocked) {
@@ -396,7 +403,7 @@ describe("Trail Compass Listen and Bell status", () => {
     ]);
     expect(announce).toHaveBeenCalledWith(
       "Listen: warden 3 east; warden 4 south and 4 east; " +
-        "gate 4 north and 4 west; echo 1 east; echo 1 north; echo 1 south."
+        "gate 4 north and 4 west; echo 2, 1 east; echo 3, 1 north; echo 4, 1 south."
     );
   });
 
@@ -483,5 +490,195 @@ describe("Trail Compass Listen and Bell status", () => {
     const { compass, announce } = compassController(() => rung);
     compass.onTransition(rung, ready, action);
     expect(String(announce.mock.calls[0][0])).toContain(rung.event.message);
+  });
+});
+
+describe("Trail Compass parity with the board", () => {
+  it("names the Echo pair number in Describe and in Bridge text (B-13)", () => {
+    const run = listenFixture(null);
+    const text = describeCompassState(run);
+    expect(text).toContain("Echo 3 shimmers 1 north");
+    expect(text).toContain("Echo 1 shimmers 2 north");
+
+    const { run: bridgeRun, shortcut } = openShortcutFixture(
+      "echo-bridges-v1",
+      "capable"
+    );
+    bridgeRun.echoBridges.forEach((bridge, index) => {
+      bridge.open = index === 0;
+    });
+    expect(describeCompassState(bridgeRun)).toContain(
+      `Echo Bridges opened: 1 of ${bridgeRun.echoBridges.length} ` +
+        `(Echo ${/** @type {any} */ (shortcut).echoIndex + 1}).`
+    );
+  });
+
+  it("names each revealed Windway source, not only exits (B-14)", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
+    );
+    const [windway] = run.windways;
+    expect(windway).toBeDefined();
+    run.explorer = {
+      ...run.explorer,
+      row: windway.source.row,
+      col: windway.source.col + 2
+    };
+    run.revealed = [`${windway.source.row},${windway.source.col}`];
+    run.pulseVisible = [];
+    expect(describeCompassState(run)).toContain(
+      `A Windway starts 2 west and carries you to ${gridRef(windway.destination)}.`
+    );
+    run.revealed = [];
+    expect(describeCompassState(run)).not.toContain("A Windway starts");
+  });
+
+  it("lists Wardens nearest first, then the Gate, then Echoes (B-53)", () => {
+    const text = describeCompassState(listenFixture(null));
+    expect(text).toMatch(
+      /Warden on \w+ duty is 3 east\..*Warden on \w+ duty is 4 south and 4 east\..*The Gate is.*Echo 2 shimmers/
+    );
+  });
+
+  it("says 1 Echo remains for one Echo and plural otherwise (B-54)", () => {
+    const run = structuredClone(runFixture());
+    run.echoes = run.echoes.map((echo, index) => ({ ...echo, collected: index > 0 }));
+    expect(describeCompassState(run)).toContain("1 Echo remains.");
+    expect(describeCompassState(run)).not.toContain("1 Echoes");
+    run.echoes[1].collected = false;
+    expect(describeCompassState(run)).toContain("2 Echoes remain.");
+    run.echoes.forEach((echo) => {
+      echo.collected = true;
+    });
+    expect(describeCompassState(run)).toContain("0 Echoes remain.");
+  });
+
+  it("says the new Tide Door phase when a Move starts a Challenge (B-55)", () => {
+    const run = createRun("TIDE-SHARED-PHASE", {
+      echoCount: 0,
+      size: 9,
+      wardenCount: 1,
+      ruleset: getQuestRunRuleset(13)
+    });
+    const openLabyrinth = Array.from({ length: 9 }, (_, row) =>
+      Array.from({ length: 9 }, (_, col) =>
+        row > 0 && row < 8 && col > 0 && col < 8 ? 1 : 0
+      )
+    );
+    openLabyrinth[4][4] = 0;
+    const staged = {
+      ...run,
+      labyrinth: openLabyrinth,
+      explorer: { ...run.explorer, row: 4, col: 3 },
+      gate: { row: 7, col: 7, open: true },
+      wardens: [{ row: 4, col: 6, id: 0, mode: /** @type {const} */ ("patrol") }],
+      tideDoors: [
+        { id: 0, from: { row: 4, col: 3 }, to: { row: 4, col: 5 }, open: true },
+        { id: 1, from: { row: 2, col: 3 }, to: { row: 2, col: 5 }, open: true }
+      ]
+    };
+    const next = applyAction(staged, { type: "move", direction: "right" });
+    expect(next.status).toBe("challenge");
+    expect(describeCompassAction(next, staged)).toContain("Tide Doors are now sealed.");
+    // A Challenge action that changes no phase adds nothing.
+    expect(describeCompassAction(next, next)).not.toContain("Tide Doors");
+  });
+
+  it("says the Run status when paused or ended (B-56)", () => {
+    const run = runFixture();
+    expect(describeCompassState(run)).not.toMatch(/paused|Run over/);
+    expect(describeCompassState(applyAction(run, { type: "pause" }))).toContain(
+      "Run paused."
+    );
+    expect(describeCompassState({ ...run, status: "won" })).toContain(
+      "Run over: you escaped."
+    );
+    expect(describeCompassState({ ...run, status: "lost" })).toContain(
+      "Run over: you were defeated."
+    );
+    expect(describeCompassState({ ...run, status: "challenge" })).toContain(
+      "Warden Challenge in progress."
+    );
+  });
+
+  it("gives no board facts under the paused cover (A-40)", () => {
+    const paused = applyAction(runFixture(), { type: "pause" });
+    const text = describeCompassState(paused);
+    expect(text).toMatch(/^Run paused\. Vitality \d+ of \d+, Pulses \d+, \d+ Echo/);
+    expect(text).not.toMatch(/You are at|Exits|Warden|Gate|shimmers|Windway/);
+    const silent = /** @type {never} */ (null);
+    expect(describeCompassAction({ ...paused, event: silent })).toBe("Run paused.");
+    expect(describeCompassAction({ ...paused, status: "won", event: silent })).toBe(
+      "Run over: you escaped."
+    );
+  });
+
+  it("includes the Run Score total (B-57)", () => {
+    expect(describeCompassState({ ...runFixture(), score: 150 })).toContain(
+      "Score 150."
+    );
+  });
+
+  it("omits place, exits and Warden mode in a Challenge and after the Run (B-58)", () => {
+    const run = listenFixture(null);
+    run.event = { type: "moved", message: "Moved right." };
+    expect(describeCompassAction(run)).toMatch(/At E5\. Open:.*Warden mode:/);
+    for (const status of /** @type {const} */ (["challenge", "won", "lost"])) {
+      expect(describeCompassAction({ ...run, status })).toBe("Moved right.");
+    }
+  });
+
+  it("uses the Grid reference for the place (B-59)", () => {
+    const run = listenFixture(null);
+    expect(describeCompassState(run)).toContain("You are at E5.");
+    expect(describeCompassAction(run)).toContain("At E5.");
+  });
+
+  it("marks an entity on a Pulse-only tile, and only that one (B-60, R-08)", () => {
+    const run = listenFixture(null);
+    run.revealed = ["4,4"];
+    run.pulseVisible = ["4,5", "4,7"];
+    const text = describeCompassState(run);
+    expect(text).toContain("Echo 2 shimmers 1 east, seen by Pulse.");
+    expect(text).toMatch(/Warden on \w+ duty is 3 east, seen by Pulse\./);
+    // Echo 3 sits on neither list: Fog hides it.
+    expect(text).not.toContain("Echo 3");
+    run.revealed = ["4,4", "4,5"];
+    expect(describeCompassState(run)).toContain("Echo 2 shimmers 1 east.");
+  });
+
+  it("states the Gate by the Echo lock before the Gate Warden seal (A-16, B-62)", () => {
+    const run = listenFixture(null);
+    run.gate = { ...run.gate, open: false, sealed: true };
+    expect(describeCompassState(run)).toContain(
+      "locked until you collect every Echo"
+    );
+    expect(describeCompassState(run)).not.toContain("sealed by the Gate Warden");
+    run.gate = { ...run.gate, open: true, sealed: true };
+    expect(describeCompassState(run)).toContain("open but sealed by the Gate Warden");
+    run.gate = { ...run.gate, open: true, sealed: false };
+    expect(describeCompassState(run)).toMatch(/The Gate is [^,]+, open\./);
+  });
+
+  it("names what a Pulse revealed (A-19, B-62)", () => {
+    const run = listenFixture(null);
+    run.revealed = ["4,4"];
+    run.pulseVisible = ["4,4", "4,5", "4,7", "3,4", "3,3"];
+    run.labyrinth = run.labyrinth.map((row) => row.map(() => 1));
+    run.event = { type: "pulse", message: "Pulse reveals nearby tiles briefly." };
+    expect(describeCompassAction(run)).toContain(
+      "In range: 4 passages, 2 Echoes, 1 Warden."
+    );
+    run.pulseVisible = ["4,4"];
+    expect(describeCompassAction(run)).toContain("In range: nothing new.");
+  });
+
+  it("gives the nearest revealed Warden distance, direction and mode (A-22, B-62)", () => {
+    const run = listenFixture(null);
+    run.event = { type: "moved", message: "Moved right." };
+    run.wardens[1] = { ...run.wardens[1], mode: "hunt" };
+    expect(describeCompassAction(run)).toContain("Nearest Warden: hunt, 3 east.");
+    run.revealed = ["4,4"];
+    expect(describeCompassAction(run)).not.toContain("Nearest Warden");
   });
 });

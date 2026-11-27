@@ -1,5 +1,6 @@
 // Dialog rules first: the First Light and Constellation sheets override them.
 import "./game/game-dialogs.css";
+import { announceInto } from "./game/live-announcer.js";
 import "./game/daily-constellation.css";
 import "./game/first-light.css";
 import {
@@ -1819,8 +1820,8 @@ async function startRun(locator, daily = null, recoveredRun = null) {
   canvas.focus({ preventScroll: true });
   announce(
     daily
-      ? `Today’s shared Labyrinth for ${daily.date} UTC. ${run.echoes.length} Echoes remain.`
-      : `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${run.echoes.length} Echoes remain.`
+      ? `Today’s shared Labyrinth for ${daily.date} UTC. ${echoesRemain(run.echoes.length)}`
+      : `${currentLevel.name}, Labyrinth ${currentLabyrinthNumber} of ${QUEST_LABYRINTH_COUNT}. ${echoesRemain(run.echoes.length)}`
   );
   showEvent(
     daily
@@ -4834,10 +4835,7 @@ function showEvent(message) {
 
 /** @param {string} message */
 function announce(message) {
-  elements.liveRegion.textContent = "";
-  requestAnimationFrame(() => {
-    elements.liveRegion.textContent = message;
-  });
+  announceInto(elements.liveRegion, message);
 }
 
 /** @param {unknown} error */
@@ -5050,4 +5048,9 @@ function requiredElement(id, type) {
     throw new Error(`Missing required element #${id}`);
   }
   return element;
+}
+
+/** @param {number} count */
+function echoesRemain(count) {
+  return `${count} ${count === 1 ? "Echo remains" : "Echoes remain"}.`;
 }

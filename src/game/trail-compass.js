@@ -18,6 +18,35 @@ const DIRECTIONS = Object.freeze([
   Object.freeze({ name: "west", row: 0, col: -1 })
 ]);
 
+/**
+ * The Grid reference the board draws outside the Neatline: column letter,
+ * then row number.
+ *
+ * @param {{ row: number, col: number }} position
+ */
+function gridReference(position) {
+  return `${String.fromCharCode(65 + position.col)}${position.row + 1}`;
+}
+
+/**
+ * A tile the Pulse alone shows: the board tints it, and it expires.
+ *
+ * @param {GameRun} run
+ * @param {string} key
+ */
+function isPulseOnly(run, key) {
+  return run.pulseVisible.includes(key) && !run.revealed.includes(key);
+}
+
+/**
+ * @param {number} count
+ * @param {string} one
+ * @param {string} many
+ */
+function counted(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 /** @param {GameRun} run */
 function revealedTiles(run) {
   const revealed = new Set([...run.revealed, ...run.pulseVisible]);
@@ -51,14 +80,20 @@ function describeExit(run, revealed, direction) {
   const key = `${row},${col}`;
   // Only the shortcut revisions populate these lists, so this matches the
   // engine revision gate in resolveMove.
-  if (
-    openShortcutAcrossWall(
-      [...run.echoBridges, ...run.tideDoors],
-      run.explorer,
-      { row, col }
-    )
-  ) {
-    return `${direction.name} open through a shortcut`;
+  const crossing = openShortcutAcrossWall(
+    [...run.echoBridges, ...run.tideDoors],
+    run.explorer,
+    { row, col }
+  );
+  if (crossing) {
+    const kind =
+      "echoIndex" in crossing.shortcut
+        ? `Echo Bridge ${crossing.shortcut.echoIndex + 1}`
+        : "a Tide Door";
+    return (
+      `${direction.name} open through ${kind} to ` +
+      gridReference(crossing.destination)
+    );
   }
   if (!revealed.has(key)) {
     return `${direction.name} unexplored`;
@@ -85,7 +120,7 @@ function describeExit(run, revealed, direction) {
   }
   return (
     `${direction.name} onto a Windway carrying you to ` +
-    `row ${destination.row + 1}, column ${destination.col + 1}`
+    gridReference(destination)
   );
 }
 
@@ -127,30 +162,33 @@ export function describeListenTargets(run) {
    */
   const nearestFirst = (positions) =>
     [...positions].sort((a, b) => distance(a) - distance(b));
-  /** @type {{ kind: "echo" | "gate" | "warden", key: string, where: string }[]} */
+  /** @type {{ kind: "echo" | "gate" | "warden", key: string, where: string, text: string, item: any }[]} */
   const targets = [];
   for (const warden of nearestFirst(run.wardens)) {
     const key = `${warden.row},${warden.col}`;
     if (revealed.has(key)) {
-      targets.push({
-        kind: "warden",
-        key,
-        where: directionAndDistance(run, warden)
-      });
+      const where = directionAndDistance(run, warden);
+      targets.push({ kind: "warden", key, where, text: `warden ${where}`, item: warden });
     }
   }
   const gateKey = `${run.gate.row},${run.gate.col}`;
   if (revealed.has(gateKey)) {
-    targets.push({
-      kind: "gate",
-      key: gateKey,
-      where: directionAndDistance(run, run.gate)
-    });
+    const where = directionAndDistance(run, run.gate);
+    targets.push({ kind: "gate", key: gateKey, where, text: `gate ${where}`, item: run.gate });
   }
-  for (const echo of nearestFirst(run.echoes)) {
+  // The number is the Echo pair number the board draws on the Echo.
+  const numbered = run.echoes.map((echo, index) => ({ ...echo, number: index + 1 }));
+  for (const echo of nearestFirst(numbered)) {
     const key = `${echo.row},${echo.col}`;
     if (!echo.collected && revealed.has(key)) {
-      targets.push({ kind: "echo", key, where: directionAndDistance(run, echo) });
+      const where = directionAndDistance(run, echo);
+      targets.push({
+        kind: "echo",
+        key,
+        where,
+        text: `echo ${echo.number}, ${where}`,
+        item: echo
+      });
     }
   }
   return targets;
@@ -165,40 +203,58 @@ export function describeListenTargets(run) {
 export function describeCompassState(run) {
   const revealed = revealedTiles(run);
   const sentences = [];
-  sentences.push(
-    `You are at row ${run.explorer.row + 1}, column ${run.explorer.col + 1}.`
-  );
+  if (run.status === "paused") {
+    sentences.push("Run paused.");
+  } else if (run.status === "won") {
+    sentences.push("Run over: you escaped.");
+  } else if (run.status === "lost") {
+    sentences.push("Run over: you were defeated.");
+  } else if (run.status === "challenge") {
+    sentences.push("Warden Challenge in progress.");
+  }
   const remainingEchoes = run.echoes.filter((echo) => !echo.collected).length;
-  sentences.push(
+  const resources =
     `Vitality ${run.explorer.vitality} of ${run.explorer.maxVitality}, ` +
-      `Pulses ${run.pulses}, ${remainingEchoes} Echoes remain.`
-  );
+    `Pulses ${run.pulses}, ` +
+    `${remainingEchoes} ${remainingEchoes === 1 ? "Echo remains" : "Echoes remain"}. ` +
+    `Score ${run.score}.`;
+  if (run.status === "paused") {
+    // The paused cover hides the board (A-40), so the Compass gives no board facts.
+    sentences.push(resources);
+    return sentences.join(" ");
+  }
+  sentences.push(`You are at ${gridReference(run.explorer)}.`);
+  sentences.push(resources);
   const exits = DIRECTIONS.map((direction) =>
     describeExit(run, revealed, direction)
   ).filter((exit) => exit !== null);
   sentences.push(exits.length ? `Exits: ${exits.join("; ")}.` : "No open exits.");
 
-  const visibleEchoes = run.echoes.filter(
-    (echo) => !echo.collected && revealed.has(`${echo.row},${echo.col}`)
-  );
-  for (const echo of visibleEchoes) {
-    sentences.push(`An Echo shimmers ${directionAndDistance(run, echo)}.`);
+  // Listen order: Wardens nearest first, then the Gate, then Echoes.
+  for (const { kind, key, where, item } of describeListenTargets(run)) {
+    const seen = isPulseOnly(run, key) ? ", seen by Pulse" : "";
+    if (kind === "warden") {
+      sentences.push(`A Warden on ${item.mode} duty is ${where}${seen}.`);
+    } else if (kind === "gate") {
+      const state = run.gate.open
+        ? run.gate.sealed
+          ? "open but sealed by the Gate Warden"
+          : "open"
+        : "locked until you collect every Echo";
+      sentences.push(`The Gate is ${where}, ${state}${seen}.`);
+    } else {
+      sentences.push(`Echo ${item.number} shimmers ${where}${seen}.`);
+    }
   }
-  if (revealed.has(`${run.gate.row},${run.gate.col}`)) {
-    const state = run.gate.sealed
-      ? "sealed by the Gate Warden"
-      : run.gate.open
-        ? "open"
-        : "waiting for every Echo";
-    sentences.push(
-      `The Gate is ${directionAndDistance(run, run.gate)}, ${state}.`
-    );
-  }
-  for (const warden of run.wardens) {
-    if (revealed.has(`${warden.row},${warden.col}`)) {
+  for (const windway of run.windways) {
+    const key = `${windway.source.row},${windway.source.col}`;
+    const { row, col } = windway.destination;
+    // The engine blocks a Windway whose destination is not a passage.
+    if (revealed.has(key) && run.labyrinth[row]?.[col] === 1) {
+      const seen = isPulseOnly(run, key) ? ", seen by Pulse" : "";
       sentences.push(
-        `A Warden on ${warden.mode} duty is ` +
-          `${directionAndDistance(run, warden)}.`
+        `A Windway starts ${directionAndDistance(run, windway.source)} ` +
+          `and carries you to ${gridReference(windway.destination)}${seen}.`
       );
     }
   }
@@ -215,9 +271,12 @@ export function describeCompassState(run) {
     );
   }
   if (revision === "echo-bridges-v1") {
-    const open = run.echoBridges.filter((bridge) => bridge.open).length;
+    const open = run.echoBridges.filter((bridge) => bridge.open);
+    const pairs = open.length
+      ? ` (${open.map((bridge) => `Echo ${bridge.echoIndex + 1}`).join(", ")})`
+      : "";
     sentences.push(
-      `Echo Bridges opened: ${open} of ${run.echoBridges.length}.`
+      `Echo Bridges opened: ${open.length} of ${run.echoBridges.length}${pairs}.`
     );
   }
   if (revision === "warden-bells-v1") {
@@ -240,26 +299,87 @@ export function describeCompassState(run) {
 }
 
 /**
- * One concise polite status for the action that just resolved.
+ * What a Pulse showed: the passages, Echoes, Gate and Wardens that only the
+ * Pulse reveals. Fog-hidden entities stay out of range.
  *
  * @param {GameRun} run
  */
-export function describeCompassAction(run) {
+function pulseNote(run) {
+  const pulseOnly = run.pulseVisible.filter((key) => !run.revealed.includes(key));
+  const passages = pulseOnly.filter((key) => {
+    const [row, col] = key.split(",").map(Number);
+    return run.labyrinth[row]?.[col] === 1;
+  }).length;
+  const onPulse = (/** @type {{ row: number, col: number }} */ item) =>
+    pulseOnly.includes(`${item.row},${item.col}`);
+  const echoes = run.echoes.filter((echo) => !echo.collected && onPulse(echo)).length;
+  const wardens = run.wardens.filter(onPulse).length;
+  const found = [
+    passages > 0 && counted(passages, "passage", "passages"),
+    echoes > 0 && counted(echoes, "Echo", "Echoes"),
+    onPulse(run.gate) && "the Gate",
+    wardens > 0 && counted(wardens, "Warden", "Wardens")
+  ].filter(Boolean);
+  return `In range: ${found.length ? found.join(", ") : "nothing new"}.`;
+}
+
+/**
+ * One concise polite status for the action that just resolved. In a Challenge
+ * and after the Run ends, only the event is said.
+ *
+ * @param {GameRun} run
+ * @param {GameRun} [previous]
+ */
+export function describeCompassAction(run, previous) {
+  let event = run.event?.message ?? "";
+  const door = run.tideDoors[0];
+  if (
+    run.status === "challenge" &&
+    door &&
+    previous?.tideDoors[0] &&
+    previous.tideDoors[0].open !== door.open &&
+    !event.includes("Tide Doors are now")
+  ) {
+    // The engine leaves the phase out of a Challenge event.
+    event = `${event} Tide Doors are now ${door.open ? "open" : "sealed"}.`;
+  }
+  if (run.status !== "active") {
+    // A paused cover hides the board (A-40); an ended Run or a Challenge needs
+    // the event only. An empty event still gets a status line.
+    const fallback = {
+      paused: "Run paused.",
+      challenge: "Warden Challenge in progress.",
+      won: "Run over: you escaped.",
+      lost: "Run over: you were defeated."
+    }[run.status];
+    return event.trim() || fallback || "";
+  }
   const revealed = revealedTiles(run);
   const exits = DIRECTIONS.map((direction) =>
     describeExit(run, revealed, direction)
   )
     .filter((exit) => exit !== null && !exit.includes("unexplored"))
     .map((exit) => String(exit).split(" ")[0]);
-  const event = run.event?.message ? `${run.event.message} ` : "";
-  const place = `At row ${run.explorer.row + 1}, column ${run.explorer.col + 1}.`;
-  const exitNote = exits.length ? ` Open: ${exits.join(", ")}.` : "";
+  const sentences = [event, `At ${gridReference(run.explorer)}.`];
+  if (exits.length) {
+    sentences.push(`Open: ${exits.join(", ")}.`);
+  }
+  if (run.event?.type === "pulse") {
+    sentences.push(pulseNote(run));
+  }
   // Warden mode is on screen for a sighted Explorer at all times, so a
   // nonvisual Run has to carry it too. It rides this one status rather than
-  // becoming a second announcement. It reads every Warden, Fog-hidden ones
-  // included, as the sighted HUD does, and it names a mode only, never a
-  // Warden position.
-  return `${event}${place}${exitNote} ${wardenModeNote(run)}`.trim();
+  // becoming a second announcement. The mode reads every Warden, Fog-hidden
+  // ones included, as the sighted HUD does, and names no position. Only a
+  // revealed Warden gets a distance and a direction.
+  sentences.push(wardenModeNote(run));
+  const nearest = describeListenTargets(run).find(
+    (target) => target.kind === "warden"
+  );
+  if (nearest) {
+    sentences.push(`Nearest Warden: ${nearest.item.mode}, ${nearest.where}.`);
+  }
+  return sentences.filter(Boolean).join(" ");
 }
 
 /**
@@ -338,7 +458,7 @@ export function createTrailCompass({
     announce(
       `Listen: ${targets
         .slice(0, 6)
-        .map((target) => `${target.kind} ${target.where}`)
+        .map((target) => target.text)
         .join("; ")}.`
     );
   });
@@ -360,7 +480,7 @@ export function createTrailCompass({
         announce("No Signal Bell is beside you.");
         return;
       }
-      announce(describeCompassAction(run));
+      announce(describeCompassAction(run, previous));
     },
     hide() {
       cancelCues();
