@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean }} [options]
+ * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean, ownLayerContexts?: boolean }} [options]
  */
-function stubCanvas({ width = 640, height = width, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart } = {}) {
+function stubCanvas({ width = 640, height = width, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart, ownLayerContexts = false } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -29,8 +29,10 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     beginPath: record("beginPath"),
     clearRect: vi.fn(),
     closePath: record("closePath"),
+    clip: record("clip"),
     createPattern: vi.fn(() => ({ pattern: true })),
     createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+    drawImage: record("drawImage"),
     fill: record("fill"),
     fillRect: vi.fn((x, y, w, h) => {
       calls.push("fillRect");
@@ -78,6 +80,28 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     };
     tiles.push(tile);
     return /** @type {never} */ (tile);
+  };
+  // A layer draws on the shared recording context unless it asks for its own, so the paints record in layer order.
+  /** @type {Array<{ width: number, height: number, context: any }>} */
+  const layers = [];
+  const ownContext = () => {
+    /** @type {Record<string | symbol, any>} */
+    const state = { fills: [] };
+    return new Proxy(state, {
+      get: (target, name) => {
+        if (name in target) return target[name];
+        if (name === "createRadialGradient") return () => ({ addColorStop() {} });
+        return () => {
+          if (name === "fill") target.fills.push(target.fillStyle);
+        };
+      }
+    });
+  };
+  const createLayer = (/** @type {number} */ layerWidth, /** @type {number} */ layerHeight) => {
+    const layerContext = ownLayerContexts ? ownContext() : context;
+    const layer = { width: layerWidth, height: layerHeight, context: layerContext, getContext: () => layerContext };
+    layers.push(layer);
+    return /** @type {never} */ (layer);
   };
   // The Neatline overlay sits beside the canvas inside an 18 pixel margin.
   /** @type {string[]} */
@@ -137,10 +161,12 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
     createTile,
     /** @type {never} */ (loadArt),
-    isBrightStart
+    isBrightStart,
+    createLayer
   );
   return {
     calls,
+    layers,
     canvas,
     context,
     fillRects,
@@ -416,6 +442,32 @@ function recordPaints(context) {
 }
 
 /**
+ * Records each clip as the rect paths behind it, one "left,top,width,height" string per tile.
+ * @param {ReturnType<typeof stubCanvas>["context"]} context
+ */
+function recordClips(context) {
+  /** @type {string[][]} */
+  const clips = [];
+  /** @type {string[]} */
+  let path = [];
+  const target = /** @type {Record<string, any>} */ (context);
+  const begin = target.beginPath;
+  const rect = target.rect;
+  target.beginPath = vi.fn(() => {
+    path = [];
+    begin();
+  });
+  target.rect = vi.fn((/** @type {number[]} */ ...args) => {
+    path.push(args.join(","));
+    rect(...args);
+  });
+  target.clip = vi.fn(() => {
+    clips.push([...path]);
+  });
+  return clips;
+}
+
+/**
  * A 2x2 board with one passage at 0,0 and nothing else drawn but the Explorer.
  * @param {Partial<ReturnType<typeof questRun>>} overrides
  */
@@ -575,9 +627,14 @@ describe("Canvas renderer", () => {
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
 
-    expect(context.createPattern).toHaveBeenCalledTimes(1);
-    expect(context.rect).not.toHaveBeenCalled();
-    expect(fogFills).toEqual([{ pattern: true }, { pattern: true }]);
+    // The chart pass builds the hatch pattern too, so the Fog pattern is the one built from the 8 pixel tile.
+    expect(
+      /** @type {Array<Array<{ width: number }>>} */ (context.createPattern.mock.calls).filter(([tile]) => tile.width === 8)
+    ).toHaveLength(1);
+    // The chart traces each cell once; the Fog pass traces no known tile.
+    expect(context.rect).toHaveBeenCalledTimes(run.labyrinth.length ** 2);
+    // The second frame blits the cached Fog layer: the Fog fills once.
+    expect(fogFills).toEqual([{ pattern: true }]);
   });
 
   it("US-02.4 paints each pattern tile on a software canvas, so a reload gives the same pixels", () => {
@@ -600,9 +657,9 @@ describe("Canvas renderer", () => {
         const { renderer, tiles } = stubCanvas();
         renderer.render(questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9));
 
-        // The Fog tile builds first; the land hatch tile builds second.
+        // The chart pass builds the land hatch tile first; the Fog pass builds the Fog tile second.
         expect(tiles).toHaveLength(2);
-        const [tile] = tiles;
+        const tile = tiles[1];
         expect(tile.width).toBe(8 * ratio);
         expect(tile.height).toBe(8 * ratio);
         const dots = tile.fills.filter((fill) => fill.w < tile.width);
@@ -728,7 +785,8 @@ describe("Canvas renderer", () => {
 
       // The Fog tile scales with the device ratio. The hatch tile stays 6 backing-store pixels at every ratio.
       // B-95: the ratio change clears the cache, so the hatch tile is built again.
-      expect(tiles.map((tile) => tile.width)).toEqual([8, 6, 16, 6]);
+      // The chart pass builds the hatch tile before the Fog pass builds the Fog tile.
+      expect(tiles.map((tile) => tile.width)).toEqual([6, 8, 6, 16]);
     } finally {
       window.devicePixelRatio = originalDpr;
     }
@@ -1133,7 +1191,7 @@ describe("Canvas renderer", () => {
       document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
       frame();
       // The second frame reuses the palette and the Fog pattern.
-      expect(tiles.map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)"]);
+      expect(tiles.filter((tile) => tile.width === 8).map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)"]);
 
       // happy-dom needs a tick before a computed style shows an inline change.
       await settle();
@@ -1163,8 +1221,12 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.style.setProperty("--color-ink", canvasToken(LIGHT, "--color-ink"));
     const { context, renderer, tiles } = stubCanvas();
     const paints = recordPaints(context);
+    const clips = recordClips(context);
 
     renderer.render(board({ revealed: ["0,0", "0,1", "1,1"] }));
+
+    // The chart paints every cell; the Fog clip shows the three known tiles only.
+    expect(clips).toEqual([["0,0,320,320", "320,0,320,320", "320,320,320,320"]]);
 
     const passage = oklabOf(canvasToken(LIGHT, "--color-passage"));
     expect(passage[0]).toBeGreaterThanOrEqual(0.95);
@@ -1177,12 +1239,18 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const land = paints.find(
       (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-land")
     );
-    expect(land?.path).toEqual(["rect(320.00,0.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]);
+    // The chart paints the unknown wall (1,0) too; the Fog clip above hides it.
+    expect(land?.path).toEqual([
+      "rect(320.00,0.00,320.00,320.00)",
+      "rect(0.00,320.00,320.00,320.00)",
+      "rect(320.00,320.00,320.00,320.00)"
+    ]);
     const hatch = paints.find(
       (paint) => paint !== land && paint.kind === "fill" && paint.path.join() === land?.path.join()
     );
     expect(hatch).toBeDefined();
-    const hatchTile = tiles[1];
+    // The chart pass builds the hatch tile before the Fog pass builds the Fog tile.
+    const hatchTile = tiles[0];
     expect(hatchTile.width).toBe(6);
     expect(hatchTile.height).toBe(6);
     expect(hatchTile.fills).toHaveLength(6);
@@ -1973,7 +2041,7 @@ describe("R1a renderer findings", () => {
     document.body.style.setProperty("--color-on-fill", WINDWAY_DISC);
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
-    const passage = document.body.style.getPropertyValue("--color-passage");
+    const clips = recordClips(context);
 
     renderer.render(
       board({
@@ -1982,8 +2050,8 @@ describe("R1a renderer findings", () => {
       })
     );
 
-    // Tile 0,0 is a passage. Its water rect would show if the pair rule revealed it.
-    expect(paints.filter((paint) => paint.kind === "fill" && paint.style === passage)).toEqual([]);
+    // Tile 0,0 is a passage. The chart paints its water, so the Fog clip must hold tile 1,0 only.
+    expect(clips).toEqual([["0,320,320,320"]]);
     expect(windwayDiscs(paints)).toHaveLength(1);
   });
 
@@ -2189,5 +2257,258 @@ describe("R1a renderer findings", () => {
       expect(art.drawFigure.mock.calls.every((call) => call[5] === false)).toBe(true);
       expect(() => renderer.render(withWarden())).not.toThrow();
     });
+  });
+});
+
+describe("R1b layered renderer", () => {
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute("data-access-contrast");
+    await settle();
+    document.body.removeAttribute("style");
+  });
+
+  /** A 2x2 board with one known passage; each pass leaves its own count. */
+  function layered(options = {}) {
+    const stub = stubCanvas(options);
+    const paints = recordPaints(stub.context);
+    const clips = recordClips(stub.context);
+    const passage = document.body.style.getPropertyValue("--color-passage");
+    return {
+      ...stub,
+      clips,
+      // The chart pass paints the one passage of the board; one water fill is one chart repaint.
+      chartPaints: () => paints.filter((paint) => paint.kind === "fill" && paint.style === passage).length,
+      blits: () => stub.context.drawImage.mock.calls.length
+    };
+  }
+
+  const run = board({ revealed: ["0,0"] });
+
+  it("US-01.1 repaints the marks alone on a Move with no sight change", () => {
+    const { chartPaints, clips, blits, renderer } = layered();
+
+    renderer.render(run);
+    const blitsBefore = blits();
+    renderer.render({ ...run, explorer: { ...run.explorer, row: 1, col: 0 } });
+
+    expect(chartPaints()).toBe(1);
+    expect(clips).toHaveLength(1);
+    // The visible canvas blits the Fog layer once; the Fog layer does not blit the chart again.
+    expect(blits() - blitsBefore).toBe(1);
+  });
+
+  it("US-01.2 repaints the Fog on a new cell, and both layers on a size or palette change", async () => {
+    /** @type {() => void} */
+    let onChange = () => {};
+    vi.stubGlobal("matchMedia", () => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        onChange = listener;
+      }
+    }));
+    const { canvas, chartPaints, clips, renderer } = layered();
+
+    renderer.render(run);
+    renderer.render({ ...run, revealed: ["0,0", "0,1"] });
+    expect([chartPaints(), clips.length]).toEqual([1, 2]);
+
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 320 });
+    renderer.render({ ...run, revealed: ["0,0", "0,1"] });
+    expect([chartPaints(), clips.length]).toEqual([2, 3]);
+
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    onChange();
+    expect([chartPaints(), clips.length]).toEqual([3, 4]);
+  });
+
+  it("US-01.4 repaints the Fog for a second Pulse and for a backward step", () => {
+    const { clips, renderer } = layered();
+
+    renderer.render({ ...run, pulseVisible: ["0,1"] });
+    renderer.render({ ...run, pulseVisible: ["1,0"] });
+    renderer.render({ ...run, revealed: ["0,0", "0,1"], pulseVisible: [] });
+    renderer.render(run);
+
+    expect(clips).toEqual([
+      ["0,0,320,320", "320,0,320,320"],
+      ["0,0,320,320", "0,320,320,320"],
+      ["0,0,320,320", "320,0,320,320"],
+      ["0,0,320,320"]
+    ]);
+  });
+
+  it("US-01.5 changes the mark pass alone for a pause, a Challenge and the art load", async () => {
+    const drawFigure = vi.fn();
+    const { chartPaints, clips, labels, renderer } = layered({ loadArt: () => Promise.resolve({ drawFigure }) });
+
+    renderer.render(run);
+    renderer.render({ ...run, status: "paused" });
+    renderer.render({ ...run, status: "challenge", challenge: /** @type {never} */ ({ kind: "gate-warden" }) });
+    await settle();
+
+    expect(labels).toContain("GATE WARDEN");
+    expect(drawFigure).toHaveBeenCalled();
+    expect([chartPaints(), clips.length]).toEqual([1, 1]);
+  });
+
+  it("US-02.2 puts each Neatline tick on its tile line in a 375 px box", () => {
+    const { neat, renderer } = layered({ neatline: true, width: 375 });
+
+    renderer.render(run);
+
+    // Left 18 plus Math.round(line * 375 / 2) plus the half pixel: 0, 188 (rounded from 187.5) and 375.
+    const topTicks = /** @type {number[][]} */ (neat.context.moveTo.mock.calls).filter((_call, index) => index % 4 === 0).map(([x]) => x);
+    expect(topTicks).toEqual([18.5, 206.5, 393.5]);
+  });
+
+/** @param {number} ratio @param {() => void} body */
+  function atRatio(ratio, body) {
+    const original = window.devicePixelRatio;
+    window.devicePixelRatio = ratio;
+    try {
+      body();
+    } finally {
+      window.devicePixelRatio = original;
+    }
+  }
+
+  it("US-01.2 repaints both layers on a device ratio change that keeps the backing size", () => {
+    const { canvas, chartPaints, clips, renderer } = layered();
+
+    atRatio(1, () => renderer.render(run));
+    // Browser zoom: half the CSS box at twice the ratio gives the same 640 pixel backing size.
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 320 });
+    atRatio(2, () => renderer.render(run));
+
+    expect([canvas.width, canvas.height]).toEqual([640, 640]);
+    expect([chartPaints(), clips.length]).toEqual([2, 2]);
+  });
+
+  it("PR 317 repaints the Fog on a return to the last good frame after a Fog pass throws", () => {
+    const { context, clips, renderer } = layered();
+    const target = /** @type {Record<string, any>} */ (context);
+
+    renderer.render(run);
+    const clip = target.clip;
+    target.clip = vi.fn(() => {
+      throw new Error("canvas lost");
+    });
+    expect(() => renderer.render({ ...run, revealed: ["0,0", "0,1"] })).toThrow("canvas lost");
+    target.clip = clip;
+    // A Replay step back to the first frame finds the Fog layer half painted, so the Fog repaints.
+    renderer.render(run);
+
+    expect(clips).toEqual([["0,0,320,320"], ["0,0,320,320"]]);
+  });
+
+  it("PR 317 repaints the chart on a return to the last good frame after a chart pass throws", () => {
+    const { canvas, context, chartPaints, renderer } = layered();
+    const target = /** @type {Record<string, any>} */ (context);
+    const box = canvas.getBoundingClientRect;
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 320 });
+    const fill = target.fill;
+    target.fill = vi.fn(() => {
+      throw new Error("canvas lost");
+    });
+    expect(() => renderer.render(run)).toThrow("canvas lost");
+    target.fill = fill;
+    canvas.getBoundingClientRect = box;
+    renderer.render(run);
+
+    expect(chartPaints()).toBe(2);
+  });
+
+  it("US-01.2 repaints the chart on a width-only backing change", () => {
+    const { canvas, chartPaints, renderer } = layered({ width: 640, height: 640 });
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 480, height: 640 });
+    renderer.render(run);
+
+    expect([canvas.width, canvas.height]).toEqual([480, 640]);
+    expect(chartPaints()).toBe(2);
+  });
+
+  it("US-01.2 repaints the chart on a height-only backing change", () => {
+    const { canvas, chartPaints, renderer } = layered({ width: 640, height: 640 });
+
+    renderer.render(run);
+    canvas.getBoundingClientRect = () => ({ width: 640, height: 480 });
+    renderer.render(run);
+
+    expect([canvas.width, canvas.height]).toEqual([640, 480]);
+    expect(chartPaints()).toBe(2);
+  });
+
+  it("US-01.2 paints each pass on its own layer and draws the marks on the visible canvas", () => {
+    const { calls, canvas, context, layers, renderer } = stubCanvas({ ownLayerContexts: true });
+    const passage = document.body.style.getPropertyValue("--color-passage");
+    /** @type {string[]} */
+    const visibleFills = [];
+    let style = "";
+    Object.defineProperty(context, "fillStyle", { configurable: true, get: () => style, set: (value) => { style = value; } });
+    const fill = context.fill;
+    context.fill = vi.fn(() => {
+      visibleFills.push(style);
+      fill();
+    });
+
+    renderer.render(run);
+
+    const [chart, fog] = layers;
+    // (a) Water and land fill on the chart layer, never on the visible canvas.
+    expect(chart.context.fills).toContain(passage);
+    expect(visibleFills).not.toContain(passage);
+    // (b) The visible canvas blits the Fog layer first, then draws the marks.
+    expect(context.drawImage.mock.calls).toEqual([[fog, 0, 0]]);
+    expect(calls[0]).toBe("drawImage");
+    // (d) The Explorer ring draws after the blit, on the visible context.
+    expect(calls.slice(1)).toContain("arc");
+
+    // (c) A new backing size resizes both layers with the visible canvas.
+    canvas.getBoundingClientRect = () => ({ width: 320, height: 240 });
+    renderer.render(run);
+    for (const layer of layers) expect([layer.width, layer.height]).toEqual([canvas.width, canvas.height]);
+    expect([canvas.width, canvas.height]).toEqual([320, 240]);
+  });
+
+  it("R-05 draws no Echo outside the known set", () => {
+    const { labels, renderer } = layered();
+    const echoes = [{ row: 1, col: 1, collected: false }];
+
+    renderer.render({ ...run, echoes });
+    expect(labels).toEqual([]);
+    renderer.render({ ...run, revealed: ["0,0", "1,1"], echoes });
+    expect(labels).toEqual(["1"]);
+  });
+
+  it("R-06 draws no Warden outside the known set", () => {
+    document.body.style.setProperty("--color-danger-line", "rgb(33, 44, 55)");
+    const { context, renderer } = layered();
+    const paints = recordPaints(context);
+    const wardens = [{ row: 1, col: 1, id: 0, mode: /** @type {const} */ ("patrol") }];
+    const rings = () => paints.filter((paint) => paint.kind === "stroke" && paint.style === "rgb(33, 44, 55)");
+
+    renderer.render({ ...run, wardens });
+    expect(rings()).toEqual([]);
+    renderer.render({ ...run, revealed: ["0,0", "1,1"], wardens });
+    expect(rings()).toHaveLength(1);
+  });
+
+  it("R-07 draws no Gate outside the known set", () => {
+    document.body.style.setProperty("--color-board-gate", "rgb(66, 77, 88)");
+    const { context, renderer } = layered();
+    const paints = recordPaints(context);
+    const gate = { row: 1, col: 1, open: false };
+    const arches = () => paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(66, 77, 88)");
+
+    renderer.render({ ...run, gate });
+    expect(arches()).toEqual([]);
+    renderer.render({ ...run, revealed: ["0,0", "1,1"], gate });
+    expect(arches()).toHaveLength(1);
   });
 });
