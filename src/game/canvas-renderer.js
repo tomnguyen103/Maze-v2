@@ -159,8 +159,9 @@ export function createCanvasRenderer(canvas, createTile = createDetachedCanvas) 
   /** @param {GameRun} run */
   function render(run) {
     lastRun = run;
-    resize();
+    // Read the tokens before resize() clears the canvas, so a missing token leaves the last board.
     palette = readPalette();
+    resize();
     const size = run.labyrinth.length;
     const tile = canvas.width / size;
     const revealed = new Set([...run.revealed, ...run.pulseVisible]);
