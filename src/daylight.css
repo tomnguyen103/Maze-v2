@@ -231,6 +231,11 @@ a:hover {
   min-width: 0;
 }
 
+/* End-card art belongs to the Popup look; Pilot shows none. */
+.result-art {
+  display: none;
+}
+
 /* One ruled row of text tabs. The row scrolls sideways when it cannot fit; no scrollbar shows. */
 .command-bar__actions {
   flex: 1 1 auto;

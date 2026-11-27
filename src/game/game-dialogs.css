@@ -801,6 +801,11 @@ dialog > .dialog-heading > button {
   background: var(--color-echo-soft);
 }
 
+/* The display rule above beats the user-agent [hidden] rule; First Light and Daily hide the box. */
+.result-atlas[hidden] {
+  display: none;
+}
+
 .result-atlas strong {
   font-size: 0.8rem;
 }

@@ -4304,6 +4304,11 @@ test("requires account creation before a guest starts a second Labyrinth", async
     })
   ).toBe(1);
   await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
+  await expect(page.locator("#result-play-seed")).toBeHidden();
+  await expect(page.locator("#result-dialog")).not.toHaveAttribute(
+    "data-result-state",
+    /.*/
+  );
 });
 
 test("reveals a Hint, grants one free skip, then warns before paid skips", async ({
@@ -5544,7 +5549,13 @@ test("defeats the deterministic Labyrinth 4 Gate Warden before escape", async ({
   await expect(page.locator("#replay-run")).toHaveText(
     "Skip ceremony · Continue Quest"
   );
-  await page.locator("#replay-run").click();
+  await expect(page.locator("#result-dialog")).toHaveAttribute(
+    "data-result-state",
+    "sigil"
+  );
+  await expect(page.locator("#result-play-seed")).toBeHidden();
+  await page.locator("#replay-run").focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator("#result-kicker")).toHaveText("Demo complete");
   await expect(page.locator("#replay-run")).toHaveText(
     "Create account for three Runs"
@@ -5594,6 +5605,8 @@ test("keeps a saved terminal result usable when Atlas presentation fails", async
   );
   const getCurrentQuestion = await mockQuestionApi(page);
   await page.route("**/assets/quest-atlas-*.js", (route) => route.abort());
+  // A signed-in Explorer keeps the defeat card; a guest would see the demo gate.
+  await installSignedInQuestPlayer(page);
   await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
   await expectGameReady(page);
   await page.getByLabel(/Interactive maze/).focus();
@@ -5623,6 +5636,11 @@ test("keeps a saved terminal result usable when Atlas presentation fails", async
     "Atlas summary unavailable. Quest progress is saved."
   );
   await expect(page.locator("#result-seed")).toHaveText(DEFEAT_SEED);
+  await expect(page.locator("#result-dialog")).toHaveAttribute(
+    "data-result-state",
+    "defeat"
+  );
+  await expect(page.locator("#result-echoes")).toHaveText(/^\d+ of \d+$/);
   await expect.poll(() =>
     page.evaluate((seed) => {
       const stored = localStorage.getItem("echo-maze:run-records:v1");
@@ -5635,6 +5653,86 @@ test("keeps a saved terminal result usable when Atlas presentation fails", async
     seed: DEFEAT_SEED,
     outcome: "defeated"
   });
+});
+
+test("plays the lost seed again and keeps the Quest", async ({
+  page
+}, testInfo) => {
+  test.skip(
+    Boolean(testInfo.project.use.isMobile),
+    "One Play This Seed browser Run per desktop engine is sufficient."
+  );
+  const getCurrentQuestion = await mockQuestionApi(page);
+  await installSignedInQuestPlayer(page);
+  await page.goto(`/?seed=${DEFEAT_SEED}&level=trail-scout`);
+  await expectGameReady(page);
+  await page.getByLabel(/Interactive maze/).focus();
+  for (const direction of DEFEAT_PATH) {
+    await page.keyboard.press(KEY_BY_DIRECTION[direction]);
+    if (await page.locator("#challenge-dialog").isVisible()) {
+      break;
+    }
+  }
+  await expect(page.locator("#challenge-dialog")).toBeVisible();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const question = getCurrentQuestion();
+    const wrongAnswer = question.choices.find(
+      (choice) => choice.id !== question.answerId
+    );
+    if (!wrongAnswer) {
+      throw new Error("Reviewed fixture needs a wrong answer.");
+    }
+    await page.locator(`[data-answer="${wrongAnswer.id}"]`).click();
+    if (attempt < 2) {
+      await expect.poll(() => getCurrentQuestion().id).not.toBe(question.id);
+    }
+  }
+
+  await expect(page.locator("#result-dialog")).toBeVisible();
+  await expect(page.locator("#result-play-seed")).toBeVisible();
+  await expect(page.locator("#replay-run")).toHaveText("Retry Labyrinth");
+  const readQuestId = () =>
+    page.evaluate(() => {
+      const stored = localStorage.getItem("echo-maze:quest-progress:v1");
+      return stored ? JSON.parse(stored).questId : null;
+    });
+  const questId = await readQuestId();
+  expect(questId).toEqual(expect.any(String));
+
+  // Clicks in one task: the first start disables every start control on the
+  // card, so a second Play This Seed or a Retry Labyrinth fires no click event.
+  const guardedSecondClick = await page
+    .locator("#result-play-seed")
+    .evaluate((button) => {
+      const replay = document.querySelector("#replay-run");
+      const freshRun = document.querySelector("#fresh-run");
+      if (
+        !(button instanceof HTMLButtonElement) ||
+        !(replay instanceof HTMLButtonElement) ||
+        !(freshRun instanceof HTMLButtonElement)
+      ) {
+        return false;
+      }
+      button.click();
+      const guarded = button.disabled && replay.disabled && freshRun.disabled;
+      button.click();
+      replay.click();
+      return guarded;
+    });
+  expect(guardedSecondClick).toBe(true);
+  await expect(page.locator("#result-dialog")).not.toBeVisible();
+  await expect(page.locator("#moves-value")).toHaveText("000");
+  await expect(page.locator("#seed-value")).toHaveText(DEFEAT_SEED);
+  await expectGameReady(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("echo-maze:active-run:v1") ?? "null")
+      )
+    )
+    .toMatchObject({ seed: DEFEAT_SEED, levelId: "trail-scout" });
+  await expect(page.locator("#result-play-seed")).toBeEnabled();
+  expect(await readQuestId()).toBe(questId);
 });
 
 test("uses a compact result after the Region Sigil ceremony was seen", async ({

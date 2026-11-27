@@ -327,3 +327,86 @@
 .motion-confetti-2 {
   background: var(--sun);
 }
+
+/* End cards (R6c): one paper figure per result state; no animation here, R3 owns the motion. */
+:root .result-art {
+  display: block;
+  width: min(12rem, 60%);
+  margin: 0 auto var(--space-2);
+}
+
+:root .result-dialog:not([data-result-state]) .result-art {
+  display: none;
+}
+
+:root .result-art__figure {
+  display: none;
+  width: 100%;
+  height: auto;
+}
+
+:root .result-dialog[data-result-state="gate"] .result-art__figure--gate,
+:root .result-dialog[data-result-state="sigil"] .result-art__figure--sigil,
+:root .result-dialog[data-result-state="defeat"] .result-art__figure--defeat {
+  display: block;
+}
+
+:root .result-art__ink {
+  stroke: var(--color-ink);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+:root .result-art__sun {
+  fill: var(--sun);
+}
+
+:root .result-art__coral {
+  fill: var(--coral);
+}
+
+:root .result-art__sky {
+  fill: var(--sky);
+}
+
+:root .result-art__meadow {
+  fill: var(--meadow);
+}
+
+:root .result-art__zero {
+  fill: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+
+/* Stats: a paper table row ruled in ink. */
+:root .result-dialog__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  border-block: 2px solid var(--color-ink);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+:root .result-dialog__stats > span {
+  flex: 1 1 4.5rem;
+}
+
+/* A seed moves to its own row before it breaks inside a word. */
+:root .result-dialog__stats strong {
+  overflow-wrap: break-word;
+}
+
+/* The heading block centres under the centred art. */
+:root .result-dialog[data-result-state] > :is(#result-kicker, #result-title, #result-summary) {
+  display: block;
+  text-align: center;
+}
+
+:root .result-dialog__actions {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

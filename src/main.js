@@ -368,7 +368,9 @@ const elements = {
   resultKicker: requiredElement("result-kicker", HTMLElement),
   resultAccessNote: requiredElement("result-access-note", HTMLElement),
   resultAtlas: requiredElement("result-atlas", HTMLElement),
+  resultEchoes: requiredElement("result-echoes", HTMLElement),
   resultMoves: requiredElement("result-moves", HTMLElement),
+  resultPlaySeed: requiredElement("result-play-seed", HTMLButtonElement),
   resultPractice: requiredElement("result-practice", HTMLButtonElement),
   resultRank: requiredElement("result-rank", HTMLElement),
   resultSeed: requiredElement("result-seed", HTMLElement),
@@ -687,6 +689,12 @@ let offlineContinuityBridgePromise = null;
 /** @type {boolean} */
 let offlineContinuityActive;
 let demoAccessPending = hasCompletedGuestDemo();
+/** @type {{ seed: string, levelId: string, labyrinthNumber: number, ruleset: { atlasRegionId: string, revision: string } } | null} */
+let playSeedTarget = null;
+let resultCardStartPending = false;
+/** The end-card state of the last Quest Run; a late sign-in restores it after the demo gate. */
+/** @type {"gate" | "sigil" | "defeat" | null} */
+let runResultState = null;
 let activeFirstLight = false;
 let firstLightEntryPending = false;
 let firstLightHandoff = false;
@@ -1394,6 +1402,9 @@ elements.runRecords.addEventListener("click", async (event) => {
   }
 });
 elements.freshRun.addEventListener("click", () => {
+  if (resultCardStartPending) {
+    return;
+  }
   if (activeDaily) {
     startDailyRun();
     return;
@@ -1423,7 +1434,7 @@ elements.replay.addEventListener("click", async () => {
     return;
   }
   if (action === "continue" || action === "retry") {
-    await startFreshRun();
+    await runResultCardStart(() => startFreshRun());
     return;
   }
   if (action === "dismiss-access") {
@@ -1436,6 +1447,53 @@ elements.replay.addEventListener("click", async () => {
   }
   await openLevelPicker();
 });
+elements.resultPlaySeed.addEventListener("click", async () => {
+  const target = playSeedTarget;
+  if (!target) {
+    return;
+  }
+  await runResultCardStart(async () => {
+    try {
+      // startRun closes the card. A refused start keeps the card open, so the player can choose again.
+      await startSharedRun(
+        target.seed,
+        target.levelId,
+        target.labyrinthNumber,
+        false,
+        undefined,
+        target.ruleset
+      );
+    } catch {
+      const failed = "That seed could not start. Try Retry Labyrinth.";
+      announce(failed);
+      showEvent(failed);
+    }
+  });
+});
+
+/**
+ * Runs one start from the result card at a time. Each start overwrites the
+ * shared active-run locator during admission, so a second start must wait.
+ * @param {() => Promise<unknown>} start
+ */
+async function runResultCardStart(start) {
+  if (resultCardStartPending) {
+    return;
+  }
+  const buttons = [elements.replay, elements.freshRun, elements.resultPlaySeed];
+  resultCardStartPending = true;
+  for (const button of buttons) {
+    button.disabled = true;
+  }
+  try {
+    await start();
+  } finally {
+    resultCardStartPending = false;
+    for (const button of buttons) {
+      button.disabled = false;
+    }
+  }
+}
 elements.sound.addEventListener("click", async () => {
   const enabled = await loadAudio()
     .then((loadedAudio) => loadedAudio.toggle())
@@ -2905,6 +2963,7 @@ function showRunAccessGate(access) {
   elements.resultSummary.textContent =
     "This account's purchase was refunded or disputed. Your current Labyrinth is saved; ask a parent or guardian to contact support.";
   elements.resultAccessNote.hidden = true;
+  clearResultCard();
   elements.replay.dataset.resultAction = "dismiss-access";
   elements.replay.textContent = "Close";
   elements.freshRun.hidden = true;
@@ -3234,6 +3293,7 @@ function showDemoAccountGate() {
   elements.resultTitle.textContent = "Create an account for three free Runs.";
   elements.resultSummary.textContent =
     "You completed your Guest Run. Create an account to start three more Runs and continue your Quest.";
+  clearResultCard();
   elements.replay.dataset.resultAction = "create-account";
   elements.replay.textContent = "Create account for three Runs";
   elements.freshRun.hidden = true;
@@ -3259,6 +3319,7 @@ async function requestDemoAccount() {
   }
   elements.resultSummary.textContent =
     "Account creation is unavailable right now. Try again later to continue your Quest.";
+  clearResultCard();
   if (restoreDemoGate && !elements.resultDialog.open) {
     elements.resultDialog.showModal();
   }
@@ -3279,6 +3340,9 @@ function syncDemoAccountAction(signedIn) {
     return;
   }
   demoAccessPending = false;
+  if (runResultState) {
+    elements.resultDialog.dataset.resultState = runResultState;
+  }
   const questComplete = questProgress.complete;
   elements.resultSummary.textContent = questComplete
     ? "Your account is ready. Begin a new Quest whenever you are ready."
@@ -3291,6 +3355,9 @@ function syncDemoAccountAction(signedIn) {
 /** @param {boolean} signedIn */
 function handleAuthenticationChange(signedIn) {
   syncDemoAccountAction(signedIn);
+  if (!signedIn) {
+    clearPlaySeed();
+  }
   if (elements.dailyDialog.open) {
     renderDailyBoardNote();
   }
@@ -4403,6 +4470,8 @@ async function finishRun() {
     return;
   }
   const finishedLabyrinthNumber = currentLabyrinthNumber;
+  // A cloud Quest response can replace currentLevel during the awaits below.
+  const finishedLevel = currentLevel;
   const runId = activeRunLocator?.runId;
   const echoesCollected = run.echoes.filter((echo) => echo.collected).length;
   const runReplayOwnerId = playerController.getAuthenticatedUserId();
@@ -4436,7 +4505,7 @@ async function finishRun() {
     echoesCollected,
     echoTotal: run.echoes.length,
     questId: questProgress.questId,
-    questLevelId: currentLevel.id,
+    questLevelId: finishedLevel.id,
     labyrinthNumber: currentLabyrinthNumber,
     atlasRegionId: run.ruleset.atlasRegionId,
     rulesetRevision: run.ruleset.revision,
@@ -4464,7 +4533,7 @@ async function finishRun() {
           atlasRegionId: run.ruleset.atlasRegionId,
           rulesetRevision: run.ruleset.revision
         },
-        currentLevel.id,
+        finishedLevel.id,
         finishedLabyrinthNumber
       );
       questProgress = saveQuestProgress(advanceQuest(questProgress));
@@ -4482,7 +4551,8 @@ async function finishRun() {
   const terminal = {
     run,
     progress: questProgress,
-    levelName: currentLevel.name,
+    levelId: finishedLevel.id,
+    levelName: finishedLevel.name,
     labyrinthNumber: finishedLabyrinthNumber,
     echoesCollected,
     standing: resultStanding(),
@@ -4545,6 +4615,8 @@ async function finishRun() {
     // Storage access cannot strand the saved terminal result.
   }
   playCeremony = sigilCeremony;
+  runResultState = sigilMilestone ? "sigil" : won ? "gate" : "defeat";
+  elements.resultDialog.dataset.resultState = runResultState;
   elements.resultKicker.textContent = questComplete
     ? "Quest complete"
     : sigilCeremony
@@ -4599,6 +4671,21 @@ async function finishRun() {
       ? "Continue Quest"
       : "Retry Labyrinth";
   elements.freshRun.hidden = questComplete;
+  const canPlaySeed =
+    elements.replay.dataset.resultAction === "retry" &&
+    playerController.hasAuthenticatedUser();
+  playSeedTarget = canPlaySeed
+    ? {
+        seed: terminal.run.seed,
+        levelId: terminal.levelId,
+        labyrinthNumber: terminal.labyrinthNumber,
+        ruleset: {
+          atlasRegionId: terminal.run.ruleset.atlasRegionId,
+          revision: terminal.run.ruleset.revision
+        }
+      }
+    : null;
+  elements.resultPlaySeed.hidden = !canPlaySeed;
   if (!playerController.hasAuthenticatedUser()) {
     markGuestDemoPendingAuthentication();
     demoAccessPending = true;
@@ -4617,6 +4704,7 @@ async function finishRun() {
   }
   elements.resultTime.textContent = formatTime(terminal.run.elapsedMs);
   elements.resultMoves.textContent = String(terminal.run.moves).padStart(3, "0");
+  elements.resultEchoes.textContent = `${terminal.echoesCollected} of ${terminal.run.echoes.length}`;
   elements.resultSeed.textContent = terminal.run.seed;
   elements.resultRank.textContent = terminal.standing;
   } finally {
@@ -4629,6 +4717,28 @@ async function finishRun() {
   if (playCeremony) {
     playMotion("ceremonyPopUp", elements.resultDialog);
   }
+}
+
+/**
+ * First Light and Daily results: Gate or defeat art, Echoes cell, no Play This Seed.
+ * @param {boolean} won
+ */
+function setSimpleResultCard(won) {
+  elements.resultDialog.dataset.resultState = won ? "gate" : "defeat";
+  const collected = run.echoes.filter((echo) => echo.collected).length;
+  elements.resultEchoes.textContent = `${collected} of ${run.echoes.length}`;
+  clearPlaySeed();
+}
+
+function clearPlaySeed() {
+  playSeedTarget = null;
+  elements.resultPlaySeed.hidden = true;
+}
+
+/** Access and demo gates show no end-card art. */
+function clearResultCard() {
+  delete elements.resultDialog.dataset.resultState;
+  clearPlaySeed();
 }
 
 /** @param {boolean} won */
@@ -4661,6 +4771,7 @@ function finishFirstLight(won) {
     : "Choose Quest Level";
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+  setSimpleResultCard(won);
   elements.resultSeed.textContent = "Practice";
   elements.resultRank.textContent = "Not saved";
   updateInterface();
@@ -4696,6 +4807,7 @@ function finishDailyRun(daily, won) {
     elements.freshRun.textContent = "Start current Daily";
     elements.resultTime.textContent = formatTime(run.elapsedMs);
     elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+    setSimpleResultCard(won);
     elements.resultSeed.textContent = daily.seed;
     elements.resultRank.textContent = "Expired";
     updateInterface();
@@ -4739,6 +4851,7 @@ function finishDailyRun(daily, won) {
   elements.freshRun.textContent = "Play Daily again";
   elements.resultTime.textContent = formatTime(run.elapsedMs);
   elements.resultMoves.textContent = String(run.moves).padStart(3, "0");
+  setSimpleResultCard(won);
   elements.resultSeed.textContent = daily.seed;
   elements.resultRank.textContent = !persisted
     ? "Not saved"
