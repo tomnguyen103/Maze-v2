@@ -1155,28 +1155,43 @@ kbd {
 
 .legend-mark--coastline::before {
   display: block;
-  margin-top: 0.3rem;
+  margin-top: 0.24rem;
   border-top: 0.16rem solid var(--color-coastline);
   content: "";
 }
 
-/* Each Warden Mode copies its canvas silhouette in the board Warden colour. */
-.legend-mark--warden-patrol {
-  border-radius: 50%;
-  background: var(--color-board-warden);
+/* Each Warden Mode copies its canvas silhouette on a Passage chip, because the board Warden ink is dark. */
+.legend-mark--coastline,
+.legend-mark--gate-sealed,
+.legend-mark[class*="--warden-"] {
+  border: 1px solid var(--color-line);
+  background: var(--color-passage);
 }
 
-.legend-mark--warden-hunt {
+.legend-mark[class*="--warden-"] {
+  padding: 0.08rem;
+}
+
+.legend-mark[class*="--warden-"]::before {
+  display: block;
+  height: 100%;
   background: var(--color-board-warden);
+  content: "";
+}
+
+.legend-mark--warden-patrol::before {
+  border-radius: 50%;
+}
+
+.legend-mark--warden-hunt::before {
   clip-path: polygon(50% 0, 100% 50%, 100% 75%, 50% 100%, 0 75%, 0 50%);
 }
 
-.legend-mark--warden-intercept {
-  background: var(--color-board-warden);
+.legend-mark--warden-intercept::before {
   clip-path: polygon(50% 0, 100% 40%, 100% 100%, 50% 70%, 0 100%, 0 40%);
 }
 
-.legend-mark--warden-lured {
+.legend-mark--warden-lured::before {
   border-radius: 50%;
   background: radial-gradient(
     var(--color-board-warden) 34%,
