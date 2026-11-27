@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean }} [options]
+ * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown> }} [options]
  */
-function stubCanvas({ width = 640, neatline = false, seed = true } = {}) {
+function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () => new Promise(() => {}) } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -135,7 +135,8 @@ function stubCanvas({ width = 640, neatline = false, seed = true } = {}) {
   if (seed) seedBoardTokens();
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
-    createTile
+    createTile,
+    /** @type {never} */ (loadArt)
   );
   return {
     calls,
@@ -336,7 +337,9 @@ const BOARD_PAIRS = /** @type {const} */ ([
   // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
   ["--color-board-explorer", DISC, 3],
   ["--color-board-explorer-ring", DISC, 4.5],
-  // The paused band and the challenge band write the board ink on the land.
+  // The pause cover writes its ink on the cover fill.
+  ["--color-board-cover-ink", "--color-board-cover", 4.5],
+  // The challenge band writes the board ink on the land.
   ["--color-board-ink", "--color-land", 4.5],
   // Pulse is a wash, so it needs only to show.
   ["--color-pulse", "--color-passage", 1.2],
@@ -421,6 +424,94 @@ describe("Canvas renderer", () => {
   afterEach(() => {
     document.body.removeAttribute("style");
     document.documentElement.removeAttribute("data-access-contrast");
+  });
+
+  describe("board art", () => {
+    const run = () => {
+      const base = questRun("BOARD-ART", "trail-scout", 9);
+      return {
+        ...base,
+        pulseVisible: [],
+        revealed: ["1,1", "0,1"],
+        wardens: [
+          { row: 1, col: 1, id: 0, mode: /** @type {const} */ ("patrol") },
+          { row: 0, col: 1, id: 1, mode: /** @type {const} */ ("hunt") },
+          { row: 0, col: 0, id: 2, mode: /** @type {const} */ ("lured") }
+        ]
+      };
+    };
+    const flush = () => new Promise((done) => setTimeout(done, 0));
+    const shapeCalls = () => {
+      const plain = stubCanvas({ loadArt: () => Promise.resolve(null) });
+      plain.renderer.render(run());
+      return plain.calls.join(" ");
+    };
+
+    it("draws the shape marks while loadArt never resolves", async () => {
+      const drawn = stubCanvas({ loadArt: () => new Promise(() => {}) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(drawn.calls.join(" ")).toBe(shapeCalls());
+    });
+
+    it("drops the art and draws the shape marks when the art throws", async () => {
+      const art = {
+        drawFigure: vi.fn(() => {
+          throw new TypeError("roundRect is not a function");
+        })
+      };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure).toHaveBeenCalledTimes(1);
+      drawn.calls.length = 0;
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      expect(art.drawFigure).toHaveBeenCalledTimes(1);
+      expect(drawn.calls.join(" ")).toBe(shapeCalls());
+    });
+
+    it("draws the shape marks and throws nothing when loadArt rejects", async () => {
+      const drawn = stubCanvas({ loadArt: () => Promise.reject(new Error("offline")) });
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      await flush();
+      expect(() => drawn.renderer.render(run())).not.toThrow();
+      expect(drawn.calls.join(" ")).toContain(shapeCalls());
+    });
+
+    it("draws the shape marks when the art is null", async () => {
+      const loadArt = vi.fn(() => Promise.resolve(null));
+      const drawn = stubCanvas({ loadArt });
+      drawn.renderer.render(run());
+      await flush();
+      drawn.renderer.render(run());
+      expect(loadArt).toHaveBeenCalledTimes(1);
+      expect(drawn.calls.slice(-shapeCalls().split(" ").length).join(" ")).toBe(shapeCalls());
+    });
+
+    it("draws one Explorer and one figure per visible Warden with its Mode, then renders again once", async () => {
+      const art = { drawFigure: vi.fn() };
+      const loadArt = vi.fn(() => Promise.resolve(art));
+      const drawn = stubCanvas({ loadArt });
+      drawn.renderer.render(run());
+      expect(art.drawFigure).not.toHaveBeenCalled();
+      await flush();
+      expect(loadArt).toHaveBeenCalledTimes(1);
+      const figures = art.drawFigure.mock.calls.map(([, key, mode]) => `${key}:${mode}`);
+      expect(figures).toEqual(["fangmoor:patrol", "fangmoor:hunt", "clover:idle"]);
+      // The figure fills 0.9 of one tile.
+      expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 0.9);
+      expect(art.drawFigure.mock.calls[0][4]).toBe(false);
+    });
+
+    it("keeps the danger ring under the Warden art and skips the glow in high contrast", async () => {
+      document.documentElement.dataset.accessContrast = "strong";
+      const art = { drawFigure: vi.fn() };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure.mock.calls.every((call) => call[4] === true)).toBe(true);
+      expect(drawn.context.setLineDash).toHaveBeenCalled();
+    });
   });
 
   it("draws numbered Echo Bridge pairs through Fog", () => {
@@ -924,13 +1015,13 @@ describe("Canvas renderer", () => {
     }
   });
 
-  it("writes the pause text in ink on a paper band between two ink rules", () => {
-    const { context, renderer } = stubCanvas();
+  it("A-40 covers the whole board on pause and draws no mark under the cover", () => {
+    const { calls, context, renderer } = stubCanvas();
     const run = questRun("PALETTE-REREAD", "bright-start", 1);
-    /** @type {string[][]} */
+    /** @type {Array<{ style: string, w: number, h: number }>} */
+    const rects = [];
+    /** @type {string[]} */
     const textFills = [];
-    /** @type {Array<{ style: string, y: number, w: number, h: number }>} */
-    const bands = [];
     let fillStyle = "";
     Object.defineProperty(context, "fillStyle", {
       get: () => fillStyle,
@@ -938,23 +1029,25 @@ describe("Canvas renderer", () => {
         fillStyle = value;
       }
     });
-    context.fillText = vi.fn((text) => textFills.push([text, fillStyle]));
-    context.fillRect = vi.fn((_x, y, w, h) => {
-      bands.push({ style: fillStyle, y, w, h });
+    context.fillRect = vi.fn((_x, _y, w, h) => {
+      rects.push({ style: fillStyle, w, h });
     });
-    document.body.style.setProperty("--color-board-ink", "rgb(4, 4, 4)");
-    document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
-    document.body.style.setProperty("--color-overlay", "rgb(1, 1, 1)");
+    context.fillText = vi.fn((text) => textFills.push(`${text}|${fillStyle}`));
+    document.body.style.setProperty("--color-board-cover", "rgb(250, 251, 252)");
+    document.body.style.setProperty("--color-board-cover-ink", "rgb(4, 4, 4)");
+    const here = `${run.explorer.row},${run.explorer.col}`;
 
-    renderer.render({ ...run, pulseVisible: [], revealed: [], status: "paused" });
+    renderer.render({
+      ...run,
+      pulseVisible: [],
+      revealed: [here],
+      status: "paused",
+      wardens: [{ row: run.explorer.row, col: run.explorer.col, id: 0, mode: "hunt" }]
+    });
 
-    expect(textFills).toContainEqual(["PAUSED", "rgb(4, 4, 4)"]);
-    expect(bands.some((band) => band.style === "rgb(1, 1, 1)")).toBe(false);
-    const paper = bands.find((band) => band.style === "rgb(250, 251, 252)" && band.w === 640);
-    expect(paper).toBeDefined();
-    expect(paper && paper.h).toBeLessThan(640 / 2);
-    const rules = bands.filter((band) => band.style === "rgb(4, 4, 4)" && band.w === 640);
-    expect(rules.map((rule) => rule.y)).toEqual([paper?.y, (paper?.y ?? 0) + (paper?.h ?? 0) - 1]);
+    expect(rects).toEqual([{ style: "rgb(250, 251, 252)", w: 640, h: 640 }]);
+    expect(textFills).toEqual(["PAUSED|rgb(4, 4, 4)"]);
+    expect(calls.filter((call) => call !== "fillRect")).toEqual([]);
   });
 
   it("US-02.1 puts the Signal light on the Gate Warden challenge band only", () => {
