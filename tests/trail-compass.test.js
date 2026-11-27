@@ -533,6 +533,33 @@ describe("Trail Compass parity with the board", () => {
     expect(describeCompassState(run)).not.toContain("A Windway starts");
   });
 
+  it("names a Windway whose destination is known and whose source is not (US-03.1, B-83)", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
+    );
+    const [windway] = run.windways;
+    const destinationKey = `${windway.destination.row},${windway.destination.col}`;
+    run.pulseVisible = [];
+    run.revealed = [destinationKey];
+    expect(describeCompassState(run)).toMatch(
+      new RegExp(`A Windway starts [^.]* and carries you to ${gridRef(windway.destination)}[.]`)
+    );
+    run.revealed = [];
+    run.pulseVisible = [destinationKey];
+    expect(describeCompassState(run)).toContain(
+      `and carries you to ${gridRef(windway.destination)}, seen by Pulse.`
+    );
+  });
+
+  it("leaves a Windway unnamed when neither end is known (US-03.2, B-83)", () => {
+    const run = structuredClone(
+      runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })
+    );
+    run.revealed = [];
+    run.pulseVisible = [];
+    expect(describeCompassState(run)).not.toContain("A Windway starts");
+  });
+
   it("keeps the unrevealed Windway partner tile in Fog, as the canvas does (R1a)", () => {
     const run = structuredClone(
       runFixture({ ruleset: { atlasRegionId: "developing", revision: "windways-v2" } })

@@ -238,8 +238,10 @@ export function describeCompassState(run) {
     }
   }
   for (const windway of run.windways) {
-    const key = `${windway.source.row},${windway.source.col}`;
+    const sourceKey = `${windway.source.row},${windway.source.col}`;
     const { row, col } = windway.destination;
+    // The board draws a Windway when either end is known (B-83); the Compass follows.
+    const key = revealed.has(sourceKey) ? sourceKey : `${row},${col}`;
     // The engine blocks a Windway whose destination is not a passage.
     if (revealed.has(key) && run.labyrinth[row]?.[col] === 1) {
       const seen = isPulseOnly(run, key) ? ", seen by Pulse" : "";
