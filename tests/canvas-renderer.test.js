@@ -11,9 +11,9 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 
 /**
  * Builds a recording 2D context and a canvas that returns it.
- * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown> }} [options]
+ * @param {{ width?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean }} [options]
  */
-function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () => new Promise(() => {}) } = {}) {
+function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () => new Promise(() => {}), isBrightStart } = {}) {
   /** @type {string[]} */
   const labels = [];
   /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
@@ -136,7 +136,8 @@ function stubCanvas({ width = 640, neatline = false, seed = true, loadArt = () =
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
     createTile,
-    /** @type {never} */ (loadArt)
+    /** @type {never} */ (loadArt),
+    isBrightStart
   );
   return {
     calls,
@@ -501,6 +502,16 @@ describe("Canvas renderer", () => {
       // The figure fills 0.9 of one tile.
       expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 0.9);
       expect(art.drawFigure.mock.calls[0][4]).toBe(false);
+      expect(art.drawFigure.mock.calls.every((call) => call[5] === false)).toBe(true);
+    });
+
+    it("passes soft to the Fangmoor art alone while Bright Start shows", async () => {
+      const art = { drawFigure: vi.fn() };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art), isBrightStart: () => true });
+      drawn.renderer.render(run());
+      await flush();
+      const soft = art.drawFigure.mock.calls.map(([, key, , , , flag]) => `${key}:${flag}`);
+      expect(soft).toEqual(["fangmoor:true", "fangmoor:true", "explorer:false"]);
     });
 
     it("keeps the danger ring under the Warden art and skips the glow in high contrast", async () => {

@@ -10,7 +10,12 @@ import { buildRunReplayTimeline } from "./run-replay.js";
  *     terminal: Record<string, unknown>,
  *     actionCount: number
  *   },
- *   rendererFactory?: (canvas: HTMLCanvasElement) => {
+ *   rendererFactory?: (
+ *     canvas: HTMLCanvasElement,
+ *     createTile?: undefined,
+ *     loadArt?: undefined,
+ *     isBrightStart?: () => boolean
+ *   ) => {
  *     render: (state: any) => void,
  *     resize: () => void
  *   },
@@ -23,7 +28,13 @@ export function createRunReplayView({
   onClose = () => {}
 } = {}) {
   const elements = createElements();
-  const renderer = rendererFactory(elements.canvas);
+  let brightStart = false;
+  const renderer = rendererFactory(
+    elements.canvas,
+    undefined,
+    undefined,
+    () => brightStart
+  );
   /** @type {{
    *   states: any[],
    *   events: { index: number, type: string, label: string, elapsedMs: number }[],
@@ -89,6 +100,7 @@ export function createRunReplayView({
       stopPlayback();
       const nextTimeline = buildTimeline(record);
       timeline = nextTimeline;
+      brightStart = record.questLevelId === "bright-start";
       returnFocus = trigger;
       index = 0;
       renderEventList();

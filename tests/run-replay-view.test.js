@@ -121,6 +121,26 @@ describe("Run Replay view", () => {
     vi.useRealTimers();
   });
 
+  it("tells the renderer to soften the Fangmoor art only for a Bright Start record", () => {
+    /** @type {(() => boolean) | undefined} */
+    let isBrightStart;
+    const view = createRunReplayView({
+      buildTimeline: () => TIMELINE,
+      rendererFactory: (_canvas, _tile, _art, getter) => {
+        isBrightStart = getter;
+        return { render: vi.fn(), resize: vi.fn() };
+      }
+    });
+    const trigger = /** @type {HTMLButtonElement} */ (
+      document.getElementById("trigger")
+    );
+    expect(isBrightStart?.()).toBe(false);
+    view.show({ questLevelId: "bright-start" }, trigger);
+    expect(isBrightStart?.()).toBe(true);
+    view.show({ questLevelId: "trail-scout" }, trigger);
+    expect(isBrightStart?.()).toBe(false);
+  });
+
   it("supports keyboard steps without stealing native control keys", () => {
     const render = vi.fn();
     const view = createRunReplayView({

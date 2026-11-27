@@ -8,7 +8,8 @@ declare module "@look/board-art.js" {
       key: "fangmoor" | "explorer" | "clover" | "pip" | "lumi" | "fen" | "tuck",
       mode: string,
       size: number,
-      flat: boolean
+      flat: boolean,
+      soft?: boolean
     ) => void;
   } | null;
   export default art;

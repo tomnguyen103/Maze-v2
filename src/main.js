@@ -144,7 +144,7 @@ const HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER = Math.max(
 );
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
-const renderer = createCanvasRenderer(canvas);
+const renderer = createCanvasRenderer(canvas, undefined, undefined, () => currentLevel.id === "bright-start");
 
 /** @param {{ id: string, topicId: string, learningObjectiveId: string, difficultyBand: string }} question @param {"correct" | "wrong" | "hint" | "skip"} outcome */
 function recordLearningOutcome(question, outcome) {
