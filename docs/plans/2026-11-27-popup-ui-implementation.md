@@ -41,7 +41,7 @@ Each row has one recommendation. The run adopts the recommendation unless the ow
 | M5 Renderer and Pilot Chart | Replaced by M5P (section 4). Slice ids R1 to R7 stay, keep their findings, and keep their acceptance tests |
 | M6 Z1 | Unchanged |
 | M6 Z2 | Rewrites `design.md` from the shipped Popup build |
-| Section 7, Pilot Chart amendment | Replaced by section 3. The rows that are not about the look carry over: three Fog states, the Memory dot, the Echo number minimum size, the Lured square outline, the narrow frame ticks and 12 px gutter, the Grid reference below 420 px, the paused full cover (A-40), the legend contract (B-12, B-47), forced-colors shapes, the 24 px tile rule (B-10), the Motion table rule (B-84), and the I3 change |
+| Section 7, Pilot Chart amendment | Replaced by section 3. The rows that are not about the look carry over: three Fog states, the Memory dot, the Echo number minimum size, the Lured square outline, the narrow frame ticks and 12 px gutter, the Grid reference below 420 px, the paused full cover (A-40), the legend contract (B-12, B-47), forced-colors shapes, the tile floor rule of max(24, ceil(48 / DPR)) px (B-10, spike decision 3), the Motion table rule (B-84), and the I3 change |
 | ADR 0051 (Pilot Chart replaces Field Journal) | Superseded by a new ADR, "Popup book replaces Pilot Chart" |
 | ADR 0052 (Pilot Chart board contract) | Superseded by a new ADR, "Popup board contract". The contract rows carry over; only the forms change |
 | Reserved ADR 0057 (R1 token read) | Re-scoped: it amends the Popup board contract ADR, not ADR 0052 |
@@ -340,6 +340,6 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
-| Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
+| Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) and #326 (the B-10 tile floor from the device pixel ratio). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
 
-The game row measures 41.26 KB of 42 KB after #325. The motion chunk is 0.83 KB.
+The game row measures 41.26 KB of 42 KB after #326. The motion chunk is 0.83 KB.
