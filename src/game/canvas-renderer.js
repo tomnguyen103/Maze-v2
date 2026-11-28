@@ -422,28 +422,44 @@ export function createCanvasRenderer(
     if (cells.length === 0) return;
     const unit = devicePixel();
     const step = tile / 24;
+    const cardInset = landInset(tile);
+    const outline = coastlineWidth(tile);
     // A flap on a Land card starts inside the Coastline, so it never covers the outline.
-    const landFlapInset = snapStroke(landInset(tile) + coastlineWidth(tile) + unit / 2, unit);
-    context.beginPath();
-    for (const [row, col] of cells) {
-      const { left, top, width } = tileBox(row, col, tile);
-      const inset = labyrinth[row][col] === 0 ? landFlapInset : snapStroke(step, unit);
-      const near = left + inset;
-      const far = left + width - inset;
-      const edge = top + inset;
-      const low = snapStroke(edge + 16 * step, unit);
-      context.moveTo(near, edge);
-      context.lineTo(far, edge);
-      context.lineTo(snapStroke(far - 6 * step, unit), low);
-      context.lineTo(snapStroke(near + 6 * step, unit), low);
-      context.closePath();
-    }
-    context.fillStyle = palette.fogSoft;
-    context.fill();
-    context.strokeStyle = palette.fogEdge;
-    context.lineWidth = unit;
-    context.lineJoin = "miter";
-    context.stroke();
+    const landFlapInset = snapStroke(cardInset + outline + unit / 2, unit);
+    isolated(() => {
+      // The clip follows the inner edge of the Coastline, so the flap corners stay off its rounded corners too.
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width, height } = tileBox(row, col, tile);
+        if (labyrinth[row][col] !== 0) {
+          context.rect(left, top, width, height);
+          continue;
+        }
+        const edge = cardInset + outline;
+        appendRoundedRect(left + edge, top + edge, width - 2 * edge, height - 2 * edge, Math.max(0, 5 * step - outline));
+      }
+      context.clip();
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width } = tileBox(row, col, tile);
+        const inset = labyrinth[row][col] === 0 ? landFlapInset : snapStroke(step, unit);
+        const near = left + inset;
+        const far = left + width - inset;
+        const edge = top + inset;
+        const low = snapStroke(edge + 16 * step, unit);
+        context.moveTo(near, edge);
+        context.lineTo(far, edge);
+        context.lineTo(snapStroke(far - 6 * step, unit), low);
+        context.lineTo(snapStroke(near + 6 * step, unit), low);
+        context.closePath();
+      }
+      context.fillStyle = palette.fogSoft;
+      context.fill();
+      context.strokeStyle = palette.fogEdge;
+      context.lineWidth = unit;
+      context.lineJoin = "miter";
+      context.stroke();
+    });
   }
 
   /** @param {() => void} draw Runs one mark with its own line, text and fill state. */

@@ -206,8 +206,8 @@ _Avoid_: Paper card, tile sprite
 
 **Land card**:
 The Tile card of each known wall tile (ADR 0067). It has a meadow fill, a Land lip,
-and a Coastline. In strong contrast and in each palette mode, the fill is paper, and
-the Coastline doubles.
+and a Coastline. In strong contrast and in the twilight, sea-glass, and dusk palette
+modes, the fill is paper, and the Coastline doubles.
 _Avoid_: wall tile, hatched Land
 
 **Land lip**:
@@ -232,12 +232,14 @@ _Avoid_: dog-ear, corner badge
 **Pulse flap**:
 The peeled flap on the top edge of a known tile in Pulse sight. It uses the Fog soft
 fill and the Fog edge stroke. On a Land card, the flap starts inside the Coastline,
-so it never covers the Coastline.
+and a clip on the inner edge of the Coastline keeps its corners off the rounded
+corners.
 _Avoid_: Pulse wash, Pulse highlight
 
 **Casing**:
 The board paper under every tile. The Fog layer fills it first. The challenge band
-also uses it as its fill.
+also uses it as its fill. The wider stroke under a Signal line is a different mark:
+the code names it a casing stroke (`strokeCasing`).
 _Avoid_: background, board border
 
 **Chart notes**:

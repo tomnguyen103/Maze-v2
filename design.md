@@ -97,7 +97,8 @@ when the fill alone does not. Text reaches 4.5:1.
 | Gate keyhole | `--color-board-gate-ink` | `--color-board-ink`; `Canvas` in forced colours | Gate |
 | Paused cover | `--color-board-cover` | `--card`, with `--cover-deep` ink | none |
 
-A Passage in Pulse sight shows a peeled flap on its top edge in the Fog fold colour. The
+A known tile in Pulse sight shows a peeled flap on its top edge in the Fog fold colour.
+On a Land card, the flap stays inside the Coastline. The
 board draws no hatch, no Fog dot, and no Echo halo.
 
 No board mark depends on fill colour alone. Each mark has an ink outline and a shape cue.
@@ -221,7 +222,7 @@ The Echo Atlas is a pop-up book (`src/looks/popup/atlas.css`).
   - Remembered (parked with the generation 2 engine): the chart tile plus a folded flap. It shows no Echo, no Gate, and no Warden.
   The Fog layer clips to the known tiles and draws the chart layer inside them.
 - **Echo number**: the number draws at 12px or more. On a tile below 24px the board draws
-  the plain Echo mark, and the Readout carries the number.
+  the plain Echo mark with no number.
 - **Explorer**: the Explorer Figure picked on this device, Clover by default, with an ink
   outline. Run Replay and Echo Postcard draw the picked figure, and Class Play draws
   Clover (plan D14).

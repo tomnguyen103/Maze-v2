@@ -1966,6 +1966,41 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
+  it("US-02.1 clips a Land flap to the inner edge of the Coastline, so its corners stay off the rounded corners", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    /** @type {number[][]} */
+    let arcs = [];
+    /** @type {number[][] | null} */
+    let clipped = null;
+    const target = /** @type {Record<string, any>} */ (context);
+    const begin = target.beginPath;
+    const arc = target.arc;
+    target.beginPath = vi.fn(() => {
+      arcs = [];
+      begin();
+    });
+    target.arc = vi.fn((/** @type {number[]} */ ...args) => {
+      arcs.push(args);
+      arc(...args);
+    });
+    target.clip = vi.fn(() => {
+      clipped = [...arcs];
+    });
+
+    // Tile 320 px: the inner edge sits 32 px in, and its corner radius is 5 * 320 / 24 - 19 px.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    expect(paintsOf(paints, "fill", "rgb(9, 9, 9)")).not.toHaveLength(0);
+    const corners = /** @type {number[][]} */ (/** @type {unknown} */ (clipped));
+    expect(corners).toHaveLength(4);
+    const radius = (5 * 320) / 24 - 19;
+    for (const [, , r] of corners) expect(r).toBeCloseTo(radius, 5);
+    expect(corners[0][0]).toBeCloseTo(640 - 32 - radius, 5);
+    expect(corners[3][1]).toBeCloseTo(32 + radius, 5);
+  });
+
   describe("Echo number floor", () => {
     /** @param {number} ratio @param {number} width The board width in CSS px. */
     function echoDigit(ratio, width) {
@@ -2661,9 +2696,12 @@ describe("R1b layered renderer", () => {
     renderer.render({ ...run, revealed: ["0,0", "0,1"], pulseVisible: [] });
     renderer.render(run);
 
+    // Each Pulse adds a flap clip on its Land tile; it holds rounded corners only, so it records no rect.
     expect(clips).toEqual([
       ["0,0,320,320", "320,0,320,320"],
+      [],
       ["0,0,320,320", "0,320,320,320"],
+      [],
       ["0,0,320,320", "320,0,320,320"],
       ["0,0,320,320"]
     ]);
