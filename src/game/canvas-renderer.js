@@ -91,6 +91,8 @@ export function createCanvasRenderer(
   let deviceRatio = 1;
   /** @type {GameRun | null} */
   let lastRun = null;
+  /** Set by destroy(), so a late art load or repaint paints nothing. */
+  let destroyed = false;
   /** The Explorer tile and board width of the last follow, so an appearance repaint keeps a manual scroll. */
   let lastFollow = "";
   /** @type {GameRun["labyrinth"] | null} */
@@ -152,6 +154,7 @@ export function createCanvasRenderer(
 
   /** @param {GameRun} run */
   function render(run) {
+    if (destroyed) return;
     lastRun = run;
     // Read the tokens before resize() can clear the canvas on a size change, so a missing token leaves the last board.
     if (paletteStale) {
@@ -1177,6 +1180,7 @@ export function createCanvasRenderer(
   // A scheme or theme change moves the tokens; the cached chart and Fog layers hold the old colours.
   function repaint() {
     paletteStale = true;
+    if (destroyed) return;
     // A detached canvas or one without a layout box, such as a closed dialog, paints on its next render.
     if (!lastRun || !canvas.isConnected || !canvas.getClientRects().length) return;
     try {
@@ -1186,11 +1190,16 @@ export function createCanvasRenderer(
       console.error("Echo Maze board repaint failed.", error);
     }
   }
-  // An explicit data-theme wins over the system scheme, so a scheme change moves no token.
-  const onSchemeChange = () => document.documentElement.hasAttribute("data-theme") || repaint();
+  const forcedColors = window.matchMedia?.("(forced-colors: active)");
+  // An explicit light or dark theme wins over the system scheme, unless forced colours replace the tokens.
+  const onSchemeChange = () => {
+    const theme = document.documentElement.getAttribute("data-theme");
+    if ((theme === "light" || theme === "dark") && !forcedColors?.matches) return;
+    repaint();
+  };
   const mediaListeners = [
     { media: window.matchMedia?.("(prefers-color-scheme: dark)"), listener: onSchemeChange },
-    { media: window.matchMedia?.("(forced-colors: active)"), listener: repaint },
+    { media: forcedColors, listener: repaint },
     { media: window.matchMedia?.("(prefers-contrast: more)"), listener: repaint }
   ];
   for (const { media, listener } of mediaListeners) media?.addEventListener?.("change", listener);
@@ -1207,13 +1216,17 @@ export function createCanvasRenderer(
     attributes: true
   });
 
+  // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
+  const frame = canvas.parentElement;
+  const onFrameScroll = () => lastRun && drawNeatline(lastRun.labyrinth.length);
+  frame?.addEventListener("scroll", onFrameScroll, { passive: true });
+
   function destroy() {
+    destroyed = true;
     observer.disconnect();
     for (const { media, listener } of mediaListeners) media?.removeEventListener?.("change", listener);
+    frame?.removeEventListener("scroll", onFrameScroll);
   }
-
-  // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
-  canvas.parentElement?.addEventListener("scroll", () => lastRun && drawNeatline(lastRun.labyrinth.length), { passive: true });
 
   return { destroy, loadFonts, render, resize };
 }
