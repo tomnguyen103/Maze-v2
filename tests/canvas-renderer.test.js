@@ -53,6 +53,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     getBoundingClientRect: () => ({ width, height }),
     getContext: () => context,
     height: 640,
+    style: { setProperty: vi.fn() },
     width: 640
   };
   /** @type {Array<{ width: number, height: number, contextArgs: unknown[], fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
@@ -151,6 +152,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     Object.assign(canvas, {
       getBoundingClientRect: () => ({ left: 18, top: 18, width, height }),
       parentElement: {
+        addEventListener: vi.fn(),
         getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: height + 36 }),
         querySelector: () => (neatline === "no-overlay" ? null : overlay)
       }
@@ -876,6 +878,28 @@ describe("Canvas renderer", () => {
     const wardenBody = markFills.indexOf("rgb(200, 0, 0)");
     expect(wardenBody).toBeGreaterThan(-1);
     expect(markFills[wardenBody + 1]).toBe("rgb(11, 12, 13)");
+  });
+
+  it("B-10 follows the Explorer on a move and keeps a manual scroll through an appearance repaint", () => {
+    const { canvas, renderer } = stubCanvas({ neatline: true });
+    const frame = Object.assign(/** @type {{ parentElement: object }} */ (/** @type {unknown} */ (canvas)).parentElement, { clientWidth: 100, clientHeight: 100, scrollLeft: 0, scrollTop: 0 });
+    Object.assign(canvas, { offsetLeft: 18, offsetTop: 18 });
+    const base = board({});
+    const start = { ...base, explorer: { ...base.explorer, col: 1, row: 0 } };
+
+    renderer.render(start);
+    const followed = frame.scrollLeft;
+    expect(followed).toBeGreaterThan(0);
+
+    // A repaint of the same Run, such as a theme change, keeps the scroll that the player chose.
+    frame.scrollLeft = 5;
+    renderer.render(start);
+    expect(frame.scrollLeft).toBe(5);
+
+    // A move follows the Explorer again.
+    renderer.render({ ...start, explorer: { ...start.explorer, row: 1 } });
+    expect(frame.scrollLeft).toBe(followed);
+    expect(frame.scrollTop).toBeGreaterThan(0);
   });
 
   it("US-03.1 draws the Neatline ticks and the Grid reference on the overlay canvas", () => {

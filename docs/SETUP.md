@@ -343,6 +343,13 @@ from the bounded browser nonce and never stores or returns that nonce. Keep the
 asset package version aligned with the reviewed build; an absent or partial set
 leaves the route unavailable rather than issuing an unverifiable receipt.
 
+The asset list must name every file an offline Run loads, and that includes the
+Popup fonts. `src/looks/popup/fonts.js` imports Chewy 400, Andika 400 and 700,
+and Geist Mono Variable. Vite emits hashed `.woff2` and `.woff` files for each
+unicode subset under `dist/assets/`. Each build changes the hashes, so take the font
+paths from the reviewed `dist/assets/` listing and add them as `public` assets
+in the same package version as the JavaScript and CSS files.
+
 Rotation is additive. Add the new key to the published array and point
 `OFFLINE_RECEIPT_KEY_ID` at it, but keep the retiring key listed until the last
 receipt it signed is past its nine-day submission deadline. Removing it earlier

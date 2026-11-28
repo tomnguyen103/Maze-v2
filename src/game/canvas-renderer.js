@@ -62,6 +62,14 @@ function createDetachedCanvas(width, height) {
 /** @typedef {{ canvas: OffscreenCanvas | HTMLCanvasElement, context: CanvasRenderingContext2D }} Layer */
 
 /**
+ * The scroll offset that keeps the span [start, start + length] inside a view of `view` px.
+ * @param {number} start @param {number} length @param {number} current @param {number} view
+ */
+export function followOffset(start, length, current, view) {
+  return Math.max(start + length - view, Math.min(current, start));
+}
+
+/**
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  * @param {() => Promise<unknown>} [loadArt] Loads the board art; null or a rejection keeps the shape marks.
@@ -97,6 +105,10 @@ export function createCanvasRenderer(
   const patterns = new Map();
   /** @type {GameRun | null} */
   let lastRun = null;
+  /** The Explorer tile and board width of the last follow, so an appearance repaint keeps a manual scroll. */
+  let lastFollow = "";
+  /** @type {GameRun["labyrinth"] | null} */
+  let lastFollowLabyrinth = null;
 
   /**
    * One pattern per paint and device pixel size. Without a tile context the caller gets null.
@@ -191,7 +203,10 @@ export function createCanvasRenderer(
       palette = readPalette();
       paletteStale = false;
     }
+    // The play board CSS reads the size for its 24 px tile floor; the Run Replay canvas ignores it.
+    canvas.style.setProperty("--board-size", String(run.labyrinth.length));
     resize();
+    followExplorer(run);
     // Each frame starts from the default line, text, and fill state, and ends on it even when a mark throws.
     context.save();
     try {
@@ -200,6 +215,21 @@ export function createCanvasRenderer(
       context.restore();
     }
     requestArt();
+  }
+
+  /** The frame scrolls the Explorer tile, with the margin that holds its ticks, into view. @param {GameRun} run */
+  function followExplorer(run) {
+    const frame = canvas.parentElement;
+    if (!frame) return;
+    const width = canvas.getBoundingClientRect().width;
+    const tile = width / run.labyrinth.length;
+    const { col, row } = run.explorer;
+    const follow = `${col}:${row}:${width}`;
+    if (follow === lastFollow && run.labyrinth === lastFollowLabyrinth) return;
+    lastFollow = follow;
+    lastFollowLabyrinth = run.labyrinth;
+    frame.scrollLeft = followOffset(col * tile, tile + 2 * canvas.offsetLeft, frame.scrollLeft, frame.clientWidth);
+    frame.scrollTop = followOffset(row * tile, tile + 2 * canvas.offsetTop, frame.scrollTop, frame.clientHeight);
   }
 
   /** @param {GameRun} run */
@@ -1174,6 +1204,9 @@ export function createCanvasRenderer(
     ],
     attributes: true
   });
+
+  // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
+  canvas.parentElement?.addEventListener("scroll", () => lastRun && drawNeatline(lastRun.labyrinth.length), { passive: true });
 
   return { loadFonts, render, resize };
 }
