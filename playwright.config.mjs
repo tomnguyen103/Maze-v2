@@ -45,7 +45,10 @@ export default defineConfig({
     { name: "iphone", timeout: 60_000, use: { ...devices["iPhone 14"] } }
   ],
   webServer: {
-    command: "npm run preview -- --host 127.0.0.1",
+    // The server builds the e2e bundle itself, so a direct `npx playwright test`
+    // cannot serve a production bundle with real Clerk keys from `.env.local`.
+    command: "npx vite build --mode e2e && npm run preview -- --host 127.0.0.1",
+    timeout: 180_000,
     url: "http://127.0.0.1:4173",
     // Reusing whatever already answers on :4173 can attach to a preview
     // started before the current `vite build`, so the suite passes against a
