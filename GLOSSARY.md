@@ -233,8 +233,8 @@ _Avoid_: dog-ear, corner badge
 The peeled flap on the top edge of a known tile in Pulse sight. It uses the Fog soft
 fill and the Fog edge stroke. On a Land card, the flap starts inside the Coastline,
 and a clip on the inner edge of the Coastline keeps its corners off the rounded
-corners. A compact Run Replay tile with less than half the tile inside the Coastline
-draws its Land flap as a Passage flap.
+corners. A compact Run Replay tile whose span inside the Coastline is under half the
+tile width draws its Land flap as a Passage flap.
 _Avoid_: Pulse wash, Pulse highlight
 
 **Casing**:

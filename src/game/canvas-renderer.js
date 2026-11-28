@@ -426,7 +426,7 @@ export function createCanvasRenderer(
     const outline = coastlineWidth(tile);
     // A flap on a Land card starts inside the Coastline, so it never covers the outline.
     const landFlapInset = snapStroke(cardInset + outline + unit / 2, unit);
-    // A compact Run Replay tile has little or no room inside the Coastline, so its Land flap draws as a Passage flap.
+    // A compact Run Replay tile whose span inside the Coastline is under half the tile width draws its Land flap as a Passage flap.
     const roomy = tile - 2 * (cardInset + outline) >= tile / 2;
     const insideCoastline = (/** @type {number} */ row, /** @type {number} */ col) => roomy && labyrinth[row][col] === 0;
     isolated(() => {
