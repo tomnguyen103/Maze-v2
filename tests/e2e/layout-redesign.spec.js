@@ -184,7 +184,9 @@ test.describe("layout redesign & edge viewports", () => {
     const canvas = page.locator("#maze-canvas");
     const frame = page.locator("#canvas-frame");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
-    expect(((await canvas.boundingBox())?.width ?? 0) / size).toBeGreaterThanOrEqual(24);
+    // Spike decision 3: each tile keeps 48 device px and 24 CSS px or more.
+    const ratio = await page.evaluate(() => window.devicePixelRatio);
+    expect(((await canvas.boundingBox())?.width ?? 0) / size).toBeGreaterThanOrEqual(Math.max(24, Math.ceil(48 / ratio)));
     expect(await canvas.evaluate((element) => getComputedStyle(element).touchAction)).toBe("none");
     expect(await frame.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 
@@ -211,7 +213,7 @@ test.describe("layout redesign & edge viewports", () => {
       await page.keyboard.press(keys[pick.direction]);
       const { col, row } = run.explorer;
       // A Warden moves on the clock, which the local copy does not model. Its Question dialog stops the walk.
-      const question = page.locator("dialog[open]");
+      const question = page.locator("#challenge-dialog[open]");
       // The board repaints on the next animation frame, so the follow scroll can land after the key press.
       await expect(async () => {
         if (await question.count()) return;

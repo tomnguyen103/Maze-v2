@@ -1569,6 +1569,15 @@ new ResizeObserver(() => {
   });
 }).observe(elements.canvasFrame);
 
+// A move to a screen with another pixel ratio changes the tile floor, and the frame size can stay the same.
+function watchPixelRatio() {
+  matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", () => {
+    renderer.render(run);
+    watchPixelRatio();
+  }, { once: true });
+}
+watchPixelRatio();
+
 // The fonts load lazily and `fonts.ready` can resolve early, so the board repaints once the Grid and body fonts settle.
 // The catch covers the load only: a render error stays visible.
 void renderer.loadFonts().catch(() => {}).then(() => renderer.render(run));
