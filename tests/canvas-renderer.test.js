@@ -13,7 +13,7 @@ import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/boar
 /** @type {Array<{ destroy: () => void }>} */
 const created = [];
 afterEach(() => {
-  for (const renderer of created.splice(0)) renderer.destroy?.();
+  for (const renderer of created.splice(0)) renderer.destroy();
 });
 
 /**
@@ -455,6 +455,7 @@ function schemeChangeRepaints(theme, forced) {
     onChange();
     return paints.length > painted;
   } finally {
+    document.body.style.removeProperty("--color-fog");
     document.documentElement.removeAttribute("data-theme");
     vi.unstubAllGlobals();
   }
@@ -2226,7 +2227,7 @@ describe("R1a renderer findings", () => {
     }
   });
 
-  it("US-04.3 skips the colour scheme repaint when data-theme is set, before and after the first render", () => {
+  it("US-04.3 skips the colour scheme repaint when data-theme is light, before and after the first render", () => {
     /** @type {() => void} */
     let onChange = () => {};
     vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
@@ -2317,6 +2318,8 @@ describe("R1a renderer findings", () => {
       const frame = /** @type {any} */ (canvas).parentElement;
       const paints = recordPaints(context);
       renderer.render(board({}));
+      // The art load starts in a microtask, so let it bind resolveArt before destroy.
+      await Promise.resolve();
       const painted = paints.length;
       renderer.destroy();
 
@@ -2329,8 +2332,7 @@ describe("R1a renderer findings", () => {
       // A render and a late art load after destroy paint nothing.
       renderer.render(board({ revealed: ["0,0"] }));
       resolveArt({ drawFigure: () => {} });
-      await Promise.resolve();
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve));
       expect(paints).toHaveLength(painted);
     } finally {
       vi.unstubAllGlobals();
