@@ -90,3 +90,10 @@ a new replay protocol version and separate compatibility decision.
 Shared casual Score Entries follow ADR 0037: rankings, best-entry replacement,
 and Global Max Score never compare different Region/ruleset revisions. Legacy
 entries remain on the Classic Rules board.
+
+## Amendment, 2026-11-28: Trail Compass parity (#292)
+
+- **Directional Listen tones (A-15).** Each Listen tone plays in sequence, 160 ms apart. Its stereo pan follows the column offset, and its pitch follows the row offset: north is higher and south is lower. The spoken Listen status keeps the full direction and distance, so the tones never carry the only signal.
+- **Visible fixtures (A-17).** Echo Bridges, Tide Doors and Signal Bells stay visible through Fog. They are fixed landmarks of the Trail Twist, not hidden information. The Compass gives their counts or phase, and Describe names a shortcut when the Explorer stands next to it. Listen keeps three kinds: Warden, Gate and Echo.
+- **No Fog frontier (A-18).** The reveal radius is always 2, so every adjacent tile is already revealed. The Compass reports exits for the four neighbors only, and it gives no Fog frontier or dead-end data. The unreachable "unexplored" exit branch is deleted.
+- **Direction words (A-36).** The Compass speaks north, east, south and west to the player. Engine events keep up, right, down and left as internal names. A Windway or shortcut destination is a Grid reference, because it is a fixed place on the board. A Warden, the Gate or an Echo is a relative offset, because the player acts on its distance.
