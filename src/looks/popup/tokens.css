@@ -78,14 +78,14 @@
   --color-night: oklch(26% 0.055 310);
   --color-night-deep: oklch(20% 0.05 310);
 
-  /* Board: fog is a sky flap, land is a darker hedge, passages are meadow tiles. */
+  /* Board paper forms (ADR 0067): Fog is a sky card, Land is a meadow hedge card, a Passage is cream paper. */
   --color-fog: var(--sky);
-  --color-fog-soft: oklch(80% 0.1 241.4);
-  --color-fog-dot: var(--board-fog-dot);
-  --color-land: oklch(60% 0.12 140);
-  --color-hatch: var(--board-hatch);
+  --color-fog-soft: oklch(90% 0.06 238);
+  --color-fog-edge: var(--sky-deep);
+  --color-land: var(--board-land);
+  --color-land-lip: oklch(53.5% 0.13 138);
   --color-coastline: var(--board-ink);
-  --color-passage: var(--meadow);
+  --color-passage: var(--board-passage);
   --color-board-gate: var(--sun);
   --color-board-warden: var(--fur);
   --color-board-light: var(--sun);
@@ -99,25 +99,25 @@
   --color-board-cover: var(--card);
   --color-board-cover-ink: var(--cover-deep);
   --color-danger-line: var(--coral);
-  --color-board-echo: var(--sun);
-  --color-board-echo-text: var(--board-ink);
-  --color-pulse: oklch(45% 0.13 243 / 30%);
+  --color-board-echo: var(--board-echo);
+  --color-board-echo-text: var(--board-echo-text);
   /* Board role primitives: every theme keeps these values, because the board paints the same tiles in Night. */
   --board-paper: oklch(98.6% 0.014 84.6);
   --board-ink: oklch(30.5% 0.07 310.3);
-  --board-hatch: oklch(30.5% 0.07 310.3 / 30%);
-  --board-fog-dot: oklch(30.5% 0.07 310.3 / 75%);
+  --board-passage: oklch(96.6% 0.024 85.8);
+  --board-land: oklch(73.4% 0.177 137.9);
+  --board-land-lip: oklch(30.5% 0.07 310.3 / 30%);
+  --board-fog-edge: oklch(30.5% 0.07 310.3 / 75%);
   --board-explorer: oklch(84.4% 0.092 2);
   --board-explorer-sunset: oklch(68.5% 0.206 32.5);
   --board-explorer-violet: oklch(60% 0.15 300);
   --board-explorer-gold: oklch(90.1% 0.106 84.7);
   --board-gate: oklch(90.1% 0.106 84.7);
-  --board-echo: oklch(90.1% 0.106 84.7);
-  --board-echo-text: oklch(30.5% 0.07 310.3);
+  --board-echo: oklch(54% 0.166 32.2);
+  --board-echo-text: var(--board-paper);
   --access-fog: oklch(62% 0.06 241.4);
   --access-fog-soft: oklch(94% 0.03 241.4);
   --access-passage: var(--board-paper);
-  --access-pulse: oklch(45% 0.13 243 / 30%);
   --maze-mark-scale: 1;
   --region-mosslight: oklch(74% 0.13 165);
   --region-windcall: oklch(66% 0.16 240);
@@ -131,15 +131,12 @@
   --twilight-fog: oklch(68% 0.055 274);
   --twilight-fog-soft: oklch(75% 0.045 270);
   --twilight-passage: oklch(91% 0.04 282);
-  --twilight-pulse: oklch(70% 0.13 292 / 34%);
   --sea-glass-fog: oklch(82% 0.055 176);
   --sea-glass-fog-soft: oklch(88% 0.04 174);
   --sea-glass-passage: oklch(95% 0.04 160);
-  --sea-glass-pulse: oklch(65% 0.14 174 / 32%);
   --dusk-fog: oklch(74% 0.055 38);
   --dusk-fog-soft: oklch(81% 0.04 42);
   --dusk-passage: oklch(93% 0.045 55);
-  --dusk-pulse: oklch(66% 0.15 26 / 32%);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -240,8 +237,8 @@
     --color-ink-muted: var(--ink);
     --color-ink-faint: var(--ink);
     --color-line-soft: var(--ink);
-    --color-fog-dot: var(--board-ink);
-    --color-hatch: var(--board-ink);
+    --color-fog-edge: var(--board-ink);
+    --color-land-lip: var(--board-ink);
   }
 }
 
@@ -265,12 +262,12 @@
     --color-explorer: CanvasText;
     --color-warden: CanvasText;
     --color-gate: Highlight;
-    /* The board: known land is Highlight with HighlightText ink, the passage is Canvas, and the Fog is GrayText. */
+    /* The board: known land and its lip are Highlight with HighlightText ink, the passage is Canvas, and the Fog is GrayText. */
     --color-fog: GrayText;
     --color-fog-soft: GrayText;
-    --color-fog-dot: Canvas;
+    --color-fog-edge: CanvasText;
     --color-land: Highlight;
-    --color-hatch: HighlightText;
+    --color-land-lip: Highlight;
     --color-coastline: CanvasText;
     --color-passage: Canvas;
     --color-danger-line: CanvasText;

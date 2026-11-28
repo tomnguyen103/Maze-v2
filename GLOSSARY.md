@@ -194,8 +194,7 @@ The column letters and row numbers outside the Neatline that name a tile.
 _Avoid_: axis labels, coordinates
 
 **Coastline**:
-The ink edge where a Passage meets Land. It carries the wall edge at 3:1 against
-both grounds.
+The ink outline of each Land card. It carries 3:1 against a Passage and the Fog.
 _Avoid_: wall outline, shoreline
 
 **Chart notes**:
@@ -330,8 +329,8 @@ clips the known tiles. It holds no Fog.
 _Avoid_: Background, base map, tile cache
 
 **Fog layer**:
-The board layer that fills the Fog, then shows the chart layer through the known
-tiles and draws the Coastline.
+The board layer that fills the casing, shows the chart through the known tiles, then
+draws the Fog cards and the Pulse flaps.
 _Avoid_: Overlay, mask, darkness layer
 
 **Run Record**:

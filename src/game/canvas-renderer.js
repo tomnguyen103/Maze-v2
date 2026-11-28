@@ -28,24 +28,6 @@
  * }} SignalBell
  */
 
-/** The Fog tile is 8 by 8 pixels at one device pixel per tile pixel. */
-const FOG_TILE = 8;
-/** The hatch tile is 6 backing-store pixels square, so the 45 degree pitch is about 4 device pixels at every ratio. */
-const HATCH_TILE = 6;
-/** Row and column steps to the four neighbours of a cell. */
-const NEIGHBOURS = [
-  [-1, 0],
-  [1, 0],
-  [0, -1],
-  [0, 1]
-];
-/** Three one-pixel dots in the 8 by 8 tile give 4.7 percent coverage. */
-const FOG_DOTS = [
-  [1, 1],
-  [5, 3],
-  [2, 6]
-];
-
 /**
  * @param {number} width
  * @param {number} height
@@ -79,14 +61,12 @@ export function followOffset(start, length, current, view) {
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
  * @param {() => Promise<unknown>} [loadArt] Loads the board art; null or a rejection keeps the shape marks.
  * @param {() => boolean} [isBrightStart] True while the Bright Start Quest Level shows; it softens the Fangmoor art.
  * @param {typeof createDetachedCanvas} [createLayer] Builds the two offscreen layers: the chart and the Fog.
  */
 export function createCanvasRenderer(
   canvas,
-  createTile = createDetachedCanvas,
   loadArt = () => import("../looks/popup/board-art.js"),
   isBrightStart = () => false,
   createLayer = createDetachedCanvas
@@ -109,8 +89,6 @@ export function createCanvasRenderer(
   // The palette is cached: the first render, a repaint and a token attribute change read it again.
   let paletteStale = true;
   let deviceRatio = 1;
-  /** @type {Map<string, CanvasPattern | null>} */
-  const patterns = new Map();
   /** @type {GameRun | null} */
   let lastRun = null;
   /** The Explorer tile and board width of the last follow, so an appearance repaint keeps a manual scroll. */
@@ -118,57 +96,35 @@ export function createCanvasRenderer(
   /** @type {GameRun["labyrinth"] | null} */
   let lastFollowLabyrinth = null;
 
-  /**
-   * One pattern per paint and device pixel size. Without a tile context the caller gets null.
-   * @param {string} key
-   * @param {number} side
-   * @param {(tileContext: CanvasRenderingContext2D) => void} paint
-   */
-  function cachedPattern(key, side, paint) {
-    if (!patterns.has(key)) {
-      const tile = createTile(side, side);
-      // Software raster: a GPU tile and a CPU tile round translucent dots differently, which shows after a reload.
-      const tileContext = /** @type {CanvasRenderingContext2D | null} */ (
-        tile.getContext("2d", { willReadFrequently: true })
-      );
-      let pattern = null;
-      if (tileContext) {
-        paint(tileContext);
-        pattern = context.createPattern(tile, "repeat");
-      }
-      patterns.set(key, pattern);
-    }
-    return patterns.get(key) ?? null;
-  }
-
   function devicePixel() {
     return Math.max(1, Math.round(deviceRatio));
   }
 
-  /** The Fog fills flat when no tile context exists. */
-  function fogFill() {
-    // High contrast paints the Fog flat: no stipple.
-    if (palette.strong) return palette.fog;
-    const unit = devicePixel();
-    const side = FOG_TILE * unit;
-    return (
-      cachedPattern(`fog|${palette.fog}|${palette.fogDot}|${unit}`, side, (tileContext) => {
-        tileContext.fillStyle = palette.fog;
-        tileContext.fillRect(0, 0, side, side);
-        tileContext.fillStyle = palette.fogDot;
-        for (const [x, y] of FOG_DOTS) tileContext.fillRect(x * unit, y * unit, unit, unit);
-      }) ?? palette.fog
-    );
+  /**
+   * A stroke coordinate that centres a line of `width` device pixels on whole pixels, so the edge stays crisp.
+   * @param {number} value
+   * @param {number} width
+   */
+  function snapStroke(value, width) {
+    const half = (width % 2) / 2;
+    return Math.round(value - half) + half;
   }
 
-  /** The hatch is one backing-store pixel ink line at 45 degrees, with no device ratio factor. */
-  function hatchFill() {
-    return cachedPattern(`hatch|${palette.hatch}`, HATCH_TILE, (tileContext) => {
-      tileContext.fillStyle = palette.hatch;
-      for (let i = 0; i < HATCH_TILE; i += 1) {
-        tileContext.fillRect(i, HATCH_TILE - 1 - i, 1, 1);
-      }
-    });
+  /**
+   * One tile box with edges on whole pixels, so adjacent tiles leave no seam.
+   * @param {number} row
+   * @param {number} col
+   * @param {number} tile
+   */
+  function tileBox(row, col, tile) {
+    const left = Math.round(col * tile);
+    const top = Math.round(row * tile);
+    return {
+      left,
+      top,
+      width: Math.round((col + 1) * tile) - left,
+      height: Math.round((row + 1) * tile) - top
+    };
   }
 
   /**
@@ -178,22 +134,13 @@ export function createCanvasRenderer(
    * @param {number} tile
    */
   function traceTile(row, col, tile) {
-    // The edges round like the coastline edges, so no land strip shows on the water side.
-    const left = Math.round(col * tile);
-    const top = Math.round(row * tile);
-    context.rect(
-      left,
-      top,
-      Math.round((col + 1) * tile) - left,
-      Math.round((row + 1) * tile) - top
-    );
+    const { left, top, width, height } = tileBox(row, col, tile);
+    context.rect(left, top, width, height);
   }
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    // The Fog tile scales with the device ratio, so a new ratio drops the cached tiles.
-    if (ratio !== deviceRatio) patterns.clear();
     deviceRatio = ratio;
     const width = Math.max(1, Math.round(bounds.width * ratio));
     const height = Math.max(1, Math.round(bounds.height * ratio));
@@ -366,7 +313,7 @@ export function createCanvasRenderer(
   }
 
   /**
-   * Water and land for every cell; the Fog layer clips the part that shows.
+   * Passages and Land cards for every cell; the Fog layer clips the part that shows.
    * @param {GameRun} run
    * @param {number} tile
    */
@@ -374,27 +321,29 @@ export function createCanvasRenderer(
     /** @type {Array<[number, number]>} */
     const landCells = [];
     /** @type {Array<[number, number]>} */
-    const waterCells = [];
+    const passageCells = [];
     run.labyrinth.forEach((cells, row) =>
       cells.forEach((cell, col) => {
-        // ADR 0052 item 1: a passage (1) is water, a wall (0) is land.
-        (cell === 1 ? waterCells : landCells).push([row, col]);
+        // ADR 0067: a passage (1) is a cream square, a wall (0) is a meadow Land card.
+        (cell === 1 ? passageCells : landCells).push([row, col]);
       })
     );
-    drawWater(waterCells, tile);
+    drawPassages(passageCells, tile);
     drawLand(landCells, tile);
   }
 
   /**
-   * The opaque Fog layer: the Fog fill, the chart through the known tiles, the Pulse tint and the Coastline.
+   * The opaque Fog layer: the board paper, a sky card on each unknown tile, the chart through the known tiles and a peeled flap on each Pulse tile.
    * @param {GameRun} run
    * @param {Set<string>} revealed
    * @param {number} tile
    * @param {CanvasImageSource} chart
    */
   function paintFog(run, revealed, tile, chart) {
-    context.fillStyle = fogFill();
+    context.fillStyle = palette.casing;
     context.fillRect(0, 0, canvas.width, canvas.height);
+    /** @type {Array<[number, number]>} */
+    const fogCells = [];
     /** @type {Array<[number, number]>} */
     const pulseCells = [];
     context.save();
@@ -402,7 +351,10 @@ export function createCanvasRenderer(
     for (let row = 0; row < run.labyrinth.length; row += 1) {
       for (let col = 0; col < run.labyrinth.length; col += 1) {
         const key = `${row},${col}`;
-        if (!revealed.has(key)) continue;
+        if (!revealed.has(key)) {
+          fogCells.push([row, col]);
+          continue;
+        }
         traceTile(row, col, tile);
         if (run.pulseVisible.includes(key) && !run.revealed.includes(key)) pulseCells.push([row, col]);
       }
@@ -410,14 +362,77 @@ export function createCanvasRenderer(
     context.clip();
     context.drawImage(chart, 0, 0);
     context.restore();
-    if (pulseCells.length > 0) {
-      // The Pulse layer paints over land and water. One path stops the translucent layer from doubling.
-      context.beginPath();
-      for (const [row, col] of pulseCells) traceTile(row, col, tile);
-      context.fillStyle = palette.pulse;
-      context.fill();
+    drawFogCards(fogCells, tile);
+    drawPulseFlaps(pulseCells, tile);
+  }
+
+  /**
+   * One sky card per unknown tile: a card fill, a fog-edge stroke and a folded corner, each from one path.
+   * @param {Array<[number, number]>} cells
+   * @param {number} tile
+   */
+  function drawFogCards(cells, tile) {
+    if (cells.length === 0) return;
+    const unit = devicePixel();
+    const step = tile / 24;
+    // The stroke centre sits 1.5/24 tile inside the tile edge.
+    const inset = snapStroke(1.5 * step, unit);
+    const radius = 4 * step;
+    const fold = 1.5 * step;
+    context.beginPath();
+    for (const [row, col] of cells) {
+      const { left, top, width, height } = tileBox(row, col, tile);
+      appendRoundedRect(left + inset, top + inset, width - 2 * inset, height - 2 * inset, radius);
     }
-    drawCoastline(run, revealed, tile);
+    context.fillStyle = palette.fog;
+    context.fill();
+    context.strokeStyle = palette.fogEdge;
+    context.lineWidth = unit;
+    context.stroke();
+    context.beginPath();
+    for (const [row, col] of cells) {
+      const { left, top, width } = tileBox(row, col, tile);
+      const right = left + width - inset;
+      const edge = top + inset;
+      context.moveTo(right - 7.5 * step, edge);
+      context.lineTo(right - fold, edge);
+      context.arc(right - fold, edge + fold, fold, -Math.PI / 2, 0);
+      context.lineTo(right, edge + 7.5 * step);
+      context.closePath();
+    }
+    context.fillStyle = palette.fogSoft;
+    context.fill();
+  }
+
+  /**
+   * A tile in Pulse sight shows the chart plus a peeled Fog flap along its top edge, each from one path.
+   * @param {Array<[number, number]>} cells
+   * @param {number} tile
+   */
+  function drawPulseFlaps(cells, tile) {
+    if (cells.length === 0) return;
+    const unit = devicePixel();
+    const step = tile / 24;
+    const inset = snapStroke(step, unit);
+    context.beginPath();
+    for (const [row, col] of cells) {
+      const { left, top, width } = tileBox(row, col, tile);
+      const near = left + inset;
+      const far = left + width - inset;
+      const edge = top + inset;
+      const low = snapStroke(edge + 16 * step, unit);
+      context.moveTo(near, edge);
+      context.lineTo(far, edge);
+      context.lineTo(snapStroke(far - 6 * step, unit), low);
+      context.lineTo(snapStroke(near + 6 * step, unit), low);
+      context.closePath();
+    }
+    context.fillStyle = palette.fogSoft;
+    context.fill();
+    context.strokeStyle = palette.fogEdge;
+    context.lineWidth = unit;
+    context.lineJoin = "miter";
+    context.stroke();
   }
 
   /** @param {() => void} draw Runs one mark with its own line, text and fill state. */
@@ -492,7 +507,8 @@ export function createCanvasRenderer(
     const gap = 2 * unit;
     const half = (unit % 2) / 2;
     neat.clearRect(0, 0, width, height);
-    neat.strokeStyle = palette.ink;
+    // The Neatline sits on the paper casing in every mode, so it takes the Coastline ink, not the page ink.
+    neat.strokeStyle = palette.coastline;
     neat.lineWidth = unit;
     neat.strokeRect(left - unit / 2, top - unit / 2, side + unit, side + unit);
     neat.beginPath();
@@ -510,7 +526,7 @@ export function createCanvasRenderer(
       neat.lineTo(left + side + unit + tick, y);
     }
     neat.stroke();
-    neat.fillStyle = palette.ink;
+    neat.fillStyle = palette.coastline;
     // The Grid reference is 0.625 rem: 10 px at a 16 px root.
     const gridSize = (Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * 0.625 * deviceRatio;
     neat.font = gridFont(gridSize);
@@ -540,16 +556,15 @@ export function createCanvasRenderer(
   }
 
   /**
-   * Traces a rounded rectangle path with plain arcs.
+   * Appends a rounded rectangle to the current path with plain arcs.
    * @param {number} x
    * @param {number} y
    * @param {number} width
    * @param {number} height
    * @param {number} radius
    */
-  function traceRoundedRect(x, y, width, height, radius) {
-    const r = Math.min(radius, width / 2, height / 2);
-    context.beginPath();
+  function appendRoundedRect(x, y, width, height, radius) {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
     context.moveTo(x + r, y);
     context.lineTo(x + width - r, y);
     context.arc(x + width - r, y + r, r, -Math.PI / 2, 0);
@@ -560,6 +575,19 @@ export function createCanvasRenderer(
     context.lineTo(x, y + r);
     context.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
     context.closePath();
+  }
+
+  /**
+   * Traces a rounded rectangle path with plain arcs.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} width
+   * @param {number} height
+   * @param {number} radius
+   */
+  function traceRoundedRect(x, y, width, height, radius) {
+    context.beginPath();
+    appendRoundedRect(x, y, width, height, radius);
   }
 
   /**
@@ -585,11 +613,11 @@ export function createCanvasRenderer(
   }
 
   /**
-   * Known passages are one water shape from one path (ADR 0052 item 1).
+   * Known passages are cream squares from one path (ADR 0067).
    * @param {Array<[number, number]>} cells
    * @param {number} tile
    */
-  function drawWater(cells, tile) {
+  function drawPassages(cells, tile) {
     if (cells.length === 0) return;
     context.beginPath();
     for (const [row, col] of cells) traceTile(row, col, tile);
@@ -598,89 +626,48 @@ export function createCanvasRenderer(
   }
 
   /**
-   * Known walls are paper land with one ink hatch, each layer from one path.
+   * Known walls are meadow Land cards: a card fill, a lip along the bottom and an ink outline, each from one path.
+   * The outline is the Coastline.
    * @param {Array<[number, number]>} cells
    * @param {number} tile
    */
   function drawLand(cells, tile) {
     if (cells.length === 0) return;
+    const step = tile / 24;
+    const inset = Math.max(1, Math.round(step));
+    // High contrast doubles the outline.
+    const outline = Math.max(1, Math.round(tile * 0.06)) * (palette.strong ? 2 : 1);
+    const lip = Math.max(1, Math.round(6 * step));
+    const radius = 5 * step;
+    const boxes = cells.map(([row, col]) => {
+      const { left, top, width, height } = tileBox(row, col, tile);
+      return { x: left + inset, y: top + inset, width: width - 2 * inset, height: height - 2 * inset };
+    });
     context.beginPath();
-    for (const [row, col] of cells) traceTile(row, col, tile);
+    for (const { x, y, width, height } of boxes) appendRoundedRect(x, y, width, height, radius);
     context.fillStyle = palette.land;
     context.fill();
-    const hatch = hatchFill();
-    if (hatch) {
-      context.fillStyle = hatch;
-      context.fill();
-    }
-  }
-
-  /**
-   * One ink stroke along every edge where known land meets a known passage.
-   * @param {GameRun} run
-   * @param {Set<string>} revealed
-   * @param {number} tile
-   */
-  function drawCoastline(run, revealed, tile) {
-    const size = run.labyrinth.length;
-    // High contrast doubles the line.
-    const width = Math.max(1, Math.round(tile * 0.06)) * (palette.strong ? 2 : 1);
-    // An odd width centres across the edge on a half pixel, so the stroke fills whole device pixels.
-    // Along the edge, the ends sit on whole pixels.
-    const across = (/** @type {number} */ edge) => Math.round(edge) + (width % 2) / 2;
-    // An end that meets a crossing stroke reaches its far side, so a land corner has no notch. A free end stops on the edge.
-    // An odd stroke covers floor(w/2) pixels before the edge and ceil(w/2) pixels after it.
-    const reachStart = Math.floor(width / 2);
-    const reachEnd = Math.ceil(width / 2);
-    const along = (/** @type {number} */ edge) => Math.round(edge);
-    /** @param {number} row @param {number} col */
-    const kindAt = (row, col) =>
-      row < 0 || col < 0 || row >= size || col >= size || !revealed.has(`${row},${col}`)
-        ? -1
-        : run.labyrinth[row][col] === 1
-          ? 1
-          : 0;
-    /** An edge lies between one known wall and one known passage. */
-    const isEdge = (/** @type {number} */ rowA, /** @type {number} */ colA, /** @type {number} */ rowB, /** @type {number} */ colB) =>
-      kindAt(rowA, colA) + kindAt(rowB, colB) === 1 && kindAt(rowA, colA) >= 0 && kindAt(rowB, colB) >= 0;
-    // Row line r and column line c meet at corner (r, c). A stroke reaches past a corner only where a crossing stroke meets it.
-    const meetsAcross = (/** @type {number} */ lineRow, /** @type {number} */ lineCol, /** @type {boolean} */ horizontal) =>
-      horizontal
-        ? isEdge(lineRow - 1, lineCol - 1, lineRow - 1, lineCol) || isEdge(lineRow, lineCol - 1, lineRow, lineCol)
-        : isEdge(lineRow - 1, lineCol - 1, lineRow, lineCol - 1) || isEdge(lineRow - 1, lineCol, lineRow, lineCol);
     context.beginPath();
-    let edges = 0;
-    for (let row = 0; row < size; row += 1) {
-      for (let col = 0; col < size; col += 1) {
-        if (run.labyrinth[row][col] !== 1 || !revealed.has(`${row},${col}`)) continue;
-        for (const [dRow, dCol] of NEIGHBOURS) {
-          const nRow = row + dRow;
-          const nCol = col + dCol;
-          if (nRow < 0 || nCol < 0 || nRow >= size || nCol >= size) continue;
-          if (run.labyrinth[nRow][nCol] === 1 || !revealed.has(`${nRow},${nCol}`)) continue;
-          const edgeRow = dRow === 0 ? row : row + (dRow > 0 ? 1 : 0);
-          const edgeCol = dCol === 0 ? col : col + (dCol > 0 ? 1 : 0);
-          if (dCol === 0) {
-            const y = across(edgeRow * tile);
-            const start = meetsAcross(edgeRow, edgeCol, true) ? reachStart : 0;
-            const end = meetsAcross(edgeRow, edgeCol + 1, true) ? reachEnd : 0;
-            context.moveTo(along(edgeCol * tile) - start, y);
-            context.lineTo(along((edgeCol + 1) * tile) + end, y);
-          } else {
-            const x = across(edgeCol * tile);
-            const start = meetsAcross(edgeRow, edgeCol, false) ? reachStart : 0;
-            const end = meetsAcross(edgeRow + 1, edgeCol, false) ? reachEnd : 0;
-            context.moveTo(x, along(edgeRow * tile) - start);
-            context.lineTo(x, along((edgeRow + 1) * tile) + end);
-          }
-          edges += 1;
-        }
-      }
+    // The lip has a flat top and the card's bottom corners, so it stays inside the card outline.
+    const lipRadius = Math.min(radius, lip);
+    for (const { x, y, width, height } of boxes) {
+      const bottom = y + height;
+      context.moveTo(x, bottom - lip);
+      context.lineTo(x + width, bottom - lip);
+      context.arc(x + width - lipRadius, bottom - lipRadius, lipRadius, 0, Math.PI / 2);
+      context.arc(x + lipRadius, bottom - lipRadius, lipRadius, Math.PI / 2, Math.PI);
+      context.closePath();
     }
-    if (edges === 0) return;
+    context.fillStyle = palette.landLip;
+    context.fill();
+    // The outline sits inside the card edge, so an odd width fills whole device pixels.
+    const half = outline / 2;
+    context.beginPath();
+    for (const { x, y, width, height } of boxes) {
+      appendRoundedRect(x + half, y + half, width - outline, height - outline, radius - half);
+    }
     context.strokeStyle = palette.coastline;
-    context.lineWidth = width;
-    context.lineCap = "butt";
+    context.lineWidth = outline;
     context.stroke();
   }
 
@@ -689,7 +676,7 @@ export function createCanvasRenderer(
    * @returns {boolean} False when the art failed and the caller draws the shape mark.
    */
   function drawArt(key, mode, x, y, tile) {
-    const side = tile * 0.9 * palette.markScale;
+    const side = tile * 1.2 * palette.markScale;
     let soft = false;
     try {
       soft = key === "fangmoor" && isBrightStart();
@@ -740,18 +727,24 @@ export function createCanvasRenderer(
   function drawEcho(echo, tile, pairNumber) {
     const { x, y } = centerOf(echo, tile);
     const scale = palette.markScale;
-    // An Echo is a soft lantern: a halo, a lit core, and its pair number.
+    // An Echo is a coral disc with an ink outline, a dashed ring and its pair number. It has no halo.
+    const step = (tile / 24) * scale;
     context.beginPath();
-    context.arc(x, y, tile * 0.34 * scale, 0, Math.PI * 2);
-    context.fillStyle = palette.pulse;
-    context.fill();
-    context.beginPath();
-    context.arc(x, y, tile * 0.22 * scale, 0, Math.PI * 2);
+    context.arc(x, y, 9.5 * step, 0, Math.PI * 2);
     context.fillStyle = palette.echo;
     context.fill();
-    context.lineWidth = Math.max(1.5, tile * 0.045 * scale);
-    context.strokeStyle = palette.onFill;
+    context.lineWidth = Math.max(1, 2 * step);
+    context.strokeStyle = palette.boardInk;
     context.stroke();
+
+    context.save();
+    context.beginPath();
+    context.arc(x, y, 6.5 * step, 0, Math.PI * 2);
+    context.setLineDash([2 * step, 2 * step]);
+    context.lineWidth = 1.2 * step;
+    context.strokeStyle = palette.echoText;
+    context.stroke();
+    context.restore();
 
     context.save();
     context.fillStyle = palette.echoText;
@@ -1192,11 +1185,10 @@ export function createCanvasRenderer(
     ]);
   }
 
-  // A scheme or theme change moves the tokens; the cached Fog and hatch patterns hold the old colours.
+  // A scheme or theme change moves the tokens; the cached chart and Fog layers hold the old colours.
   function repaint() {
     paletteStale = true;
     if (!lastRun) return;
-    patterns.clear();
     render(lastRun);
   }
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", repaint);
@@ -1276,11 +1268,11 @@ function readPalette() {
       document.documentElement.dataset.accessContrast === "strong" ||
       Boolean(window.matchMedia?.("(forced-colors: active)")?.matches),
     fog: color("--color-fog"),
-    fogDot: color("--color-fog-dot"),
+    fogEdge: color("--color-fog-edge"),
+    fogSoft: color("--color-fog-soft"),
     gate: color("--color-board-gate"),
-    hatch: color("--color-hatch"),
-    ink: color("--color-ink"),
     land: color("--color-land"),
+    landLip: color("--color-land-lip"),
     light: color("--color-board-light"),
     lightOnFill: color("--color-board-light-on-fill"),
     // A negative scale would make `arc` throw, so the scale keeps a positive floor.
@@ -1288,7 +1280,6 @@ function readPalette() {
     night: color("--color-night-deep"),
     onFill: color("--color-on-fill"),
     passage: color("--color-passage"),
-    pulse: color("--color-pulse"),
     strong: document.documentElement.dataset.accessContrast === "strong",
     warden: color("--color-board-warden")
   };

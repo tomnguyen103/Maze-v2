@@ -195,15 +195,40 @@ describe("Popup identity", () => {
       "Empty state",
       "12px minimum",
       "coastline",
-      "oklch(60% 0.12 140)",
-      "oklch(30.5% 0.07 310.3 / 30%)",
+      "oklch(73.4% 0.177 137.9)",
+      "oklch(53.5% 0.13 138)",
       "oklch(30.5% 0.07 310.3 / 75%)",
-      "oklch(45% 0.13 243 / 30%)",
       "with an ink outline"
     ]) {
       expect(design, literal).toContain(literal);
     }
     expect(design).not.toContain("Passage tiles: chart paper with an ink hairline");
+    expect(design).not.toMatch(/--color-fog-dot|--board-hatch|--board-fog-dot|Memory dot|--color-pulse|Pulse wash/);
+  });
+
+  it("names each board paper token in each board mode block (ADR 0067)", () => {
+    const popup = read("src/looks/popup/tokens.css");
+    const daylight = read("src/daylight.css");
+    // Default: the light root names all three.
+    const root = popup.slice(popup.indexOf(":root {"), popup.indexOf("}", popup.indexOf(":root {")));
+    for (const token of ["--color-fog-edge", "--color-fog-soft", "--color-land-lip"]) {
+      expect(root, token).toContain(token + ":");
+    }
+    // prefers-contrast: more and forced colours override the edge and the lip.
+    const more = popup.slice(popup.indexOf("prefers-contrast: more"));
+    const forced = popup.slice(popup.indexOf("forced-colors: active"));
+    for (const block of [more, forced]) {
+      expect(block).toContain("--color-fog-edge:");
+      expect(block).toContain("--color-land-lip:");
+    }
+    expect(forced).toContain("--color-fog-soft:");
+    // Palette and strong blocks: edge and lip together, a fold per palette.
+    expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-fog-edge: var\(--board-fog-edge\)/);
+    expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-land-lip: var\(--board-land-lip\)/);
+    for (const palette of ["twilight", "sea-glass", "dusk"]) {
+      expect(daylight).toContain(`--color-fog-soft: var(--${palette}-fog-soft)`);
+    }
+    expect(daylight).toContain("--color-fog-soft: var(--access-fog-soft)");
   });
 
   it("defines the chart device terms in GLOSSARY.md and records ADR 0052", () => {

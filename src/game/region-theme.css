@@ -22,7 +22,3 @@ body[data-region-theme="bellroot-summit"] {
 body[data-region-theme] .title-block__quest {
   --card-hue: var(--region-hue, var(--region-mosslight));
 }
-
-body[data-region-theme] .canvas-frame {
-  border-color: color-mix(in oklab, var(--region-hue, var(--color-line-soft)) 60%, var(--color-line-soft));
-}

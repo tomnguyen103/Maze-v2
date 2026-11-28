@@ -14,7 +14,7 @@ Warden Question.
 
 ## Genre and atmosphere
 
-- **Genre**: pop-up storybook on warm paper, with plum ink outlines, meadow tiles, sky
+- **Genre**: pop-up storybook on warm paper, with plum ink outlines, meadow cards, sky
   flaps, and one coral accent.
 - **Atmosphere**: a calm reading table, balanced (density 6, variance 5, motion 3).
 - **Surfaces**:
@@ -39,12 +39,14 @@ colours stay inside that chunk.
 | Card, dialog, Question page | `oklch(98.6% 0.014 84.6)` | `oklch(26% 0.055 310)` | `--card` |
 | Text, outlines, Land edges | `oklch(30.5% 0.07 310.3)` | `oklch(95% 0.03 86)` | `--ink` |
 | Secondary text | `oklch(44.3% 0.058 311.6)` | `oklch(80% 0.04 86)` | `--ink-soft` |
-| Passage tiles, with an ink outline | `oklch(73.4% 0.177 137.9)` | same | `--meadow` |
+| Land cards, with an ink outline | `oklch(73.4% 0.177 137.9)` | same | `--meadow` |
+| Passage paper | `oklch(96.6% 0.024 85.8)` | same | `--board-passage` |
 | Fog flaps | `oklch(75.1% 0.141 241.4)` | same | `--sky` |
 | Flap fold edge | `oklch(59.6% 0.126 243.2)` | same | `--sky-deep` |
 | Danger and Vitality loss marks only | `oklch(68.5% 0.206 32.5)` | same | `--coral` |
 | Coral text, short labels only | `oklch(54% 0.166 32.2)` | `oklch(78% 0.14 32)` | `--coral-deep` |
-| Echo, Gate light, Readout bookmarks | `oklch(90.1% 0.106 84.7)` | same | `--sun` |
+| Echo disc, with an ink outline | `oklch(54% 0.166 32.2)` | same | `--board-echo` |
+| Gate light, Readout bookmarks | `oklch(90.1% 0.106 84.7)` | same | `--sun` |
 | Book cover art | `oklch(64.6% 0.109 186.2)` | same | `--cover` |
 | Cover text | `oklch(42.6% 0.07 186.8)` | `oklch(80% 0.1 186)` | `--cover-deep` |
 | Primary pull-tab fill | `oklch(42.6% 0.07 186.8)` | same | `--cover-fill` |
@@ -78,22 +80,24 @@ when the fill alone does not. Text reaches 4.5:1.
 
 | Mark | Token | Value | Ground |
 | :-- | :-- | :-- | :-- |
-| Land | `--color-land` | `oklch(60% 0.12 140)` | none |
-| Hatch | `--board-hatch` | `oklch(30.5% 0.07 310.3 / 30%)` | Land |
-| Coastline | `--color-coastline` | `--board-ink`, `oklch(30.5% 0.07 310.3)` | Passage and Land |
-| Passage | `--color-passage` | `--meadow` | Land |
-| Fog | `--color-fog` | `--sky` | none (the Fog dot marks the edge) |
-| Fog dot | `--board-fog-dot` | `oklch(30.5% 0.07 310.3 / 75%)` | Fog and Passage |
-| Memory dot | `--color-fog-dot` | the Fog dot | Remembered Passage |
+| Land card | `--color-land` | `--board-land`, `oklch(73.4% 0.177 137.9)` | none |
+| Land lip | `--color-land-lip` | `oklch(53.5% 0.13 138)` | Land card (texture, no duty) |
+| Coastline | `--color-coastline` | `--board-ink`, `oklch(30.5% 0.07 310.3)`, the outline of each Land card | Passage and Fog |
+| Passage | `--color-passage` | `--board-passage`, `oklch(96.6% 0.024 85.8)`, cream paper | Land |
+| Fog card | `--color-fog` | `--sky` | none (the Fog edge marks the card) |
+| Fog edge | `--color-fog-edge` | `--sky-deep`; `oklch(30.5% 0.07 310.3 / 75%)` in a palette and strong contrast | Fog and Passage |
+| Fog fold | `--color-fog-soft` | `oklch(90% 0.06 238)`, the corner fold and the Pulse flap | Fog card |
 | Explorer | `--color-board-explorer` | `--clover`, with a 2px ink outline | Passage |
 | Explorer ring (fallback mark) | `--color-board-explorer-ring` | `--board-ink` | Passage |
 | Warden | `--color-board-warden` | `--fur` | Passage |
 | Danger line | `--color-danger-line` | `--coral`, with an ink outline | Passage |
-| Pulse range ring | `--color-pulse` | `oklch(45% 0.13 243 / 30%)` | Passage and Land |
-| Echo | `--color-board-echo` | `--sun` | Passage |
-| Echo number | `--color-board-echo-text` | `--board-ink` | Echo |
+| Echo | `--color-board-echo` | `--board-echo`, `oklch(54% 0.166 32.2)`, with an ink outline and a dashed paper ring | Passage |
+| Echo number | `--color-board-echo-text` | `--board-paper` | Echo |
 | Gate | `--color-board-gate` | `--sun` | Passage |
 | Paused cover | `--color-board-cover` | `--card`, with `--cover-deep` ink | none |
+
+A Passage in Pulse sight shows a peeled flap on its top edge in the Fog fold colour. The
+board draws no hatch, no Fog dot, and no Echo halo.
 
 No board mark depends on fill colour alone. Each mark has an ink outline and a shape cue.
 
@@ -107,12 +111,15 @@ WCAG 2 formula, in light and in Night.
   paper; coral-deep on paper for short labels only.
 - The pairs that fail alone (coral, meadow, sky, and clover on their grounds) pass only
   with an ink outline.
-- The coastline pair: the Coastline in board ink reaches 3:1 or more against the Passage
-  and against the Land. The coastline marks the land edge. The hatch on the Land is
-  texture and carries no contrast duty.
+- The coastline pair: the Coastline in board ink outlines each Land card. It reaches 3:1
+  or more against the Passage and against the Fog. The Land lip is texture and carries
+  no contrast duty.
+- The Fog edge reaches 3:1 against the Passage in every mode: sky-deep by default, board
+  ink at 75% in a palette and in strong contrast.
+- The Echo disc reaches 3:1 against the Passage, and its digit reaches 4.5:1.
 - Non-text parts reach at least 3:1: focus rings, control edges, and the Constellation
   tiles on the night ground.
-- At `prefers-contrast: more`, muted ink, soft lines, the hatch, and the board stipple
+- At `prefers-contrast: more`, muted ink, soft lines, the Land lip, and the Fog edge
   take full ink.
 - Under `forced-colors: active`, system colours replace the palette and each mark keeps
   its shape.
@@ -201,18 +208,17 @@ The Echo Atlas is a pop-up book (`src/looks/popup/atlas.css`).
 
 ## Labyrinth canvas
 
-- **Passages**: meadow paper tiles on Land that is a darker hedge. The board paints all
-  Passages as one meadow fill and draws no outline per tile.
-- **Land**: the Land colour with a hatch of 1px ink lines at 45 degrees. The hatch pitch
-  is 4px, set in integer device pixels. The hatch is drawn inside each merged wall run.
-- **Coastline**: one ink edge where a Passage meets Land (ADR 0066).
-- **Fog**: a tile has one of three states.
-  - Unknown: the sky Fog fill with a dot stipple from an 8 by 8 pattern tile.
-  - Remembered: the Passage or the Land as charted, plus one Memory dot at the tile centre.
-    A remembered tile shows no Echo, no Gate, no Warden, no telegraph, and no Danger line.
-  - In sight: the Passage or the Land with no dot.
-  The Memory dot, not a tint, separates a remembered tile from a tile in sight. The Fog
-  layer clips to the known tiles and draws the chart layer inside them.
+- **Passages**: cream paper squares. The board paints all Passages as one fill and draws
+  no outline per tile.
+- **Land**: a meadow card with a deep lip and a board-ink outline (ADR 0067). Each card
+  snaps to the tile grid.
+- **Coastline**: the ink outline of each Land card (ADR 0067).
+- **Fog**: a tile is unknown or known.
+  - Unknown: a sky card with a Fog edge stroke and a folded corner.
+  - Known: the Passage or the Land card, drawn from the chart layer.
+  - In Pulse sight: a known tile plus a peeled flap on its top edge.
+  - Remembered (parked with the generation 2 engine): the chart tile plus a folded flap. It shows no Echo, no Gate, and no Warden.
+  The Fog layer clips to the known tiles and draws the chart layer inside them.
 - **Echo number**: the number draws at 12px or more. On a tile below 24px the board draws
   the plain Echo mark, and the Readout carries the number.
 - **Explorer**: the Explorer Figure picked on this device, Clover by default, with an ink

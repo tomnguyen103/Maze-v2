@@ -151,6 +151,8 @@ Pass criterion: the shared styles row stays at or under 13 KB in each look, and 
 
 ### 4.6 Board marks
 
+> Amendment, 2026-11-28 (ADR 0067): the board draws paper forms from the owner-approved mock. A Passage is cream paper, Land is a meadow card with a deep lip and an ink outline, unknown tiles are sky Fog cards with a folded corner, and the Echo is a coral-deep disc. The rows below that name a hatch, a Fog fold line, or a Pulse tint read as superseded where they differ.
+
 | Mark | Popup form | Mocked |
 | --- | --- | --- |
 | Passage | Meadow paper tile, ink outline, tile radius | Yes |
@@ -341,5 +343,6 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
 | Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) #326 (the B-10 tile floor from the device pixel ratio) and #327 (the B-10 follow-up gaps: the held-key scroll, the tile floor fallback and the pixel ratio repaint) and #328 (e2e coverage of the pixel ratio repaint, its re-arm and the held game keys). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
+| Board paper forms | In review | ADR 0067 (paper forms for Passage, Land, Fog, Echo, and the Pulse flap; the hatch, the Fog dot, and the Pulse wash removed) |
 
 The game row measures 41.43 KB of 42 KB after #328. The motion chunk is 0.83 KB.
