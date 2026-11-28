@@ -1946,6 +1946,22 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(subPaths(edge[0])).toBe(4);
   });
 
+  it("US-02.1 traces the Fog fold corner on the Fog card corner arc, so the fold never leaves the card", () => {
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-fog-soft", "rgb(7, 8, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: [] }));
+
+    const arcsOf = (paint) => new Set((paint?.path ?? []).filter((step) => step.startsWith("arc(")).map((step) => step.split(",").slice(0, 3).join(",")));
+    const card = arcsOf(paintsOf(paints, "fill", "rgb(1, 2, 3)")[0]);
+    const fold = arcsOf(paintsOf(paints, "fill", "rgb(7, 8, 9)")[0]);
+    expect(fold.size).toBe(4);
+    // Each fold arc shares its centre and radius with a card corner arc.
+    for (const arc of fold) expect(card.has(arc)).toBe(true);
+  });
+
   it("US-02.1 draws each Pulse flap below the Coastline of a Land tile, so the flap never covers it", () => {
     document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
     const { context, renderer } = stubCanvas();

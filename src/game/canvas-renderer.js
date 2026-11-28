@@ -381,7 +381,6 @@ export function createCanvasRenderer(
     // The stroke centre sits 1.5/24 tile inside the tile edge.
     const inset = snapStroke(1.5 * step, unit);
     const radius = 4 * step;
-    const fold = 1.5 * step;
     const traceCards = () => {
       context.beginPath();
       for (const [row, col] of cells) {
@@ -397,9 +396,10 @@ export function createCanvasRenderer(
       const { left, top, width } = tileBox(row, col, tile);
       const right = left + width - inset;
       const edge = top + inset;
+      // The fold corner follows the card corner, so the fold never leaves the card.
       context.moveTo(right - 7.5 * step, edge);
-      context.lineTo(right - fold, edge);
-      context.arc(right - fold, edge + fold, fold, -Math.PI / 2, 0);
+      context.lineTo(right - radius, edge);
+      context.arc(right - radius, edge + radius, radius, -Math.PI / 2, 0);
       context.lineTo(right, edge + 7.5 * step);
       context.closePath();
     }
