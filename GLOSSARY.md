@@ -165,8 +165,9 @@ _Avoid_: Flat button, link button, chip
 
 **Paper card**:
 The Popup frame of every dialog and of the board panel: a 3px ink outline over a
-paper fill, with a hard ink lift.
-_Avoid_: Modal, panel, tile
+paper fill, with a hard ink lift. It names the frame only. A board tile has its own
+term, Tile card.
+_Avoid_: Modal, panel, tile, Tile card
 
 **Readout**:
 The strip of live Run numbers above the board: Time, Moves, Echoes, Vitality,
@@ -196,6 +197,48 @@ _Avoid_: axis labels, coordinates
 **Coastline**:
 The ink outline of each Land card. It carries 3:1 against a Passage and the Fog.
 _Avoid_: wall outline, shoreline
+
+**Tile card**:
+The Popup form of one board tile that is Land or Fog: a rounded card inset from the
+tile edge, with a fill and an edge. A Land card and a Fog card are Tile cards. A
+Passage is a plain square and is not a Tile card.
+_Avoid_: Paper card, tile sprite
+
+**Land card**:
+The Tile card of each known wall tile (ADR 0067). It has a meadow fill, a Land lip,
+and a Coastline. In strong contrast and in each palette mode, the fill is paper, and
+the Coastline doubles.
+_Avoid_: wall tile, hatched Land
+
+**Land lip**:
+The deep band along the bottom of a Land card. It is texture. It carries no contrast
+duty.
+_Avoid_: shadow, hatch
+
+**Fog card**:
+The sky Tile card of each unknown tile. It has a Fog edge and a Fog fold.
+_Avoid_: Fog tile, Fog stipple, cloud
+
+**Fog edge**:
+The stroke around a Fog card. The Fog fill is close to the Passage in value, so the
+Fog edge marks the known and unknown boundary. It carries 3:1 against a Passage.
+_Avoid_: Fog outline, Fog border
+
+**Fog fold**:
+The folded corner at the top right of a Fog card. It uses the Fog soft colour. The
+board paints the Fog fold before the Fog edge, so the fold never covers the edge.
+_Avoid_: dog-ear, corner badge
+
+**Pulse flap**:
+The peeled flap on the top edge of a known tile in Pulse sight. It uses the Fog soft
+fill and the Fog edge stroke. On a Land card, the flap starts inside the Coastline,
+so it never covers the Coastline.
+_Avoid_: Pulse wash, Pulse highlight
+
+**Casing**:
+The board paper under every tile. The Fog layer fills it first. The challenge band
+also uses it as its fill.
+_Avoid_: background, board border
 
 **Chart notes**:
 The inset beside the board on a desktop, and under it on a phone, that holds

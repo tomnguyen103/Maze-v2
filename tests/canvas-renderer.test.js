@@ -364,7 +364,7 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-light-on-fill", "--color-on-fill", 3]
 ]);
 
-/** ADR 0067: the Land outline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
+/** ADR 0067: the Coastline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
 const FOG_EDGE_PAIRS = /** @type {const} */ ([["--color-coastline", "--color-fog", 3]]);
 
 /** The on-fill colour that the Windway tests give the Windway source disc. */
@@ -1014,8 +1014,8 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.style === "rgb(9, 9, 9)")).toBe(false);
   });
 
-  it("US-02.1 draws the closed Gate keyhole in the board ink, not the Land or the on-fill white", () => {
-    document.body.style.setProperty("--color-board-ink", "rgb(11, 12, 13)");
+  it("US-02.1 draws the closed Gate keyhole in the Gate ink, not the Land or the on-fill white", () => {
+    document.body.style.setProperty("--color-board-gate-ink", "rgb(11, 12, 13)");
     document.body.style.setProperty("--color-land", "rgb(40, 160, 40)");
     document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
     const { context, renderer } = stubCanvas();
@@ -1413,7 +1413,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     ]);
   });
 
-  it("US-02.1 strokes one Land outline path in opaque board ink", () => {
+  it("US-02.1 strokes one Coastline path in opaque board ink", () => {
     document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -1918,6 +1918,84 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     // Forced colours drops a box shadow, so the Neatline opts out and keeps the edge in a system colour.
     expect(neatline).toMatch(/forced-color-adjust:\s*none/);
     expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px CanvasText/);
+  });
+
+  it("US-03.2 hides the classic scrollbar of the canvas frame, so the Neatline keeps the whole scroll area", () => {
+    const ruleOf = (/** @type {string} */ selector) =>
+      [...daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].trim() === selector).map((rule) => rule[2]).join("\n");
+
+    expect(ruleOf(".canvas-frame")).toMatch(/scrollbar-width:\s*none/);
+    expect(ruleOf(".canvas-frame::-webkit-scrollbar")).toMatch(/display:\s*none/);
+  });
+
+  it("US-02.1 strokes the Fog edge after the Fog fold fill, so the fold cannot cover the edge", () => {
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    document.body.style.setProperty("--color-fog-soft", "rgb(7, 8, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: [] }));
+
+    const order = paints.map((paint) => `${paint.kind}:${paint.style}`);
+    expect(order.indexOf("fill:rgb(1, 2, 3)")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("fill:rgb(7, 8, 9)")).toBeGreaterThan(order.indexOf("fill:rgb(1, 2, 3)"));
+    expect(order.lastIndexOf("stroke:rgb(4, 5, 6)")).toBeGreaterThan(order.indexOf("fill:rgb(7, 8, 9)"));
+    const edge = paintsOf(paints, "stroke", "rgb(4, 5, 6)");
+    expect(edge).toHaveLength(1);
+    expect(subPaths(edge[0])).toBe(4);
+  });
+
+  it("US-02.1 draws each Pulse flap below the Coastline of a Land tile, so the flap never covers it", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    // Tile 320 px: the Land card sits 13 px in and its Coastline is 19 px wide, so the card interior starts at 32 px.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+    const points = (flap?.path ?? [])
+      .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+      .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+    expect(points).toHaveLength(4);
+    for (const [x, y] of points) {
+      expect(y).toBeGreaterThanOrEqual(32);
+      expect(x).toBeGreaterThanOrEqual(320 + 32);
+      expect(x).toBeLessThanOrEqual(640 - 32);
+    }
+  });
+
+  describe("Echo number floor", () => {
+    /** @param {number} ratio @param {number} width The board width in CSS px. */
+    function echoDigit(ratio, width) {
+      /** @type {string[]} */
+      let fonts = [];
+      /** @type {string[]} */
+      let labels = [];
+      atDeviceRatio(ratio, () => {
+        const drawn = stubCanvas({ width });
+        Object.defineProperty(drawn.context, "font", { configurable: true, get: () => fonts.at(-1) ?? "", set: (value) => {
+            fonts.push(value);
+          }
+        });
+        drawn.renderer.render(board({ revealed: ["1,1"], echoes: [{ row: 1, col: 1, collected: false }] }));
+        labels = drawn.labels;
+      });
+      return { fonts, labels };
+    }
+
+    it("US-02.1 draws the Echo number at 12 CSS px or more, at each device ratio", () => {
+      expect(echoDigit(1, 48).fonts.filter((font) => font.startsWith("700 ")).at(-1)).toMatch(/^700 12px /);
+      expect(echoDigit(2, 48).fonts.filter((font) => font.startsWith("700 ")).at(-1)).toMatch(/^700 24px /);
+    });
+
+    it("US-02.1 draws no Echo number on a tile below 24 CSS px, at each device ratio", () => {
+      expect(echoDigit(1, 48).labels).toEqual(["1"]);
+      expect(echoDigit(1, 46).labels).toEqual([]);
+      expect(echoDigit(2, 48).labels).toEqual(["1"]);
+      expect(echoDigit(2, 46).labels).toEqual([]);
+    });
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {
@@ -2437,6 +2515,15 @@ describe("R1a renderer findings", () => {
 
       for (const name of NAMES) expect(SYSTEM.has(value(name) ?? ""), name).toBe(true);
       expect(value("--color-passage")).not.toBe(value("--color-land"));
+    });
+
+    it("US-02.1 inks the Gate keyhole in Canvas on the CanvasText Gate in forced colours", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
+      const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+      const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+      expect(value("--color-board-gate")).toBe("CanvasText");
+      expect(value("--color-board-gate-ink")).toBe("Canvas");
+      expect(value("--color-board-ink")).toBe("HighlightText");
     });
 
     it("raises the Popup forced-colors selector above the daylight palette rules", () => {

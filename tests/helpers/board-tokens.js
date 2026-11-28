@@ -6,7 +6,7 @@ export const BOARD_TOKENS = [
   "--color-coastline", "--color-danger-line", "--color-board-echo", "--color-board-echo-text",
   "--color-board-ink", "--color-board-casing", "--color-board-explorer", "--color-board-explorer-disc",
   "--color-board-explorer-ring", "--font-body", "--font-utility", "--color-fog", "--color-fog-edge", "--color-fog-soft",
-  "--color-board-gate", "--color-land-lip", "--color-land", "--color-board-light",
+  "--color-board-gate", "--color-board-gate-ink", "--color-land-lip", "--color-land", "--color-board-light",
   "--color-board-light-on-fill", "--color-night-deep", "--color-on-fill", "--color-passage",
   "--color-board-warden", "--color-board-cover", "--color-board-cover-ink", "--board-paper"
 ];

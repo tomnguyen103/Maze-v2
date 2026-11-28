@@ -165,14 +165,27 @@ describe("Popup contrast (WCAG 2)", () => {
   // ADR 0067 board paper forms: the pairs of the spec contrast table. The spec measured the mock hex
   // colours, so each token ratio may differ by a few tenths; every pair stays above its 3:1 duty.
   it.each([
-    ["--board-ink", "--board-passage", 12.81, "Land outline on Passage"],
-    ["--board-ink", "--board-land", 6.19, "Land outline on Land"],
-    ["--board-ink", "--sky", 6.31, "Land outline on Fog"],
+    ["--board-ink", "--board-passage", 12.81, "Coastline on Passage"],
+    ["--board-ink", "--board-land", 6.19, "Coastline on Land"],
+    ["--board-ink", "--sky", 6.31, "Coastline on Fog"],
     ["--sky-deep", "--board-passage", 3.59, "Fog edge on Passage"],
     ["--board-echo", "--board-paper", 5.27, "Echo digit on the Echo disc"],
     ["--board-echo", "--board-passage", 4.97, "Echo disc on Passage"]
   ])("board paper: %s on %s is %s:1", (fg, bg, expected) => {
     expect(Math.abs(ratio(light, fg, bg) - Number(expected))).toBeLessThan(0.4);
+  });
+
+  // ADR 0067: no Land token exists in a palette mode, because Land is paper there. The Coastline (board ink)
+  // must still hold 3:1 against each neighbour: the palette Passage, the palette Fog, the paper Land and the paper casing.
+  it.each(["twilight", "sea-glass", "dusk"].flatMap((mode) => [
+    [`--${mode}-passage`, "Passage"],
+    [`--${mode}-fog`, "Fog"]
+  ]))("palette mode: the Coastline on %s (%s) reaches 3:1", (ground) => {
+    expect(ratio(light, "--board-ink", ground)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(["--access-passage", "--access-fog", "--board-paper"])("palette and strong mode: the Coastline on %s reaches 3:1", (ground) => {
+    expect(ratio(light, "--board-ink", ground)).toBeGreaterThanOrEqual(3);
   });
 
   it.each([

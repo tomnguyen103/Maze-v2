@@ -366,7 +366,7 @@ export function createCanvasRenderer(
     context.drawImage(chart, 0, 0);
     context.restore();
     drawFogCards(fogCells, tile);
-    drawPulseFlaps(pulseCells, tile);
+    drawPulseFlaps(pulseCells, tile, run.labyrinth);
   }
 
   /**
@@ -382,16 +382,16 @@ export function createCanvasRenderer(
     const inset = snapStroke(1.5 * step, unit);
     const radius = 4 * step;
     const fold = 1.5 * step;
-    context.beginPath();
-    for (const [row, col] of cells) {
-      const { left, top, width, height } = tileBox(row, col, tile);
-      appendRoundedRect(left + inset, top + inset, width - 2 * inset, height - 2 * inset, radius);
-    }
+    const traceCards = () => {
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width, height } = tileBox(row, col, tile);
+        appendRoundedRect(left + inset, top + inset, width - 2 * inset, height - 2 * inset, radius);
+      }
+    };
+    traceCards();
     context.fillStyle = palette.fog;
     context.fill();
-    context.strokeStyle = palette.fogEdge;
-    context.lineWidth = unit;
-    context.stroke();
     context.beginPath();
     for (const [row, col] of cells) {
       const { left, top, width } = tileBox(row, col, tile);
@@ -405,21 +405,29 @@ export function createCanvasRenderer(
     }
     context.fillStyle = palette.fogSoft;
     context.fill();
+    // The edge strokes last, so the fold fill cannot cover it.
+    traceCards();
+    context.strokeStyle = palette.fogEdge;
+    context.lineWidth = unit;
+    context.stroke();
   }
 
   /**
    * A tile in Pulse sight shows the chart plus a peeled Fog flap along its top edge, each from one path.
    * @param {Array<[number, number]>} cells
    * @param {number} tile
+   * @param {GameRun["labyrinth"]} labyrinth
    */
-  function drawPulseFlaps(cells, tile) {
+  function drawPulseFlaps(cells, tile, labyrinth) {
     if (cells.length === 0) return;
     const unit = devicePixel();
     const step = tile / 24;
-    const inset = snapStroke(step, unit);
+    // A flap on a Land card starts inside the Coastline, so it never covers the outline.
+    const landFlapInset = snapStroke(landInset(tile) + coastlineWidth(tile) + unit / 2, unit);
     context.beginPath();
     for (const [row, col] of cells) {
       const { left, top, width } = tileBox(row, col, tile);
+      const inset = labyrinth[row][col] === 0 ? landFlapInset : snapStroke(step, unit);
       const near = left + inset;
       const far = left + width - inset;
       const edge = top + inset;
@@ -616,6 +624,16 @@ export function createCanvasRenderer(
     context.fill();
   }
 
+  /** @param {number} tile The gap between a tile edge and its Land card. */
+  function landInset(tile) {
+    return Math.max(1, Math.round(tile / 24));
+  }
+
+  /** @param {number} tile The Coastline width. Where Land is paper (strong contrast, a palette mode), it doubles (ADR 0067). */
+  function coastlineWidth(tile) {
+    return Math.max(1, Math.round(tile * 0.06)) * (palette.paperLand ? 2 : 1);
+  }
+
   /**
    * Known walls are meadow Land cards: a card fill, a lip along the bottom and an ink outline, each from one path.
    * The outline is the Coastline.
@@ -625,9 +643,8 @@ export function createCanvasRenderer(
   function drawLand(cells, tile) {
     if (cells.length === 0) return;
     const step = tile / 24;
-    const inset = Math.max(1, Math.round(step));
-    // Where Land is paper (strong contrast, a palette mode), the outline doubles (ADR 0067).
-    const outline = Math.max(1, Math.round(tile * 0.06)) * (palette.paperLand ? 2 : 1);
+    const inset = landInset(tile);
+    const outline = coastlineWidth(tile);
     const lip = Math.max(1, Math.round(6 * step));
     const radius = 5 * step;
     const boxes = cells.map(([row, col]) => {
@@ -737,10 +754,12 @@ export function createCanvasRenderer(
     context.stroke();
     context.restore();
 
+    // design.md: the number draws at 12 CSS px or more; a tile below 24 CSS px keeps the plain mark.
+    if (tile < 24 * deviceRatio) return;
     context.save();
     context.fillStyle = palette.echoText;
     context.font =
-      `700 ${Math.max(8 * deviceRatio, tile * 0.22 * scale)}px ${palette.fontBody}`;
+      `700 ${Math.max(12 * deviceRatio, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(String(pairNumber), x, y);
@@ -799,9 +818,9 @@ export function createCanvasRenderer(
       context.lineTo(x + tile * 0.1 * scale, y - tile * 0.02 * scale);
       context.stroke();
     } else {
-      // The keyhole is board ink: Land is paper in strong and palette modes, so it would vanish on the sun fill.
+      // The keyhole has its own ink: Land is paper in strong and palette modes, and forced colours paint the Gate CanvasText.
       context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
-      context.fillStyle = palette.boardInk;
+      context.fillStyle = palette.gateInk;
       context.fill();
       context.fillRect(
         x - tile * 0.025 * scale,
@@ -1290,6 +1309,7 @@ function readPalette() {
     fogEdge: color("--color-fog-edge"),
     fogSoft: color("--color-fog-soft"),
     gate: color("--color-board-gate"),
+    gateInk: color("--color-board-gate-ink"),
     land: color("--color-land"),
     landLip: color("--color-land-lip"),
     light: color("--color-board-light"),

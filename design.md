@@ -94,6 +94,7 @@ when the fill alone does not. Text reaches 4.5:1.
 | Echo | `--color-board-echo` | `--board-echo`, `oklch(54% 0.166 32.2)`, with an ink outline and a dashed paper ring | Passage |
 | Echo number | `--color-board-echo-text` | `--board-paper` | Echo |
 | Gate | `--color-board-gate` | `--sun` | Passage |
+| Gate keyhole | `--color-board-gate-ink` | `--color-board-ink`; `Canvas` in forced colours | Gate |
 | Paused cover | `--color-board-cover` | `--card`, with `--cover-deep` ink | none |
 
 A Passage in Pulse sight shows a peeled flap on its top edge in the Fog fold colour. The
