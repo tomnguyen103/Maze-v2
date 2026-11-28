@@ -91,6 +91,8 @@ export function createCanvasRenderer(
   let deviceRatio = 1;
   /** @type {GameRun | null} */
   let lastRun = null;
+  /** Set by destroy(), so a late art load or repaint paints nothing. */
+  let destroyed = false;
   /** The Explorer tile and board width of the last follow, so an appearance repaint keeps a manual scroll. */
   let lastFollow = "";
   /** @type {GameRun["labyrinth"] | null} */
@@ -152,8 +154,9 @@ export function createCanvasRenderer(
 
   /** @param {GameRun} run */
   function render(run) {
+    if (destroyed) return;
     lastRun = run;
-    // Read the tokens before resize() clears the canvas, so a missing token leaves the last board.
+    // Read the tokens before resize() can clear the canvas on a size change, so a missing token leaves the last board.
     if (paletteStale) {
       palette = readPalette();
       paletteStale = false;
@@ -1177,14 +1180,32 @@ export function createCanvasRenderer(
   // A scheme or theme change moves the tokens; the cached chart and Fog layers hold the old colours.
   function repaint() {
     paletteStale = true;
-    if (!lastRun) return;
-    render(lastRun);
+    if (destroyed) return;
+    // A detached canvas or one without a layout box, such as a closed dialog, paints on its next render.
+    if (!lastRun || !canvas.isConnected || !canvas.getClientRects().length) return;
+    try {
+      render(lastRun);
+    } catch (error) {
+      // A listener has no caller to catch this, so the console gets the token name.
+      console.error("Echo Maze board repaint failed.", error);
+    }
   }
-  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", repaint);
-  window.matchMedia?.("(forced-colors: active)")?.addEventListener?.("change", repaint);
-  window.matchMedia?.("(prefers-contrast: more)")?.addEventListener?.("change", repaint);
+  const forcedColors = window.matchMedia?.("(forced-colors: active)");
+  // An explicit light or dark theme wins over the system scheme, unless forced colours replace the tokens.
+  const onSchemeChange = () => {
+    const theme = document.documentElement.getAttribute("data-theme");
+    if ((theme === "light" || theme === "dark") && !forcedColors?.matches) return;
+    repaint();
+  };
+  const mediaListeners = [
+    { media: window.matchMedia?.("(prefers-color-scheme: dark)"), listener: onSchemeChange },
+    { media: forcedColors, listener: repaint },
+    { media: window.matchMedia?.("(prefers-contrast: more)"), listener: repaint }
+  ];
+  for (const { media, listener } of mediaListeners) media?.addEventListener?.("change", listener);
   // Each attribute moves a board token or the mark scale: the theme, the contrast, the large marks and the two palettes.
-  new MutationObserver(repaint).observe(document.documentElement, {
+  const observer = new MutationObserver(repaint);
+  observer.observe(document.documentElement, {
     attributeFilter: [
       "data-theme",
       "data-access-contrast",
@@ -1196,9 +1217,18 @@ export function createCanvasRenderer(
   });
 
   // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
-  canvas.parentElement?.addEventListener("scroll", () => lastRun && drawNeatline(lastRun.labyrinth.length), { passive: true });
+  const scrollFrame = canvas.parentElement;
+  const onFrameScroll = () => lastRun && drawNeatline(lastRun.labyrinth.length);
+  scrollFrame?.addEventListener("scroll", onFrameScroll, { passive: true });
 
-  return { loadFonts, render, resize };
+  function destroy() {
+    destroyed = true;
+    observer.disconnect();
+    for (const { media, listener } of mediaListeners) media?.removeEventListener?.("change", listener);
+    scrollFrame?.removeEventListener("scroll", onFrameScroll);
+  }
+
+  return { destroy, loadFonts, render, resize };
 }
 
 /** @param {{ row: number, col: number }} position @param {number} tile */

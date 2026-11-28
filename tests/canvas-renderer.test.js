@@ -9,6 +9,13 @@ import { getLabyrinthConfig } from "../src/questions/quest-levels.js";
 import { getQuestRunRuleset } from "../src/game/run-ruleset.js";
 import { BOARD_TOKENS, resolveBoardToken, seedBoardTokens } from "./helpers/board-tokens.js";
 
+/** Each renderer keeps a MutationObserver on the shared root, so every test releases the ones it made. */
+/** @type {Array<{ destroy: () => void }>} */
+const created = [];
+afterEach(() => {
+  for (const renderer of created.splice(0)) renderer.destroy();
+});
+
 /**
  * Builds a recording 2D context and a canvas that returns it.
  * @param {{ width?: number, height?: number, neatline?: boolean | "no-overlay" | "no-context", seed?: boolean, loadArt?: () => Promise<unknown>, isBrightStart?: () => boolean, ownLayerContexts?: boolean }} [options]
@@ -51,8 +58,10 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
   };
   const canvas = {
     getBoundingClientRect: () => ({ width, height }),
+    getClientRects: () => [{}],
     getContext: () => context,
     height: 640,
+    isConnected: true,
     style: { setProperty: vi.fn() },
     width: 640
   };
@@ -127,6 +136,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
       getBoundingClientRect: () => ({ left: 18, top: 18, width, height }),
       parentElement: {
         addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
         getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: height + 36 }),
         querySelector: () => (neatline === "no-overlay" ? null : overlay)
       }
@@ -139,6 +149,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     isBrightStart,
     createLayer
   );
+  created.push(renderer);
   return {
     calls,
     layers,
@@ -418,6 +429,36 @@ function recordPaints(context) {
  */
 function paintsOf(paints, kind, style) {
   return paints.filter((paint) => paint.kind === kind && paint.style === style);
+}
+
+/**
+ * Fires the colour scheme listener after one board paint and reports whether the change repainted the board.
+ * @param {string | null} theme The data-theme value, or null for no attribute.
+ * @param {boolean} forced Whether the forced-colors query matches.
+ */
+function schemeChangeRepaints(theme, forced) {
+  /** @type {() => void} */
+  let onChange = () => {};
+  vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
+    matches: query === "(forced-colors: active)" && forced,
+    addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+      if (query === "(prefers-color-scheme: dark)") onChange = listener;
+    }
+  }));
+  if (theme !== null) document.documentElement.setAttribute("data-theme", theme);
+  try {
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    renderer.render(board({}));
+    const painted = paints.length;
+    document.body.style.setProperty("--color-fog", "rgb(3, 4, 5)");
+    onChange();
+    return paints.length > painted;
+  } finally {
+    document.body.style.removeProperty("--color-fog");
+    document.documentElement.removeAttribute("data-theme");
+    vi.unstubAllGlobals();
+  }
 }
 
 /** @param {number} ratio @param {() => void} body */
@@ -1245,6 +1286,7 @@ describe("Canvas renderer", () => {
         observe(_target, options) {
           observed[observed.length - 1].options = options;
         }
+        disconnect() {}
       }
     );
     try {
@@ -2148,6 +2190,150 @@ describe("R1a renderer findings", () => {
       expect(listeners["(prefers-contrast: more)"]).toBeTypeOf("function");
       listeners["(prefers-contrast: more)"]();
       expect(paintsOf(paints, "fill", "rgb(7, 8, 9)")).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("US-04.2 skips a repaint on a detached canvas or one without a layout box", () => {
+    /** @type {() => void} */
+    let onChange = () => {};
+    vi.stubGlobal("matchMedia", () => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        onChange = listener;
+      }
+    }));
+    try {
+      const { canvas, context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      renderer.render(board({}));
+      const painted = paints.length;
+
+      document.body.style.setProperty("--color-fog", "rgb(2, 3, 4)");
+      canvas.isConnected = false;
+      onChange();
+      canvas.isConnected = true;
+      canvas.getClientRects = () => [];
+      onChange();
+      expect(paints).toHaveLength(painted);
+      expect(paintsOf(paints, "fill", "rgb(2, 3, 4)")).toHaveLength(0);
+
+      // The next render reads the palette again, so the skipped change still shows.
+      canvas.getClientRects = () => [{}];
+      renderer.render(board({ revealed: ["0,0"] }));
+      expect(paintsOf(paints, "fill", "rgb(2, 3, 4)").length).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("US-04.3 skips the colour scheme repaint when data-theme is light, before and after the first render", () => {
+    /** @type {() => void} */
+    let onChange = () => {};
+    vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        if (query === "(prefers-color-scheme: dark)") onChange = listener;
+      }
+    }));
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
+      onChange();
+      expect(paints).toHaveLength(0);
+      renderer.render(board({}));
+      const painted = paints.length;
+      document.body.style.setProperty("--color-fog", "rgb(3, 4, 5)");
+      onChange();
+      expect(paints).toHaveLength(painted);
+    } finally {
+      document.documentElement.removeAttribute("data-theme");
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("US-04.3 repaints on a colour scheme change when data-theme is absent", () => {
+    expect(schemeChangeRepaints(null, false)).toBe(true);
+  });
+
+  it("US-04.3 skips the colour scheme repaint when data-theme is dark", () => {
+    expect(schemeChangeRepaints("dark", false)).toBe(false);
+  });
+
+  it("US-04.3 repaints on a colour scheme change when data-theme is dark and forced colours match", () => {
+    expect(schemeChangeRepaints("dark", true)).toBe(true);
+  });
+
+  it("US-04.3 treats a data-theme value other than light or dark as no explicit theme", () => {
+    expect(schemeChangeRepaints("auto", false)).toBe(true);
+  });
+
+  it("US-04.4 logs a board token error that a repaint listener throws", () => {
+    /** @type {() => void} */
+    let onChange = () => {};
+    vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {() => void} */ listener) => {
+        if (query === "(forced-colors: active)") onChange = listener;
+      }
+    }));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { renderer } = stubCanvas();
+      renderer.render(board({}));
+      document.body.style.removeProperty("--color-passage");
+      expect(() => onChange()).not.toThrow();
+      expect(errors.mock.calls.flat().some((arg) => arg instanceof MissingBoardTokenError && arg.token === "--color-passage")).toBe(true);
+    } finally {
+      errors.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("US-04.5 destroy removes the same listeners, the observer and the scroll handler, and stops painting", async () => {
+    /** @type {Array<{ query: string, listener: unknown }>} */
+    const added = [];
+    /** @type {Array<{ query: string, listener: unknown }>} */
+    const removed = [];
+    vi.stubGlobal("matchMedia", (/** @type {string} */ query) => ({
+      addEventListener: (/** @type {string} */ _type, /** @type {unknown} */ listener) => added.push({ query, listener }),
+      removeEventListener: (/** @type {string} */ _type, /** @type {unknown} */ listener) => removed.push({ query, listener })
+    }));
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "MutationObserver",
+      class {
+        observe() {}
+        disconnect() {
+          disconnect();
+        }
+      }
+    );
+    /** @type {(value: unknown) => void} */
+    let resolveArt = () => {};
+    try {
+      const { canvas, context, renderer } = stubCanvas({
+        neatline: true,
+        loadArt: () => new Promise((resolve) => (resolveArt = resolve))
+      });
+      const frame = /** @type {any} */ (canvas).parentElement;
+      const paints = recordPaints(context);
+      renderer.render(board({}));
+      // The art load starts in a microtask, so let it bind resolveArt before destroy.
+      await Promise.resolve();
+      const painted = paints.length;
+      renderer.destroy();
+
+      expect(added).toHaveLength(3);
+      expect(removed).toEqual(added);
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      const scroll = frame.addEventListener.mock.calls.find((/** @type {unknown[]} */ call) => call[0] === "scroll");
+      expect(frame.removeEventListener).toHaveBeenCalledWith("scroll", scroll[1]);
+
+      // A render and a late art load after destroy paint nothing.
+      renderer.render(board({ revealed: ["0,0"] }));
+      resolveArt({ drawFigure: () => {} });
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(paints).toHaveLength(painted);
     } finally {
       vi.unstubAllGlobals();
     }
