@@ -56,32 +56,6 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     style: { setProperty: vi.fn() },
     width: 640
   };
-  /** @type {Array<{ width: number, height: number, contextArgs: unknown[], fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
-  const tiles = [];
-  const createTile = (/** @type {number} */ tileWidth, /** @type {number} */ tileHeight) => {
-    /** @type {Array<{ style: string, x: number, y: number, w: number, h: number }>} */
-    const fills = [];
-    const tileContext = {
-      fillStyle: "",
-      fillRect(/** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
-        fills.push({ style: tileContext.fillStyle, x, y, w, h });
-      }
-    };
-    /** @type {unknown[]} */
-    const contextArgs = [];
-    const tile = {
-      width: tileWidth,
-      height: tileHeight,
-      fills,
-      contextArgs,
-      getContext: (/** @type {unknown[]} */ ...args) => {
-        contextArgs.push(...args);
-        return tileContext;
-      }
-    };
-    tiles.push(tile);
-    return /** @type {never} */ (tile);
-  };
   // A layer draws on the shared recording context unless it asks for its own, so the paints record in layer order.
   /** @type {Array<{ width: number, height: number, context: any }>} */
   const layers = [];
@@ -161,7 +135,6 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
   if (seed) seedBoardTokens();
   const renderer = createCanvasRenderer(
     /** @type {HTMLCanvasElement} */ (/** @type {unknown} */ (canvas)),
-    createTile,
     /** @type {never} */ (loadArt),
     isBrightStart,
     createLayer
@@ -174,8 +147,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     fillRects,
     labels,
     neat: { context: neatContext, fonts: neatFonts, labels: neatLabels, overlay, paths: neatPaths, rects: neatRects, texts: neatTexts },
-    renderer,
-    tiles
+    renderer
   };
 }
 
@@ -222,11 +194,12 @@ const SCOPES = [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT];
 /** Every token a board mark reads, one row per mark (design.md palette rows). */
 const BOARD_ROWS = [
   "--color-land",
-  "--color-hatch",
+  "--color-land-lip",
   "--color-coastline",
   "--color-passage",
   "--color-fog",
-  "--color-fog-dot",
+  "--color-fog-edge",
+  "--color-fog-soft",
   "--color-board-explorer-ring",
   "--color-danger-line",
   "--color-board-warden",
@@ -358,17 +331,17 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-warden", "--color-passage", 3],
   // Popup draws an ink outline under each coral dash, so the outline carries the 3:1 edge.
   ["--color-board-ink", "--color-passage", 3],
-  // Popup draws the Gate, the Light and the Echo as sun fills with an ink outline, so the outline carries the 3:1 edge.
+  // Popup draws the Gate and the Light as sun fills with an ink outline, so the outline carries the 3:1 edge.
   ["--color-board-ink", "--color-board-gate", 3],
-  ["--color-board-ink", "--color-board-echo", 3],
   ["--color-board-ink", "--color-board-light", 3],
   ["--color-board-ink", "--color-board-casing", 3],
-  ["--color-fog-dot", "--color-fog", 3],
-  // The Fog dots carry the known/unknown edge, because the Fog fill is close to the Passage.
-  ["--color-fog-dot", "--color-passage", 3],
+  // The Fog edge carries the known/unknown boundary, because the Fog fill is close to the Passage.
+  ["--color-fog-edge", "--color-passage", 3],
+  // The Echo disc sits on the Passage, so the disc edge carries the 3:1 and its ink outline is decoration.
+  ["--color-board-echo", "--color-passage", 3],
   // The Echo pair number sits on the Echo fill.
   ["--color-board-echo-text", "--color-board-echo", 4.5],
-  // The closed Gate keyhole is board ink on the sun fill: it reads on its own fill.
+  // The sealed Gate X is night ink on the white arch fill.
   ["--color-night-deep", "--color-on-fill", 3],
   // The disc is the board paper, so its ring keeps the text floor in every mode; the clover Explorer sits inside the ring.
   ["--color-board-explorer-ring", DISC, 4.5],
@@ -376,18 +349,12 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-cover-ink", "--color-board-cover", 4.5],
   // The challenge band writes the board ink on the board paper.
   ["--color-board-ink", "--color-board-casing", 4.5],
-  // Pulse is a wash, so it needs only to show.
-  ["--color-pulse", "--color-passage", 1.2],
-  ["--color-pulse", "--color-land", 1.2],
   // The open Gate arrow strokes on the white arch fill, not on the Passage.
   ["--color-board-light-on-fill", "--color-on-fill", 3]
 ]);
 
-/** Strong mode paints the Fog flat, so the Fog edge alone separates known tiles from unknown ones. */
-const STRONG_ONLY_PAIRS = /** @type {const} */ ([
-  ["--color-fog", "--color-passage", 3],
-  ["--color-coastline", "--color-fog", 3]
-]);
+/** ADR 0067: the Land outline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
+const FOG_EDGE_PAIRS = /** @type {const} */ ([["--color-coastline", "--color-fog", 3]]);
 
 /** The on-fill colour that the Windway tests give the Windway source disc. */
 const WINDWAY_DISC = "rgb(251, 252, 253)";
@@ -442,6 +409,31 @@ function recordPaints(context) {
     paints.push({ kind: "stroke", style: stroke, path: [...path] });
   });
   return paints;
+}
+
+/**
+ * @param {ReturnType<typeof recordPaints>} paints
+ * @param {"fill" | "stroke"} kind
+ * @param {string} style
+ */
+function paintsOf(paints, kind, style) {
+  return paints.filter((paint) => paint.kind === kind && paint.style === style);
+}
+
+/** @param {number} ratio @param {() => void} body */
+function atDeviceRatio(ratio, body) {
+  const original = window.devicePixelRatio;
+  window.devicePixelRatio = ratio;
+  try {
+    body();
+  } finally {
+    window.devicePixelRatio = original;
+  }
+}
+
+/** @param {{ path: string[] }} paint @returns {number} how many sub-paths the paint starts */
+function subPaths(paint) {
+  return paint.path.filter((step) => step.startsWith("moveTo(")).length;
 }
 
 /**
@@ -574,10 +566,19 @@ describe("Canvas renderer", () => {
       expect(loadArt).toHaveBeenCalledTimes(1);
       const figures = art.drawFigure.mock.calls.map(([, key, mode]) => `${key}:${mode}`);
       expect(figures).toEqual(["fangmoor:patrol", "fangmoor:hunt", "explorer:idle"]);
-      // The figure fills 0.9 of one tile.
-      expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 0.9);
+      // The figure fills 1.2 tiles, so it spills past the tile like a pop-up.
+      expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 1.2);
       expect(art.drawFigure.mock.calls[0][4]).toBe(false);
       expect(art.drawFigure.mock.calls.every((call) => call[5] === false)).toBe(true);
+    });
+
+    it("scales the figure side with the mark scale", async () => {
+      document.body.style.setProperty("--maze-mark-scale", "1.22");
+      const art = { drawFigure: vi.fn() };
+      const drawn = stubCanvas({ loadArt: () => Promise.resolve(art) });
+      drawn.renderer.render(run());
+      await flush();
+      expect(art.drawFigure.mock.calls[0][3]).toBeCloseTo((640 / run().labyrinth.length) * 1.2 * 1.22);
     });
 
     it("passes soft to the Fangmoor art alone while Bright Start shows", async () => {
@@ -611,68 +612,59 @@ describe("Canvas renderer", () => {
     );
   });
 
-  it("US-02.1 fills the whole Fog from one pattern, built once per palette", () => {
+  it("US-02.1 draws every Fog card from three batched paths, built once per palette", () => {
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    document.body.style.setProperty("--color-fog-soft", "rgb(7, 8, 9)");
     const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
-    /** @type {unknown[]} */
-    const fogFills = [];
-    let fillStyle = /** @type {unknown} */ ("");
-    Object.defineProperty(context, "fillStyle", {
-      get: () => fillStyle,
-      set: (value) => {
-        fillStyle = value;
-      }
-    });
-    context.fillRect = vi.fn((_x, _y, w) => {
-      if (w === 640) fogFills.push(fillStyle);
-    });
+    const cells = run.labyrinth.length ** 2;
 
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
 
-    // The chart pass builds the hatch pattern too, so the Fog pattern is the one built from the 8 pixel tile.
-    expect(
-      /** @type {Array<Array<{ width: number }>>} */ (context.createPattern.mock.calls).filter(([tile]) => tile.width === 8)
-    ).toHaveLength(1);
-    // The chart traces each cell once; the Fog pass traces no known tile.
-    expect(context.rect).toHaveBeenCalledTimes(run.labyrinth.length ** 2);
-    // The second frame blits the cached Fog layer: the Fog fills once.
-    expect(fogFills).toEqual([{ pattern: true }]);
+    // The second frame blits the cached Fog layer, so each batch paints once.
+    const card = paintsOf(paints, "fill", "rgb(1, 2, 3)");
+    expect(card).toHaveLength(1);
+    expect(subPaths(card[0])).toBe(cells);
+    const edge = paintsOf(paints, "stroke", "rgb(4, 5, 6)");
+    expect(edge).toHaveLength(1);
+    expect(subPaths(edge[0])).toBe(cells);
+    const fold = paintsOf(paints, "fill", "rgb(7, 8, 9)");
+    expect(fold).toHaveLength(1);
+    expect(subPaths(fold[0])).toBe(cells);
+    // The chart traces each Passage once and the Fog pass traces no known tile.
+    expect(context.rect).toHaveBeenCalledTimes(run.labyrinth.flat().filter((cell) => cell === 1).length);
   });
 
-  it("US-02.4 paints each pattern tile on a software canvas, so a reload gives the same pixels", () => {
-    const { renderer, tiles } = stubCanvas();
+  it("US-02.4 builds no pattern, so a reload gives the same pixels", () => {
+    const { context, renderer } = stubCanvas();
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
 
     renderer.render({ ...run, pulseVisible: [], revealed: ["0,0"] });
 
-    expect(tiles.length).toBeGreaterThan(0);
-    for (const tile of tiles) {
-      expect(tile.contextArgs).toEqual(["2d", { willReadFrequently: true }]);
-    }
+    expect(context.createPattern).not.toHaveBeenCalled();
   });
 
-  it("US-02.2 builds an integer pixel Fog tile with 4 to 6 percent dots at each device ratio", () => {
-    const original = window.devicePixelRatio;
-    try {
-      for (const ratio of [1, 2]) {
-        window.devicePixelRatio = ratio;
-        const { renderer, tiles } = stubCanvas();
-        renderer.render(questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9));
-
-        // The chart pass builds the land hatch tile first; the Fog pass builds the Fog tile second.
-        expect(tiles).toHaveLength(2);
-        const tile = tiles[1];
-        expect(tile.width).toBe(8 * ratio);
-        expect(tile.height).toBe(8 * ratio);
-        const dots = tile.fills.filter((fill) => fill.w < tile.width);
-        const coverage =
-          dots.reduce((sum, fill) => sum + fill.w * fill.h, 0) / (tile.width * tile.height);
-        expect(coverage).toBeGreaterThanOrEqual(0.04);
-        expect(coverage).toBeLessThanOrEqual(0.06);
-      }
-    } finally {
-      window.devicePixelRatio = original;
+  it("US-02.2 snaps each Fog card stroke to the device pixel grid at each device ratio", () => {
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    // Tile 24 device pixels at both ratios: a 1 pixel stroke centres on a half pixel and a 2 pixel stroke on a whole pixel.
+    for (const [ratio, width, half] of [[1, 48, 0.5], [2, 24, 0]]) {
+      atDeviceRatio(ratio, () => {
+        const { context, renderer } = stubCanvas({ width });
+        const paints = recordPaints(context);
+        renderer.render(board({ revealed: [] }));
+        const edge = paintsOf(paints, "stroke", "rgb(4, 5, 6)");
+        expect(edge).toHaveLength(1);
+        const points = edge[0].path.filter((step) => /^(moveTo|lineTo)\(/.test(step));
+        expect(points.length).toBeGreaterThan(0);
+        for (const step of points) {
+          for (const value of step.replace(/^\w+\(|\)$/g, "").split(",").map(Number)) {
+            expect(Number.isInteger(value - half), ratio + ": " + step).toBe(true);
+          }
+        }
+      });
     }
   });
 
@@ -687,14 +679,21 @@ describe("Canvas renderer", () => {
     expect(record()).toEqual(record());
   });
 
-  it("US-02.1 draws every Pulse cell under one translucent path", () => {
-    document.body.style.setProperty("--color-pulse", "rgb(9, 9, 9)");
+  it("US-02.1 draws every Pulse flap in one Fog fold fill and one Fog edge stroke", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    document.body.style.setProperty("--color-fog-edge", "rgb(8, 8, 8)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
 
     renderer.render(board({ revealed: ["0,0"], pulseVisible: ["0,1", "1,0", "1,1"] }));
 
-    expect(paints.filter((paint) => paint.style === "rgb(9, 9, 9)")).toHaveLength(1);
+    // The three Pulse tiles are known, so no Fog card remains and each flap adds one sub-path.
+    const flaps = paintsOf(paints, "fill", "rgb(9, 9, 9)");
+    expect(flaps).toHaveLength(1);
+    expect(subPaths(flaps[0])).toBe(3);
+    const edge = paintsOf(paints, "stroke", "rgb(8, 8, 8)");
+    expect(edge).toHaveLength(1);
+    expect(subPaths(edge[0])).toBe(3);
   });
 
   it("restores the canvas state after each frame", () => {
@@ -762,8 +761,8 @@ describe("Canvas renderer", () => {
     }
   });
 
-  it("US-02.1 paints the Pulse layer after the land, so the land cannot hide it", () => {
-    document.body.style.setProperty("--color-pulse", "rgb(9, 9, 9)");
+  it("US-02.1 paints the Pulse flaps after the land, so the land cannot hide them", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
     document.body.style.setProperty("--color-land", "rgb(250, 251, 252)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -772,27 +771,21 @@ describe("Canvas renderer", () => {
 
     const order = paints.map((paint) => paint.style);
     expect(order).toContain("rgb(9, 9, 9)");
-    expect(order.indexOf("rgb(9, 9, 9)")).toBeGreaterThan(order.indexOf("rgb(250, 251, 252)"));
+    expect(order.lastIndexOf("rgb(9, 9, 9)")).toBeGreaterThan(order.indexOf("rgb(250, 251, 252)"));
   });
 
-  it("US-02.3 keeps the Fog and hatch patterns in step when the device ratio changes", () => {
-    const originalDpr = window.devicePixelRatio;
-    try {
-      const { renderer, tiles } = stubCanvas();
-      const run = board({ revealed: ["0,0", "0,1"] });
+  it("US-02.3 sizes the Fog cards from the device ratio when it changes", () => {
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    const run = board({ revealed: ["0,0", "0,1"] });
 
-      window.devicePixelRatio = 1;
-      renderer.render(run);
-      window.devicePixelRatio = 2;
-      renderer.render(run);
+    atDeviceRatio(1, () => renderer.render(run));
+    atDeviceRatio(2, () => renderer.render(run));
 
-      // The Fog tile scales with the device ratio. The hatch tile stays 6 backing-store pixels at every ratio.
-      // B-95: the ratio change clears the cache, so the hatch tile is built again.
-      // The chart pass builds the hatch tile before the Fog pass builds the Fog tile.
-      expect(tiles.map((tile) => tile.width)).toEqual([6, 8, 6, 16]);
-    } finally {
-      window.devicePixelRatio = originalDpr;
-    }
+    const edge = paintsOf(paints, "stroke", "rgb(4, 5, 6)");
+    expect(edge).toHaveLength(2);
+    expect(edge[1].path).not.toEqual(edge[0].path);
   });
 
   it("US-02.3 clamps a negative mark scale so every mark still draws", () => {
@@ -924,6 +917,18 @@ describe("Canvas renderer", () => {
     expect(neat.overlay.width).toBe(676);
   });
 
+  it("US-03.1 draws the Neatline in the Coastline ink, so Night keeps it dark on the paper casing", () => {
+    // Night sets a light page ink, but the frame casing stays paper in every mode.
+    document.body.style.setProperty("--color-ink", "rgb(250, 250, 250)");
+    document.body.style.setProperty("--color-coastline", "rgb(6, 6, 6)");
+    const { neat, renderer } = stubCanvas({ neatline: true });
+
+    renderer.render(board({ revealed: ["0,0"] }));
+
+    expect(neat.context.strokeStyle).toBe("rgb(6, 6, 6)");
+    expect(neat.context.fillStyle).toBe("rgb(6, 6, 6)");
+  });
+
   it("US-02.1 draws the Echo pair number in the Echo text token", () => {
     document.body.style.setProperty("--color-board-echo-text", "rgb(1, 2, 3)");
     document.body.style.setProperty("--color-night-deep", "rgb(7, 8, 9)");
@@ -944,8 +949,33 @@ describe("Canvas renderer", () => {
     expect(textStyles).toEqual(["rgb(1, 2, 3)"]);
   });
 
-  it("US-02.1 draws the closed Gate keyhole in the land colour, not the on-fill white", () => {
-    document.body.style.setProperty("--color-land", "rgb(11, 12, 13)");
+  it("US-02.1 draws an Echo as a coral disc with an ink outline, a dashed ring and no Pulse halo", () => {
+    document.body.style.setProperty("--color-board-echo", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-board-ink", "rgb(4, 4, 4)");
+    document.body.style.setProperty("--color-board-echo-text", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--color-pulse", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: ["1,1"], echoes: [{ row: 1, col: 1, collected: false }] }));
+
+    // The tile is 320 pixels, so one step is 13.33 and the Echo centre is (480, 480).
+    const disc = paintsOf(paints, "fill", "rgb(1, 2, 3)");
+    expect(disc).toHaveLength(1);
+    expect(disc[0].path[0]).toBe("arc(480.00,480.00,126.67,0.00,6.28)");
+    const outline = paintsOf(paints, "stroke", "rgb(4, 4, 4)").filter((paint) => paint.path[0] === disc[0].path[0]);
+    expect(outline).toHaveLength(1);
+    const ring = paintsOf(paints, "stroke", "rgb(5, 5, 5)");
+    expect(ring).toHaveLength(1);
+    expect(ring[0].path[0]).toBe("arc(480.00,480.00,86.67,0.00,6.28)");
+    const dashes = context.setLineDash.mock.calls.map((call) => /** @type {number[]} */ (call[0]));
+    expect(dashes.some(([on, off]) => Math.abs(on - 26.67) < 0.01 && on === off)).toBe(true);
+    expect(paints.some((paint) => paint.style === "rgb(9, 9, 9)")).toBe(false);
+  });
+
+  it("US-02.1 draws the closed Gate keyhole in the board ink, not the Land or the on-fill white", () => {
+    document.body.style.setProperty("--color-board-ink", "rgb(11, 12, 13)");
+    document.body.style.setProperty("--color-land", "rgb(40, 160, 40)");
     document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -955,6 +985,7 @@ describe("Canvas renderer", () => {
     const fills = paints.filter((paint) => paint.kind === "fill");
     expect(fills.some((paint) => paint.style === "rgb(11, 12, 13)" && paint.path[0].startsWith("arc("))).toBe(true);
     expect(fills.some((paint) => paint.style === "rgb(250, 250, 250)")).toBe(false);
+    expect(fills.some((paint) => paint.style === "rgb(40, 160, 40)" && paint.path[0].startsWith("arc("))).toBe(false);
   });
 
   it("US-02.1 draws the sealed Gate X in the night ink, not the Warden ink", () => {
@@ -965,9 +996,9 @@ describe("Canvas renderer", () => {
 
     renderer.render(board({ revealed: ["1,1"], gate: { row: 1, col: 1, open: true, sealed: true } }));
 
-    const cross = paints.filter((paint) => paint.kind === "stroke" && paint.path[0].startsWith("moveTo("));
+    const cross = paintsOf(paints, "stroke", "rgb(7, 8, 9)");
     expect(cross).toHaveLength(1);
-    expect(cross[0].style).toBe("rgb(7, 8, 9)");
+    expect(cross[0].path[0]).toMatch(/^moveTo\(/);
   });
 
   it("US-02.1 clamps the Warden danger ring inside its tile at the large mark scale", () => {
@@ -1022,11 +1053,11 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 2)")).toBe(true);
   });
 
-  it("US-01.2 doubles the Coastline and fills the Fog flat in high contrast", () => {
-    /** @param {boolean} strong */
-    const measure = (strong) => {
-      if (strong) document.documentElement.dataset.accessContrast = "strong";
-      const { context, renderer, tiles } = stubCanvas();
+  it("US-01.2 doubles the Coastline where Land is paper: each daylight.css mode that sets Land to paper, and not forced colours", () => {
+    /** @param {string} land */
+    const measure = (land) => {
+      document.body.style.setProperty("--color-land", land);
+      const { context, renderer } = stubCanvas();
       /** @type {number[]} */
       const widths = [];
       const stroke = context.stroke;
@@ -1035,18 +1066,24 @@ describe("Canvas renderer", () => {
         stroke();
       });
       renderer.render(board({ revealed: ["0,0", "0,1"] }));
-      document.documentElement.removeAttribute("data-access-contrast");
-      return { coast: widths[0], fogTile: tiles.some((tile) => tile.width === 8) };
+      // The chart pass strokes the Coastline first.
+      return widths[0];
     };
+    const paper = resolveBoardToken("--board-paper");
+    const single = measure(resolveBoardToken("--color-land"));
+    expect(single).toBe(19);
 
-    const normal = measure(false);
-    const strong = measure(true);
-    expect(strong.coast).toBe(normal.coast * 2);
-    expect(normal.fogTile).toBe(true);
-    expect(strong.fogTile).toBe(false);
+    // The paper modes come from daylight.css, so a new mode that sets Land to paper is covered without a test edit.
+    const paperModes = Object.entries(MODES).filter(
+      ([, selector]) => selector && daylightScope(selector).get("--color-land") === "var(--board-paper)"
+    );
+    expect(paperModes.map(([name]) => name)).toEqual(expect.arrayContaining(["strong", "twilight", "sea-glass", "dusk"]));
+    for (const [name] of paperModes) expect(measure(paper), name).toBe(single * 2);
+    // Forced colours sets Land to Highlight, which is not paper.
+    expect(measure("Highlight")).toBe(single);
   });
 
-  it("US-01.2 snaps land fills to the coastline edges at a fractional tile size", () => {
+  it("US-01.2 snaps Land cards and Passages to the tile edges at a fractional tile size", () => {
     const labyrinth = Array.from({ length: 23 }, (_, row) =>
       Array.from({ length: 23 }, (_, col) => (row === 0 && col === 1 ? 0 : 1))
     );
@@ -1055,8 +1092,10 @@ describe("Canvas renderer", () => {
 
     renderer.render(board({ labyrinth, revealed: ["0,0", "0,1"] }));
 
-    // 320 / 23 = 13.91: the wall at column 1 spans 14 to 28, the rounded coastline edges.
-    expect(paints.some((paint) => paint.kind === "fill" && paint.path.includes("rect(14.00,0.00,14.00,14.00)"))).toBe(true);
+    // 320 / 23 = 13.91: the wall at column 1 spans 14 to 28, so its card starts one pixel inside at 15 and the corner arc starts at 17.9.
+    expect(paints.some((paint) => paint.kind === "fill" && paint.path.includes("moveTo(17.90,1.00)"))).toBe(true);
+    // The passage at column 2 spans 28 to 42.
+    expect(paints.some((paint) => paint.kind === "fill" && paint.path.includes("rect(28.00,0.00,14.00,14.00)"))).toBe(true);
   });
 
   it("US-03.1 skips the Neatline when the frame has no overlay canvas", () => {
@@ -1209,7 +1248,8 @@ describe("Canvas renderer", () => {
       }
     );
     try {
-      const { renderer, tiles } = stubCanvas();
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
       const run = questRun("PALETTE-REREAD", "bright-start", 1);
       const frame = () => renderer.render({ ...run, pulseVisible: [], revealed: [] });
       const settle = () => new Promise((done) => setTimeout(done, 0));
@@ -1223,19 +1263,20 @@ describe("Canvas renderer", () => {
       frame();
       document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
       frame();
-      // The second frame reuses the palette and the Fog pattern.
-      expect(tiles.filter((tile) => tile.width === 8).map((tile) => tile.fills[0].style)).toEqual(["rgb(1, 2, 3)"]);
+      // The second frame reuses the palette and the cached Fog layer.
+      expect(paintsOf(paints, "fill", "rgb(1, 2, 3)")).toHaveLength(1);
+      expect(paintsOf(paints, "fill", "rgb(4, 5, 6)")).toHaveLength(0);
 
       // happy-dom needs a tick before a computed style shows an inline change.
       await settle();
       // A token attribute change reads the palette again and repaints the last Run.
       callback();
-      expect(tiles.at(-1)?.fills[0].style).toBe("rgb(4, 5, 6)");
+      expect(paintsOf(paints, "fill", "rgb(4, 5, 6)")).toHaveLength(1);
 
       document.body.style.setProperty("--color-fog", "rgb(7, 8, 9)");
       await settle();
       callback();
-      expect(tiles.at(-1)?.fills[0].style).toBe("rgb(7, 8, 9)");
+      expect(paintsOf(paints, "fill", "rgb(7, 8, 9)")).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1247,12 +1288,14 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.removeAttribute("style");
   });
 
-  it("US-08.1 draws a square water passage and paper land with an ink hatch", () => {
-    for (const name of ["--color-fog", "--color-passage", "--color-land", "--color-hatch"]) {
+  it("US-08.1 draws a cream Passage square and a meadow Land card with a lip and an ink outline", () => {
+    for (const name of ["--color-fog", "--color-passage", "--color-land"]) {
       document.body.style.setProperty(name, canvasToken(LIGHT, name));
     }
+    document.body.style.setProperty("--color-land-lip", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
     document.body.style.setProperty("--color-ink", canvasToken(LIGHT, "--color-ink"));
-    const { context, renderer, tiles } = stubCanvas();
+    const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
     const clips = recordClips(context);
 
@@ -1261,37 +1304,33 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     // The chart paints every cell; the Fog clip shows the three known tiles only.
     expect(clips).toEqual([["0,0,320,320", "320,0,320,320", "320,320,320,320"]]);
 
-    // Popup paints the passage as a light meadow tile and the land as a darker hedge.
+    // Popup paints the Passage as light cream and the Land as a darker meadow.
     expect(oklabOf(canvasToken(LIGHT, "--color-passage"))[0]).toBeGreaterThan(oklabOf(canvasToken(LIGHT, "--color-land"))[0]);
-    const water = paints.find(
-      (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-passage")
-    );
-    // ADR 0052 item 1: the passage (0,0) is water, and the walls (0,1) and (1,1) are land.
-    expect(water?.path).toEqual(["rect(0.00,0.00,320.00,320.00)"]);
-    const land = paints.find(
-      (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-land")
-    );
+    const passage = paintsOf(paints, "fill", canvasToken(LIGHT, "--color-passage"));
+    // ADR 0067: the passage (0,0) is a square, and the walls (0,1), (1,0) and (1,1) are Land cards.
+    expect(passage.map((paint) => paint.path)).toEqual([["rect(0.00,0.00,320.00,320.00)"]]);
+    const land = paintsOf(paints, "fill", canvasToken(LIGHT, "--color-land"));
     // The chart paints the unknown wall (1,0) too; the Fog clip above hides it.
-    expect(land?.path).toEqual([
-      "rect(320.00,0.00,320.00,320.00)",
-      "rect(0.00,320.00,320.00,320.00)",
-      "rect(320.00,320.00,320.00,320.00)"
-    ]);
-    const hatch = paints.find(
-      (paint) => paint !== land && paint.kind === "fill" && paint.path.join() === land?.path.join()
-    );
-    expect(hatch).toBeDefined();
-    // The chart pass builds the hatch tile before the Fog pass builds the Fog tile.
-    const hatchTile = tiles[0];
-    expect(hatchTile.width).toBe(6);
-    expect(hatchTile.height).toBe(6);
-    expect(hatchTile.fills).toHaveLength(6);
-    expect(hatchTile.fills.every((fill) => fill.w === 1 && fill.h === 1)).toBe(true);
-    expect(hatchTile.fills.every((fill) => fill.style === canvasToken(LIGHT, "--color-hatch"))).toBe(true);
-    expect(hatchTile.fills.every((fill) => fill.x + fill.y === 5)).toBe(true);
+    expect(land).toHaveLength(1);
+    expect(subPaths(land[0])).toBe(3);
+    // The tile is 320 and the step is 13.33: the card sits 13 inside its tile and the corner radius is 66.67.
+    expect(land[0].path[0]).toBe("moveTo(399.67,13.00)");
+    const lip = paintsOf(paints, "fill", "rgb(5, 5, 5)");
+    expect(lip).toHaveLength(1);
+    expect(subPaths(lip[0])).toBe(3);
+    // The lip takes the card's bottom corner radius, so it stays inside the card outline.
+    const lipArcs = lip[0].path.filter((step) => step.startsWith("arc("));
+    expect(lipArcs).toHaveLength(6);
+    expect(lipArcs.every((step) => step.split(",")[2] === "66.67")).toBe(true);
+    const outline = paintsOf(paints, "stroke", "rgb(7, 7, 7)");
+    expect(outline).toHaveLength(1);
+    expect(subPaths(outline[0])).toBe(3);
+    // The 19 pixel outline sits inside the card edge, so it starts 9.5 inside.
+    expect(outline[0].path[0]).toBe("moveTo(399.67,22.50)");
+    expect(context.createPattern).not.toHaveBeenCalled();
   });
 
-  it("US-02.1 paints each passage cell (1) as water and each wall cell (0) as land, with the coastline between", () => {
+  it("US-02.1 paints each passage cell (1) as a square and each wall cell (0) as a Land card, with the outline on the card", () => {
     document.body.style.setProperty("--color-passage", "rgb(1, 1, 9)");
     document.body.style.setProperty("--color-land", "rgb(9, 9, 1)");
     document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
@@ -1300,19 +1339,18 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
 
     renderer.render(board({ revealed: ["0,0", "0,1", "1,0", "1,1"] }));
 
-    // ADR 0052 item 1 and design.md: a passage is water and a wall is land.
-    const water = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(1, 1, 9)");
-    expect(water.map((paint) => paint.path)).toEqual([["rect(0.00,0.00,320.00,320.00)"]]);
-    const land = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(9, 9, 1)");
-    expect(land.map((paint) => paint.path)).toEqual([
-      ["rect(320.00,0.00,320.00,320.00)", "rect(0.00,320.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]
-    ]);
-    const coast = paints.filter((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 7)");
+    // ADR 0067 and design.md: a passage is a cream square and a wall is a Land card.
+    const passage = paintsOf(paints, "fill", "rgb(1, 1, 9)");
+    expect(passage.map((paint) => paint.path)).toEqual([["rect(0.00,0.00,320.00,320.00)"]]);
+    const land = paintsOf(paints, "fill", "rgb(9, 9, 1)");
+    expect(land).toHaveLength(1);
+    expect(subPaths(land[0])).toBe(3);
+    const coast = paintsOf(paints, "stroke", "rgb(7, 7, 7)");
     expect(coast).toHaveLength(1);
-    expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
+    expect(subPaths(coast[0])).toBe(3);
   });
 
-  it("US-02.1 paints every known passage in one water fill (ADR 0052 item 1)", () => {
+  it("US-02.1 paints every known passage in one Passage fill (ADR 0067)", () => {
     document.body.style.setProperty("--color-passage", "rgb(1, 1, 9)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -1327,13 +1365,13 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       })
     );
 
-    const water = paints.filter((paint) => paint.kind === "fill" && paint.style === "rgb(1, 1, 9)");
-    expect(water.map((paint) => paint.path)).toEqual([
+    const passage = paintsOf(paints, "fill", "rgb(1, 1, 9)");
+    expect(passage.map((paint) => paint.path)).toEqual([
       ["rect(0.00,0.00,320.00,320.00)", "rect(320.00,0.00,320.00,320.00)", "rect(320.00,320.00,320.00,320.00)"]
     ]);
   });
 
-  it("US-02.1 strokes one coastline path of wall and passage edges in opaque ink", () => {
+  it("US-02.1 strokes one Land outline path in opaque board ink", () => {
     document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -1358,49 +1396,11 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     const coast = paints.filter((paint) => paint.style === "rgb(7, 7, 7)");
     expect(coast).toHaveLength(1);
     expect(coast[0].kind).toBe("stroke");
-    expect(coast[0].path.filter((step) => step.startsWith("moveTo"))).toHaveLength(2);
-    expect(coast[0].path.every((step) => !step.startsWith("arc"))).toBe(true);
-    // The passage (0,0) borders the wall (0,1) at x = 320 and the wall (1,0) at y = 320.
-    const points = coast[0].path.map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
-    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels. Centred on 320.5, it covers 311..330.
+    // One rounded rectangle per wall: (0,1), (1,0) and (1,1).
+    expect(subPaths(coast[0])).toBe(3);
+    // tile 320 * 0.06 = 19.2, rounded to 19 device pixels.
     expect(widths).toContain(19);
-    const reachEnd = 10;
-    // An odd width sits on a half pixel across the edge and the ends sit on whole pixels.
-    expect(points.every(([x, y]) => (x === 320.5 && Number.isInteger(y)) || (y === 320.5 && Number.isInteger(x)))).toBe(true);
-    // The joined end reaches the far side of the crossing stroke. The free ends stop on the edge.
-    const horizontal = points.filter(([, y]) => y === 320.5).map(([x]) => x);
-    const vertical = points.filter(([x]) => x === 320.5).map(([, y]) => y);
-    expect(Math.min(...horizontal)).toBe(0);
-    expect(Math.max(...horizontal)).toBe(320 + reachEnd);
-    expect(Math.min(...vertical)).toBe(0);
-    expect(Math.max(...vertical)).toBe(320 + reachEnd);
-    expect(/** @type {Record<string, unknown>} */ (context).lineCap).toBe("butt");
-  });
-
-  it("US-02.1 reaches past the ends of a coastline edge only at joined corners", () => {
-    document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
-    const { context, renderer } = stubCanvas();
-    const paints = recordPaints(context);
-    const labyrinth = Array.from({ length: 4 }, (_, row) =>
-      Array.from({ length: 4 }, (_, col) => (row === 1 && col === 1 ? 1 : 0))
-    );
-    const revealed = labyrinth.flatMap((cells, row) => cells.map((_, col) => `${row},${col}`));
-
-    renderer.render(board({ labyrinth, revealed }));
-
-    // The wall ring has four joined corners. Tile 160 gives width 10: reach 5 on each side.
-    const coast = paints.find((paint) => paint.style === "rgb(7, 7, 7)");
-    const top = coast?.path.filter((step) => /,160\.00\)$/.test(step)).map((step) => Number(step.match(/\(([\d.]+),/)?.[1]));
-    expect(top).toEqual([155, 325]);
-
-    // One wall edge with unknown tiles around it has free ends: no reach past the edge.
-    const lone = stubCanvas();
-    const lonePaints = recordPaints(lone.context);
-    lone.renderer.render(board({ revealed: ["0,0", "0,1"] }));
-    const loneCoast = lonePaints.find((paint) => paint.style === "rgb(7, 7, 7)");
-    const ys = loneCoast?.path.map((step) => Number(step.match(/,([\d.]+)\)$/)?.[1]));
-    expect(Math.min(...(ys ?? []))).toBe(0);
-    expect(Math.max(...(ys ?? []))).toBe(320);
+    expect(coast[0].path[0]).toBe("moveTo(399.67,22.50)");
   });
 
   it("US-03.1 loads the Grid and body fonts with the tokens read at call time", async () => {
@@ -1701,9 +1701,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
         expect(() => canvasToken(scope, name), name).not.toThrow();
       }
       expect(canvasToken(scope, "--color-board-warden")).toBe(canvasToken(scope, "--fur"));
-      const hatch = Number(canvasToken(scope, "--color-hatch").match(/ \/ (\d+)%\)$/)?.[1]);
-      expect(hatch).toBeGreaterThanOrEqual(28);
-      expect(hatch).toBeLessThanOrEqual(34);
+      expect(canvasToken(scope, "--color-land-lip"), scope.slice(0, 40)).not.toBe(canvasToken(scope, "--color-land"));
     }
     const rows = (/** @type {string} */ scope) =>
       [...scope.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((hit) => `${hit[1]}: ${hit[2]}`).sort();
@@ -1722,8 +1720,6 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
             ...(paletteSelector ? daylightScope(paletteSelector) : [])
           ]);
           for (const [mark, ground, floor] of BOARD_PAIRS) {
-            // Strong mode paints the Fog flat with no dots, so only the dot-on-Fog pair does not apply there.
-            if (mode === "strong" && mark === "--color-fog-dot") continue;
             // Strong contrast lifts every pair on the passage and the land to 4.5:1.
             const needed = mode === "strong" && floor === 3 ? 4.5 : floor;
             const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
@@ -1734,14 +1730,16 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
         }
       }
     }
-    const strong = Object.entries(THEMES).flatMap(([theme, base]) => {
-      const tokens = new Map([...base, ...daylightScope(/** @type {string} */ (MODES.strong))]);
-      return STRONG_ONLY_PAIRS.map(([mark, ground, floor]) => {
-        const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
-        return ratio < floor ? `${theme}/strong: ${mark} on ${ground} ${ratio.toFixed(2)} < ${floor}` : "";
-      });
-    });
-    failures.push(...strong.filter(Boolean));
+    const fogEdges = Object.entries(THEMES).flatMap(([theme, base]) =>
+      Object.entries(MODES).flatMap(([mode, modeSelector]) => {
+        const tokens = new Map([...base, ...(modeSelector ? daylightScope(modeSelector) : [])]);
+        return FOG_EDGE_PAIRS.map(([mark, ground, floor]) => {
+          const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
+          return ratio < floor ? `${theme}/${mode}: ${mark} on ${ground} ${ratio.toFixed(2)} < ${floor}` : "";
+        });
+      })
+    );
+    failures.push(...fogEdges.filter(Boolean));
     expect(failures).toEqual([]);
   });
 
@@ -1758,14 +1756,13 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
-  it("US-01.2 keeps the Pulse wash translucent and the coastline opaque in each theme and mode", () => {
+  it("US-01.2 keeps the coastline opaque and the Fog edge visible in each theme and mode", () => {
     for (const base of Object.values(THEMES)) {
       for (const selector of Object.values(MODES)) {
         const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
-        const { alpha } = resolveColor(tokens, "--color-pulse");
-        expect(alpha).toBeGreaterThanOrEqual(0.2);
-        expect(alpha).toBeLessThanOrEqual(0.4);
         expect(resolveColor(tokens, "--color-coastline").alpha).toBe(1);
+        // The palette modes draw the Fog edge as board ink at 75 percent.
+        expect(resolveColor(tokens, "--color-fog-edge").alpha).toBeGreaterThanOrEqual(0.75);
       }
     }
   });
@@ -1775,6 +1772,15 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     document.body.style.removeProperty("--color-passage");
     expect(() => stubCanvas({ seed: false })).toThrow(MissingBoardTokenError);
     expect(() => stubCanvas({ seed: false })).toThrow("--color-passage");
+  });
+
+  it("US-03.3 names the Fog edge, the Fog fold and the Land lip when one reads empty", () => {
+    for (const name of ["--color-fog-edge", "--color-fog-soft", "--color-land-lip"]) {
+      seedBoardTokens();
+      document.body.style.removeProperty(name);
+      expect(() => stubCanvas({ seed: false }), name).toThrow(MissingBoardTokenError);
+      expect(() => stubCanvas({ seed: false }), name).toThrow(name);
+    }
   });
 
   it("US-03.3 resolves each board token and paints a Run from the Popup tokens", () => {
@@ -1796,29 +1802,30 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       }
     }));
     try {
-      const { renderer, tiles } = stubCanvas();
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
       const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
       onChange();
-      expect(tiles).toHaveLength(0);
+      expect(paints).toHaveLength(0);
       renderer.render({ ...run, pulseVisible: [], revealed: [] });
-      const built = tiles.length;
+      expect(paintsOf(paints, "fill", "rgb(1, 2, 3)")).toHaveLength(0);
       document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
       onChange();
-      expect(tiles.length).toBeGreaterThan(built);
-      expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(1, 2, 3)")).toBe(true);
+      expect(paintsOf(paints, "fill", "rgb(1, 2, 3)")).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
   it("US-03.1 repaints the last Run when data-theme changes", async () => {
-    const { renderer, tiles } = stubCanvas();
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
     renderer.render({ ...run, pulseVisible: [], revealed: [] });
     document.body.style.setProperty("--color-fog", "rgb(4, 5, 6)");
     document.documentElement.setAttribute("data-theme", "dark");
     try {
-      await vi.waitFor(() => expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(4, 5, 6)")).toBe(true));
+      await vi.waitFor(() => expect(paintsOf(paints, "fill", "rgb(4, 5, 6)")).toHaveLength(1));
     } finally {
       document.documentElement.removeAttribute("data-theme");
     }
@@ -1847,6 +1854,28 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
 
     expect(regionCss).not.toMatch(/--color-passage\s*:/);
     expect(tokensCss).not.toMatch(/--color-tile-/);
+  });
+
+  it("US-03.2 keeps the board-ink frame border, so no Region theme restyles the canvas frame", () => {
+    const regionCss = readFileSync(resolve(process.cwd(), "src/game/region-theme.css"), "utf8");
+
+    // Guard for docs/solutions/frontend/region-theme-overrode-board.md: a Region scope never touches the board.
+    expect(regionCss).not.toMatch(/\.canvas-frame|#maze-canvas/);
+    expect(regionCss).not.toMatch(/--color-(board|passage|land|fog|coastline|pulse)[\w-]*\s*:/);
+  });
+
+  it("US-03.2 paints the 3px ink edge on the sticky Neatline, so a board wider than the frame never covers it", () => {
+    const ruleOf = (/** @type {string} */ selector) =>
+      [...daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].trim() === selector).map((rule) => rule[2]).join("\n");
+
+    const neatline = ruleOf(".neatline-canvas");
+    expect(neatline).toMatch(/position:\s*sticky/);
+    expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px var\(--color-board-ink\)/);
+    // The scroll container paints its own shadow under the scrolled board, so the frame carries none.
+    expect(ruleOf(".canvas-frame")).not.toMatch(/box-shadow/);
+    // Forced colours drops a box shadow, so the Neatline opts out and keeps the edge in a system colour.
+    expect(neatline).toMatch(/forced-color-adjust:\s*none/);
+    expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px CanvasText/);
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {
@@ -1912,22 +1941,29 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
 
     const styles = new Set(paints.map((paint) => paint.style));
     expect(size).toBeGreaterThan(1);
-    // Meadow passage, hedge land, board ink, sun, board paper, night ink, Pulse wash, coral danger line, fur Warden, Explorer.
+    // Cream passage, meadow land, land lip, board ink, sun, board paper, night ink, coral danger line, fur Warden, Explorer.
     for (const style of [
+      "oklch(96.6% 0.024 85.8)",
       "oklch(73.4% 0.177 137.9)",
-      "oklch(60% 0.12 140)",
+      "oklch(53.5% 0.13 138)",
       "oklch(30.5% 0.07 310.3)",
       "oklch(90.1% 0.106 84.7)",
       "oklch(98.6% 0.014 84.6)",
       "oklch(20% 0.05 310)",
-      "oklch(45% 0.13 243 / 30%)",
       "oklch(68.5% 0.206 32.5)",
       "oklch(26% 0.086 299.6)",
       "oklch(84.4% 0.092 2)"
     ]) {
       expect(styles, style).toContain(style);
     }
-    for (const stale of ["oklch(95.5% 0.022 232)", "oklch(18% 0.012 250)", "oklch(52% 0.17 250)", "oklch(98.5% 0.014 88)"]) {
+    for (const stale of [
+      "oklch(95.5% 0.022 232)",
+      "oklch(18% 0.012 250)",
+      "oklch(52% 0.17 250)",
+      "oklch(98.5% 0.014 88)",
+      "oklch(60% 0.12 140)",
+      "oklch(45% 0.13 243 / 30%)"
+    ]) {
       expect(styles, stale).not.toContain(stale);
     }
   });
@@ -2005,17 +2041,6 @@ describe("R1a renderer findings", () => {
       }
     });
     return fonts;
-  }
-
-  /** @param {number} ratio @param {() => void} body */
-  function atDeviceRatio(ratio, body) {
-    const original = window.devicePixelRatio;
-    window.devicePixelRatio = ratio;
-    try {
-      body();
-    } finally {
-      window.devicePixelRatio = original;
-    }
   }
 
   it("B-81 restores the line cap and join after a Gate", () => {
@@ -2115,15 +2140,14 @@ describe("R1a renderer findings", () => {
       }
     }));
     try {
-      const { renderer, tiles } = stubCanvas();
+      const { context, renderer } = stubCanvas();
+      const paints = recordPaints(context);
       const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
       renderer.render({ ...run, pulseVisible: [], revealed: [] });
-      const built = tiles.length;
       document.body.style.setProperty("--color-fog", "rgb(7, 8, 9)");
       expect(listeners["(prefers-contrast: more)"]).toBeTypeOf("function");
       listeners["(prefers-contrast: more)"]();
-      expect(tiles.length).toBeGreaterThan(built);
-      expect(tiles.some((tile) => tile.fills[0]?.style === "rgb(7, 8, 9)")).toBe(true);
+      expect(paintsOf(paints, "fill", "rgb(7, 8, 9)")).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -2184,17 +2208,17 @@ describe("R1a renderer findings", () => {
     expect(neat.fonts.every((font) => font.startsWith("12.5px "))).toBe(true);
   });
 
-  it("B-95 rebuilds the Fog and hatch patterns when the device ratio changes", () => {
-    const { renderer, tiles } = stubCanvas();
+  it("B-95 repaints the Fog cards when the device ratio changes", () => {
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
     const run = board({ revealed: ["0,0", "0,1"] });
     atDeviceRatio(1, () => renderer.render(run));
-    const first = tiles.length;
+    expect(paintsOf(paints, "stroke", "rgb(4, 5, 6)")).toHaveLength(1);
     atDeviceRatio(1, () => renderer.render(run));
-    expect(tiles).toHaveLength(first);
+    expect(paintsOf(paints, "stroke", "rgb(4, 5, 6)")).toHaveLength(1);
     atDeviceRatio(2, () => renderer.render(run));
-    expect(tiles.length).toBeGreaterThan(first);
-    // The hatch tile is 6 pixels at every ratio, so only a cleared cache builds it again.
-    expect(tiles.filter((tile) => tile.width === 6)).toHaveLength(2);
+    expect(paintsOf(paints, "stroke", "rgb(4, 5, 6)")).toHaveLength(2);
   });
 
   it("B-91 gives the game canvas an image role and fallback text", () => {
@@ -2210,11 +2234,12 @@ describe("R1a renderer findings", () => {
     const SYSTEM = new Set(["Canvas", "CanvasText", "GrayText", "Highlight", "HighlightText"]);
     const NAMES = [
       "--color-fog",
-      "--color-fog-dot",
+      "--color-fog-edge",
+      "--color-fog-soft",
       "--color-passage",
       "--color-land",
       "--color-coastline",
-      "--color-hatch",
+      "--color-land-lip",
       "--color-danger-line",
       ...BOARD_TOKENS.filter((name) => name.startsWith("--color-board-"))
     ];

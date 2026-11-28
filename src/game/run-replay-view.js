@@ -13,7 +13,6 @@ import { buildRunReplayTimeline } from "./run-replay.js";
  *   },
  *   rendererFactory?: (
  *     canvas: HTMLCanvasElement,
- *     createTile?: undefined,
  *     loadArt?: undefined,
  *     isBrightStart?: () => boolean
  *   ) => {
@@ -32,7 +31,6 @@ export function createRunReplayView({
   let brightStart = false;
   const renderer = rendererFactory(
     elements.canvas,
-    undefined,
     undefined,
     () => brightStart
   );

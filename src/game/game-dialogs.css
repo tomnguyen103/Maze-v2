@@ -595,7 +595,7 @@ dialog > .dialog-heading > button {
   justify-items: center;
   overflow: hidden;
   border: 1px solid var(--color-line);
-  /* Layers, top first: coastline edges, land hatch on the third band, then the four ground bands. */
+  /* Layers, top first: coastline edges, land lip on the third band, then the four ground bands. */
   background:
     linear-gradient(
       90deg,
@@ -605,7 +605,7 @@ dialog > .dialog-heading > button {
       var(--color-coastline) 75% calc(75% + 1px),
       transparent calc(75% + 1px)
     ),
-    repeating-linear-gradient(45deg, var(--color-hatch) 0 1px, transparent 1px 4px) 66.667% 0 / 25% 100% no-repeat,
+    linear-gradient(var(--color-land-lip), var(--color-land-lip)) 66.667% 100% / 25% 25% no-repeat,
     linear-gradient(
       90deg,
       var(--color-fog) 0 25%,
@@ -615,10 +615,16 @@ dialog > .dialog-heading > button {
     );
 }
 
+/* ADR 0067: Pulse sight is a peeled Fog flap on the top edge of a charted tile, so the flap sits on the first Passage band. */
 .access-preview-pulse {
   position: absolute;
-  inset: 0;
-  background: var(--color-pulse);
+  top: 0;
+  left: 25%;
+  width: 25%;
+  height: 35%;
+  border-bottom: 1px solid var(--color-fog-edge);
+  border-bottom-right-radius: var(--radius-md);
+  background: var(--color-fog-soft);
   animation: access-preview-pulse 1.6s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -640,9 +646,19 @@ dialog > .dialog-heading > button {
   background: var(--color-night-deep);
 }
 
+/* The Echo sample copies the canvas Echo: a coral disc, an ink outline and a dashed paper ring. */
 .access-preview-mark--echo {
-  border: 0.22rem double var(--color-echo);
-  transform: rotate(45deg) scale(var(--maze-mark-scale));
+  border: 0.12rem solid var(--color-board-ink);
+  border-radius: 50%;
+  background: var(--color-board-echo);
+}
+
+.access-preview-mark--echo::after {
+  position: absolute;
+  inset: 0.18rem;
+  border: 1px dashed var(--color-board-echo-text);
+  border-radius: 50%;
+  content: "";
 }
 
 .access-preview-mark--gate {

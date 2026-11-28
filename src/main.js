@@ -147,7 +147,7 @@ const HIGHEST_PUBLISHED_QUEST_LEVEL_NUMBER = Math.max(
 );
 
 const canvas = requiredElement("maze-canvas", HTMLCanvasElement);
-const renderer = createCanvasRenderer(canvas, undefined, undefined, () =>
+const renderer = createCanvasRenderer(canvas, undefined, () =>
   isBrightStartQuestRun(currentLevel.id, { daily: activeDaily !== null, firstLight: activeFirstLight })
 );
 

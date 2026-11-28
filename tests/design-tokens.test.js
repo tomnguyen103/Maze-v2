@@ -29,6 +29,22 @@ const SHEETS = globSync("**/*.{css,html}", {
     path.replace(/\\/g, "/").startsWith(MOCKUPS)
 });
 
+/**
+ * Returns the body of the first `@media (<query>)` block, matched by braces.
+ * @param {string} css @param {string} query
+ */
+function mediaBlock(css, query) {
+  const start = css.indexOf(`@media (${query})`);
+  if (start < 0) return "";
+  const open = css.indexOf("{", start);
+  let depth = 0;
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === "{") depth += 1;
+    if (css[index] === "}" && --depth === 0) return css.slice(open + 1, index);
+  }
+  return "";
+}
+
 describe("custom properties", () => {
   it("never reads one that is neither defined nor given a fallback", () => {
     /** @type {Set<string>} */
@@ -195,15 +211,52 @@ describe("Popup identity", () => {
       "Empty state",
       "12px minimum",
       "coastline",
-      "oklch(60% 0.12 140)",
-      "oklch(30.5% 0.07 310.3 / 30%)",
+      "oklch(73.4% 0.177 137.9)",
+      "oklch(53.5% 0.13 138)",
       "oklch(30.5% 0.07 310.3 / 75%)",
-      "oklch(45% 0.13 243 / 30%)",
       "with an ink outline"
     ]) {
       expect(design, literal).toContain(literal);
     }
     expect(design).not.toContain("Passage tiles: chart paper with an ink hairline");
+    expect(design).not.toMatch(/--color-fog-dot|--board-hatch|--board-fog-dot|Memory dot|--color-pulse|Pulse wash/);
+  });
+
+  it("names each board paper token in each board mode block (ADR 0067)", () => {
+    const popup = read("src/looks/popup/tokens.css");
+    const daylight = read("src/daylight.css");
+    // Default: the light root names all three.
+    const root = popup.slice(popup.indexOf(":root {"), popup.indexOf("}", popup.indexOf(":root {")));
+    for (const token of ["--color-fog-edge", "--color-fog-soft", "--color-land-lip"]) {
+      expect(root, token).toContain(token + ":");
+    }
+    // prefers-contrast: more and forced colours override the edge and the lip, each in its own block.
+    const more = mediaBlock(popup, "prefers-contrast: more");
+    const forced = mediaBlock(popup, "forced-colors: active");
+    for (const block of [more, forced]) {
+      expect(block).toContain("--color-fog-edge:");
+      expect(block).toContain("--color-land-lip:");
+    }
+    expect(forced).toContain("--color-fog-soft:");
+    // daylight.css loads later, so its palette and strong rules beat tokens.css at equal specificity.
+    // Its own increased-contrast block comes after them and keeps the full-ink edge and lip.
+    const daylightMore = mediaBlock(daylight, "prefers-contrast: more");
+    expect(daylight.indexOf("@media (prefers-contrast: more)")).toBeGreaterThan(
+      daylight.indexOf('data-access-contrast="strong"] {')
+    );
+    for (const selector of ["twilight", "sea-glass", "dusk"].map((p) => `:root[data-playground-palette="${p}"]`)
+      .concat(':root[data-access-contrast="strong"]')) {
+      expect(daylightMore, selector).toContain(selector);
+    }
+    expect(daylightMore).toContain("--color-fog-edge: var(--board-ink)");
+    expect(daylightMore).toContain("--color-land-lip: var(--board-ink)");
+    // Palette and strong blocks: edge and lip together, a fold per palette.
+    expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-fog-edge: var\(--board-fog-edge\)/);
+    expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-land-lip: var\(--board-land-lip\)/);
+    for (const palette of ["twilight", "sea-glass", "dusk"]) {
+      expect(daylight).toContain(`--color-fog-soft: var(--${palette}-fog-soft)`);
+    }
+    expect(daylight).toContain("--color-fog-soft: var(--access-fog-soft)");
   });
 
   it("defines the chart device terms in GLOSSARY.md and records ADR 0052", () => {

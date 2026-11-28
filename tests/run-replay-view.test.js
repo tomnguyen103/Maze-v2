@@ -150,7 +150,7 @@ describe("Run Replay view", () => {
     let isBrightStart;
     const view = createRunReplayView({
       buildTimeline: () => TIMELINE,
-      rendererFactory: (_canvas, _tile, _art, getter) => {
+      rendererFactory: (_canvas, _art, getter) => {
         isBrightStart = getter;
         return { render: vi.fn(), resize: vi.fn() };
       }

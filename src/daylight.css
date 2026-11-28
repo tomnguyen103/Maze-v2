@@ -51,8 +51,8 @@ body {
 :root[data-playground-palette="dusk"],
 :root[data-access-contrast="strong"] {
   --color-land: var(--board-paper);
-  --color-hatch: var(--board-hatch);
-  --color-fog-dot: var(--board-fog-dot);
+  --color-land-lip: var(--board-land-lip);
+  --color-fog-edge: var(--board-fog-edge);
   --color-coastline: var(--board-ink);
   --color-board-warden: var(--board-ink);
   --color-danger-line: var(--board-ink);
@@ -67,32 +67,39 @@ body {
   --color-board-echo-text: var(--board-echo-text);
 }
 
+/* Increased contrast keeps the full-ink lip and Fog edge. This block comes after the rule above, so it wins at equal specificity. */
+@media (prefers-contrast: more) {
+  :root[data-playground-palette="twilight"],
+  :root[data-playground-palette="sea-glass"],
+  :root[data-playground-palette="dusk"],
+  :root[data-access-contrast="strong"] {
+    --color-land-lip: var(--board-ink);
+    --color-fog-edge: var(--board-ink);
+  }
+}
+
 :root[data-playground-palette="twilight"] {
   --color-fog: var(--twilight-fog);
   --color-fog-soft: var(--twilight-fog-soft);
   --color-passage: var(--twilight-passage);
-  --color-pulse: var(--twilight-pulse);
 }
 
 :root[data-playground-palette="sea-glass"] {
   --color-fog: var(--sea-glass-fog);
   --color-fog-soft: var(--sea-glass-fog-soft);
   --color-passage: var(--sea-glass-passage);
-  --color-pulse: var(--sea-glass-pulse);
 }
 
 :root[data-playground-palette="dusk"] {
   --color-fog: var(--dusk-fog);
   --color-fog-soft: var(--dusk-fog-soft);
   --color-passage: var(--dusk-passage);
-  --color-pulse: var(--dusk-pulse);
 }
 
 :root[data-access-contrast="strong"] {
   --color-fog: var(--access-fog);
   --color-fog-soft: var(--access-fog-soft);
   --color-passage: var(--access-passage);
-  --color-pulse: var(--access-pulse);
 }
 
 :root[data-access-marks="large"] {
@@ -504,7 +511,8 @@ a:hover {
   aspect-ratio: 1;
   margin-inline: auto;
   --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
-  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  background: var(--color-board-casing);
   isolation: isolate;
   /* A board wider than the frame scrolls inside it; the tile floor sets the board's min-width. */
   display: grid;
@@ -529,6 +537,17 @@ a:hover {
   width: 100cqw;
   height: 100cqw;
   pointer-events: none;
+  /* ADR 0067: the 3px ink edge of the paper card. The sticky Neatline paints it above a board that scrolls, and an inset shadow keeps the frame geometry. */
+  box-shadow: inset 0 0 0 3px var(--color-board-ink);
+  border-radius: inherit;
+}
+
+/* Forced colours drop a box shadow. The Neatline holds no text, so it opts out and keeps the edge in a system colour. */
+@media (forced-colors: active) {
+  .neatline-canvas {
+    forced-color-adjust: none;
+    box-shadow: inset 0 0 0 3px CanvasText;
+  }
 }
 
 .canvas-frame.is-hurt {
@@ -1092,10 +1111,20 @@ kbd {
   background: var(--color-on-fill);
 }
 
+/* The Echo mark copies the canvas Echo: a coral disc, an ink outline and a dashed paper ring. */
 .legend-mark--echo {
+  position: relative;
+  border: 0.12rem solid var(--color-board-ink);
   border-radius: 50%;
-  background: var(--color-echo);
-  box-shadow: 0 0 0 0.14rem color-mix(in oklab, var(--color-echo) 28%, transparent);
+  background: var(--color-board-echo);
+}
+
+.legend-mark--echo::after {
+  position: absolute;
+  inset: 0.1rem;
+  border: 1px dashed var(--color-board-echo-text);
+  border-radius: 50%;
+  content: "";
 }
 
 /* Gate marks copy the canvas arch door. */
@@ -1165,22 +1194,30 @@ kbd {
   background: var(--color-passage);
 }
 
+/* Land is a meadow card: a lip along the bottom and an ink outline, which is also the Coastline. */
 .legend-mark--land {
-  background: var(--color-land);
+  border: 0.12rem solid var(--color-coastline);
+  border-radius: 0.2rem;
+  background: linear-gradient(var(--color-land-lip), var(--color-land-lip)) bottom / 100% 25% no-repeat, var(--color-land);
 }
 
 .legend-mark--fog {
+  border-color: var(--color-fog-edge);
+  border-radius: 0.16rem;
   background: var(--color-fog);
 }
 
+/* Pulse is a peeled flap: a Fog-soft band across the top of a Passage chip. */
 .legend-mark--pulse {
-  background: linear-gradient(var(--color-pulse), var(--color-pulse)), var(--color-passage);
+  border-color: var(--color-fog-edge);
+  background: linear-gradient(to bottom, var(--color-fog-soft) 0 65%, transparent 65%), var(--color-passage);
 }
 
 .legend-mark--coastline::before {
   display: block;
-  margin-top: 0.24rem;
-  border-top: 0.16rem solid var(--color-coastline);
+  height: 100%;
+  border: 0.12rem solid var(--color-coastline);
+  border-radius: 0.2rem;
   content: "";
 }
 
@@ -1337,11 +1374,11 @@ body[data-run-mode="first-light"] .play-workbench {
 
 @keyframes access-preview-pulse {
   from {
-    opacity: 0.12;
+    opacity: 0.55;
   }
 
   to {
-    opacity: 0.48;
+    opacity: 1;
   }
 }
 
