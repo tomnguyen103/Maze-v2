@@ -247,7 +247,8 @@
 
 html .practice-tactics[hidden],
 html .practice-tactics__twists[hidden],
-html .practice-tactics__session[hidden] {
+html .practice-tactics__session[hidden],
+html .practice-tactics__challenge[hidden] {
   display: none;
 }
 

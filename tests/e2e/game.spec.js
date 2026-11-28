@@ -5096,6 +5096,11 @@ test("opens the unscored Warden Tactics Lab from Workshop", async ({ page }) => 
 
   await page.locator("[data-tactics-drill='patrol']").click();
   await expect(page.locator("#practice-tactics-session")).toBeVisible();
+  await expect(page.locator("#practice-tactics-challenge")).toBeHidden();
+  const clippedMoves = await page.locator("[data-tactics-move]").evaluateAll((buttons) =>
+    buttons.filter((button) => button.scrollWidth > button.clientWidth).map((button) => button.textContent)
+  );
+  expect(clippedMoves).toEqual([]);
   await expect(page.locator("#practice-tactics-report")).toContainText("Patrol");
   await expect(page.locator("#practice-tactics-report")).not.toContainText(/row|col|answer/i);
 
