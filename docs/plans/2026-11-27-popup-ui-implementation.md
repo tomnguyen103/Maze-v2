@@ -322,7 +322,7 @@ Derived from the Needs column. Every step before R9 is behind the flag, so produ
 
 ## 14. Run status, 2026-11-27
 
-The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Production shows Pilot.
+The run merged these slices. Since R9, Popup is the only look in every build, and production shows Popup.
 
 | Slice | Status | Where |
 | --- | --- | --- |
@@ -339,6 +339,6 @@ The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Prod
 | R7b | Merged | #321 (Echo Atlas stamp sheet, five stamp forms, tunnel-book frame, phone layout) |
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
-| R9 | In progress | Per D2, R9 follows R7c. The gen2 marks land later |
+| R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
 
 The game row measures 40.63 KB (Pilot) and 40.72 KB (Popup) of 42 KB after #318. The motion chunk is 0.83 KB.
