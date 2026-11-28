@@ -102,8 +102,10 @@ async function startGameplay() {
     const { gameReady } = await import("./main.js");
     await gameReady;
     gameRoot.dataset.gameReady = "true";
-  } catch {
+  } catch (error) {
     console.error("Echo Maze gameplay failed to load.");
+    // A separate call keeps the line above exact; this one carries the token name of a MissingBoardTokenError.
+    console.error(error);
     gameRoot.innerHTML = `
       <main class="landing-page" id="landing-main">
         <p class="section-label">Maze unavailable</p>
