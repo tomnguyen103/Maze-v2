@@ -1,6 +1,7 @@
 // Dialog rules first: the First Light and Constellation sheets override them.
 import "./game/game-dialogs.css";
 import { announceInto } from "./game/live-announcer.js";
+import { summarizeWardenMode } from "./game/warden-mode.js";
 import "./game/daily-constellation.css";
 import "./game/first-light.css";
 import {
@@ -786,7 +787,7 @@ document.addEventListener("keydown", (event) => {
     move(direction);
   } else if (event.key === "q" || event.key === "Q" || event.code === "Space") {
     event.preventDefault();
-    usePulse();
+    usePulse({ viaKeyboard: true });
   } else if (event.key === "b" || event.key === "B") {
     event.preventDefault();
     ringBell();
@@ -804,7 +805,7 @@ document.querySelectorAll("[data-move]").forEach((button) => {
   });
 });
 
-elements.pulse.addEventListener("click", usePulse);
+elements.pulse.addEventListener("click", () => usePulse());
 elements.bell.addEventListener("click", ringBell);
 elements.pause.addEventListener("click", togglePause);
 elements.newRun.addEventListener("click", () => {
@@ -3683,13 +3684,21 @@ function move(direction) {
   transition({ type: "move", direction });
 }
 
-function usePulse() {
+/** @param {{ viaKeyboard?: boolean }} [options] */
+function usePulse({ viaKeyboard = false } = {}) {
   if (
     activeFirstLight ||
     isDemoBlocked() ||
     completedQuestIdle ||
     run.status !== "active"
   ) {
+    return;
+  }
+  // The engine holds a Pulse until pulseExpiresAt clears, so a second one only wastes a charge.
+  if (run.pulseExpiresAt !== null) {
+    if (viaKeyboard) {
+      announce("The Pulse is still active.");
+    }
     return;
   }
   transition({ type: "pulse" });
@@ -4371,7 +4380,8 @@ function updateInterface() {
     `${run.explorer.vitality} / ${run.explorer.maxVitality}`;
   elements.pulseCount.textContent = String(run.pulses);
   playerController.updateScore(activeFirstLight ? 0 : run.score);
-  elements.pulse.disabled = run.pulses === 0 || run.status !== "active";
+  elements.pulse.disabled =
+    run.pulses === 0 || run.status !== "active" || run.pulseExpiresAt !== null;
   const adjacentBell = run.signalBells.find(
     (bell) =>
       !bell.spent &&
@@ -4422,7 +4432,7 @@ function updateInterface() {
         won: "Escaped",
         lost: "Light lost"
       }[run.status];
-  const wardenMode = summarizeWardenMode();
+  const wardenMode = summarizeWardenMode(run);
   elements.wardenState.textContent = wardenModeLabel(wardenMode);
   elements.wardenReadout.dataset.mode = wardenMode;
   elements.wardenGuild.textContent = regionTheme
@@ -5137,23 +5147,6 @@ function labyrinthFromLocation() {
     labyrinthNumber <= QUEST_LABYRINTH_COUNT
     ? labyrinthNumber
     : null;
-}
-
-/** @param {typeof run} [gameRun] */
-function summarizeWardenMode(gameRun = run) {
-  if (gameRun.wardens.length === 0) {
-    return "cleared";
-  }
-  if (gameRun.wardens.some((warden) => warden.mode === "lured")) {
-    return "lured";
-  }
-  if (gameRun.wardens.some((warden) => warden.mode === "intercept")) {
-    return "intercept";
-  }
-  if (gameRun.wardens.some((warden) => warden.mode === "hunt")) {
-    return "hunt";
-  }
-  return "patrol";
 }
 
 /** @param {"patrol" | "hunt" | "intercept" | "lured" | "cleared"} mode */

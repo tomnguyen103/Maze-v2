@@ -82,7 +82,8 @@ export function createTacticsLabView({ onExit = () => {} } = {}) {
     apply({ type: "move", direction: button.dataset.tacticsMove });
   });
   elements.moves.addEventListener("click", () => {
-    if (!session) return;
+    // A second Pulse while one is active would spend a Move for nothing.
+    if (!session || session.run.pulseExpiresAt !== null) return;
     apply({ type: "pulse" });
   });
   elements.choices.addEventListener("click", (event) => {
@@ -217,7 +218,8 @@ export function createTacticsLabView({ onExit = () => {} } = {}) {
         button.disabled = state.status !== "active";
       }
     }
-    elements.moves.disabled = state.status !== "active";
+    elements.moves.disabled =
+      state.status !== "active" || session.run.pulseExpiresAt !== null;
     elements.challenge.hidden = state.status !== "challenge";
     if (state.status === "challenge" && session.run.challenge?.question) {
       renderQuestion(session.run.challenge.question);

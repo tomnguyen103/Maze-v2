@@ -342,6 +342,7 @@ _Avoid_: Question Hint, generated explanation, answer reveal
 **Warden Mode**:
 The readable tactic a Warden currently follows: Patrol, Hunt, Intercept, or the
 one-action Lured state created only by a Warden Bell Trail Twist.
+The Readout shows one mode for all Wardens. The rank is Intercept, Hunt, Lured, Patrol.
 _Avoid_: Difficulty level, random behavior, AI state
 
 **Tactics Lab**:
@@ -363,6 +364,7 @@ _Avoid_: Hit points, health, lives
 
 **Pulse**:
 A limited action that temporarily reveals nearby passages without moving the Explorer.
+The Pulse control stays disabled while a Pulse is active.
 _Avoid_: Hint, scan, radar
 
 **Fog**:
