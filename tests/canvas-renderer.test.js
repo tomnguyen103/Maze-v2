@@ -53,6 +53,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     getBoundingClientRect: () => ({ width, height }),
     getContext: () => context,
     height: 640,
+    style: {},
     width: 640
   };
   /** @type {Array<{ width: number, height: number, contextArgs: unknown[], fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */
@@ -151,6 +152,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     Object.assign(canvas, {
       getBoundingClientRect: () => ({ left: 18, top: 18, width, height }),
       parentElement: {
+        addEventListener: vi.fn(),
         getBoundingClientRect: () => ({ left: 0, top: 0, width: width + 36, height: height + 36 }),
         querySelector: () => (neatline === "no-overlay" ? null : overlay)
       }

@@ -22,3 +22,14 @@ The owner mandate of 2026-11-26 authorises a rebuild of the interface as the Pop
 - Two looks coexist until R9. Each push runs the Pilot gate. The Popup leg runs `npm run build:popup` and `npm run check:bundle:popup`.
 - Slice R1 removes the Pilot fallback palette from `src/game/canvas-renderer.js`. The renderer reads the palette from the look tokens and throws on an empty token.
 - A test reads each tokens file by path, so a moved token file needs a test edit.
+
+## Retirement
+
+Slice R9 (#324) did item 7. The current state is:
+
+- No `VITE_LOOK` flag, no `@look` alias, and no theme-colour plugin exist.
+- `src/looks/popup/` is the one look folder. `src/daylight.css` and `src/app.js` import it by path.
+- `npm run build` writes the Popup build to `dist`. The `build:popup` and `check:bundle:popup` scripts are gone.
+- The `theme-color` meta tags, `theme-boot.js`, and `THEME_COLORS` hold the Popup literals in source.
+
+Items 1 to 6 describe the transition only. They do not bind new work.

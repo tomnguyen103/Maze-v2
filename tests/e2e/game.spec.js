@@ -2273,6 +2273,73 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
   }
 });
 
+test("keeps the Watch Trail canvas square at desktop viewports", async ({
+  page
+}) => {
+  const plan = milestoneWinningPlan("TRAIL-VIEW-4");
+  const replay = createTerminalRunReplay(
+    plan.actions.map((action) =>
+      action.type === "move"
+        ? { type: "move", direction: action.direction, elapsedMs: 0 }
+        : { type: "challenge-outcome", outcome: "correct", elapsedMs: 0 }
+    ),
+    plan.finalRun
+  );
+  if (!replay) {
+    throw new Error("Expected a retained Replay fixture.");
+  }
+  await page.addInitScript(({ retainedReplay }) => {
+    localStorage.setItem("echo-maze:run-records:v1", JSON.stringify([
+      {
+        elapsedMs: retainedReplay.terminal.elapsedMs,
+        moves: retainedReplay.terminal.moves,
+        seed: "TRAIL-VIEW-4",
+        outcome: "escaped",
+        echoesCollected: retainedReplay.terminal.echoesCollected,
+        echoTotal: retainedReplay.terminal.echoTotal,
+        questId: "quest_replay_e2e_123",
+        questLevelId: "trail-scout",
+        labyrinthNumber: 4,
+        atlasRegionId: "foundation",
+        rulesetRevision: "classic-v1",
+        replay: retainedReplay
+      }
+    ]));
+    localStorage.setItem("echo-maze:quest-progress:v1", JSON.stringify({
+      version: 1,
+      questId: "quest_replay_e2e_123",
+      levelId: "trail-scout",
+      labyrinthNumber: 5,
+      completedLabyrinths: 4,
+      usedMapFingerprints: [],
+      usedQuestionIds: [],
+      nextQuestionOrdinal: 0,
+      complete: false
+    }));
+  }, { retainedReplay: replay });
+
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 1920, height: 1080 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/?seed=TRAIL-SQUARE&level=trail-scout&labyrinth=5");
+    await expectGameReady(page);
+    await page.getByRole("button", { name: "Records", exact: true }).click();
+    const records = page.getByRole("dialog", { name: "Run Records" });
+    await records.getByRole("button", {
+      name: "Watch retained Trail for seed TRAIL-VIEW-4"
+    }).click();
+    const viewer = page.getByRole("dialog", { name: "Watch Trail" });
+    await expect(viewer).toBeVisible();
+    const box = await viewer.locator(".run-replay-canvas").boundingBox();
+    if (!box) {
+      throw new Error("Expected a visible Run Replay canvas.");
+    }
+    expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);
+  }
+});
+
 test("lazy Watch Trail stays usable across contracted Replay viewports", async ({
   page
 }, testInfo) => {

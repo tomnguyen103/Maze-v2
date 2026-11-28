@@ -50,8 +50,7 @@
 
 .run-replay-canvas {
   display: block;
-  width: min(100%, 36rem);
-  max-height: min(52dvh, 36rem);
+  width: min(100%, 36rem, 52dvh);
   margin-inline: auto;
   aspect-ratio: 1;
   border: 1px solid var(--color-line-soft);
@@ -167,7 +166,7 @@
   }
 
   .run-replay-canvas {
-    max-height: 44dvh;
+    width: min(100%, 44dvh);
   }
 
   .run-replay-events {

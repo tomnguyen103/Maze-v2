@@ -295,6 +295,7 @@
    The layer covers the board canvas only. The frame padding holds the coordinate labels. */
 .motion-layer {
   position: absolute;
+  grid-area: 1 / 1;
   inset: var(--frame-pad, 0);
   overflow: hidden;
   pointer-events: none;

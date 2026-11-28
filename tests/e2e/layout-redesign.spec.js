@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { expectGameReady } from "./game-ready.js";
+import { applyAction, createRun } from "../../src/game/game-session.js";
+import { getQuestRunRuleset } from "../../src/game/run-ruleset.js";
 import { getLabyrinthConfig } from "../../src/questions/quest-levels.js";
 
 test.describe("layout redesign & edge viewports", () => {
@@ -162,8 +164,7 @@ test.describe("layout redesign & edge viewports", () => {
         const item = metricsLayout?.items[i];
         expect(parseFloat(item?.borderBottom ?? "0"), `Item ${i} has a bottom border on ${vp.name}`).toBeGreaterThan(0);
         expect(parseFloat(item?.borderTop ?? "1"), `Item ${i} has no top border on ${vp.name}`).toBe(0);
-        // At 250% font the auto track shrinks to its padding, so the cells overflow by design (same on Pilot, never measured).
-        if (i > 0 && metricsLayout && !vp.fontSize) {
+        if (i > 0 && metricsLayout) {
           expect(
             metricsLayout.items[i].left,
             `Item ${i} does not overlap item ${i - 1} on ${vp.name}`
@@ -172,6 +173,64 @@ test.describe("layout redesign & edge viewports", () => {
       }
     });
   }
+
+  // B-10: a size 15 board keeps tiles at 24 px or more and scrolls inside its frame at 375 px.
+  test("scrolls a size 15 board inside its frame and follows the Explorer at 375x812", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=FOLLOW-B&level=maze-master&labyrinth=1");
+    await expectGameReady(page);
+    const size = getLabyrinthConfig("maze-master", 1).size;
+    expect(size).toBe(15);
+    const canvas = page.locator("#maze-canvas");
+    const frame = page.locator("#canvas-frame");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+    expect(((await canvas.boundingBox())?.width ?? 0) / size).toBeGreaterThanOrEqual(24);
+    expect(await canvas.evaluate((element) => getComputedStyle(element).touchAction)).toBe("none");
+    expect(await frame.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+
+    // The same seed and config give the same Run, so a local copy tells where the Explorer stands after each key.
+    let run = createRun("FOLLOW-B", { ...getLabyrinthConfig("maze-master", 1), ruleset: getQuestRunRuleset(1) });
+    /** @type {Record<string, string>} */
+    const keys = { up: "ArrowUp", right: "ArrowRight", down: "ArrowDown", left: "ArrowLeft" };
+    const visits = new Map([["1,1", 1]]);
+    let scrolled = false;
+    await canvas.focus();
+    for (let step = 0; step < 400 && run.status === "active"; step += 1) {
+      // Take the least visited passage, so the walk reaches the far side.
+      const tries = /** @type {const} */ (["right", "down", "up", "left"]).map((direction) => ({
+        direction,
+        next: applyAction(run, { type: "move", direction })
+      }));
+      const moved = tries.filter(({ next }) => next.status === "active" && (next.explorer.row !== run.explorer.row || next.explorer.col !== run.explorer.col));
+      const count = (/** @type {{ next: typeof run }} */ { next }) => visits.get(`${next.explorer.row},${next.explorer.col}`) ?? 0;
+      const pick = moved.reduce((best, entry) => (count(entry) < count(best) ? entry : best), moved[0]);
+      if (!pick) break;
+      run = pick.next;
+      const here = `${run.explorer.row},${run.explorer.col}`;
+      visits.set(here, (visits.get(here) ?? 0) + 1);
+      await page.keyboard.press(keys[pick.direction]);
+      const box = await canvas.boundingBox();
+      const view = await frame.boundingBox();
+      if (!box || !view) throw new Error("board has no bounding box");
+      const tile = box.width / size;
+      const left = box.x + run.explorer.col * tile;
+      const top = box.y + run.explorer.row * tile;
+      expect(left, `column ${run.explorer.col} left edge`).toBeGreaterThanOrEqual(view.x - 1);
+      expect(left + tile, `column ${run.explorer.col} right edge`).toBeLessThanOrEqual(view.x + view.width + 1);
+      expect(top, `row ${run.explorer.row} top edge`).toBeGreaterThanOrEqual(view.y - 1);
+      expect(top + tile, `row ${run.explorer.row} bottom edge`).toBeLessThanOrEqual(view.y + view.height + 1);
+      scrolled ||= (await frame.evaluate((element) => element.scrollLeft + element.scrollTop)) > 0;
+    }
+    expect(scrolled, "the frame scrolled to follow the Explorer").toBe(true);
+    // The Neatline stays at frame size while the board scrolls under it.
+    const offsets = await frame.evaluate((element) => {
+      const frameBox = element.getBoundingClientRect();
+      const neatBox = element.querySelector(".neatline-canvas")?.getBoundingClientRect();
+      return [neatBox?.x, neatBox?.y, neatBox?.width].map((value, index) => (value ?? NaN) - [frameBox.x, frameBox.y, frameBox.width][index]);
+    });
+    for (const offset of offsets) expect(Math.abs(offset)).toBeLessThan(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+  });
 
   test("provides tactile feedback on interactive buttons and controls", async ({ page }) => {
     await page.goto("/?seed=TACTILE-AUDIT&level=trail-scout");

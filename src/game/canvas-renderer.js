@@ -61,6 +61,17 @@ function createDetachedCanvas(width, height) {
 
 /** @typedef {{ canvas: OffscreenCanvas | HTMLCanvasElement, context: CanvasRenderingContext2D }} Layer */
 
+/** The smallest tile side in CSS px; a board that needs more room scrolls inside its frame. */
+export const MIN_TILE = 24;
+
+/**
+ * The scroll offset that keeps the span [start, start + length] inside a view of `view` px.
+ * @param {number} start @param {number} length @param {number} current @param {number} view
+ */
+export function followOffset(start, length, current, view) {
+  return Math.max(start + length - view, Math.min(current, start));
+}
+
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
@@ -191,7 +202,9 @@ export function createCanvasRenderer(
       palette = readPalette();
       paletteStale = false;
     }
+    canvas.style.minWidth = `${run.labyrinth.length * MIN_TILE}px`;
     resize();
+    followExplorer(run);
     // Each frame starts from the default line, text, and fill state, and ends on it even when a mark throws.
     context.save();
     try {
@@ -200,6 +213,16 @@ export function createCanvasRenderer(
       context.restore();
     }
     requestArt();
+  }
+
+  /** The frame scrolls the Explorer tile, with the margin that holds its ticks, into view. @param {GameRun} run */
+  function followExplorer(run) {
+    const frame = canvas.parentElement;
+    if (!frame) return;
+    const tile = canvas.offsetWidth / run.labyrinth.length;
+    const { col, row } = run.explorer;
+    frame.scrollLeft = followOffset(col * tile, tile + 2 * canvas.offsetLeft, frame.scrollLeft, frame.clientWidth);
+    frame.scrollTop = followOffset(row * tile, tile + 2 * canvas.offsetTop, frame.scrollTop, frame.clientHeight);
   }
 
   /** @param {GameRun} run */
@@ -1174,6 +1197,9 @@ export function createCanvasRenderer(
     ],
     attributes: true
   });
+
+  // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
+  canvas.parentElement?.addEventListener("scroll", () => lastRun && drawNeatline(lastRun.labyrinth.length), { passive: true });
 
   return { loadFonts, render, resize };
 }

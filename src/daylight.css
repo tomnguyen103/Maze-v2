@@ -398,7 +398,8 @@ a:hover {
 
 .readout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The Warden readout keeps to 30% of the line, so the metric cells keep room at a large text size. */
+  grid-template-columns: minmax(0, 1fr) fit-content(30%);
   align-items: stretch;
   border-block: 1px solid var(--color-line);
 }
@@ -446,7 +447,8 @@ a:hover {
 
 .warden-readout {
   display: grid;
-  min-width: 10rem;
+  /* The viewport cap keeps the metric cells in room at a large text size. */
+  min-width: min(10rem, 20vw);
   align-content: center;
   padding: var(--space-2) var(--space-3);
 }
@@ -502,16 +504,30 @@ a:hover {
   aspect-ratio: 1;
   margin-inline: auto;
   --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
-  padding: var(--frame-pad);
   background: var(--color-paper);
   isolation: isolate;
+  /* A board wider than the frame scrolls inside it; the tile floor sets the board's min-width. */
+  display: grid;
+  overflow: auto;
+  scrollbar-width: none;
+  container-type: inline-size;
+}
+
+/* The board and the Neatline share one grid cell. The board margin holds the ticks, and the Neatline sticks to the frame. */
+#maze-canvas,
+.neatline-canvas {
+  grid-area: 1 / 1;
+}
+
+#maze-canvas {
+  margin: var(--frame-pad);
 }
 
 .neatline-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  position: sticky;
+  inset: 0 auto auto 0;
+  width: 100cqw;
+  height: 100cqw;
   pointer-events: none;
 }
 
@@ -523,7 +539,7 @@ a:hover {
    inside an aspect-ratio box against the border box, so the frame grew by its padding. */
 #maze-canvas {
   display: block;
-  width: 100%;
+  width: calc(100cqw - 2 * var(--frame-pad));
   height: auto;
   aspect-ratio: 1;
   touch-action: none;

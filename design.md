@@ -1,6 +1,7 @@
 ---
 stitch-project: 3244739478942983822
 stitch-design-system: a5e0a7aba16145f7b5ebd784c8ee5945
+stitch-note: 2026-11-27 | readback drift: the asset still holds the retired look's seed | update_design_system returned "invalid argument" twice with a valid schema | next UI task: call create_design_system with the Popup seed and repoint this key
 ---
 
 # Design - Echo Maze
