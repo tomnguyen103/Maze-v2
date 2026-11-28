@@ -338,7 +338,7 @@ The run merged these slices. Popup is visible only under `VITE_LOOK=popup`. Prod
 | R6c | Merged | #319 (gate, Sigil, and defeat end cards; Play This Seed; one start at a time from the card), with a fix in #320 |
 | R7b | Merged | #321 (Echo Atlas stamp sheet, five stamp forms, tunnel-book frame, phone layout) |
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
-| R8 | Partial | ADR 0064 merged. The superseding ADRs and the GLOSSARY terms wait for R3 |
-| R9 | Parked | Needs R8 and each gen1 surface in Popup |
+| R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
+| R9 | In progress | Per D2, R9 follows R7c. The gen2 marks land later |
 
 The game row measures 40.63 KB (Pilot) and 40.72 KB (Popup) of 42 KB after #318. The motion chunk is 0.83 KB.
