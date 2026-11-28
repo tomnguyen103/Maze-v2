@@ -236,7 +236,7 @@ What a paid Explorer owns today: unlimited new Personal Run starts after 3 free 
 - A slice that moves a chunk from "Other JavaScript" to another row sets the limit of "Other JavaScript" again: the new measure plus 5%. The receipt quotes the old limit and the new limit. The limit never goes up in that step.
 - Each generated fixture has a gate test that makes the output again and compares it with the committed file.
 - Each Game restriction of section 4 has enforcement code and one test. The slice named in section 4 shows the test red with the guard removed, and the PR receipt quotes the red output.
-- `npm run test:e2e` joins the pre-push gate as the last step of the hook. The e2e build writes to its own output directory, so `dist` keeps the production build (B-142). `npm run check` stays unchanged. The pin test of the hook then expects the steps of `npm run check` and `test:e2e` last; its title changes, so H4 changes the identity list of H3 in the same PR. One e2e pass runs against the production bundle (B-43 to B-45).
+- `npm run test:e2e` joins the pre-push gate as the last step of the hook. Since #331, the e2e build writes to `dist-e2e/`, so `dist` keeps the production build (B-142). `npm run check` stays unchanged. The pin test of the hook then expects the steps of `npm run check` and `test:e2e` last; its title changes, so H4 changes the identity list of H3 in the same PR. One e2e pass runs against the production bundle (B-43 to B-45).
 - Gate time: H4 records the time of each gate step on this machine. A slice keeps `npm run check` below 15 minutes and `npm run test:e2e` below 20 minutes.
 - B-149: two files take 376 s of the unit run. H3 moves the exhaustive cases of `tests/no-soft-lock.test.js` and `tests/warden-behavior.test.js` to a sweep script. H3 sizes the gate sample of each file from a measure: at most 30 seconds per file, stated in Runs. The target for the unit run is 4 minutes on one worker.
 - H2 lists one named mutation per rule family (Move, Fog, Pulse, Warden, contact, Twist, score), and each mutation turns a golden test red.
@@ -402,7 +402,7 @@ Before the first ticket, the issue reconcile step closes #229 and #298. It close
 | H1 | Local Node range constant in the gate; the runner flag | `npm run test` passes on Node 26 with no `NODE_OPTIONS`; the gate stops with a message on a Node version outside the range |
 | H2 | Golden Run Action Logs of the six current revisions and `windways-v1`; engine determinism bans; Twist replay round trip; engine soft-lock check with `applyAction` | Each named mutation, one per rule family, turns a golden test red |
 | H3 | Gate integrity: test identity list, skipped tests, worker loss, flaky retries; the two bundle gate fixes (B-40, B-41); the B-149 move of the exhaustive cases to a sweep script; the moved-line check script | A renamed test with an equal test count fails `npm run check`; a second chunk with an equal prefix adds to its row; a new chunk with no row fails the "Other JavaScript" limit; the moved-line check fails on a move that drops one line |
-| H4 | e2e as the last step of the pre-push hook; the hook pin test and the identity list; one pass on the production bundle; offline e2e; the output directory of the e2e build, which the two e2e scripts and their preview read (B-142); mobile project cases; one `windways-v2` Run in e2e (#282); gate time record | The hook pin test expects the steps of `npm run check`, then `test:e2e`; the offline e2e fails when the service worker serves no shell; a `windways-v2` Run reaches its escape |
+| H4 | e2e as the last step of the pre-push hook; the hook pin test and the identity list; one pass on the production bundle; offline e2e; mobile project cases; one `windways-v2` Run in e2e (#282); gate time record | The hook pin test expects the steps of `npm run check`, then `test:e2e`; the offline e2e fails when the service worker serves no shell; a `windways-v2` Run reaches its escape |
 | S0 | Spike measure; the Lifetime view loads when it opens | The game row shows at least 0.5 KB gzip free; the Lifetime e2e passes; a delayed import of each S0 chunk shows the wait state, and a failed import shows the retry notice |
 | H5 | Red-going tests of section 4; input validation of Run options; the bounds of `normalizeTerminal` (B-132); B-130 and B-131 fixes with green golden logs | Each new test is red with its guard removed, then green |
 | H6 | Entitlement pin test; an order step in `scripts/run-database-lane.mjs` (`npm run test:db` exists), which applies `0018`, `0019`, and `0037` in order and then inserts one `windways-v2` row. Z1 adds `0038` and one successor row to the step | The pin test is red when `FREE_RUN_LIMIT` changes |
@@ -644,7 +644,7 @@ The Harness milestone comes first, because each later slice needs a gate that ca
 | B-139 | low | Fix | H3 | The gate reads the text summary lines of the reporter, not a structured result. |
 | B-140 | low | Fix | H3 | Four tests use `it.skipIf(!shellAvailable)`. |
 | B-141 | low | Fix | H3 | The e2e suite has no pin on the skipped count. |
-| B-142 | low | Fix | H4 | `check:full` builds production, then `test:e2e` overwrites `dist/` with the e2e-mode build. |
+| B-142 | low | Fixed | #331 | `check:full` builds production, then `test:e2e` overwrites `dist/` with the e2e-mode build. #331 builds the e2e bundle into `dist-e2e/`. |
 | B-143 | low | Fix | H4 | Two tests can pass with almost no assertion. |
 | B-144 | low | Fix | H4 | The touch-control size test does not wait for `data-game-ready`. |
 | B-145 | low | Fix | H4 | Thirteen `waitForTimeout` calls make e2e results depend on machine speed. |
@@ -930,7 +930,7 @@ Four critics gave 30 raw findings. The filter kept 15: 4 Medium and 11 Low. It d
 - The moved-line check compares the two directions as a multiset, and H3 builds its script.
 - A Class Play submit keeps the rule of today. The Classroom Run Grant check parks, because it needs new SQL.
 - Three readers use the config with no engine. E0e keeps `size` and `wardenCount` equal, and E6 owns the two demand sums.
-- A-09 is accepted in ADR 0063. B-142 gets its fix in H4. B-37 has its record next to B-129.
+- A-09 is accepted in ADR 0063. #331 fixes B-142. B-37 has its record next to B-129.
 
 Diff check after revision 8 (one checker read the diff, the 15 findings, and the cited source): 7 findings closed, 8 partly closed, and 19 defects in the changed lines (7 Medium, 12 Low). Revision 8b answers each one except the Z1 freeze, which revision 9 answers with a frozen flag.
 

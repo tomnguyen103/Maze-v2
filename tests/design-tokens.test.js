@@ -8,6 +8,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const GENERATED = [
   "node_modules",
   "dist",
+  "dist-e2e",
   ".vercel",
   ".git",
   "graphify-out",

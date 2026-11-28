@@ -45,12 +45,17 @@ export default defineConfig({
     { name: "iphone", timeout: 60_000, use: { ...devices["iPhone 14"] } }
   ],
   webServer: {
-    command: "npm run preview -- --host 127.0.0.1",
+    // The server builds the e2e bundle, with its test player seam, into its own
+    // directory. A direct `npx playwright test` therefore never serves the
+    // production bundle, and `dist/` keeps the production build (B-142).
+    command:
+      "npx vite build --mode e2e --outDir dist-e2e && npx vite preview --host 127.0.0.1 --outDir dist-e2e",
+    timeout: 180_000,
     url: "http://127.0.0.1:4173",
-    // Reusing whatever already answers on :4173 can attach to a preview
-    // started before the current `vite build`, so the suite passes against a
-    // stale bundle. Default to starting our own server and make reuse an
-    // explicit local-iteration opt-in: `PW_REUSE_SERVER=1 npm run test:e2e`.
+    // Reuse attaches to whatever already answers on :4173 and skips the e2e
+    // build, so the suite can run against a stale or production bundle. Default
+    // to our own server and make reuse an explicit opt-in (`PW_REUSE_SERVER=1`)
+    // for a preview of `dist-e2e` that you started yourself.
     // (`process.env.CI` is the usual switch, but Actions are disabled for this
     // repo and nothing sets `CI`, so keying on it would leave reuse always on.)
     reuseExistingServer: process.env.PW_REUSE_SERVER === "1"
