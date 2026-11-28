@@ -342,4 +342,4 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
 | Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) and #326 (the B-10 tile floor from the device pixel ratio). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
 
-The game row measures 41.26 KB of 42 KB after #326. The motion chunk is 0.83 KB.
+The game row measures 41.40 KB of 42 KB after #326. The motion chunk is 0.83 KB.
