@@ -331,7 +331,7 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | Game-row headroom | Merged | #309 (lazy shell views free 2.9 KB on the game row) |
 | R1 | Merged | #304 (token read, repaint on a theme change), #316 (R1a renderer findings), #317 (R1b chart layer and Fog layer) |
 | R2, R2b, R2c | Merged | #310 (board marks, Warden Mode legend, paused cover), #311 (Explorer picker), #312 (soft Fangmoor, Lured face) |
-| R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. The R4 JS findings (B-10 frame follow, B-02) are not built. R7c had one gap: the Readout numbers used Geist Mono against D9. The fix in #322 sets them in Andika. The `theme-color` value is correct: the `popup-bar-colors` plugin writes the Popup paper colour into the Popup build |
+| R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. #325 builds the R4 JS findings: B-10 (a 24 px tile floor on the play board, with a frame follow that keeps a manual scroll) and B-02 (a square Watch Trail canvas). R7c had one gap: the Readout numbers used Geist Mono against D9. The fix in #322 sets them in Andika. The `theme-color` value is correct: the `popup-bar-colors` plugin writes the Popup paper colour into the Popup build |
 | R5 | Merged | #313 (Trail Compass text parity, live region in dialogs), with a fix in #315 |
 | R7a | Merged | #314 (landing hero from a real board crop) |
 | R3 | Merged | #318 (motion chunk: flap ripple, Gate pop-up, paper confetti, ceremony pop-up, reduced-motion gate) |
@@ -340,5 +340,6 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
+| Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
 
-The game row measures 40.63 KB (Pilot) and 40.72 KB (Popup) of 42 KB after #318. The motion chunk is 0.83 KB.
+The game row measures 41.26 KB of 42 KB after #325. The motion chunk is 0.83 KB.
