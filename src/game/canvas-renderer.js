@@ -1217,15 +1217,15 @@ export function createCanvasRenderer(
   });
 
   // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
-  const frame = canvas.parentElement;
+  const scrollFrame = canvas.parentElement;
   const onFrameScroll = () => lastRun && drawNeatline(lastRun.labyrinth.length);
-  frame?.addEventListener("scroll", onFrameScroll, { passive: true });
+  scrollFrame?.addEventListener("scroll", onFrameScroll, { passive: true });
 
   function destroy() {
     destroyed = true;
     observer.disconnect();
     for (const { media, listener } of mediaListeners) media?.removeEventListener?.("change", listener);
-    frame?.removeEventListener("scroll", onFrameScroll);
+    scrollFrame?.removeEventListener("scroll", onFrameScroll);
   }
 
   return { destroy, loadFonts, render, resize };
