@@ -701,8 +701,19 @@ describe("Trail Compass parity with the board", () => {
     run.event = { type: "moved", message: "Moved right." };
     expect(describeCompassAction(run)).toMatch(/At E5\. Open:.*Warden mode:/);
     for (const status of /** @type {const} */ (["challenge", "won", "lost"])) {
-      expect(describeCompassAction({ ...run, status })).toBe("Moved right.");
+      expect(describeCompassAction({ ...run, status })).toBe("Moved east.");
     }
+  });
+
+  it("speaks compass words for engine move directions (A-36)", () => {
+    const run = listenFixture(null);
+    run.status = "won";
+    run.event = { type: "windway-travel", message: "Windway carried you down." };
+    expect(describeCompassAction(run)).toBe("Windway carried you south.");
+    run.event = { type: "moved", message: "Moved up. Tide Doors are now open." };
+    expect(describeCompassAction(run)).toBe("Moved north. Tide Doors are now open.");
+    run.event = { type: "blocked", message: "Wall. Choose another direction." };
+    expect(describeCompassAction(run)).toBe("Wall. Choose another direction.");
   });
 
   it("uses the Grid reference for the place (B-59)", () => {

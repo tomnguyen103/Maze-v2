@@ -19,6 +19,14 @@ const DIRECTIONS = Object.freeze([
   Object.freeze({ name: "west", row: 0, col: -1 })
 ]);
 
+/** @type {Readonly<Record<string, string>>} */
+const COMPASS_WORDS = Object.freeze({
+  up: "north",
+  right: "east",
+  down: "south",
+  left: "west"
+});
+
 /**
  * The Grid reference the board draws outside the Neatline: column letter,
  * then row number.
@@ -320,7 +328,12 @@ function pulseNote(run) {
  * @param {GameRun} [previous]
  */
 export function describeCompassAction(run, previous) {
-  let event = run.event?.message ?? "";
+  // The engine names moves up, right, down and left; the Compass speaks
+  // compass words only (A-36).
+  let event = (run.event?.message ?? "").replace(
+    /^(Moved|Windway carried you) (up|right|down|left)\./,
+    (_, lead, word) => `${lead} ${COMPASS_WORDS[word]}.`
+  );
   const door = run.tideDoors[0];
   if (
     run.status === "challenge" &&
