@@ -9,6 +9,7 @@
  * @typedef {import("./game-session.js").GameRun} GameRun
  */
 
+import { summarizeWardenMode } from "./warden-mode.js";
 import { actionAdvancedRun, openShortcutAcrossWall } from "./game-session.js";
 
 const DIRECTIONS = Object.freeze([
@@ -379,20 +380,15 @@ export function describeCompassAction(run, previous) {
  * @param {GameRun} run
  */
 function wardenModeNote(run) {
-  if (run.wardens.length === 0) {
-    return "Warden mode: Path clear.";
-  }
-  const modes = run.wardens.map((warden) => warden.mode);
-  if (modes.includes("lured")) {
-    return "Warden mode: Lured to Bell.";
-  }
-  if (modes.includes("intercept")) {
-    return "Warden mode: Intercept active.";
-  }
-  if (modes.includes("hunt")) {
-    return "Warden mode: Hunt active.";
-  }
-  return "Warden mode: Patrol.";
+  const mode = summarizeWardenMode(run);
+  return mode === "cleared"
+    ? "Warden mode: Path clear."
+    : `Warden mode: ${{
+        lured: "Lured to Bell",
+        intercept: "Intercept active",
+        hunt: "Hunt active",
+        patrol: "Patrol"
+      }[mode]}.`;
 }
 
 const LISTEN_CUE_GAP_MS = 160;
