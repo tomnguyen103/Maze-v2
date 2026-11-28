@@ -266,6 +266,14 @@ test.describe("layout redesign & edge viewports", () => {
       await expect(page.locator("#moves-value")).toHaveText(moves ?? "");
       await expect(page.locator("#pulse-count")).toHaveText(pulses ?? "");
     }
+    // The same keys without repeat change the run, so the checks above are not vacuous.
+    for (const { key, code } of keys) {
+      await page.locator("#maze-canvas").evaluate((element, init) => {
+        element.dispatchEvent(new KeyboardEvent("keydown", { ...init, cancelable: true, bubbles: true }));
+      }, { key, code });
+    }
+    const after = [await page.locator("#moves-value").textContent(), await page.locator("#pulse-count").textContent()];
+    expect(after, "a first press moves the Explorer or spends a Pulse").not.toEqual([moves, pulses]);
   });
 
   // The tile floor reads devicePixelRatio at render time, so a ratio change must repaint the board.
@@ -273,7 +281,7 @@ test.describe("layout redesign & edge viewports", () => {
     await page.addInitScript(() => {
       // The page loads at ratio 2, so each later floor value can only come from a repaint.
       let ratio = 2;
-      /** @type {Array<() => void>} */
+      /** @type {Array<{ query: string, listener: () => void }>} */
       const listeners = [];
       Object.defineProperty(window, "devicePixelRatio", { configurable: true, get: () => ratio });
       const realMatchMedia = window.matchMedia.bind(window);
@@ -282,7 +290,7 @@ test.describe("layout redesign & edge viewports", () => {
         if (/resolution:.*dppx/.test(query)) {
           const add = list.addEventListener.bind(list);
           list.addEventListener = (/** @type {string} */ type, /** @type {EventListenerOrEventListenerObject} */ listener, /** @type {AddEventListenerOptions} */ options) => {
-            if (type === "change") listeners.push(/** @type {() => void} */ (listener));
+            if (type === "change") listeners.push({ query, listener: /** @type {() => void} */ (listener) });
             return add(type, listener, options);
           };
         }
@@ -290,7 +298,13 @@ test.describe("layout redesign & edge viewports", () => {
       };
       Object.assign(window, {
         __setRatio: (/** @type {number} */ value) => { ratio = value; },
-        __fireRatio: () => listeners[listeners.length - 1]()
+        // The app listens with `once`, so a fired listener is gone. The newest query shows the re-arm.
+        __fireRatio: () => {
+          const entry = listeners.pop();
+          if (!entry) throw new Error("no armed pixel ratio listener");
+          entry.listener();
+          return listeners[listeners.length - 1]?.query;
+        }
       });
     });
     await page.setViewportSize({ width: 375, height: 812 });
@@ -298,12 +312,16 @@ test.describe("layout redesign & edge viewports", () => {
     await expectGameReady(page);
     const floor = () => page.locator("#maze-canvas").evaluate((element) => element.style.getPropertyValue("--tile-floor"));
     await expect.poll(floor).toBe("24px");
-    // No browser event fires here, so the test calls the newest listener; the app re-arms after each call.
-    await page.evaluate(() => { /** @type {any} */ (window).__setRatio(1); /** @type {any} */ (window).__fireRatio(); });
+    // No browser event fires here, so the test calls the newest listener. Each call must re-arm a query for the new ratio.
+    const fire = (/** @type {number} */ value) => page.evaluate((ratio) => {
+      /** @type {any} */ (window).__setRatio(ratio);
+      return /** @type {any} */ (window).__fireRatio();
+    }, value);
+    expect(await fire(1)).toBe("(resolution: 1dppx)");
     await expect.poll(floor).toBe("48px");
-    await page.evaluate(() => { /** @type {any} */ (window).__setRatio(2); /** @type {any} */ (window).__fireRatio(); });
+    expect(await fire(2)).toBe("(resolution: 2dppx)");
     await expect.poll(floor).toBe("24px");
-    // Two calls in one task coalesce into one frame and leave the value correct.
+    // Two calls in one task leave the value correct.
     await page.evaluate(() => { /** @type {any} */ (window).__setRatio(1); /** @type {any} */ (window).__fireRatio(); /** @type {any} */ (window).__fireRatio(); });
     await expect.poll(floor).toBe("48px");
   });
