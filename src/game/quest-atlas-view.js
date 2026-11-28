@@ -1,5 +1,5 @@
 import "./quest-atlas.css";
-import "@look/atlas.css";
+import "../looks/popup/atlas.css";
 
 /**
  * @typedef {ReturnType<typeof import("./quest-atlas.js").projectQuestAtlas>} QuestAtlas

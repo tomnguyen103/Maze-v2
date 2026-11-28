@@ -17,7 +17,7 @@
   --sky: oklch(75.1% 0.141 241.4);
   --sky-deep: oklch(59.6% 0.126 243.2);
   --coral: oklch(68.5% 0.206 32.5);
-  --coral-deep: oklch(55.9% 0.166 32.2);
+  --coral-deep: oklch(54% 0.166 32.2);
   --sun: oklch(90.1% 0.106 84.7);
   --cover: oklch(64.6% 0.109 186.2);
   --cover-deep: oklch(42.6% 0.07 186.8);
@@ -101,12 +101,12 @@
   --color-danger-line: var(--coral);
   --color-board-echo: var(--sun);
   --color-board-echo-text: var(--board-ink);
-  --color-pulse: oklch(59.6% 0.126 243.2 / 30%);
+  --color-pulse: oklch(45% 0.13 243 / 30%);
   /* Board role primitives: every theme keeps these values, because the board paints the same tiles in Night. */
   --board-paper: oklch(98.6% 0.014 84.6);
   --board-ink: oklch(30.5% 0.07 310.3);
   --board-hatch: oklch(30.5% 0.07 310.3 / 30%);
-  --board-fog-dot: oklch(30.5% 0.07 310.3 / 50%);
+  --board-fog-dot: oklch(30.5% 0.07 310.3 / 75%);
   --board-explorer: oklch(84.4% 0.092 2);
   --board-explorer-sunset: oklch(68.5% 0.206 32.5);
   --board-explorer-violet: oklch(60% 0.15 300);
@@ -116,14 +116,14 @@
   --board-echo-text: oklch(30.5% 0.07 310.3);
   --access-fog: oklch(62% 0.06 241.4);
   --access-fog-soft: oklch(94% 0.03 241.4);
-  --access-passage: var(--card);
-  --access-pulse: oklch(59.6% 0.126 243.2 / 30%);
+  --access-passage: var(--board-paper);
+  --access-pulse: oklch(45% 0.13 243 / 30%);
   --maze-mark-scale: 1;
   --region-mosslight: oklch(74% 0.13 165);
   --region-windcall: oklch(66% 0.16 240);
   --region-sunspan: oklch(78% 0.14 80);
-  --region-tideglass: oklch(60% 0.17 275);
-  --region-bellroot: oklch(66% 0.2 345);
+  --region-tideglass: oklch(68% 0.17 275);
+  --region-bellroot: oklch(70% 0.2 345);
   --color-playground-daylight: var(--sky);
   --color-playground-twilight: oklch(62% 0.08 276);
   --color-playground-sea-glass: oklch(80% 0.09 176);

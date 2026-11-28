@@ -75,7 +75,7 @@
 }
 
 .daily-constellation__tile[data-band="glowing"] {
-  opacity: 0.62;
+  opacity: 0.66;
 }
 
 .daily-constellation__tile[data-band="bright"] {

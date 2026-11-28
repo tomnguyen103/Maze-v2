@@ -136,33 +136,39 @@ test.describe("layout redesign & edge viewports", () => {
       });
       expect(arenaInfo?.collides ?? false, `Seed copy and pause button should not collide on ${vp.name}`).toBe(false);
 
-      // Verify run-metrics border integrity
+      // Popup Readout: four bookmarks hang from the top edge. Each has a ruled bottom and no top edge, and none overlap.
       const metricsLayout = await page.evaluate(() => {
         const metrics = document.querySelector(".run-metrics");
         const items = [...document.querySelectorAll(".run-metrics div")];
         if (!metrics || items.length < 4) return null;
         const cols = window.getComputedStyle(metrics).gridTemplateColumns.trim().split(/\s+/).length;
-        const itemBorders = items.map((item) => ({
-          borderBottom: window.getComputedStyle(item).borderBottomWidth,
-          borderRight: window.getComputedStyle(item).borderRightWidth
-        }));
-        return { cols, itemBorders };
+        return {
+          cols,
+          items: items.map((item) => {
+            const style = window.getComputedStyle(item);
+            const rect = item.getBoundingClientRect();
+            return {
+              borderBottom: style.borderBottomWidth,
+              borderTop: style.borderTopWidth,
+              left: rect.left,
+              right: rect.right
+            };
+          })
+        };
       });
 
-      if (metricsLayout && metricsLayout.cols === 4) {
-        // In 4-column layout, NO item should have a bottom border
-        for (let i = 0; i < 4; i++) {
+      expect(metricsLayout?.cols, `Metrics stay in 4 columns on ${vp.name}`).toBe(4);
+      for (let i = 0; i < 4; i++) {
+        const item = metricsLayout?.items[i];
+        expect(parseFloat(item?.borderBottom ?? "0"), `Item ${i} has a bottom border on ${vp.name}`).toBeGreaterThan(0);
+        expect(parseFloat(item?.borderTop ?? "1"), `Item ${i} has no top border on ${vp.name}`).toBe(0);
+        // At 250% font the auto track shrinks to its padding, so the cells overflow by design (same on Pilot, never measured).
+        if (i > 0 && metricsLayout && !vp.fontSize) {
           expect(
-            parseFloat(metricsLayout.itemBorders[i].borderBottom),
-            `Item ${i} in 4-column metrics should not have border-bottom on ${vp.name}`
-          ).toBe(0);
+            metricsLayout.items[i].left,
+            `Item ${i} does not overlap item ${i - 1} on ${vp.name}`
+          ).toBeGreaterThanOrEqual(metricsLayout.items[i - 1].right - 0.5);
         }
-      } else if (metricsLayout && metricsLayout.cols === 2) {
-        // In 2x2 layout, row 1 items have bottom border, row 2 items do not
-        expect(parseFloat(metricsLayout.itemBorders[0].borderBottom)).toBeGreaterThan(0);
-        expect(parseFloat(metricsLayout.itemBorders[1].borderBottom)).toBeGreaterThan(0);
-        expect(parseFloat(metricsLayout.itemBorders[2].borderBottom)).toBe(0);
-        expect(parseFloat(metricsLayout.itemBorders[3].borderBottom)).toBe(0);
       }
     });
   }
@@ -330,11 +336,13 @@ test.describe("layout redesign & edge viewports", () => {
       expect(ratio, "board column share of the content width").toBeLessThanOrEqual(0.7);
       expect(Math.abs((layout.frame?.width ?? 0) - (layout.frame?.height ?? 0)), "board is square").toBeLessThanOrEqual(1);
       expect(layout.frame?.width, "board size comes from the column, not a fixed 432px").toBeGreaterThan(440);
-      for (const box of [layout.panel, layout.notes]) {
-        expect(box.border).toBe("0px");
-        expect(box.shadow).toBe("none");
-        expect(box.background).toBe("rgba(0, 0, 0, 0)");
-      }
+      // The Popup board panel is a paper card; the notes stay flat.
+      expect(layout.panel.border).toBe("3px");
+      expect(layout.panel.shadow).not.toBe("none");
+      expect(layout.panel.background).not.toBe("rgba(0, 0, 0, 0)");
+      expect(layout.notes.border).toBe("0px");
+      expect(layout.notes.shadow).toBe("none");
+      expect(layout.notes.background).toBe("rgba(0, 0, 0, 0)");
     });
   }
 
@@ -436,7 +444,7 @@ test.describe("layout redesign & edge viewports", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", choice);
       const visible = page.locator(".landing-hero__chart:visible");
       await expect(visible).toHaveCount(1);
-      await expect(visible).toHaveAttribute("src", `/landing-chart-${choice === "dark" ? "night" : "light"}.webp`);
+      await expect(visible).toHaveAttribute("src", `/landing-popup-${choice === "dark" ? "night" : "light"}.webp`);
     });
   }
 
@@ -450,7 +458,7 @@ test.describe("layout redesign & edge viewports", () => {
       await page.emulateMedia({ colorScheme: /** @type {"dark" | "light"} */ (os) });
       const visible = page.locator(".landing-hero__chart:visible");
       await expect(visible).toHaveCount(1);
-      await expect(visible).toHaveAttribute("src", `/landing-chart-${os === "dark" ? "night" : "light"}.webp`);
+      await expect(visible).toHaveAttribute("src", `/landing-popup-${os === "dark" ? "night" : "light"}.webp`);
     });
   }
 

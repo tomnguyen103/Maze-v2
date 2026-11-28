@@ -2,16 +2,8 @@ import { readFile, readdir } from "node:fs/promises";
 import process from "node:process";
 import { URL } from "node:url";
 import { gzipSync } from "node:zlib";
-import { loadEnv } from "vite";
-import { resolveLook } from "../vite.config.mjs";
 
-// The look comes from the first argument, else from `VITE_LOOK` read the way the build reads it.
-const look = resolveLook(
-  process.argv[2] ?? loadEnv("production", process.cwd(), "").VITE_LOOK
-);
-/** @type {Record<string, string>} */
-const outDirectories = { pilot: "dist", popup: "dist-look-popup" };
-const assetsDirectory = new URL(`../${outDirectories[look]}/assets/`, import.meta.url);
+const assetsDirectory = new URL("../dist/assets/", import.meta.url);
 const files = await readdir(assetsDirectory);
 const budgets = [
   { label: "landing JavaScript", prefix: "index-", suffix: ".js", maxKb: 8 },
@@ -153,9 +145,9 @@ const budgets = [
     suffix: ".js",
     maxKb: 1
   },
-  // Popup board art (six figures) measures 2.84 KB gzip; the limit is that plus 10%, rounded up. The Pilot stub is under 0.1 KB.
+  // Popup board art (six figures) measures 2.84 KB gzip; the limit is that plus 10%, rounded up.
   { label: "board art JavaScript", prefix: "board-art-", suffix: ".js", maxKb: 4 },
-  // Popup motion (four one-shot motions) measures 0.81 KB gzip; the limit is 2 KB. The Pilot stub is under 0.1 KB.
+  // Popup motion (four one-shot motions) measures 0.81 KB gzip; the limit is 2 KB.
   // The motion chunk does not load under reduced motion or reduced effects.
   { label: "motion JavaScript", prefix: "motion-", suffix: ".js", maxKb: 2 },
   { label: "optional Clerk", prefix: "clerk-", suffix: ".js", maxKb: 600 },
@@ -193,7 +185,7 @@ for (const budget of budgets) {
     }
     const missing = prefixes.filter((_, at) => matched[at].length === 0);
     throw new Error(
-      `[${look}] Could not find ${budget.label} in ${outDirectories[look]}/assets (${missing.join(", ")}).`
+      `Could not find ${budget.label} in dist/assets (${missing.join(", ")}).`
     );
   }
   // Each retry duplicate is a separate download, so it faces the row limit alone.
@@ -207,7 +199,7 @@ for (const budget of budgets) {
     }
     gzipKb += largest;
   }
-  const result = `[${look}] ${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
+  const result = `${budget.label}: ${gzipKb.toFixed(2)} KB gzip / ${budget.maxKb} KB`;
   if (gzipKb > budget.maxKb) {
     failed = true;
     process.stderr.write(`OVER ${result}\n`);
@@ -222,7 +214,7 @@ for (const file of files.filter((name) => name.endsWith(".js"))) {
   const source = await readFile(new URL(file, assetsDirectory), "utf8");
   if (/"assets\/index-[^"]*\.js"/.test(source)) {
     failed = true;
-    process.stderr.write(`PRELOAD [${look}] ${file} lists the entry chunk in its preload map\n`);
+    process.stderr.write(`PRELOAD ${file} lists the entry chunk in its preload map\n`);
   }
 }
 

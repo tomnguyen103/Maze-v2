@@ -1,4 +1,4 @@
-import "@look/fonts.js";
+import "./looks/popup/fonts.js";
 import "./daylight.css";
 
 import { renderLanding } from "./landing/landing-controller.js";

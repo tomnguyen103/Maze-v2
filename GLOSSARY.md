@@ -144,8 +144,8 @@ _Avoid_: Territory colour, status colour, difficulty colour
 
 **Popup**:
 The visual identity of every Echo Maze surface: a pop-up storybook with warm paper,
-plum ink, and coral as the one accent. It replaces Pilot Chart when slice R9 sets the
-default look. It names presentation, never a game rule.
+plum ink, and coral as the one accent. It replaced Pilot Chart in slice R9. It names
+presentation, never a game rule.
 _Avoid_: Field Journal, Journey, Theme (alone), skin, mode, Pilot Chart
 
 **Stamp sheet**:

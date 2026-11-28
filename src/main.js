@@ -3715,8 +3715,8 @@ function isDemoBlocked() {
   return demoAccessPending && activeDaily === null && !activeFirstLight;
 }
 
-// The look motion chunk loads on first play and never when motion is reduced.
-const playMotion = createMotionPlayer(() => import("@look/motion.js"));
+// The motion chunk loads on first play and never when motion is reduced.
+const playMotion = createMotionPlayer(() => import("./looks/popup/motion.js"));
 
 /** @param {Parameters<typeof applyAction>[1]} action */
 function transition(action) {

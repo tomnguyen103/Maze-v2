@@ -185,7 +185,7 @@ function questRun(seed, level, quest) {
   });
 }
 
-const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
+const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
 
 /** @param {string} selector */
 function scopeOf(selector) {
@@ -195,21 +195,24 @@ function scopeOf(selector) {
 const LIGHT = scopeOf(":root {");
 // Night appears twice in tokens.css: the system-dark media block and the explicit dark block.
 const NIGHT_SYSTEM = scopeOf(':root:not([data-theme="light"]) {');
-// The explicit Night block ends where the forced-colors block starts.
+// The explicit Night block ends where the more-contrast block starts.
 const NIGHT_EXPLICIT = tokensCss.slice(
   tokensCss.indexOf(':root[data-theme="dark"] {'),
-  tokensCss.indexOf("@media (forced-colors: active)")
+  tokensCss.indexOf("@media (prefers-contrast: more)")
 );
 
 /**
- * Reads one canvas token from a scope and throws when it is absent.
+ * Reads one canvas token from a scope and throws when it is absent. A `var()` chain resolves through the scope, then the light scope.
  * @param {string} scope
  * @param {string} name
+ * @returns {string}
  */
 function canvasToken(scope, name) {
-  const hit = scope.match(new RegExp(`${name}:\\s*([^;]+);`));
-  if (!hit) throw new Error(`missing token ${name}`);
-  return hit[1].trim();
+  const read = (/** @type {string} */ from) => from.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+  const value = read(scope) ?? read(LIGHT);
+  if (!value) throw new Error(`missing token ${name}`);
+  const reference = value.match(/^var\((--[\w-]+)\)$/);
+  return reference ? canvasToken(scope, reference[1]) : value;
 }
 
 const SCOPES = [LIGHT, NIGHT_SYSTEM, NIGHT_EXPLICIT];
@@ -351,28 +354,26 @@ const BOARD_PAIRS = /** @type {const} */ ([
   // The ring is the board ink in every mode, so it reads at the text floor.
   ["--color-board-explorer-ring", "--color-passage", 4.5],
   ["--color-board-warden", "--color-passage", 3],
-  ["--color-danger-line", "--color-passage", 3],
-  ["--color-board-gate", "--color-passage", 3],
-  ["--color-board-echo", "--color-passage", 3],
-  ["--color-board-light", "--color-passage", 3],
-  // A Signal line strokes over its casing, so the line holds 3:1 against the casing in every mode.
-  ["--color-board-light", "--color-board-casing", 3],
-  ["--color-board-gate", "--color-board-casing", 3],
+  // Popup draws an ink outline under each coral dash, so the outline carries the 3:1 edge.
+  ["--color-board-ink", "--color-passage", 3],
+  // Popup draws the Gate, the Light and the Echo as sun fills with an ink outline, so the outline carries the 3:1 edge.
+  ["--color-board-ink", "--color-board-gate", 3],
+  ["--color-board-ink", "--color-board-echo", 3],
+  ["--color-board-ink", "--color-board-light", 3],
+  ["--color-board-ink", "--color-board-casing", 3],
   ["--color-fog-dot", "--color-fog", 3],
   // The Fog dots carry the known/unknown edge, because the Fog fill is close to the Passage.
   ["--color-fog-dot", "--color-passage", 3],
   // The Echo pair number sits on the Echo fill.
   ["--color-board-echo-text", "--color-board-echo", 4.5],
-  // The closed Gate keyhole is paper-coloured and the sealed Gate X is night ink: each reads on its own fill.
-  ["--color-land", "--color-board-gate", 3],
+  // The closed Gate keyhole is board ink on the sun fill: it reads on its own fill.
   ["--color-night-deep", "--color-on-fill", 3],
-  // The disc follows the theme paper, so its pairs keep the 3:1 floor in every mode.
-  ["--color-board-explorer", DISC, 3],
+  // The disc is the board paper, so its ring keeps the text floor in every mode; the clover Explorer sits inside the ring.
   ["--color-board-explorer-ring", DISC, 4.5],
   // The pause cover writes its ink on the cover fill.
   ["--color-board-cover-ink", "--color-board-cover", 4.5],
-  // The challenge band writes the board ink on the land.
-  ["--color-board-ink", "--color-land", 4.5],
+  // The challenge band writes the board ink on the board paper.
+  ["--color-board-ink", "--color-board-casing", 4.5],
   // Pulse is a wash, so it needs only to show.
   ["--color-pulse", "--color-passage", 1.2],
   ["--color-pulse", "--color-land", 1.2],
@@ -1228,9 +1229,8 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     // The chart paints every cell; the Fog clip shows the three known tiles only.
     expect(clips).toEqual([["0,0,320,320", "320,0,320,320", "320,320,320,320"]]);
 
-    const passage = oklabOf(canvasToken(LIGHT, "--color-passage"));
-    expect(passage[0]).toBeGreaterThanOrEqual(0.95);
-    expect(Math.hypot(passage[1], passage[2])).toBeLessThan(0.03);
+    // Popup paints the passage as a light meadow tile and the land as a darker hedge.
+    expect(oklabOf(canvasToken(LIGHT, "--color-passage"))[0]).toBeGreaterThan(oklabOf(canvasToken(LIGHT, "--color-land"))[0]);
     const water = paints.find(
       (paint) => paint.kind === "fill" && paint.style === canvasToken(LIGHT, "--color-passage")
     );
@@ -1636,13 +1636,13 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     }
   });
 
-  it("US-01.2 keeps the casing light on a forced light Fog and dark on the Night Fog", () => {
+  it("US-01.2 keeps the casing the light board paper in every theme and mode", () => {
     for (const [theme, base] of Object.entries(THEMES)) {
       for (const [mode, selector] of Object.entries(MODES)) {
         const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
         const [lightness] = resolveColor(tokens, "--color-board-casing").lab;
-        if (theme === "night" && mode === "default") expect(lightness, `${theme}/${mode}`).toBeLessThan(0.3);
-        else expect(lightness, `${theme}/${mode}`).toBeGreaterThan(0.95);
+        // Popup keeps the board paper light in Night, because the board paints the same tiles in every theme.
+        expect(lightness, `${theme}/${mode}`).toBeGreaterThan(0.95);
       }
     }
     expect(canvasToken(NIGHT_SYSTEM, "--color-board-casing")).toBe(canvasToken(NIGHT_EXPLICIT, "--color-board-casing"));
@@ -1668,7 +1668,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
       for (const name of BOARD_ROWS) {
         expect(() => canvasToken(scope, name), name).not.toThrow();
       }
-      expect(canvasToken(scope, "--color-board-warden")).toBe("var(--color-ink)");
+      expect(canvasToken(scope, "--color-board-warden")).toBe(canvasToken(scope, "--fur"));
       const hatch = Number(canvasToken(scope, "--color-hatch").match(/ \/ (\d+)%\)$/)?.[1]);
       expect(hatch).toBeGreaterThanOrEqual(28);
       expect(hatch).toBeLessThanOrEqual(34);
@@ -1693,7 +1693,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
             // Strong mode paints the Fog flat with no dots, so only the dot-on-Fog pair does not apply there.
             if (mode === "strong" && mark === "--color-fog-dot") continue;
             // Strong contrast lifts every pair on the passage and the land to 4.5:1.
-            const needed = mode === "strong" && floor === 3 && ground !== DISC ? 4.5 : floor;
+            const needed = mode === "strong" && floor === 3 ? 4.5 : floor;
             const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
             if (ratio < needed) {
               failures.push(`${theme}/${mode}/${palette}: ${mark} on ${ground} ${ratio.toFixed(2)} < ${needed}`);
@@ -1717,10 +1717,10 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     for (const [theme, base] of Object.entries(THEMES)) {
       for (const [mode, selector] of Object.entries(MODES)) {
         const tokens = new Map([...base, ...(selector ? daylightScope(selector) : [])]);
-        const expected = resolveColor(tokens, selector ? "--board-paper" : "--color-paper");
+        const expected = resolveColor(tokens, "--board-paper");
         expect(resolveColor(tokens, DISC).lab, `${theme}/${mode}`).toEqual(expected.lab);
         const ring = resolveColor(tokens, "--color-board-explorer-ring").lab;
-        const ink = resolveColor(tokens, selector ? "--board-ink" : "--color-ink").lab;
+        const ink = resolveColor(tokens, "--board-ink").lab;
         expect(ring, `${theme}/${mode} ring`).toEqual(ink);
       }
     }
@@ -1745,13 +1745,11 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(() => stubCanvas({ seed: false })).toThrow("--color-passage");
   });
 
-  it("US-03.3 resolves each board token in each look and paints a Run from the Popup tokens", () => {
-    for (const look of /** @type {const} */ (["pilot", "popup"])) {
-      for (const name of BOARD_TOKENS) expect(resolveBoardToken(name, look), `${look} ${name}`).not.toBe("");
-    }
+  it("US-03.3 resolves each board token and paints a Run from the Popup tokens", () => {
+    for (const name of BOARD_TOKENS) expect(resolveBoardToken(name), name).not.toBe("");
     for (const name of BOARD_TOKENS) document.body.style.removeProperty(name);
-    seedBoardTokens("popup");
-    expect(document.body.style.getPropertyValue("--color-passage")).toBe(resolveBoardToken("--color-passage", "popup"));
+    seedBoardTokens();
+    expect(document.body.style.getPropertyValue("--color-passage")).toBe(resolveBoardToken("--color-passage"));
     const { renderer } = stubCanvas({ seed: false });
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
     expect(() => renderer.render({ ...run, pulseVisible: [], revealed: [] })).not.toThrow();
@@ -1866,7 +1864,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(drawOnce()).toEqual(drawOnce());
   });
 
-  it("US-02.3 falls back to the Pilot Chart light values when every CSS variable is missing", () => {
+  it("US-02.3 falls back to the built-in light values when every CSS variable is missing", () => {
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
     const run = questRun("VISIBLE-BRIDGE-PAIRS", "trail-scout", 9);
@@ -1882,16 +1880,22 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
 
     const styles = new Set(paints.map((paint) => paint.style));
     expect(size).toBeGreaterThan(1);
+    // Meadow passage, hedge land, board ink, sun, board paper, night ink, Pulse wash, coral danger line, fur Warden, Explorer.
     for (const style of [
-      "oklch(95.5% 0.022 232)",
-      "oklch(18% 0.012 250)",
-      "oklch(58% 0.24 340)",
-      "oklch(52% 0.17 250)",
-      "oklch(46% 0.17 250)"
+      "oklch(73.4% 0.177 137.9)",
+      "oklch(60% 0.12 140)",
+      "oklch(30.5% 0.07 310.3)",
+      "oklch(90.1% 0.106 84.7)",
+      "oklch(98.6% 0.014 84.6)",
+      "oklch(20% 0.05 310)",
+      "oklch(45% 0.13 243 / 30%)",
+      "oklch(68.5% 0.206 32.5)",
+      "oklch(26% 0.086 299.6)",
+      "oklch(84.4% 0.092 2)"
     ]) {
       expect(styles, style).toContain(style);
     }
-    for (const stale of ["oklch(98.5% 0.014 88)", "oklch(92% 0.018 85)", "oklch(58% 0.2 24)", "oklch(24% 0.015 60)"]) {
+    for (const stale of ["oklch(95.5% 0.022 232)", "oklch(18% 0.012 250)", "oklch(52% 0.17 250)", "oklch(98.5% 0.014 88)"]) {
       expect(styles, stale).not.toContain(stale);
     }
   });
@@ -2183,28 +2187,24 @@ describe("R1a renderer findings", () => {
       ...BOARD_TOKENS.filter((name) => name.startsWith("--color-board-"))
     ];
 
-    for (const look of /** @type {const} */ (["pilot", "popup"])) {
-      it(`maps every board token to a system colour in the ${look} tokens`, () => {
-        const css = readFileSync(resolve(process.cwd(), `src/looks/${look}/tokens.css`), "utf8");
-        const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
-        const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+    it("maps every board token to a system colour in the Popup tokens", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
+      const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+      const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
 
-        for (const name of NAMES) expect(SYSTEM.has(value(name) ?? ""), `${look} ${name}`).toBe(true);
-        expect(value("--color-passage")).not.toBe(value("--color-land"));
-      });
-    }
+      for (const name of NAMES) expect(SYSTEM.has(value(name) ?? ""), name).toBe(true);
+      expect(value("--color-passage")).not.toBe(value("--color-land"));
+    });
 
-    for (const look of /** @type {const} */ (["pilot", "popup"])) {
-      it(`raises the ${look} forced-colors selector above the daylight palette rules`, () => {
-        const css = readFileSync(resolve(process.cwd(), `src/looks/${look}/tokens.css`), "utf8");
-        const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
-        expect(forced).toContain(':root:root:not([data-theme="light"])');
-        expect(forced).toContain(':root:root[data-theme="light"]');
-      });
-    }
+    it("raises the Popup forced-colors selector above the daylight palette rules", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
+      const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+      expect(forced).toContain(':root:root:not([data-theme="light"])');
+      expect(forced).toContain(':root:root[data-theme="light"]');
+    });
 
-    it("maps the Pilot ink, on-fill and night tokens to system colours", () => {
-      const css = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
+    it("maps the ink, on-fill and night tokens to system colours", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
       const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
       const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
       expect(value("--color-ink")).toBe("CanvasText");

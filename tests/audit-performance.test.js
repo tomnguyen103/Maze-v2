@@ -186,14 +186,14 @@ describe("US-03 and US-04 — the landing hero shows the demo, the price and one
   it("US-03.1 shows a gameplay crop with alt text and 4:3 size in both markups", () => {
     for (const markup of markups()) {
       expect(markup).toMatch(
-        /<img class="landing-hero__chart landing-hero__chart--light" src="\/landing-chart-light\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" fetchpriority="high">\s*<img class="landing-hero__chart landing-hero__chart--night" src="\/landing-chart-night\.webp" width="640" height="480" alt="Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix\." decoding="async" loading="lazy">/
+        /<img class="landing-hero__chart landing-hero__chart--light" src="\/landing-popup-light\.webp" width="640" height="480" alt="Echo Maze board: paper tiles, Clover the Explorer, a Fangmoor Warden, an Echo, and the Gate\." decoding="async" fetchpriority="high">\s*<img class="landing-hero__chart landing-hero__chart--night" src="\/landing-popup-night\.webp" width="640" height="480" alt="Echo Maze board: paper tiles, Clover the Explorer, a Fangmoor Warden, an Echo, and the Gate\." decoding="async" loading="lazy">/
       );
     }
   });
 
   it("US-03.1 ships the gameplay crop at 40 KB or less", () => {
     for (const name of ["light", "night"]) {
-      const crop = fileURLToPath(new URL(`../public/landing-chart-${name}.webp`, import.meta.url));
+      const crop = fileURLToPath(new URL(`../public/landing-popup-${name}.webp`, import.meta.url));
       expect(statSync(crop).size).toBeLessThanOrEqual(40960);
     }
   });
