@@ -1105,14 +1105,12 @@ showThemeChoice();
 elements.themeButton.addEventListener("click", () => {
   themeChoice = nextThemeChoice(themeChoice);
   applyThemeChoice(themeChoice);
+  // The renderer observes data-theme and repaints once, so a render here paints the old palette.
   showThemeChoice();
-  // The canvas reads its palette only on a render, so redraw it in the new theme.
-  renderer.render(run);
 });
 onThemeChoiceChange((choice) => {
   themeChoice = choice;
   showThemeChoice();
-  renderer.render(run);
 });
 
 elements.settingsButton.addEventListener("click", async () => {
