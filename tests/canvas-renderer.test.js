@@ -1954,7 +1954,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
 
     renderer.render(board({ revealed: [] }));
 
-    const arcsOf = (paint) => new Set((paint?.path ?? []).filter((step) => step.startsWith("arc(")).map((step) => step.split(",").slice(0, 3).join(",")));
+    const arcsOf = (/** @type {{ path: string[] } | undefined} */ paint) => new Set((paint?.path ?? []).filter((step) => step.startsWith("arc(")).map((step) => step.split(",").slice(0, 3).join(",")));
     const card = arcsOf(paintsOf(paints, "fill", "rgb(1, 2, 3)")[0]);
     const fold = arcsOf(paintsOf(paints, "fill", "rgb(7, 8, 9)")[0]);
     expect(fold.size).toBe(4);
@@ -2015,6 +2015,43 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     for (const [, , r] of corners) expect(r).toBeCloseTo(radius, 5);
     expect(corners[0][0]).toBeCloseTo(640 - 32 - radius, 5);
     expect(corners[3][1]).toBeCloseTo(32 + radius, 5);
+  });
+
+  it("US-02.1 draws a Land flap on a compact Run Replay tile with no room inside the Coastline", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas({ width: 12 });
+    const paints = recordPaints(context);
+    const target = /** @type {Record<string, any>} */ (context);
+    const begin = target.beginPath;
+    const arc = target.arc;
+    let arcs = 0;
+    /** @type {number | null} */
+    let clipArcs = null;
+    target.beginPath = vi.fn(() => {
+      arcs = 0;
+      begin();
+    });
+    target.arc = vi.fn((/** @type {number[]} */ ...args) => {
+      arcs += 1;
+      arc(...args);
+    });
+    target.clip = vi.fn(() => {
+      clipArcs = arcs;
+    });
+
+    // Tile 6 px: the Land card and the Coastline leave 2 px or less inside, so the clip is the whole tile.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    expect(clipArcs).toBe(0);
+    const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+    const points = (flap?.path ?? [])
+      .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+      .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+    expect(points).toHaveLength(4);
+    const [near, far] = [points[0][0], points[1][0]];
+    expect(far).toBeGreaterThan(near);
+    expect(near).toBeGreaterThanOrEqual(6);
+    expect(far).toBeLessThanOrEqual(12);
   });
 
   describe("Echo number floor", () => {

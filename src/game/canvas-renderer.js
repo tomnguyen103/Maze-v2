@@ -426,12 +426,15 @@ export function createCanvasRenderer(
     const outline = coastlineWidth(tile);
     // A flap on a Land card starts inside the Coastline, so it never covers the outline.
     const landFlapInset = snapStroke(cardInset + outline + unit / 2, unit);
+    // A compact Run Replay tile has little or no room inside the Coastline, so its Land flap draws as a Passage flap.
+    const roomy = tile - 2 * (cardInset + outline) >= tile / 2;
+    const insideCoastline = (/** @type {number} */ row, /** @type {number} */ col) => roomy && labyrinth[row][col] === 0;
     isolated(() => {
       // The clip follows the inner edge of the Coastline, so the flap corners stay off its rounded corners too.
       context.beginPath();
       for (const [row, col] of cells) {
         const { left, top, width, height } = tileBox(row, col, tile);
-        if (labyrinth[row][col] !== 0) {
+        if (!insideCoastline(row, col)) {
           context.rect(left, top, width, height);
           continue;
         }
@@ -442,7 +445,7 @@ export function createCanvasRenderer(
       context.beginPath();
       for (const [row, col] of cells) {
         const { left, top, width } = tileBox(row, col, tile);
-        const inset = labyrinth[row][col] === 0 ? landFlapInset : snapStroke(step, unit);
+        const inset = insideCoastline(row, col) ? landFlapInset : snapStroke(step, unit);
         const near = left + inset;
         const far = left + width - inset;
         const edge = top + inset;
