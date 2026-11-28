@@ -1,6 +1,6 @@
 # 0052: Pilot Chart board contract
 
-- Status: Accepted. Superseded by ADR 0066 when slice R9 sets the default look.
+- Status: Superseded by ADR 0066 (slice R9).
 - Date: 2026-11-25
 
 ## Context

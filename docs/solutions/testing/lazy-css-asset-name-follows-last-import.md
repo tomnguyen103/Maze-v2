@@ -6,7 +6,7 @@ trigger: An e2e test that waits for a lazy CSS asset by file name times out afte
 
 ## Problem
 
-R7b adds `import "@look/atlas.css";` after `import "./quest-atlas.css";` in `src/game/quest-atlas-view.js`.
+R7b adds `import "@look/atlas.css";` (since R9: `import "../looks/popup/atlas.css";`) after `import "./quest-atlas.css";` in `src/game/quest-atlas-view.js`.
 The e2e test "lazy Atlas keeps semantic map and list parity across a URL reload" waits for `quest-atlas-*.css`. The test timed out in both projects.
 
 ## Root cause

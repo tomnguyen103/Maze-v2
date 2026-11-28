@@ -29,7 +29,7 @@ import { createQuietExpeditionSettings } from "./quiet-expedition.js";
  */
 export function createAccessSettingsView({
   storage = globalThis.localStorage,
-  loadArt = () => import("@look/board-art.js"),
+  loadArt = () => import("../looks/popup/board-art.js"),
   onApply = () => {},
   onClose = () => {},
   onSave = () => {}
@@ -152,7 +152,7 @@ export function createAccessSettingsView({
     return figureRadios.find((radio) => radio.checked)?.value ?? "clover";
   }
 
-  // The picker stays hidden when the look has no art (Pilot) or the art fails.
+  // The picker stays hidden when the board art fails to load.
   async function showFigurePicker() {
     if (!picker) return;
     const art = (await loadArt())?.default;

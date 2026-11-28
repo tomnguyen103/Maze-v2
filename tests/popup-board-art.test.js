@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import art from "../src/looks/popup/board-art.js";
-import pilotArt from "../src/looks/pilot/board-art.js";
 import { EXPLORER_FIGURE_STORAGE_KEY, EXPLORER_FIGURES } from "../src/player/explorer-figure.js";
 
 /** @type {string[]} */
@@ -55,10 +54,6 @@ const BADGE_ELLIPSE = "E0,0,11,11";
 const BADGE_SQUARE = "R-11,-11,22,22,6";
 
 describe("Popup board art", () => {
-  it("leaves the Pilot look with no art", () => {
-    expect(pilotArt).toBeNull();
-  });
-
   it("draws the Explorer Clover with no throw", () => {
     expect(() => art.drawFigure(/** @type {never} */ (stubContext()), "clover", "idle", 100, false)).not.toThrow();
   });

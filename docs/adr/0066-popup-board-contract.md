@@ -23,6 +23,6 @@ Supersedes ADR 0052. Each row below keeps the ADR 0052 rule and names the Popup 
 ## Consequences
 
 - `tokens.css` holds one row per board mark. The Popup board keeps its light role primitives in Night.
-- `tests/canvas-renderer.test.js` pins the empty token error and the Pilot 3:1 pairs. No test pins a Popup board 3:1 pair yet.
+- `tests/canvas-renderer.test.js` pins the empty token error and the Popup board 3:1 pairs.
 - Maze geometry, rulesets, and `echo-bridges-v1` stay unchanged.
-- Slice R9 removes the Pilot Chart board tokens.
+- Slice R9 removed the Pilot Chart board tokens.

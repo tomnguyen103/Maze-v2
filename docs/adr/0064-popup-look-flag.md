@@ -1,6 +1,6 @@
 # 0064: Popup Look Flag
 
-- Status: Accepted
+- Status: Accepted. Retired by slice R9: item 7 is done, and Popup is the only look.
 - Date: 2026-11-27
 
 ## Context

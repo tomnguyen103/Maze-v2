@@ -3,7 +3,6 @@
 graphify-out/
 node_modules/
 dist/
-dist-look-popup/
 coverage/
 playwright-report/
 test-results/

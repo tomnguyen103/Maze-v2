@@ -16,7 +16,7 @@ export const THEME_STORAGE_KEY = "echo-maze:theme";
  * The browser bar colour of each theme: the oklch value of `--color-paper`.
  * `index.html` and `public/theme-boot.js` repeat this pair.
  */
-export const THEME_COLORS = Object.freeze({ light: "oklch(99% 0.004 95)", dark: "oklch(21% 0.03 250)" });
+export const THEME_COLORS = Object.freeze({ light: "oklch(96.6% 0.024 85.8)", dark: "oklch(20% 0.05 310)" });
 
 /** @type {readonly ThemeChoice[]} */
 export const THEME_CHOICES = Object.freeze(["system", "light", "dark"]);

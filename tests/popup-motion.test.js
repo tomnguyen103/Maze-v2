@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import pilotMotion from "../src/looks/pilot/motion.js";
 import motion from "../src/looks/popup/motion.js";
 import { createMotionPlayer } from "../src/game/motion-player.js";
 
@@ -117,10 +116,6 @@ describe("Popup motion", () => {
     }
     expect(() => motion.ceremonyPopUp(frame())).not.toThrow();
     expect(frame().children).toHaveLength(0);
-  });
-
-  it("keeps the Pilot motion module null", () => {
-    expect(pilotMotion).toBeNull();
   });
 });
 

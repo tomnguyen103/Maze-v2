@@ -1,6 +1,6 @@
 # 0051: Replace the Field Journal identity with the Pilot Chart
 
-- Status: Accepted. Superseded by ADR 0065 when slice R9 sets the default look.
+- Status: Superseded by ADR 0065 (slice R9).
 - Date: 2026-10-15
 
 ## Context

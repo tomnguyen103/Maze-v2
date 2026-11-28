@@ -15,8 +15,7 @@ const GENERATED = [
   ".ua",
   "playwright-report",
   "test-results",
-  "coverage",
-  "dist-look-popup"
+  "coverage"
 ];
 
 /** Static design mockups: never served, ignored by `eslint.config.mjs` too. */
@@ -84,31 +83,32 @@ describe("custom properties", () => {
   });
 });
 
-describe("Pilot Chart identity", () => {
+describe("Popup identity", () => {
   // Checked-out files may use CRLF on Windows; compare LF text only.
   const read = (/** @type {string} */ relative) =>
     readFileSync(root + relative, "utf8").replace(/\r\n/g, "\n");
 
-  /** Adopted palette values from the spec Palette table, light then Night. */
+  /** Adopted palette values from the design.md Palette table, light then Night. */
   const PALETTE_VALUES = [
-    "oklch(99% 0.004 95)",
-    "oklch(100% 0 0)",
-    "oklch(18% 0.012 250)",
-    "oklch(38% 0.014 250)",
-    "oklch(70% 0.2 340)",
-    "oklch(47% 0.22 340)",
-    "oklch(95.5% 0.022 232)",
-    "oklch(21% 0.03 250)",
-    "oklch(23% 0.012 250)",
-    "oklch(95% 0.006 95)",
-    "oklch(78% 0.01 250)",
-    "oklch(70% 0.2 340)"
+    "oklch(96.6% 0.024 85.8)",
+    "oklch(98.6% 0.014 84.6)",
+    "oklch(30.5% 0.07 310.3)",
+    "oklch(44.3% 0.058 311.6)",
+    "oklch(73.4% 0.177 137.9)",
+    "oklch(75.1% 0.141 241.4)",
+    "oklch(68.5% 0.206 32.5)",
+    "oklch(54% 0.166 32.2)",
+    "oklch(90.1% 0.106 84.7)",
+    "oklch(20% 0.05 310)",
+    "oklch(26% 0.055 310)",
+    "oklch(95% 0.03 86)",
+    "oklch(78% 0.14 32)"
   ];
 
-  it("names Pilot Chart as the design identity in design.md", () => {
+  it("names Popup as the design identity in design.md", () => {
     const design = read("design.md");
-    expect(design).toContain("Pilot Chart");
-    expect(design).not.toMatch(/Journey system/);
+    expect(design).toContain("Popup identity (ADR 0065)");
+    expect(design).not.toMatch(/Pilot Chart|Journey system/);
   });
 
   it("keeps the Stitch project id in the design.md frontmatter", () => {
@@ -133,8 +133,8 @@ describe("Pilot Chart identity", () => {
   it("names the adopted type families and shape limits in design.md", () => {
     const design = read("design.md");
     for (const literal of [
-      "Archivo",
-      "Atkinson Hyperlegible Next",
+      "Chewy",
+      "Andika",
       "Geist Mono",
       "40px",
       "16px",
@@ -179,7 +179,7 @@ describe("Pilot Chart identity", () => {
     }
   });
 
-  it("states the chart contract in design.md (US-01.1, US-01.2)", () => {
+  it("states the board contract in design.md (US-01.1, US-01.2)", () => {
     const design = read("design.md");
     for (const literal of [
       "Chart devices",
@@ -194,13 +194,12 @@ describe("Pilot Chart identity", () => {
       "Button tiers",
       "Empty state",
       "12px minimum",
-      "water passages",
       "coastline",
-      "oklch(95.5% 0.022 232)",
-      "oklch(32% 0.04 232)",
-      "oklch(18% 0.012 250 / 80%)",
-      "oklch(18% 0.012 250 / 30%)",
-      "oklch(21% 0.03 250)"
+      "oklch(60% 0.12 140)",
+      "oklch(30.5% 0.07 310.3 / 30%)",
+      "oklch(30.5% 0.07 310.3 / 75%)",
+      "oklch(45% 0.13 243 / 30%)",
+      "with an ink outline"
     ]) {
       expect(design, literal).toContain(literal);
     }
@@ -239,7 +238,7 @@ describe("Pilot Chart identity", () => {
 });
 
 describe("shared base styles", () => {
-  // The shared sheet draws the Pilot Chart look only. No island or rope rule remains.
+  // The shared sheet draws the Popup look only. No island or rope rule remains.
   const daylight = readFileSync(root + "src/daylight.css", "utf8").replace(
     /\r\n/g,
     "\n"
@@ -257,7 +256,7 @@ describe("shared base styles", () => {
 
   it("draws no island, rope bridge, blob or grid ground (US-01.3)", () => {
     expect(daylight).not.toMatch(/--island\b/);
-    expect(readFileSync(root + "src/looks/pilot/tokens.css", "utf8")).not.toMatch(/--island\b/);
+    expect(readFileSync(root + "src/looks/popup/tokens.css", "utf8")).not.toMatch(/--island\b/);
     expect(daylight).not.toMatch(/rope/i);
     expect(daylight).not.toMatch(/closest-side/);
     expect(daylight).not.toMatch(/--color-paper-grid/);
@@ -294,7 +293,7 @@ describe("shared base styles", () => {
     expect(rules(".primary-button")).not.toMatch(/--color-signal-deep/);
   });
 
-  it("defines no pill radius and no drop-shadow token (Pilot Chart)", () => {
+  it("defines no pill radius and no drop-shadow token", () => {
     // Tags use the 4px radius and surfaces use ink rules, so these tokens have no reader.
     const found = [];
     for (const relative of SHEETS.filter((path) => path.endsWith(".css"))) {
@@ -315,13 +314,6 @@ describe("popup look tokens", () => {
   const read = (/** @type {string} */ look) =>
     readFileSync(root + `src/looks/${look}/tokens.css`, "utf8").replace(/\r\n/g, "\n");
   const popup = read("popup");
-  const names = (/** @type {string} */ css) =>
-    new Set([...css.matchAll(/^\s*(--[\w-]+)\s*:/gm)].map((match) => match[1]));
-
-  it("defines every Pilot variable name", () => {
-    const missing = [...names(read("pilot"))].filter((name) => !names(popup).has(name));
-    expect(missing).toEqual([]);
-  });
 
   it("writes every colour as oklch, outside the forced-colors block", () => {
     const outside = popup.slice(0, popup.indexOf("@media (forced-colors: active)"));

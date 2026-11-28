@@ -6,7 +6,7 @@ import { renderAtlasIllustrationMarkup } from "../src/game/quest-atlas-view.js";
 
 const ATLAS_REGION_IDS = ["foundation", "developing", "capable", "advanced", "mastery"];
 const NEUTRAL_WASH = "color-mix(in oklab, var(--color-ink-muted) 60%, var(--color-ink))";
-const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/tokens.css"), "utf8");
+const tokensCss = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
 const atlasCss = readFileSync(resolve(process.cwd(), "src/game/quest-atlas.css"), "utf8");
 
 /** @param {string} selector */
@@ -24,6 +24,8 @@ const NIGHT = scopeOf(':root[data-theme="dark"] {');
  */
 function tokenValue(scope, name) {
   const hit = scope.match(new RegExp(`${name}:\\s*([^;]+);`));
+  const ref = hit?.[1].trim().match(/^var\((--[\w-]+)\)$/);
+  if (ref) return tokenValue(scope, ref[1]);
   if (hit) return hit[1].trim();
   if (scope === LIGHT) throw new Error(`missing token ${name}`);
   return tokenValue(LIGHT, name);
@@ -39,21 +41,6 @@ function oklabOf(value) {
   const chroma = Number(hit[3]);
   const hue = (Number(hit[4]) * Math.PI) / 180;
   return [Number(hit[1]) / (hit[2] ? 100 : 1), chroma * Math.cos(hue), chroma * Math.sin(hue)];
-}
-
-/**
- * Resolves the two-token `color-mix(in oklab, ...)` form the Atlas uses.
- * @param {string} fill
- * @param {string} scope
- * @returns {number[]}
- */
-function mixedOklab(fill, scope) {
-  const hit = fill.match(/^color-mix\(in oklab, var\((--[\w-]+)\) (\d+)%, var\((--[\w-]+)\)\)$/);
-  if (!hit) throw new Error(`unexpected fill: ${fill}`);
-  const weight = Number(hit[2]) / 100;
-  const first = oklabOf(tokenValue(scope, hit[1]));
-  const second = oklabOf(tokenValue(scope, hit[3]));
-  return first.map((channel, index) => weight * channel + (1 - weight) * second[index]);
 }
 
 const unit = (/** @type {number} */ value) => Math.min(1, Math.max(0, value));
@@ -108,34 +95,33 @@ describe("US-07 — Atlas territories", () => {
     expect(markup).toContain('class="atlas-illustration__trail"');
   });
 
-  it("US-07.2 keeps five distinct territory fills at 3:1 against the Atlas ground in light and Night", () => {
-    const fills = territoryFills(atlasMarkup());
+  it("US-07.2 hides the drawn Atlas map, so its fills carry no contrast pair", () => {
+    const rule = atlasCss.slice(atlasCss.indexOf(".atlas-illustration {"));
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("display: none;");
+  });
 
-    expect(new Set(fills).size).toBe(5);
+  it("US-07.2 writes the Region tab label in board ink at 4.5:1 on each of five distinct tints in light and Night", () => {
+    const popupAtlasCss = readFileSync(resolve(process.cwd(), "src/looks/popup/atlas.css"), "utf8");
+    const tab = popupAtlasCss.slice(popupAtlasCss.indexOf(":root .atlas-region__heading h3 {"));
+    const tabRule = tab.slice(0, tab.indexOf("}"));
+    expect(tabRule).toContain("border: 2px solid var(--ink);");
+    expect(tabRule).toContain("background: var(--territory, var(--region-windcall));");
+    expect(tabRule).toContain("color: var(--color-board-ink);");
+    const tints = [...atlasCss.matchAll(/--territory: var\((--region-[\w-]+)\);/g)].map((hit) => hit[1]);
+    expect(new Set(tints).size).toBe(5);
     for (const scope of [LIGHT, NIGHT]) {
-      const ground = oklabOf(tokenValue(scope, "--color-paper"));
-      for (const fill of fills) {
-        expect(contrastRatio(mixedOklab(fill, scope), ground)).toBeGreaterThanOrEqual(3);
+      const label = oklabOf(tokenValue(scope, "--color-board-ink"));
+      for (const tint of tints) {
+        expect(contrastRatio(label, oklabOf(tokenValue(scope, tint))), tint).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
 
-  it("US-07.2 keeps the neutral wash at 3:1 against the Atlas ground in light and Night", () => {
+  it("US-07.1 outlines each Region tab in ink at 3:1 against the card in light and Night", () => {
     for (const scope of [LIGHT, NIGHT]) {
-      const ground = oklabOf(tokenValue(scope, "--color-paper"));
-      expect(contrastRatio(mixedOklab(NEUTRAL_WASH, scope), ground)).toBeGreaterThanOrEqual(3);
-    }
-  });
-
-  it("US-07.1 keeps the stamps and Gate flags at 3:1 against every territory fill in light and Night", () => {
-    expect(atlasFill(".atlas-illustration__stamp")).toBe("var(--color-paper)");
-    const gateRule = atlasCss.slice(atlasCss.indexOf(".atlas-illustration__gate {"));
-    expect(gateRule.slice(0, gateRule.indexOf("}"))).toContain("stroke: var(--color-paper);");
-    for (const scope of [LIGHT, NIGHT]) {
-      const mark = oklabOf(tokenValue(scope, "--color-paper"));
-      for (const fill of [...territoryFills(atlasMarkup()), NEUTRAL_WASH]) {
-        expect(contrastRatio(mixedOklab(fill, scope), mark)).toBeGreaterThanOrEqual(3);
-      }
+      expect(
+        contrastRatio(oklabOf(tokenValue(scope, "--ink")), oklabOf(tokenValue(scope, "--card")))
+      ).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -314,10 +300,5 @@ describe("Popup Atlas stamp forms", () => {
     expect(rule(String.raw`\[aria-current="step"\]`)).not.toMatch(/outline/);
     expect(rule(String.raw`\[aria-pressed="true"\]`)).not.toMatch(/outline/);
     expect(rule(":focus-visible")).toMatch(/outline:[^;]*solid CanvasText/);
-  });
-
-  it("keeps the Pilot Atlas sheet free of rules", () => {
-    const pilotAtlasCss = readFileSync(resolve(process.cwd(), "src/looks/pilot/atlas.css"), "utf8");
-    expect(pilotAtlasCss.replace(/\/\*[\s\S]*?\*\//g, "").trim()).toBe("");
   });
 });

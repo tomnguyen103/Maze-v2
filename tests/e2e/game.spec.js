@@ -1573,7 +1573,8 @@ test("opens the full Echo Atlas, pauses time, and restores trigger focus", async
     zoomOutBounds.y + zoomOutBounds.height / 2
   );
   await page.mouse.down();
-  await expect(zoomOutButton).toHaveCSS("transform", "none");
+  // The Popup pull-tab sinks 2px while pressed.
+  await expect(zoomOutButton).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 2)");
   await page.mouse.up();
   await expect(page.locator("#pause-run")).toHaveAttribute(
     "aria-pressed",
@@ -1845,7 +1846,7 @@ test("lazy Atlas keeps semantic map and list parity across a URL reload", async 
     .poll(() =>
       page.evaluate(() =>
         performance.getEntriesByType("resource")
-          // Vite names the lazy Atlas CSS asset after its last CSS import, @look/atlas.css.
+          // Vite names the lazy Atlas CSS asset after its last CSS import, looks/popup/atlas.css.
           .some((entry) => /\/assets\/atlas-[^/]+\.css(?:$|\?)/.test(entry.name))
       )
     )
@@ -2630,7 +2631,7 @@ test("previews, saves, and resets presentation-only Explorer Access Settings", a
     await page.locator(".access-question-preview").evaluate(
       (element) => getComputedStyle(element).fontFamily
     )
-  ).toContain("Atkinson Hyperlegible Next");
+  ).toContain("Andika");
   expect(
     await page.locator(".access-answer-preview strong").evaluate(
       (element) => getComputedStyle(element).lineHeight
@@ -2782,7 +2783,7 @@ test("keeps every Access Setting readable at mobile fold and 200 percent text", 
     await page.locator("#challenge-question").evaluate(
       (element) => getComputedStyle(element).fontFamily
     )
-  ).toContain("Atkinson Hyperlegible Next");
+  ).toContain("Andika");
 
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "32px";
@@ -5877,7 +5878,7 @@ test("preserves layout with reduced motion and 200 percent text", async ({ page 
   if (!heading || !syncStatus || !metrics) {
     throw new Error("Expected status layout at 200 percent text.");
   }
-  // Pilot Chart order: the Readout sits above the board, the Title block below it.
+  // Popup order: the Readout sits above the board, the Title block below it.
   expect(heading.y).toBeGreaterThanOrEqual(metrics.y + metrics.height);
   expect(syncStatus.y).toBeGreaterThanOrEqual(heading.y + heading.height);
 });
@@ -7448,15 +7449,15 @@ test("paints the browser bar with the stored Theme Choice and gives it back for 
       )
     );
   // The boot script paints both metas before the bundle runs.
-  expect(await barColors()).toEqual(["oklch(21% 0.03 250)", "oklch(21% 0.03 250)"]);
+  expect(await barColors()).toEqual(["oklch(20% 0.05 310)", "oklch(20% 0.05 310)"]);
 
   await chooseTrailScout(page);
   const button = page.locator("#theme-button");
   await expect(button).toHaveAttribute("data-choice", "dark");
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "system");
-  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(21% 0.03 250)"]);
+  await expect.poll(barColors).toEqual(["oklch(96.6% 0.024 85.8)", "oklch(20% 0.05 310)"]);
   await button.click();
   await expect(button).toHaveAttribute("data-choice", "light");
-  await expect.poll(barColors).toEqual(["oklch(99% 0.004 95)", "oklch(99% 0.004 95)"]);
+  await expect.poll(barColors).toEqual(["oklch(96.6% 0.024 85.8)", "oklch(96.6% 0.024 85.8)"]);
 });

@@ -1,126 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
-
-/** The looks a build can ship. `pilot` is the default; `popup` is the rebuild. */
-export const LOOKS = ["pilot", "popup"];
-
-/**
- * Maps the `VITE_LOOK` value to a look name. An empty value means `pilot`;
- * any other unknown value throws, so a typo never ships the wrong look.
- *
- * @param {string | undefined} value
- */
-export function resolveLook(value) {
-  const look = value || "pilot";
-  if (!LOOKS.includes(look)) {
-    throw new Error(
-      `VITE_LOOK must be one of: ${LOOKS.join(", ")}. Got "${look}".`
-    );
-  }
-  return look;
-}
-
-/**
- * The browser bar colours of a look: the `--color-paper` literal of the light
- * block and of the Night block in its tokens.css.
- *
- * @param {string} look
- */
-function barColors(look) {
-  const css = readFileSync(
-    new URL(`./src/looks/${look}/tokens.css`, import.meta.url),
-    "utf8"
-  );
-  const paper = /--color-paper:\s*(oklch\([^)]*\))/;
-  const light = css.match(paper)?.[1];
-  const dark = css.slice(css.indexOf(':root[data-theme="dark"]')).match(paper)?.[1];
-  // An empty match would make `replaceAll("", …)` insert the colour everywhere.
-  if (!light || !dark) {
-    throw new Error(`src/looks/${look}/tokens.css has no light or Night --color-paper.`);
-  }
-  return { light, dark };
-}
-
-/**
- * Returns the function that replaces each Pilot bar colour in a text with the
- * Popup bar colour.
- */
-export function popupBarSwap() {
-  const pilot = barColors("pilot");
-  const popup = barColors("popup");
-  /** @param {string} text */
-  return (text) =>
-    text.replaceAll(pilot.light, popup.light).replaceAll(pilot.dark, popup.dark);
-}
-
-const PILOT_HERO = [
-  ["/landing-chart-light.webp", "/landing-popup-light.webp"],
-  ["/landing-chart-night.webp", "/landing-popup-night.webp"],
-  [
-    "Echo Maze pilot chart: a hatched Labyrinth with water passages, ink Wardens, and the Explorer's position fix.",
-    "Echo Maze board: paper tiles, Clover the Explorer, a Fangmoor Warden, an Echo, and the Gate."
-  ]
-];
-
-/**
- * Returns the function that replaces the Pilot landing hero images and alt
- * text in a text with the Popup ones.
- */
-export function popupHeroSwap() {
-  // A missing Pilot string would turn the swap into a silent no-op.
-  for (const file of ["index.html", "src/landing/landing-controller.js"]) {
-    const text = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
-    for (const [pilot] of PILOT_HERO) {
-      if (!text.includes(pilot)) {
-        throw new Error(`${file} no longer contains the Pilot hero string: ${pilot}`);
-      }
-    }
-  }
-  /** @param {string} text */
-  return (text) =>
-    PILOT_HERO.reduce((out, [pilot, popup]) => out.replaceAll(pilot, popup), text);
-}
-
-/**
- * Popup build only. The meta tags, theme-boot.js, and THEME_COLORS repeat the
- * Pilot bar colours by hand, so this plugin swaps them for the Popup values
- * and leaves those three Pilot sources untouched. It also swaps the landing
- * hero images and alt text in index.html and landing-controller.js.
- *
- * @returns {import("vite").Plugin}
- */
-function popupBarColors() {
-  const swap = popupBarSwap();
-  const heroSwap = popupHeroSwap();
-  let outDir = "";
-  let isBuild = false;
-  return {
-    name: "popup-bar-colors",
-    configResolved: (config) => {
-      outDir = config.build.outDir;
-      isBuild = config.command === "build";
-    },
-    transformIndexHtml: (html) => heroSwap(swap(html)),
-    transform(code, id) {
-      if (id.endsWith("src/player/theme.js")) {
-        return { code: swap(code), map: null };
-      }
-      return id.endsWith("src/landing/landing-controller.js")
-        ? { code: heroSwap(code), map: null }
-        : null;
-    },
-    closeBundle() {
-      // The dev server also calls this hook when it closes, and it writes no outDir.
-      if (!isBuild) {
-        return;
-      }
-      const boot = `${outDir}/theme-boot.js`;
-      writeFileSync(boot, swap(readFileSync(boot, "utf8")));
-    }
-  };
-}
 
 /** @type {import("vite").ResolveModulePreloadDependenciesFn} */
 const resolveModulePreloadDependencies = (
@@ -142,16 +21,7 @@ const resolveModulePreloadDependencies = (
 };
 
 export default defineConfig(({ mode }) => {
-  const look = resolveLook(
-    loadEnv(mode, globalThis.process.cwd(), "").VITE_LOOK
-  );
   const base = {
-    // `@look` names the look folder: tokens.css, fonts.js, surface.css.
-    resolve: {
-      alias: {
-        "@look": fileURLToPath(new URL(`./src/looks/${look}/`, import.meta.url))
-      }
-    },
     test: {
       include: ["tests/*.test.js"],
       // The default fork pool has repeatedly lost workers on this Windows
@@ -165,8 +35,7 @@ export default defineConfig(({ mode }) => {
       execArgv: ["--no-experimental-webstorage"]
     },
     build: {
-      // The popup build gets its own folder so the default `dist` stays Pilot.
-      outDir: look === "popup" ? "dist-look-popup" : "dist",
+      outDir: "dist",
       sourcemap: true,
       rolldownOptions: {
         output: {
@@ -271,7 +140,6 @@ export default defineConfig(({ mode }) => {
   return {
     ...base,
     plugins: [
-      ...(look === "popup" ? [popupBarColors()] : []),
       {
         name: "question-api",
         configureServer: applyMiddlewares,

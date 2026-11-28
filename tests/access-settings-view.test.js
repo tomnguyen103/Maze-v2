@@ -222,7 +222,7 @@ describe("Explorer Access Settings dialog", () => {
       );
     const trigger = () => /** @type {HTMLButtonElement} */ (document.getElementById("settings-trigger"));
 
-    it("stays hidden when the look has no art", async () => {
+    it("stays hidden when the art fails to load", async () => {
       const loadArt = vi.fn(() => Promise.resolve({ default: null }));
       createAccessSettingsView({ storage: createStorage(), loadArt });
       await vi.waitFor(() => expect(loadArt).toHaveBeenCalled());

@@ -1,9 +1,9 @@
-@import "@look/tokens.css";
-@import "@look/surface.css";
+@import "./looks/popup/tokens.css";
+@import "./looks/popup/surface.css";
 
 /*
-  Pilot Chart. White chart paper, buff land, blue water screens, black line and
-  type. Magenta marks the lights only: Pulse, the Signal Bell, caution states.
+  Popup pop-up book base styles. Paper, ink line and type, set from the Popup tokens.
+  Coral marks the lights only: Pulse, the Signal Bell, caution states.
 */
 
 * {
@@ -231,7 +231,7 @@ a:hover {
   min-width: 0;
 }
 
-/* End-card art belongs to the Popup look; Pilot shows none. */
+/* The surface sheet shows the end-card art; this base rule hides it until then. */
 .result-art {
   display: none;
 }

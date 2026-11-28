@@ -83,14 +83,45 @@ function contrast(foreground, background) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/** The custom properties of the block that opens at `selector`, with their raw values. */
+function blockOf(/** @type {string} */ selector) {
+  const css = source("src/looks/popup/tokens.css").replace(/\r\n/g, "\n");
+  const open = css.indexOf("{", css.indexOf(selector));
+  let depth = 0;
+  let end = open;
+  for (; end < css.length; end += 1) {
+    if (css[end] === "{") depth += 1;
+    if (css[end] === "}") depth -= 1;
+    if (depth === 0) break;
+  }
+  return new Map(
+    [...css.slice(open + 1, end).matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((match) => [
+      match[1],
+      match[2].trim()
+    ])
+  );
+}
+
+/** Popup themes. Each Night theme inherits what its block does not set from the light block. */
+const LIGHT = blockOf(":root {");
+const SYSTEM_NIGHT = new Map([...LIGHT, ...blockOf(':root:not([data-theme="light"]) {')]);
+const FORCED_NIGHT = new Map([...LIGHT, ...blockOf(':root[data-theme="dark"] {')]);
+
+/** Follows `var(--x)` chains to the oklch literal. */
+function declared(/** @type {Map<string, string>} */ mode, /** @type {string} */ name) {
+  let value = mode.get(name);
+  for (let depth = 0; value?.startsWith("var("); depth += 1) {
+    if (depth > 8) throw new Error(`${name} loops`);
+    value = mode.get(value.slice(4, -1).trim());
+  }
+  const literal = value?.match(/^oklch\([^)]*\)$/)?.[0];
+  if (!literal) throw new Error(`${name} has no oklch() value`);
+  return literal;
+}
+
 /** @param {string} name */
 function token(name) {
-  const tokens = source("src/looks/pilot/tokens.css");
-  const match = tokens.match(
-    new RegExp(
-      name + String.raw`:\s*oklch\(([\d.]+)% ([\d.]+) ([\d.]+)`
-    )
-  );
+  const match = declared(LIGHT, name).match(/([\d.]+)% ([\d.]+) ([\d.]+)/);
   if (!match) throw new Error(`${name} is not an oklch token.`);
   return oklchToRgb(Number(match[1]) / 100, Number(match[2]), Number(match[3]));
 }
@@ -215,14 +246,19 @@ describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
   });
 
   it("keeps the caption legible on every band", () => {
-    // The caption is `--color-ink-muted`; on the old "BRIGHT" band it
-    // measured 1.95:1.
-    for (const name of ["--color-band-1", "--color-band-2", "--color-band-3"]) {
+    // The caption is `--color-ink-muted` on the quiet and glowing bands. Popup gives
+    // the bright band caption full ink, because the full sky fill is too dark for muted ink.
+    for (const name of ["--color-band-1", "--color-band-2"]) {
       expect(
         contrast(token("--color-ink-muted"), token(name))
       ).toBeGreaterThan(4.5);
+    }
+    for (const name of ["--color-band-1", "--color-band-2", "--color-band-3"]) {
       expect(contrast(token("--color-ink"), token(name))).toBeGreaterThan(4.5);
     }
+    expect(source("src/looks/popup/surface.css")).toMatch(
+      /\.classroom-constellation-marker\[data-band="bright"\] p \{\s*color: var\(--color-ink\);/
+    );
   });
 
   it("is used by the markers rather than the old semantic fills", () => {
@@ -238,7 +274,7 @@ describe("DASH-20/22/35 — the Constellation ramp reads as a ramp", () => {
 
 describe("TYPE — body copy has a real 16px floor", () => {
   it("defines a named type scale instead of one compact token", () => {
-    const tokens = source("src/looks/pilot/tokens.css");
+    const tokens = source("src/looks/popup/tokens.css");
     expect(tokens).toContain("--text-body: 1rem;");
     expect(tokens).toContain("--text-label: 0.875rem;");
   });
@@ -317,44 +353,34 @@ describe("TYPE — body copy has a real 16px floor", () => {
   });
 });
 
-/** @param {string} block @param {string} name */
-function declared(block, name) {
-  const line = block
-    .split(/\r?\n/)
-    .find((text) => text.trim().startsWith(name + ":"));
-  const value = line?.match(/oklch\([^)]*\)/)?.[0];
-  if (!value) throw new Error(`${name} has no oklch() value`);
-  return value;
-}
-
 /** @param {string} value */
 function rgbOf(value) {
   const [lightness, chroma, hue] = (value.match(/[\d.]+/g) ?? []).map(Number);
   return oklchToRgb(lightness / 100, chroma, hue);
 }
 
-/** Adopted values from the design.md Palette table, light theme. */
-const PILOT_CHART_LIGHT = {
-  "--color-paper": "oklch(99% 0.004 95)",
-  "--color-panel": "oklch(100% 0 0)",
-  "--color-ink": "oklch(18% 0.012 250)",
-  "--color-ink-muted": "oklch(38% 0.014 250)",
-  "--color-ink-faint": "oklch(47% 0.014 250)",
-  "--color-signal": "oklch(70% 0.2 340)",
-  "--color-signal-deep": "oklch(47% 0.22 340)",
-  "--color-on-fill": "oklch(100% 0 0)"
+/** Popup values, light theme: each token resolved through its var() chain. */
+const POPUP_LIGHT = {
+  "--color-paper": "oklch(96.6% 0.024 85.8)",
+  "--color-panel": "oklch(98.6% 0.014 84.6)",
+  "--color-ink": "oklch(30.5% 0.07 310.3)",
+  "--color-ink-muted": "oklch(44.3% 0.058 311.6)",
+  "--color-ink-faint": "oklch(44.3% 0.058 311.6)",
+  "--color-signal": "oklch(68.5% 0.206 32.5)",
+  "--color-signal-deep": "oklch(54% 0.166 32.2)",
+  "--color-on-fill": "oklch(98.6% 0.014 84.6)"
 };
 
-/** Adopted values from the design.md Palette table, Night theme. */
-const PILOT_CHART_NIGHT = {
-  "--color-paper": "oklch(21% 0.03 250)",
-  "--color-panel": "oklch(23% 0.012 250)",
-  "--color-ink": "oklch(95% 0.006 95)",
-  "--color-ink-muted": "oklch(78% 0.01 250)",
-  "--color-ink-faint": "oklch(70% 0.01 250)",
-  "--color-signal": "oklch(70% 0.2 340)",
-  "--color-signal-deep": "oklch(78% 0.17 340)",
-  "--color-on-fill": "oklch(100% 0 0)"
+/** Popup values, Night theme. */
+const POPUP_NIGHT = {
+  "--color-paper": "oklch(20% 0.05 310)",
+  "--color-panel": "oklch(26% 0.055 310)",
+  "--color-ink": "oklch(95% 0.03 86)",
+  "--color-ink-muted": "oklch(80% 0.04 86)",
+  "--color-ink-faint": "oklch(80% 0.04 86)",
+  "--color-signal": "oklch(68.5% 0.206 32.5)",
+  "--color-signal-deep": "oklch(78% 0.14 32)",
+  "--color-on-fill": "oklch(98.6% 0.014 84.6)"
 };
 
 const TEXT_PAIRS = [
@@ -363,19 +389,22 @@ const TEXT_PAIRS = [
   ["--color-ink-muted", "--color-paper"],
   ["--color-ink-faint", "--color-paper"],
   ["--color-signal-deep", "--color-paper"],
-  ["--color-accent-ink", "--color-signal"]
+  // Popup paints the pressed Run Replay tab deep coral; see PRESSED_REPLAY_TAB.
+  ["--color-on-signal-deep", "--color-signal-deep"]
 ];
 
-describe("US-01 — Pilot Chart palette tokens", () => {
-  const css = source("src/looks/pilot/tokens.css");
-  const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
-  const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
-  const lightBlock = css.slice(0, systemNightStart);
-  const systemNight = css.slice(systemNightStart, forcedNightStart);
-  const forcedNight = css.slice(forcedNightStart);
+/** Popup overrides the pressed Run Replay tab, so the plain coral fill never carries text. */
+const PRESSED_REPLAY_TAB =
+  /:root \.run-replay-controls \.control-button\[aria-pressed="true"\] \{[^}]*color: var\(--color-on-signal-deep\);[^}]*background: var\(--color-signal-deep\);/;
 
-  it("sets the adopted Pilot Chart values in light (US-01.1)", () => {
-    for (const [name, value] of Object.entries(PILOT_CHART_LIGHT)) {
+describe("US-01 — Popup palette tokens", () => {
+  const css = source("src/looks/popup/tokens.css");
+  const lightBlock = LIGHT;
+  const systemNight = SYSTEM_NIGHT;
+  const forcedNight = FORCED_NIGHT;
+
+  it("sets the Popup values in light (US-01.1)", () => {
+    for (const [name, value] of Object.entries(POPUP_LIGHT)) {
       expect(declared(lightBlock, name), name).toBe(value);
     }
   });
@@ -412,7 +441,7 @@ describe("US-01 — Pilot Chart palette tokens", () => {
   });
 
   it("gives the system and forced Night blocks the same palette values (US-01.4)", () => {
-    for (const [name, value] of Object.entries(PILOT_CHART_NIGHT)) {
+    for (const [name, value] of Object.entries(POPUP_NIGHT)) {
       expect(declared(systemNight, name), name).toBe(value);
       expect(declared(forcedNight, name), name).toBe(value);
     }
@@ -480,15 +509,8 @@ const SURFACE_SHEETS = [
   "src/learning/lantern-trail.css"
 ];
 
-describe("US-06 — dialogs and learning surfaces use Pilot Chart tokens", () => {
-  const css = source("src/looks/pilot/tokens.css");
-  const systemNightStart = css.indexOf("@media (prefers-color-scheme: dark)");
-  const forcedNightStart = css.indexOf(':root[data-theme="dark"]');
-  const blocks = [
-    css.slice(0, systemNightStart),
-    css.slice(systemNightStart, forcedNightStart),
-    css.slice(forcedNightStart)
-  ];
+describe("US-06 — dialogs and learning surfaces use Popup tokens", () => {
+  const blocks = [LIGHT, SYSTEM_NIGHT, FORCED_NIGHT];
 
   it("fills no pressed or selected control with signal-deep (US-06.1)", () => {
     const offenders = [];
@@ -555,15 +577,19 @@ describe("US-06 — dialogs and learning surfaces use Pilot Chart tokens", () =>
     const css = source("src/game/daily-constellation.css");
     expect(css).toMatch(/\.daily-constellation__map \{[^}]*background: var\(--color-night-deep\)/);
     expect(contrast(signal, ground)).toBeGreaterThanOrEqual(3);
-    // The glowing band draws at 0.62 opacity; blend it over the ground.
-    const glowing = signal.map((channel, index) => 0.62 * channel + 0.38 * ground[index]);
+    // The glowing band draws at a partial opacity; blend it over the ground.
+    const opacity = Number(
+      /\[data-band="glowing"\] \{\s*opacity: ([\d.]+);/.exec(css)?.[1]
+    );
+    expect(opacity).toBeGreaterThan(0);
+    const glowing = signal.map((channel, index) => opacity * channel + (1 - opacity) * ground[index]);
     expect(contrast(/** @type {[number, number, number]} */ (glowing), ground)).toBeGreaterThanOrEqual(3);
   });
 
-  it("keeps the amber action label and the signal-deep label at 4.5:1 (US-06.2)", () => {
+  it("keeps the pressed Run Replay label at 4.5:1 (US-06.2)", () => {
+    expect(source("src/looks/popup/surface.css")).toMatch(PRESSED_REPLAY_TAB);
     for (const block of blocks) {
       for (const [text, ground] of [
-        ["--color-accent-ink", "--color-signal"],
         ["--color-on-signal-deep", "--color-signal-deep"]
       ]) {
         expect(

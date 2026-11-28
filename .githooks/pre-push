@@ -6,7 +6,7 @@ set -eu
 # time costs the same and names the failure.
 #
 # Kept in step with the `check` script by tests/pre-push-hook.test.js.
-STEPS="lint typecheck test build check:bundle build:popup check:bundle:popup"
+STEPS="lint typecheck test build check:bundle"
 
 for step in $STEPS; do
   printf 'pre-push: %s\n' "$step"

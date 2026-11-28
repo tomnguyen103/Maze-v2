@@ -228,7 +228,7 @@ describe("SHELL-07 — the theme is applied before first paint", () => {
 
   it("keeps the page, the boot script, and the module on one bar colour pair", () => {
     // The bar colour is `--color-paper` in each theme, so read it from the tokens.
-    const tokens = source("src/looks/pilot/tokens.css");
+    const tokens = source("src/looks/popup/tokens.css");
     const paper = (/** @type {string} */ block) =>
       /** @type {RegExpMatchArray} */ (
         block.match(/--color-paper: (oklch\([^)]*\))/)
@@ -258,7 +258,7 @@ describe("SHELL-07 — the theme is applied before first paint", () => {
 
 describe("SHELL-07 — night is declared, and both ways", () => {
   it("stops hard-locking the light surface", () => {
-    const tokens = source("src/looks/pilot/tokens.css");
+    const tokens = source("src/looks/popup/tokens.css");
     // `color-scheme: light` on :root with no dark branch is what made the
     // OS-dark screenshot byte-identical to the light one.
     expect(tokens).toContain("@media (prefers-color-scheme: dark)");
@@ -266,20 +266,20 @@ describe("SHELL-07 — night is declared, and both ways", () => {
   });
 
   it("lets an explicit choice win over the OS in both directions", () => {
-    const tokens = source("src/looks/pilot/tokens.css");
+    const tokens = source("src/looks/popup/tokens.css");
     // Without the `:not([data-theme="light"])`, a light choice on a dark OS
     // would still resolve dark.
     expect(tokens).toContain(':root:not([data-theme="light"])');
   });
 
   it("keeps the two declarations in step", () => {
-    const tokens = source("src/looks/pilot/tokens.css");
+    const tokens = source("src/looks/popup/tokens.css");
     const mediaAt = tokens.indexOf("@media (prefers-color-scheme: dark)");
-    const explicitAt = tokens.lastIndexOf(':root[data-theme="dark"]');
+    const explicitAt = tokens.indexOf(':root[data-theme="dark"]');
     expect(mediaAt).toBeLessThan(explicitAt);
     const media = tokens.slice(mediaAt, explicitAt);
-    // The explicit block ends where the forced-colors block starts.
-    const explicit = tokens.slice(explicitAt, tokens.indexOf("@media (forced-colors: active)"));
+    // The explicit block ends where the contrast block starts.
+    const explicit = tokens.slice(explicitAt, tokens.indexOf("@media (prefers-contrast: more)"));
     const declared = (/** @type {string} */ block) =>
       [...block.matchAll(/(--[a-z0-9-]+):/g)].map((match) => match[1]).sort();
     expect(declared(explicit)).toEqual(declared(media));

@@ -64,14 +64,14 @@ function createDetachedCanvas(width, height) {
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {typeof createDetachedCanvas} [createTile] Builds the detached Fog tile canvas.
- * @param {() => Promise<unknown>} [loadArt] Loads the look's board art; null or a rejection keeps the shape marks.
+ * @param {() => Promise<unknown>} [loadArt] Loads the board art; null or a rejection keeps the shape marks.
  * @param {() => boolean} [isBrightStart] True while the Bright Start Quest Level shows; it softens the Fangmoor art.
  * @param {typeof createDetachedCanvas} [createLayer] Builds the two offscreen layers: the chart and the Fog.
  */
 export function createCanvasRenderer(
   canvas,
   createTile = createDetachedCanvas,
-  loadArt = () => import("@look/board-art.js"),
+  loadArt = () => import("../looks/popup/board-art.js"),
   isBrightStart = () => false,
   createLayer = createDetachedCanvas
 ) {
@@ -415,7 +415,7 @@ export function createCanvasRenderer(
     const unit = devicePixel();
     const top = Math.round((canvas.height - height) / 2);
     const band = Math.round(height);
-    context.fillStyle = palette.land;
+    context.fillStyle = palette.casing;
     context.fillRect(0, top, canvas.width, band);
     context.fillStyle = palette.boardInk;
     context.fillRect(0, top, canvas.width, unit);
@@ -1015,12 +1015,17 @@ export function createCanvasRenderer(
     const { x, y } = centerOf(warden, tile);
     const scale = palette.markScale;
     const radius = tile * 0.27 * scale;
-    // A dotted danger line rings the Warden, under its body.
+    // A dotted danger line rings the Warden, under its body. An ink outline
+    // under each coral dash keeps the line at 3:1 on every Passage hue.
+    const dangerWidth = Math.max(1, tile * 0.02 * scale);
     context.beginPath();
     context.arc(x, y, Math.min(tile * 0.46 * scale, tile * 0.48), 0, Math.PI * 2);
     context.setLineDash([Math.max(1, tile * 0.02), Math.max(2, tile * 0.05)]);
+    context.strokeStyle = palette.boardInk;
+    context.lineWidth = dangerWidth + 2 * Math.max(1, tile * 0.01 * scale);
+    context.stroke();
     context.strokeStyle = palette.danger;
-    context.lineWidth = Math.max(1, tile * 0.02 * scale);
+    context.lineWidth = dangerWidth;
     context.stroke();
     context.setLineDash([]);
     if (art && drawArt("fangmoor", warden.mode, x, y, tile)) return;

@@ -157,7 +157,14 @@
   }
 
   :root .run-metrics div {
-    padding: 4px 2px 10px;
+    padding: 4px 2px 8px;
+  }
+
+  /* The board panel gives up width and height to the board on a phone. */
+  :root .labyrinth-panel {
+    gap: var(--space-1);
+    border-width: 2px;
+    padding: 0 var(--space-1) var(--space-1);
   }
 
   :root .run-metrics dd {
@@ -279,7 +286,7 @@
   aspect-ratio: 1;
 }
 
-/* The landing course line belongs to the Pilot chart. The Popup hero is a board crop, so the line hides. */
+/* The Popup hero is a board crop, so the line hides. */
 .landing-hero__trail {
   display: none;
 }

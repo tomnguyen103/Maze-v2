@@ -321,6 +321,21 @@
   transform: translateX(-50%);
 }
 
+/* The list view sits in a narrow column beside the detail pane at any width, so each Region sheet stacks and takes two stamps per row. */
+:root .atlas-regions[data-view="list"] .atlas-region {
+  grid-template-areas: "tab" "stamps" "seal";
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--space-2);
+}
+
+:root .atlas-regions[data-view="list"] .atlas-region__heading h3 {
+  margin: calc(-1 * (var(--space-2) + 2px)) 0 0 calc(-1 * (var(--space-2) + 2px));
+}
+
+:root .atlas-regions[data-view="list"] .atlas-nodes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 /* On a phone the cover is a thin edge and each index tab sits on the top edge of its row. */
 @media (max-width: 48rem) {
   :root .atlas-viewport {
