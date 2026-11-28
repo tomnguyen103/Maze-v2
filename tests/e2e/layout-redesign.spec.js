@@ -177,7 +177,7 @@ test.describe("layout redesign & edge viewports", () => {
   // B-10: a size 15 board keeps tiles at 48 device px and 24 px or more, and scrolls inside its frame at 375 px.
   test("scrolls a size 15 board inside its frame and follows the Explorer at 375x812", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/?seed=FOLLOW-B&level=maze-master&labyrinth=1");
+    await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
     await expectGameReady(page);
     const size = getLabyrinthConfig("maze-master", 1).size;
     expect(size).toBe(15);
@@ -191,11 +191,12 @@ test.describe("layout redesign & edge viewports", () => {
     expect(await frame.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 
     // The same seed and config give the same Run, so a local copy tells where the Explorer stands after each key.
-    let run = createRun("FOLLOW-B", { ...getLabyrinthConfig("maze-master", 1), ruleset: getQuestRunRuleset(1) });
+    let run = createRun("FOLLOW-D", { ...getLabyrinthConfig("maze-master", 1), ruleset: getQuestRunRuleset(1) });
     /** @type {Record<string, string>} */
     const keys = { up: "ArrowUp", right: "ArrowRight", down: "ArrowDown", left: "ArrowLeft" };
     const visits = new Map([["1,1", 1]]);
     let scrolled = false;
+    let checked = 0;
     await canvas.focus();
     for (let step = 0; step < 400 && run.status === "active"; step += 1) {
       // Take the least visited passage, so the walk reaches the far side.
@@ -212,11 +213,10 @@ test.describe("layout redesign & edge viewports", () => {
       visits.set(here, (visits.get(here) ?? 0) + 1);
       await page.keyboard.press(keys[pick.direction]);
       const { col, row } = run.explorer;
-      // A Warden moves on the clock, which the local copy does not model. Its Question dialog stops the walk.
-      const question = page.locator("#challenge-dialog[open]");
+      // A Warden catch opens a Question the local copy does not model, so this seed must stay clear of one.
+      await expect(page.locator("#challenge-dialog[open]"), "no Warden Question opens during the walk").toHaveCount(0);
       // The board repaints on the next animation frame, so the follow scroll can land after the key press.
       await expect(async () => {
-        if (await question.count()) return;
         const box = await canvas.boundingBox();
         const view = await frame.boundingBox();
         if (!box || !view) throw new Error("board has no bounding box");
@@ -228,9 +228,10 @@ test.describe("layout redesign & edge viewports", () => {
         expect(top, `row ${row} top edge`).toBeGreaterThanOrEqual(view.y - 1);
         expect(top + tile, `row ${row} bottom edge`).toBeLessThanOrEqual(view.y + view.height + 1);
       }).toPass({ timeout: 2000 });
-      if (await question.count()) break;
+      checked += 1;
       scrolled ||= (await frame.evaluate((element) => element.scrollLeft + element.scrollTop)) > 0;
     }
+    expect(checked, "the walk checked the Explorer in frame on many steps").toBeGreaterThanOrEqual(30);
     expect(scrolled, "the frame scrolled to follow the Explorer").toBe(true);
     // The Neatline stays at frame size while the board scrolls under it.
     const offsets = await frame.evaluate((element) => {
@@ -240,6 +241,18 @@ test.describe("layout redesign & edge viewports", () => {
     });
     for (const offset of offsets) expect(Math.abs(offset)).toBeLessThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+  });
+
+  test("cancels the native scroll of a held arrow key", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
+    await expectGameReady(page);
+    const prevented = await page.locator("#maze-canvas").evaluate((element) => {
+      const event = new KeyboardEvent("keydown", { key: "ArrowRight", repeat: true, cancelable: true, bubbles: true });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(prevented).toBe(true);
   });
 
   test("provides tactile feedback on interactive buttons and controls", async ({ page }) => {
