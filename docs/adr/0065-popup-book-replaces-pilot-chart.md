@@ -10,7 +10,7 @@ The owner mandate of 2026-11-26 authorises a rebuild of the interface. The plan 
 ## Decision
 
 1. Every surface takes the Popup identity: a pop-up storybook. Warm paper holds cards, plum ink draws text and every outline, and coral is the one accent. The palette lives in `src/looks/popup/tokens.css` and in `design.md` section "Popup look".
-2. Chewy draws the wordmark, the scene titles, and the board Echo digits. Andika draws all other text (plan D9).
+2. Chewy draws the wordmark and the scene titles. Andika draws all other text, and the board Echo digits too (plan D9).
 3. Geist Mono shows only for seed codes and code text (plan D9). Every Readout number uses Andika with tabular figures at 700 weight (plan D10).
 4. Popup takes effect when slice R9 sets the default look. Until then, Pilot Chart stays the production look.
 5. Supersedes ADR 0051.

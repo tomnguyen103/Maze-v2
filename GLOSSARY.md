@@ -149,9 +149,9 @@ default look. It names presentation, never a game rule.
 _Avoid_: Field Journal, Journey, Theme (alone), skin, mode, Pilot Chart
 
 **Stamp sheet**:
-The Popup form of one Atlas Region in the Echo Atlas map view. One row holds an index
-tab, four landmark stamps, and the Region Sigil seal. Each landmark state has its own
-stamp form.
+The Popup form of the Echo Atlas map view: one row per Atlas Region, in Region order.
+Each row holds an index tab, four landmark stamps, and the Region Sigil seal. Each
+Atlas node state has its own stamp form.
 _Avoid_: Region card, level grid, world tile
 
 **Tunnel book**:
