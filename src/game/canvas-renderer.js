@@ -105,6 +105,10 @@ export function createCanvasRenderer(
   const patterns = new Map();
   /** @type {GameRun | null} */
   let lastRun = null;
+  /** The Explorer tile and board width of the last follow, so an appearance repaint keeps a manual scroll. */
+  let lastFollow = "";
+  /** @type {GameRun["labyrinth"] | null} */
+  let lastFollowLabyrinth = null;
 
   /**
    * One pattern per paint and device pixel size. Without a tile context the caller gets null.
@@ -217,8 +221,13 @@ export function createCanvasRenderer(
   function followExplorer(run) {
     const frame = canvas.parentElement;
     if (!frame) return;
-    const tile = canvas.getBoundingClientRect().width / run.labyrinth.length;
+    const width = canvas.getBoundingClientRect().width;
+    const tile = width / run.labyrinth.length;
     const { col, row } = run.explorer;
+    const follow = `${col}:${row}:${width}`;
+    if (follow === lastFollow && run.labyrinth === lastFollowLabyrinth) return;
+    lastFollow = follow;
+    lastFollowLabyrinth = run.labyrinth;
     frame.scrollLeft = followOffset(col * tile, tile + 2 * canvas.offsetLeft, frame.scrollLeft, frame.clientWidth);
     frame.scrollTop = followOffset(row * tile, tile + 2 * canvas.offsetTop, frame.scrollTop, frame.clientHeight);
   }

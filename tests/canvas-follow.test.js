@@ -13,6 +13,11 @@ describe("board tile floor and follow offset (B-10)", () => {
     expect(board).toContain("min-width: calc(var(--board-size, 0) * 24px);");
     // The Run Replay canvas must fit a 375 px dialog, so it has no floor.
     expect(replayCss).not.toContain("--board-size");
+    // The renderer is shared with the Run Replay canvas, so it never sets a width floor itself.
+    expect(renderer).not.toMatch(/style\.minWidth|["']min-width["']/);
+    const replayCanvas = replayCss.match(/\.run-replay-canvas \{[^}]*\}/g) ?? [];
+    expect(replayCanvas.length).toBeGreaterThan(0);
+    for (const block of replayCanvas) expect(block).not.toMatch(/min-width:(?!\s*0;)/);
   });
 
   it("scrolls the least that brings a span into view", () => {
