@@ -615,11 +615,11 @@ dialog > .dialog-heading > button {
     );
 }
 
-/* ADR 0067: Pulse sight is a peeled Fog flap on the top edge of the Fog band, not a wash. */
+/* ADR 0067: Pulse sight is a peeled Fog flap on the top edge of a charted tile, so the flap sits on the first Passage band. */
 .access-preview-pulse {
   position: absolute;
   top: 0;
-  left: 0;
+  left: 25%;
   width: 25%;
   height: 35%;
   border-bottom: 1px solid var(--color-fog-edge);

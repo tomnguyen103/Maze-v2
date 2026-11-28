@@ -353,8 +353,8 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-light-on-fill", "--color-on-fill", 3]
 ]);
 
-/** The Land outline carries the boundary on the Fog in strong mode. */
-const STRONG_ONLY_PAIRS = /** @type {const} */ ([["--color-coastline", "--color-fog", 3]]);
+/** ADR 0067: the Land outline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
+const FOG_EDGE_PAIRS = /** @type {const} */ ([["--color-coastline", "--color-fog", 3]]);
 
 /** The on-fill colour that the Windway tests give the Windway source disc. */
 const WINDWAY_DISC = "rgb(251, 252, 253)";
@@ -1053,10 +1053,11 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 2)")).toBe(true);
   });
 
-  it("US-01.2 doubles the Land outline in high contrast", () => {
-    /** @param {boolean} strong */
-    const measure = (strong) => {
-      if (strong) document.documentElement.dataset.accessContrast = "strong";
+  it("US-01.2 doubles the Land outline where Land is paper: high contrast and each palette mode", () => {
+    /** @param {"strong" | "twilight" | "sea-glass" | "dusk" | "daylight" | null} mode */
+    const measure = (mode) => {
+      if (mode === "strong") document.documentElement.dataset.accessContrast = "strong";
+      else if (mode) document.documentElement.dataset.playgroundPalette = mode;
       const { context, renderer } = stubCanvas();
       /** @type {number[]} */
       const widths = [];
@@ -1067,14 +1068,17 @@ describe("Canvas renderer", () => {
       });
       renderer.render(board({ revealed: ["0,0", "0,1"] }));
       document.documentElement.removeAttribute("data-access-contrast");
+      document.documentElement.removeAttribute("data-playground-palette");
       // The chart pass strokes the Land outline first.
       return { coast: widths[0] };
     };
 
-    const normal = measure(false);
-    const strong = measure(true);
+    const normal = measure(null);
     expect(normal.coast).toBe(19);
-    expect(strong.coast).toBe(normal.coast * 2);
+    expect(measure("daylight").coast).toBe(normal.coast);
+    for (const mode of /** @type {const} */ (["strong", "twilight", "sea-glass", "dusk"])) {
+      expect(measure(mode).coast).toBe(normal.coast * 2);
+    }
   });
 
   it("US-01.2 snaps Land cards and Passages to the tile edges at a fractional tile size", () => {
@@ -1724,14 +1728,16 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
         }
       }
     }
-    const strong = Object.entries(THEMES).flatMap(([theme, base]) => {
-      const tokens = new Map([...base, ...daylightScope(/** @type {string} */ (MODES.strong))]);
-      return STRONG_ONLY_PAIRS.map(([mark, ground, floor]) => {
-        const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
-        return ratio < floor ? `${theme}/strong: ${mark} on ${ground} ${ratio.toFixed(2)} < ${floor}` : "";
-      });
-    });
-    failures.push(...strong.filter(Boolean));
+    const fogEdges = Object.entries(THEMES).flatMap(([theme, base]) =>
+      Object.entries(MODES).flatMap(([mode, modeSelector]) => {
+        const tokens = new Map([...base, ...(modeSelector ? daylightScope(modeSelector) : [])]);
+        return FOG_EDGE_PAIRS.map(([mark, ground, floor]) => {
+          const ratio = contrastOver(resolveColor(tokens, mark), resolveColor(tokens, ground));
+          return ratio < floor ? `${theme}/${mode}: ${mark} on ${ground} ${ratio.toFixed(2)} < ${floor}` : "";
+        });
+      })
+    );
+    failures.push(...fogEdges.filter(Boolean));
     expect(failures).toEqual([]);
   });
 
@@ -1854,6 +1860,17 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     // Guard for docs/solutions/frontend/region-theme-overrode-board.md: a Region scope never touches the board.
     expect(regionCss).not.toMatch(/\.canvas-frame|#maze-canvas/);
     expect(regionCss).not.toMatch(/--color-(board|passage|land|fog|coastline|pulse)[\w-]*\s*:/);
+  });
+
+  it("US-03.2 paints the 3px ink edge on the sticky Neatline, so a board wider than the frame never covers it", () => {
+    const ruleOf = (/** @type {string} */ selector) =>
+      [...daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].trim() === selector).map((rule) => rule[2]).join("\n");
+
+    const neatline = ruleOf(".neatline-canvas");
+    expect(neatline).toMatch(/position:\s*sticky/);
+    expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px var\(--color-board-ink\)/);
+    // The scroll container paints its own shadow under the scrolled board, so the frame carries none.
+    expect(ruleOf(".canvas-frame")).not.toMatch(/box-shadow/);
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {

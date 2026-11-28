@@ -85,7 +85,7 @@ function ratio(
   return (high + 0.05) / (low + 0.05);
 }
 
-/** Contrast of a translucent ink over an opaque ground, mixed in linear light. */
+/** Contrast of a translucent ink over an opaque ground, mixed in gamma-encoded sRGB as the canvas does. */
 function alphaRatio(
   /** @type {Map<string, string>} */ mode,
   /** @type {string} */ foreground,

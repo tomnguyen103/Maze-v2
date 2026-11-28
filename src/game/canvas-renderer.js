@@ -28,6 +28,9 @@
  * }} SignalBell
  */
 
+/** The palette modes where `--color-land` is paper (src/daylight.css). */
+const PAPER_LAND_PALETTES = new Set(["twilight", "sea-glass", "dusk"]);
+
 /**
  * @param {number} width
  * @param {number} height
@@ -578,19 +581,6 @@ export function createCanvasRenderer(
   }
 
   /**
-   * Traces a rounded rectangle path with plain arcs.
-   * @param {number} x
-   * @param {number} y
-   * @param {number} width
-   * @param {number} height
-   * @param {number} radius
-   */
-  function traceRoundedRect(x, y, width, height, radius) {
-    context.beginPath();
-    appendRoundedRect(x, y, width, height, radius);
-  }
-
-  /**
    * Draws a dark rounded label badge with light text.
    * @param {string} text
    * @param {number} x
@@ -602,7 +592,8 @@ export function createCanvasRenderer(
     const fontSize = Math.max(7 * deviceRatio, tile * fontScale * palette.markScale);
     const width = Math.max(tile * 0.3, fontSize * (text.length * 0.68 + 0.9));
     const height = fontSize * 1.55;
-    traceRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
+    context.beginPath();
+    appendRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
     context.fillStyle = palette.night;
     context.fill();
     context.fillStyle = palette.onFill;
@@ -635,8 +626,8 @@ export function createCanvasRenderer(
     if (cells.length === 0) return;
     const step = tile / 24;
     const inset = Math.max(1, Math.round(step));
-    // High contrast doubles the outline.
-    const outline = Math.max(1, Math.round(tile * 0.06)) * (palette.strong ? 2 : 1);
+    // Where Land is paper (strong contrast, a palette mode), the outline doubles (ADR 0067).
+    const outline = Math.max(1, Math.round(tile * 0.06)) * (palette.paperLand ? 2 : 1);
     const lip = Math.max(1, Math.round(6 * step));
     const radius = 5 * step;
     const boxes = cells.map(([row, col]) => {
@@ -1280,8 +1271,11 @@ function readPalette() {
     markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
     night: color("--color-night-deep"),
     onFill: color("--color-on-fill"),
+    // Mirrors the daylight.css rule that sets `--color-land` to paper.
+    paperLand:
+      document.documentElement.dataset.accessContrast === "strong" ||
+      PAPER_LAND_PALETTES.has(document.documentElement.dataset.playgroundPalette ?? ""),
     passage: color("--color-passage"),
-    strong: document.documentElement.dataset.accessContrast === "strong",
     warden: color("--color-board-warden")
   };
 }

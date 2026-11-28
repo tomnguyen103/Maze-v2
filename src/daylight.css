@@ -511,8 +511,6 @@ a:hover {
   aspect-ratio: 1;
   margin-inline: auto;
   --frame-pad: clamp(1.125rem, 2dvh, 1.25rem);
-  /* ADR 0067: a 3px ink edge on the paper card. An inset shadow keeps the board and Neatline geometry of a borderless frame. */
-  box-shadow: inset 0 0 0 3px var(--color-board-ink);
   border-radius: var(--radius-lg);
   background: var(--color-board-casing);
   isolation: isolate;
@@ -539,6 +537,17 @@ a:hover {
   width: 100cqw;
   height: 100cqw;
   pointer-events: none;
+  /* ADR 0067: the 3px ink edge of the paper card. The sticky Neatline paints it above a board that scrolls, and an inset shadow keeps the frame geometry. */
+  box-shadow: inset 0 0 0 3px var(--color-board-ink);
+  border-radius: inherit;
+}
+
+/* Forced colours drop a box shadow. The Neatline holds no text, so it opts out and keeps the edge in a system colour. */
+@media (forced-colors: active) {
+  .neatline-canvas {
+    forced-color-adjust: none;
+    box-shadow: inset 0 0 0 3px CanvasText;
+  }
 }
 
 .canvas-frame.is-hurt {

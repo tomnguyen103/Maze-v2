@@ -30,13 +30,15 @@ describe("Access preview band", () => {
     expect(start + width).toBeCloseTo(75, 1);
   });
 
-  it("US-03.1 draws the Pulse sample as the peeled Fog flap on the Fog band, never the old Pulse wash", () => {
+  it("US-03.1 draws the Pulse sample as the peeled Fog flap on the first Passage band, never the old Pulse wash", () => {
     const pulse = css.match(/\.access-preview-pulse \{([^}]*)\}/)?.[1] ?? "";
     expect(pulse).not.toContain("--color-pulse");
     expect(pulse).not.toMatch(/inset: 0/);
     expect(pulse).toContain("var(--color-fog-soft)");
     expect(pulse).toContain("var(--color-fog-edge)");
     expect(pulse).toMatch(/width: 25%/);
+    // The Fog band spans 0 to 25%; a Pulse tile is charted, so the flap starts on the Passage band.
+    expect(pulse).toMatch(/left: 25%/);
   });
 
   it("US-03.1 draws the Echo sample and the legend Echo as the canvas coral disc, never the old diamond", () => {
