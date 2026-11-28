@@ -2075,6 +2075,28 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     });
   });
 
+  it("US-02.1 keeps the lower Land flap corners in order on a compact tile with a doubled Coastline", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    document.body.style.setProperty("--color-land", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--board-paper", "rgb(5, 5, 5)");
+    atDeviceRatio(1, () => {
+      const { context, renderer } = stubCanvas({ width: 24 });
+      const paints = recordPaints(context);
+
+      // Tile 12 device px: the snapped lower corners would sit at 6.5 and 5.5 without the clamp.
+      renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+      const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+      const points = (flap?.path ?? [])
+        .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+        .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+      expect(points).toHaveLength(4);
+      const [[nearTop], [farTop], [farLow], [nearLow]] = points;
+      expect(farTop).toBeGreaterThan(nearTop);
+      expect(farLow).toBeGreaterThanOrEqual(nearLow);
+    });
+  });
+
   describe("Echo number floor", () => {
     /** @param {number} ratio @param {number} width The board width in CSS px. */
     function echoDigit(ratio, width) {

@@ -453,10 +453,13 @@ export function createCanvasRenderer(
         // A wide Coastline leaves less room on a Land card, so the lower stroke stays above the clip edge.
         const floor = land ? snapStroke(top + height - cardInset - outline - unit / 2, unit) : Infinity;
         const low = Math.min(snapStroke(edge + 16 * step, unit), floor);
+        // On a small tile the snapped lower corners can swap sides, so the clamp keeps the flap from crossing itself.
+        const lowNear = snapStroke(near + 6 * step, unit);
+        const lowFar = Math.max(snapStroke(far - 6 * step, unit), lowNear);
         context.moveTo(near, edge);
         context.lineTo(far, edge);
-        context.lineTo(snapStroke(far - 6 * step, unit), low);
-        context.lineTo(snapStroke(near + 6 * step, unit), low);
+        context.lineTo(lowFar, low);
+        context.lineTo(lowNear, low);
         context.closePath();
       }
       context.fillStyle = palette.fogSoft;
