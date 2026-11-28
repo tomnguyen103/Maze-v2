@@ -2523,6 +2523,11 @@ test("lazy Watch Trail stays usable across contracted Replay viewports", async (
     expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
     expect((bounds?.x ?? 0) + (bounds?.width ?? 0))
       .toBeLessThanOrEqual(viewport.width);
+    // The shared renderer must not give the Replay canvas a width floor.
+    const canvasBounds = await viewer.locator(".run-replay-canvas").boundingBox();
+    expect(canvasBounds?.x ?? -1).toBeGreaterThanOrEqual(bounds?.x ?? 0);
+    expect((canvasBounds?.x ?? 0) + (canvasBounds?.width ?? Infinity))
+      .toBeLessThanOrEqual((bounds?.x ?? 0) + (bounds?.width ?? 0) + 1);
     expect(await page.evaluate(
       () => document.documentElement.scrollWidth -
         document.documentElement.clientWidth
