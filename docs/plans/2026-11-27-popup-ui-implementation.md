@@ -340,6 +340,6 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R2g, R3g, R5g | Parked | Need rebuild M4 (generation 2 engine) |
 | R8 | Merged | #323 (ADR 0065 and ADR 0066 supersede ADR 0051 and ADR 0052; GLOSSARY terms per D15; `design.md` sync) |
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
-| Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) and #326 (the B-10 tile floor from the device pixel ratio). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
+| Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) #326 (the B-10 tile floor from the device pixel ratio) and #327 (the B-10 follow-up gaps: the held-key scroll, the tile floor fallback and the pixel ratio repaint). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
 
-The game row measures 41.40 KB of 42 KB after #326. The motion chunk is 0.83 KB.
+The game row measures 41.43 KB of 42 KB after #327. The motion chunk is 0.83 KB.
