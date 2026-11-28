@@ -366,7 +366,7 @@ export function createCanvasRenderer(
     context.drawImage(chart, 0, 0);
     context.restore();
     drawFogCards(fogCells, tile);
-    drawPulseFlaps(pulseCells, tile);
+    drawPulseFlaps(pulseCells, tile, run.labyrinth);
   }
 
   /**
@@ -381,61 +381,94 @@ export function createCanvasRenderer(
     // The stroke centre sits 1.5/24 tile inside the tile edge.
     const inset = snapStroke(1.5 * step, unit);
     const radius = 4 * step;
-    const fold = 1.5 * step;
-    context.beginPath();
-    for (const [row, col] of cells) {
-      const { left, top, width, height } = tileBox(row, col, tile);
-      appendRoundedRect(left + inset, top + inset, width - 2 * inset, height - 2 * inset, radius);
-    }
+    const traceCards = () => {
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width, height } = tileBox(row, col, tile);
+        appendRoundedRect(left + inset, top + inset, width - 2 * inset, height - 2 * inset, radius);
+      }
+    };
+    traceCards();
     context.fillStyle = palette.fog;
     context.fill();
-    context.strokeStyle = palette.fogEdge;
-    context.lineWidth = unit;
-    context.stroke();
     context.beginPath();
     for (const [row, col] of cells) {
       const { left, top, width } = tileBox(row, col, tile);
       const right = left + width - inset;
       const edge = top + inset;
+      // The fold corner follows the card corner, so the fold never leaves the card.
       context.moveTo(right - 7.5 * step, edge);
-      context.lineTo(right - fold, edge);
-      context.arc(right - fold, edge + fold, fold, -Math.PI / 2, 0);
+      context.lineTo(right - radius, edge);
+      context.arc(right - radius, edge + radius, radius, -Math.PI / 2, 0);
       context.lineTo(right, edge + 7.5 * step);
       context.closePath();
     }
     context.fillStyle = palette.fogSoft;
     context.fill();
+    // The edge strokes last, so the fold fill cannot cover it.
+    traceCards();
+    context.strokeStyle = palette.fogEdge;
+    context.lineWidth = unit;
+    context.stroke();
   }
 
   /**
    * A tile in Pulse sight shows the chart plus a peeled Fog flap along its top edge, each from one path.
    * @param {Array<[number, number]>} cells
    * @param {number} tile
+   * @param {GameRun["labyrinth"]} labyrinth
    */
-  function drawPulseFlaps(cells, tile) {
+  function drawPulseFlaps(cells, tile, labyrinth) {
     if (cells.length === 0) return;
     const unit = devicePixel();
     const step = tile / 24;
-    const inset = snapStroke(step, unit);
-    context.beginPath();
-    for (const [row, col] of cells) {
-      const { left, top, width } = tileBox(row, col, tile);
-      const near = left + inset;
-      const far = left + width - inset;
-      const edge = top + inset;
-      const low = snapStroke(edge + 16 * step, unit);
-      context.moveTo(near, edge);
-      context.lineTo(far, edge);
-      context.lineTo(snapStroke(far - 6 * step, unit), low);
-      context.lineTo(snapStroke(near + 6 * step, unit), low);
-      context.closePath();
-    }
-    context.fillStyle = palette.fogSoft;
-    context.fill();
-    context.strokeStyle = palette.fogEdge;
-    context.lineWidth = unit;
-    context.lineJoin = "miter";
-    context.stroke();
+    const cardInset = landInset(tile);
+    const outline = coastlineWidth(tile);
+    // A flap on a Land card starts inside the Coastline, so it never covers the outline.
+    const landFlapInset = snapStroke(cardInset + outline + unit / 2, unit);
+    // A compact Run Replay tile whose span inside the Coastline is under half the tile width draws its Land flap as a Passage flap.
+    const roomy = tile - 2 * (cardInset + outline) >= tile / 2;
+    const insideCoastline = (/** @type {number} */ row, /** @type {number} */ col) => roomy && labyrinth[row][col] === 0;
+    isolated(() => {
+      // The clip follows the inner edge of the Coastline, so the flap corners stay off its rounded corners too.
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width, height } = tileBox(row, col, tile);
+        if (!insideCoastline(row, col)) {
+          context.rect(left, top, width, height);
+          continue;
+        }
+        const edge = cardInset + outline;
+        appendRoundedRect(left + edge, top + edge, width - 2 * edge, height - 2 * edge, Math.max(0, 5 * step - outline));
+      }
+      context.clip();
+      context.beginPath();
+      for (const [row, col] of cells) {
+        const { left, top, width, height } = tileBox(row, col, tile);
+        const land = insideCoastline(row, col);
+        const inset = land ? landFlapInset : snapStroke(step, unit);
+        const near = left + inset;
+        const far = left + width - inset;
+        const edge = top + inset;
+        // A wide Coastline leaves less room on a Land card, so the lower stroke stays above the clip edge.
+        const floor = land ? snapStroke(top + height - cardInset - outline - unit / 2, unit) : Infinity;
+        const low = Math.min(snapStroke(edge + 16 * step, unit), floor);
+        // On a small tile the snapped lower corners can swap sides, so the clamp keeps the flap from crossing itself.
+        const lowNear = snapStroke(near + 6 * step, unit);
+        const lowFar = Math.max(snapStroke(far - 6 * step, unit), lowNear);
+        context.moveTo(near, edge);
+        context.lineTo(far, edge);
+        context.lineTo(lowFar, low);
+        context.lineTo(lowNear, low);
+        context.closePath();
+      }
+      context.fillStyle = palette.fogSoft;
+      context.fill();
+      context.strokeStyle = palette.fogEdge;
+      context.lineWidth = unit;
+      context.lineJoin = "miter";
+      context.stroke();
+    });
   }
 
   /** @param {() => void} draw Runs one mark with its own line, text and fill state. */
@@ -616,6 +649,16 @@ export function createCanvasRenderer(
     context.fill();
   }
 
+  /** @param {number} tile The gap between a tile edge and its Land card. */
+  function landInset(tile) {
+    return Math.max(1, Math.round(tile / 24));
+  }
+
+  /** @param {number} tile The Coastline width. Where Land is paper (strong contrast, a palette mode), it doubles (ADR 0067). */
+  function coastlineWidth(tile) {
+    return Math.max(1, Math.round(tile * 0.06)) * (palette.paperLand ? 2 : 1);
+  }
+
   /**
    * Known walls are meadow Land cards: a card fill, a lip along the bottom and an ink outline, each from one path.
    * The outline is the Coastline.
@@ -625,9 +668,8 @@ export function createCanvasRenderer(
   function drawLand(cells, tile) {
     if (cells.length === 0) return;
     const step = tile / 24;
-    const inset = Math.max(1, Math.round(step));
-    // Where Land is paper (strong contrast, a palette mode), the outline doubles (ADR 0067).
-    const outline = Math.max(1, Math.round(tile * 0.06)) * (palette.paperLand ? 2 : 1);
+    const inset = landInset(tile);
+    const outline = coastlineWidth(tile);
     const lip = Math.max(1, Math.round(6 * step));
     const radius = 5 * step;
     const boxes = cells.map(([row, col]) => {
@@ -737,10 +779,12 @@ export function createCanvasRenderer(
     context.stroke();
     context.restore();
 
+    // design.md: the number draws at 12 CSS px or more; a tile below 24 CSS px keeps the plain mark.
+    if (tile < 24 * deviceRatio) return;
     context.save();
     context.fillStyle = palette.echoText;
     context.font =
-      `700 ${Math.max(8 * deviceRatio, tile * 0.22 * scale)}px ${palette.fontBody}`;
+      `700 ${Math.max(12 * deviceRatio, tile * 0.22 * scale)}px ${palette.fontBody}`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(String(pairNumber), x, y);
@@ -799,9 +843,9 @@ export function createCanvasRenderer(
       context.lineTo(x + tile * 0.1 * scale, y - tile * 0.02 * scale);
       context.stroke();
     } else {
-      // The keyhole is board ink: Land is paper in strong and palette modes, so it would vanish on the sun fill.
+      // The keyhole has its own ink: Land is paper in strong and palette modes, and forced colours paint the Gate CanvasText.
       context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
-      context.fillStyle = palette.boardInk;
+      context.fillStyle = palette.gateInk;
       context.fill();
       context.fillRect(
         x - tile * 0.025 * scale,
@@ -1290,6 +1334,7 @@ function readPalette() {
     fogEdge: color("--color-fog-edge"),
     fogSoft: color("--color-fog-soft"),
     gate: color("--color-board-gate"),
+    gateInk: color("--color-board-gate-ink"),
     land: color("--color-land"),
     landLip: color("--color-land-lip"),
     light: color("--color-board-light"),

@@ -521,6 +521,10 @@ a:hover {
   container-type: inline-size;
 }
 
+.canvas-frame::-webkit-scrollbar {
+  display: none;
+}
+
 /* The board and the Neatline share one grid cell. The board margin holds the ticks, and the Neatline sticks to the frame. */
 #maze-canvas,
 .neatline-canvas {

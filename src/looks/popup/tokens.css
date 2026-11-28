@@ -95,6 +95,8 @@
   --color-board-explorer-disc: var(--board-paper);
   --color-board-explorer: var(--clover);
   --color-board-ink: var(--board-ink);
+  /* The Gate keyhole ink. It follows the board ink, and forced colours set it opposite to the Gate. */
+  --color-board-gate-ink: var(--color-board-ink);
   /* The pause cover is the card with the deep cover teal on it (D7). */
   --color-board-cover: var(--card);
   --color-board-cover-ink: var(--cover-deep);
@@ -280,6 +282,8 @@
     --color-board-explorer-disc: Canvas;
     --color-board-explorer: Highlight;
     --color-board-ink: HighlightText;
+    /* The Gate is CanvasText, so the keyhole takes Canvas, its opposite in every forced theme. */
+    --color-board-gate-ink: Canvas;
     --color-board-cover: Canvas;
     --color-board-cover-ink: CanvasText;
     --color-board-echo: Highlight;
