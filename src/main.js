@@ -192,9 +192,9 @@ function setAmbientAudio(regionId, active) {
   audio?.setAmbient(regionId, active);
 }
 
-/** @param {AudioCue} cue */
-function playAudio(cue) {
-  audio?.play(cue);
+/** @param {AudioCue} cue @param {{ pan?: number, detune?: number }} [voice] */
+function playAudio(cue, voice) {
+  audio?.play(cue, voice);
 }
 
 function loadRegionTheme() {
