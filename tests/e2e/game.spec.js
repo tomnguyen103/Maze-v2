@@ -3220,7 +3220,7 @@ test("keeps event messages outside the playable maze", async ({ page }) => {
     "Echo Postcard copied. It contains only the seed, Quest Level, Region, and ruleset."
   );
 
-  const mazeBounds = await page.locator("#maze-canvas").boundingBox();
+  const mazeBounds = await page.locator("#canvas-frame").boundingBox();
   const messageBounds = await eventRibbon.boundingBox();
   if (!mazeBounds || !messageBounds) {
     throw new Error("Expected the maze and event message to be rendered.");
@@ -5893,7 +5893,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/?seed=LAPTOP-FOLD&level=trail-scout");
-  const maze = await page.locator("#maze-canvas").boundingBox();
+  const maze = await page.locator("#canvas-frame").boundingBox();
   const pulse = await page.locator("#pulse-action").boundingBox();
   if (!maze || !pulse) {
     throw new Error("Expected the maze and Pulse control to be rendered.");
@@ -5906,7 +5906,7 @@ test("reflows across required widths and keeps the game in the laptop fold", asy
   await stubClipboard(page);
   await page.locator("#seed-copy").click();
   await expect(page.locator("#event-ribbon")).toHaveClass(/is-visible/);
-  const mobileMaze = await page.locator("#maze-canvas").boundingBox();
+  const mobileMaze = await page.locator("#canvas-frame").boundingBox();
   const touchControls = await page.locator(".touch-controls").boundingBox();
   const mobilePulse = await page.locator("#pulse-action").boundingBox();
   if (!mobileMaze || !touchControls || !mobilePulse) {
