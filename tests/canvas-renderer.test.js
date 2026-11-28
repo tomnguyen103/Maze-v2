@@ -2054,6 +2054,27 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(far).toBeLessThanOrEqual(12);
   });
 
+  it("US-02.1 keeps the lower stroke of a Land flap inside a doubled Coastline at the tile floor", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    // The palette modes paint the Land as the board paper, so the Coastline doubles.
+    document.body.style.setProperty("--color-land", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--board-paper", "rgb(5, 5, 5)");
+    atDeviceRatio(2, () => {
+      const { context, renderer } = stubCanvas({ width: 48 });
+      const paints = recordPaints(context);
+
+      // Tile 48 device px: card inset 2 and Coastline 6, so the clip ends at 40 and a 2 px stroke centres at 39 or above it.
+      renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+      const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+      const ys = (flap?.path ?? [])
+        .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+        .map((step) => Number(step.replace(/^\w+\(|\)$/g, "").split(",")[1]));
+      expect(ys).toHaveLength(4);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(39);
+    });
+  });
+
   describe("Echo number floor", () => {
     /** @param {number} ratio @param {number} width The board width in CSS px. */
     function echoDigit(ratio, width) {

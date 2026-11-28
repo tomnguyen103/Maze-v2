@@ -444,12 +444,15 @@ export function createCanvasRenderer(
       context.clip();
       context.beginPath();
       for (const [row, col] of cells) {
-        const { left, top, width } = tileBox(row, col, tile);
-        const inset = insideCoastline(row, col) ? landFlapInset : snapStroke(step, unit);
+        const { left, top, width, height } = tileBox(row, col, tile);
+        const land = insideCoastline(row, col);
+        const inset = land ? landFlapInset : snapStroke(step, unit);
         const near = left + inset;
         const far = left + width - inset;
         const edge = top + inset;
-        const low = snapStroke(edge + 16 * step, unit);
+        // A wide Coastline leaves less room on a Land card, so the lower stroke stays above the clip edge.
+        const floor = land ? snapStroke(top + height - cardInset - outline - unit / 2, unit) : Infinity;
+        const low = Math.min(snapStroke(edge + 16 * step, unit), floor);
         context.moveTo(near, edge);
         context.lineTo(far, edge);
         context.lineTo(snapStroke(far - 6 * step, unit), low);
