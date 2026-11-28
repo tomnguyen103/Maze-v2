@@ -540,8 +540,8 @@ a:hover {
 #maze-canvas {
   display: block;
   width: calc(100cqw - 2 * var(--frame-pad));
-  /* Each tile keeps 24 px or more; a wider board scrolls inside the frame (B-10). */
-  min-width: calc(var(--board-size, 0) * 24px);
+  /* Each tile keeps 48 device px and 24 px or more; a wider board scrolls inside the frame (B-10). */
+  min-width: calc(var(--board-size, 0) * var(--tile-floor, 24px));
   height: auto;
   aspect-ratio: 1;
   touch-action: none;

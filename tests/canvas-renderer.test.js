@@ -900,6 +900,13 @@ describe("Canvas renderer", () => {
     renderer.render({ ...start, explorer: { ...start.explorer, row: 1 } });
     expect(frame.scrollLeft).toBe(followed);
     expect(frame.scrollTop).toBeGreaterThan(0);
+
+    // A frame resize, such as a rotation, follows the Explorer again at the same canvas width.
+    const moved = { ...start, explorer: { ...start.explorer, row: 1 } };
+    frame.scrollLeft = 5;
+    frame.clientWidth = 60;
+    renderer.render(moved);
+    expect(frame.scrollLeft).not.toBe(5);
   });
 
   it("US-03.1 draws the Neatline ticks and the Grid reference on the overlay canvas", () => {

@@ -174,7 +174,7 @@ test.describe("layout redesign & edge viewports", () => {
     });
   }
 
-  // B-10: a size 15 board keeps tiles at 24 px or more and scrolls inside its frame at 375 px.
+  // B-10: a size 15 board keeps tiles at 48 device px and 24 px or more, and scrolls inside its frame at 375 px.
   test("scrolls a size 15 board inside its frame and follows the Explorer at 375x812", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/?seed=FOLLOW-B&level=maze-master&labyrinth=1");
@@ -184,7 +184,9 @@ test.describe("layout redesign & edge viewports", () => {
     const canvas = page.locator("#maze-canvas");
     const frame = page.locator("#canvas-frame");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
-    expect(((await canvas.boundingBox())?.width ?? 0) / size).toBeGreaterThanOrEqual(24);
+    // Spike decision 3: each tile keeps 48 device px and 24 CSS px or more.
+    const ratio = await page.evaluate(() => window.devicePixelRatio);
+    expect(((await canvas.boundingBox())?.width ?? 0) / size).toBeGreaterThanOrEqual(Math.max(24, Math.ceil(48 / ratio)));
     expect(await canvas.evaluate((element) => getComputedStyle(element).touchAction)).toBe("none");
     expect(await frame.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 
@@ -209,16 +211,24 @@ test.describe("layout redesign & edge viewports", () => {
       const here = `${run.explorer.row},${run.explorer.col}`;
       visits.set(here, (visits.get(here) ?? 0) + 1);
       await page.keyboard.press(keys[pick.direction]);
-      const box = await canvas.boundingBox();
-      const view = await frame.boundingBox();
-      if (!box || !view) throw new Error("board has no bounding box");
-      const tile = box.width / size;
-      const left = box.x + run.explorer.col * tile;
-      const top = box.y + run.explorer.row * tile;
-      expect(left, `column ${run.explorer.col} left edge`).toBeGreaterThanOrEqual(view.x - 1);
-      expect(left + tile, `column ${run.explorer.col} right edge`).toBeLessThanOrEqual(view.x + view.width + 1);
-      expect(top, `row ${run.explorer.row} top edge`).toBeGreaterThanOrEqual(view.y - 1);
-      expect(top + tile, `row ${run.explorer.row} bottom edge`).toBeLessThanOrEqual(view.y + view.height + 1);
+      const { col, row } = run.explorer;
+      // A Warden moves on the clock, which the local copy does not model. Its Question dialog stops the walk.
+      const question = page.locator("#challenge-dialog[open]");
+      // The board repaints on the next animation frame, so the follow scroll can land after the key press.
+      await expect(async () => {
+        if (await question.count()) return;
+        const box = await canvas.boundingBox();
+        const view = await frame.boundingBox();
+        if (!box || !view) throw new Error("board has no bounding box");
+        const tile = box.width / size;
+        const left = box.x + col * tile;
+        const top = box.y + row * tile;
+        expect(left, `column ${col} left edge`).toBeGreaterThanOrEqual(view.x - 1);
+        expect(left + tile, `column ${col} right edge`).toBeLessThanOrEqual(view.x + view.width + 1);
+        expect(top, `row ${row} top edge`).toBeGreaterThanOrEqual(view.y - 1);
+        expect(top + tile, `row ${row} bottom edge`).toBeLessThanOrEqual(view.y + view.height + 1);
+      }).toPass({ timeout: 2000 });
+      if (await question.count()) break;
       scrolled ||= (await frame.evaluate((element) => element.scrollLeft + element.scrollTop)) > 0;
     }
     expect(scrolled, "the frame scrolled to follow the Explorer").toBe(true);
@@ -479,7 +489,8 @@ test.describe("layout redesign & edge viewports", () => {
       const frame = await page.locator("#canvas-frame").boundingBox();
       const band = await ribbon.boundingBox();
       if (!maze || !frame || !band) throw new Error("Expected the board and the ribbon to render.");
-      expect(band.y, "ribbon sits below the maze").toBeGreaterThanOrEqual(maze.y + maze.height);
+      // A board wider or taller than its frame scrolls inside it (B-10), so the frame edge is the bound.
+      expect(band.y, "ribbon sits below the board frame").toBeGreaterThanOrEqual(frame.y + frame.height - 1);
       expect(band.x).toBeGreaterThanOrEqual(frame.x - 1);
       expect(band.x + band.width).toBeLessThanOrEqual(frame.x + frame.width + 1);
       const rule = await ribbon.evaluate((el) => getComputedStyle(el).borderTopWidth);
