@@ -2338,6 +2338,7 @@ test("keeps the Watch Trail canvas square at desktop and mobile viewports", asyn
       throw new Error("Expected a visible Run Replay canvas.");
     }
     expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);
+    expect(box.width, "the canvas fits the viewport").toBeLessThanOrEqual(viewport.width);
   }
 });
 

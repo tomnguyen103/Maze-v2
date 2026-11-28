@@ -213,7 +213,7 @@ test.describe("layout redesign & edge viewports", () => {
       visits.set(here, (visits.get(here) ?? 0) + 1);
       await page.keyboard.press(keys[pick.direction]);
       const { col, row } = run.explorer;
-      // A Warden catch opens a Question the local copy does not model, so this seed must stay clear of one.
+      // The walk takes only steps that keep the run active, so no Warden Question opens.
       await expect(page.locator("#challenge-dialog[open]"), "no Warden Question opens during the walk").toHaveCount(0);
       // The board repaints on the next animation frame, so the follow scroll can land after the key press.
       await expect(async () => {
@@ -247,12 +247,15 @@ test.describe("layout redesign & edge viewports", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
     await expectGameReady(page);
+    const moves = await page.locator("#moves-value").textContent();
     const prevented = await page.locator("#maze-canvas").evaluate((element) => {
       const event = new KeyboardEvent("keydown", { key: "ArrowRight", repeat: true, cancelable: true, bubbles: true });
       element.dispatchEvent(event);
       return event.defaultPrevented;
     });
     expect(prevented).toBe(true);
+    // A repeat is not a second press, so the Explorer does not move.
+    await expect(page.locator("#moves-value")).toHaveText(moves ?? "");
   });
 
   test("provides tactile feedback on interactive buttons and controls", async ({ page }) => {
