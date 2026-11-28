@@ -75,6 +75,22 @@ describe("Warden Tactics Lab view", () => {
     expect(document.getElementById("practice-tactics")?.hidden).toBe(true);
   });
 
+  it("ignores a second Pulse while a Pulse is active", () => {
+    const view = createTacticsLabView({ onExit: vi.fn() });
+    view.show();
+    document.querySelector("[data-tactics-drill='patrol']")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    const pulse = /** @type {HTMLButtonElement} */ (
+      document.getElementById("practice-tactics-pulse")
+    );
+    pulse.click();
+    expect(pulse.disabled).toBe(true);
+    pulse.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.getElementById("practice-tactics-progress")?.textContent)
+      .toContain("1 moves");
+  });
+
   it("offers all five accepted Trail Twist revisions", () => {
     const view = createTacticsLabView();
     view.show();
