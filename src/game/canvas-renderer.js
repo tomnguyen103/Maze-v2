@@ -61,9 +61,6 @@ function createDetachedCanvas(width, height) {
 
 /** @typedef {{ canvas: OffscreenCanvas | HTMLCanvasElement, context: CanvasRenderingContext2D }} Layer */
 
-/** The smallest tile side in CSS px; a board that needs more room scrolls inside its frame. */
-export const MIN_TILE = 24;
-
 /**
  * The scroll offset that keeps the span [start, start + length] inside a view of `view` px.
  * @param {number} start @param {number} length @param {number} current @param {number} view
@@ -202,7 +199,8 @@ export function createCanvasRenderer(
       palette = readPalette();
       paletteStale = false;
     }
-    canvas.style.minWidth = `${run.labyrinth.length * MIN_TILE}px`;
+    // The play board CSS reads the size for its 24 px tile floor; the Run Replay canvas ignores it.
+    canvas.style.setProperty("--board-size", String(run.labyrinth.length));
     resize();
     followExplorer(run);
     // Each frame starts from the default line, text, and fill state, and ends on it even when a mark throws.
@@ -219,7 +217,7 @@ export function createCanvasRenderer(
   function followExplorer(run) {
     const frame = canvas.parentElement;
     if (!frame) return;
-    const tile = canvas.offsetWidth / run.labyrinth.length;
+    const tile = canvas.getBoundingClientRect().width / run.labyrinth.length;
     const { col, row } = run.explorer;
     frame.scrollLeft = followOffset(col * tile, tile + 2 * canvas.offsetLeft, frame.scrollLeft, frame.clientWidth);
     frame.scrollTop = followOffset(row * tile, tile + 2 * canvas.offsetTop, frame.scrollTop, frame.clientHeight);

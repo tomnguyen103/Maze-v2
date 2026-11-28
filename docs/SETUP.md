@@ -345,8 +345,8 @@ leaves the route unavailable rather than issuing an unverifiable receipt.
 
 The asset list must name every file an offline Run loads, and that includes the
 Popup fonts. `src/looks/popup/fonts.js` imports Chewy 400, Andika 400 and 700,
-and Geist Mono Variable. Vite emits each one as a hashed `.woff2` (and `.woff`)
-file under `dist/assets/`. Each build changes the hashes, so take the font
+and Geist Mono Variable. Vite emits hashed `.woff2` and `.woff` files for each
+unicode subset under `dist/assets/`. Each build changes the hashes, so take the font
 paths from the reviewed `dist/assets/` listing and add them as `public` assets
 in the same package version as the JavaScript and CSS files.
 

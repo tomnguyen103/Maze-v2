@@ -447,7 +447,7 @@ a:hover {
 
 .warden-readout {
   display: grid;
-  /* The viewport cap keeps the metric cells in room at a large text size. */
+  /* The viewport cap gives the metric cells room at a large text size. */
   min-width: min(10rem, 20vw);
   align-content: center;
   padding: var(--space-2) var(--space-3);
@@ -540,6 +540,8 @@ a:hover {
 #maze-canvas {
   display: block;
   width: calc(100cqw - 2 * var(--frame-pad));
+  /* Each tile keeps 24 px or more; a wider board scrolls inside the frame (B-10). */
+  min-width: calc(var(--board-size, 0) * 24px);
   height: auto;
   aspect-ratio: 1;
   touch-action: none;

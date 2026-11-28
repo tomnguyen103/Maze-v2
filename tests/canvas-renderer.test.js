@@ -53,7 +53,7 @@ function stubCanvas({ width = 640, height = width, neatline = false, seed = true
     getBoundingClientRect: () => ({ width, height }),
     getContext: () => context,
     height: 640,
-    style: {},
+    style: { setProperty: vi.fn() },
     width: 640
   };
   /** @type {Array<{ width: number, height: number, contextArgs: unknown[], fills: Array<{ style: string, x: number, y: number, w: number, h: number }> }>} */

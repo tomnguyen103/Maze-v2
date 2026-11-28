@@ -292,7 +292,7 @@
 }
 
 /* Motion layer: paper decorations over the board. The pieces ignore input and never change layout.
-   The layer covers the board canvas only. The frame padding holds the coordinate labels. */
+   The layer covers the board canvas only. The canvas margin holds the coordinate labels. */
 .motion-layer {
   position: absolute;
   grid-area: 1 / 1;
