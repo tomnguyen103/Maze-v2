@@ -21,7 +21,7 @@ Reading the failures as a layout regression. The ribbon sits below the visible b
 
 ## Root cause
 
-Since #326 the play board CSS sets a tile floor from the device pixel ratio (`src/game/canvas-renderer.js:163`).
+Since #326 the renderer sets `--tile-floor` from the device pixel ratio (`src/game/canvas-renderer.js:163`), and the board CSS sets the canvas minimum width from it (`src/daylight.css:563`).
 A size 15 board is then larger than its frame, and the frame scrolls it (`index.html:201`).
 `#maze-canvas` reports the full scrolled canvas box, not the part that the player sees.
 The e2e suite is not part of `npm run check` or the pre-push gate, so the merge of #326 did not run it.
@@ -30,4 +30,4 @@ The e2e suite is not part of `npm run check` or the pre-push gate, so the merge 
 
 The tests measure `#canvas-frame`, the visible scroll frame (`tests/e2e/game.spec.js:3223`, `:5896`, `:5909`).
 
-delete: none — the e2e suite stays out of the pre-push gate because it takes minutes; the merge checklist runs `npm run test:e2e` for each browser-facing change.
+delete: none — the e2e suite is not in the pre-push gate yet. Plan H4 adds `npm run test:e2e` as the last step of the hook (`docs/plans/2026-11-26-premium-rebuild.md:239`).

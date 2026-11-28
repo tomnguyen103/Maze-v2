@@ -3,12 +3,15 @@ import { readdirSync } from "node:fs";
 
 const CLERK_BOOTSTRAP_STORAGE_KEY = "__clerk_environment";
 
-const classroomAsset = readdirSync("dist/assets").find((name) =>
-  /^classroom-controller-.*\.js$/.test(name)
-);
-
-if (!classroomAsset) {
-  throw new Error("Built Classroom controller asset was not found.");
+// The web server builds `dist-e2e` after test collection, so read the asset name at run time.
+function findClassroomAsset() {
+  const asset = readdirSync("dist-e2e/assets").find((name) =>
+    /^classroom-controller-.*\.js$/.test(name)
+  );
+  if (!asset) {
+    throw new Error("Built Classroom controller asset was not found.");
+  }
+  return asset;
 }
 
 test("keeps the Classroom entry clear at desktop/mobile, keyboard, reduced motion, and 200 percent text", async ({
@@ -141,7 +144,7 @@ test("renders the Classroom browser state matrix and Teacher workflows", async (
  */
 async function renderMockWorkspace(page, scenario, waitForRender = true) {
   const options = {
-    asset: classroomAsset,
+    asset: findClassroomAsset(),
     scenario,
     waitForRender
   };

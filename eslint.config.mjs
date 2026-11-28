@@ -10,6 +10,7 @@ export default [
       "coverage/**",
       "design-system/**",
       "dist/**",
+      "dist-e2e/**",
       "docs/design/mockups/**",
       "docs/research/popup-art-spike/**",
       "graphify-out/**",
