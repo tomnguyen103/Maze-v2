@@ -144,12 +144,39 @@ describe("Pilot Chart identity", () => {
     }
   });
 
-  it("defines Pilot Chart and the play-screen terms in GLOSSARY.md", () => {
+  it("defines Popup and the play-screen terms in GLOSSARY.md", () => {
     const glossary = read("GLOSSARY.md");
-    for (const term of ["Pilot Chart", "Readout", "Action rail", "Title block", "Chart notes"]) {
+    for (const term of ["Popup", "Readout", "Action rail", "Title block", "Chart notes"]) {
       expect(glossary).toMatch(new RegExp(`\\*\\*${term}\\*\\*:`));
     }
     expect(glossary).not.toMatch(/\*\*Journey\*\*:/);
+  });
+
+  it("records the Popup ADR supersede chain (R8)", () => {
+    const adr65 = read("docs/adr/0065-popup-book-replaces-pilot-chart.md");
+    const adr66 = read("docs/adr/0066-popup-board-contract.md");
+    expect(adr65).toContain("Supersedes ADR 0051");
+    expect(adr66).toContain("Supersedes ADR 0052");
+    expect(read("docs/adr/0051-pilot-chart-replaces-field-journal.md")).toMatch(
+      /^- Status: .*Superseded by ADR 0065/m
+    );
+    expect(read("docs/adr/0052-pilot-chart-board-contract.md")).toMatch(
+      /^- Status: .*Superseded by ADR 0066/m
+    );
+  });
+
+  it("defines each new Popup term in GLOSSARY.md (D15)", () => {
+    const glossary = read("GLOSSARY.md");
+    for (const term of [
+      "Pull-tab",
+      "Paper card",
+      "Stamp sheet",
+      "Tunnel book",
+      "Chart layer",
+      "Fog layer"
+    ]) {
+      expect(glossary).toContain(`**${term}**:`);
+    }
   });
 
   it("states the chart contract in design.md (US-01.1, US-01.2)", () => {

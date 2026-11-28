@@ -142,15 +142,36 @@ amber, Tideglass indigo, Bellroot pink. Atlas territories, Labyrinth tiles, and
 tinted cards on the admin and Classroom surfaces reuse it as decoration only.
 _Avoid_: Territory colour, status colour, difficulty colour
 
-**Pilot Chart**:
-The visual identity of every Echo Maze surface: white chart paper, black ink,
-hatched ink walls, blue water screens, and magenta for lights only. It replaces the
-Field Journal identity. It names presentation, never a game rule.
-_Avoid_: Field Journal, Journey, Theme (alone), skin, mode
+**Popup**:
+The visual identity of every Echo Maze surface: a pop-up storybook with warm paper,
+plum ink, and coral as the one accent. It replaces Pilot Chart when slice R9 sets the
+default look. It names presentation, never a game rule.
+_Avoid_: Field Journal, Journey, Theme (alone), skin, mode, Pilot Chart
+
+**Stamp sheet**:
+The Popup form of the Echo Atlas map view: one row per Atlas Region, in Region order.
+Each row holds an index tab, four landmark stamps, and the Region Sigil seal. Each
+Atlas node state has its own stamp form.
+_Avoid_: Region card, level grid, world tile
+
+**Tunnel book**:
+The three stacked paper layers around the open Atlas Region on the Echo Atlas map.
+They show which Region holds the current landmark.
+_Avoid_: Spotlight, selection frame, 3D map
+
+**Pull-tab**:
+A Popup button with an ink outline and a hard ink lift. A press flattens the lift.
+_Avoid_: Flat button, link button, chip
+
+**Paper card**:
+The Popup frame of every dialog and of the board panel: a 3px ink outline over a
+paper fill, with a hard ink lift.
+_Avoid_: Modal, panel, tile
 
 **Readout**:
 The strip of live Run numbers above the board: Time, Moves, Echoes, Vitality,
-and the Warden mode. The Readout shows state. It holds no control.
+and the Warden mode. The Readout shows state. It holds no control. Each number
+keeps a fixed width, so the Readout does not reflow during a Run.
 _Avoid_: HUD, stats bar, status deck
 
 **Action rail**:
@@ -159,13 +180,13 @@ Every control that acts on the Run sits in the Action rail.
 _Avoid_: toolbar, control bar, arena actions
 
 **Title block**:
-The chart-style block under the Action rail that names the Quest Level, the
-Labyrinth number and stage, the save state, the player console, and the seed.
+The block under the Action rail that names the Quest Level, the Labyrinth number
+and stage, the save state, the player console, and the seed.
 _Avoid_: header, run status, quest card
 
 **Neatline**:
-The 1px ink frame around the board. It carries one 2px tick per tile and the
-Grid reference outside it.
+The frame around the board. It carries one tick per tile and the Grid reference
+outside it.
 _Avoid_: border, board frame
 
 **Grid reference**:
@@ -173,8 +194,8 @@ The column letters and row numbers outside the Neatline that name a tile.
 _Avoid_: axis labels, coordinates
 
 **Coastline**:
-The single ink line where a water passage meets hatched land. It carries the wall
-edge at 3:1 against both grounds.
+The ink edge where a Passage meets Land. It carries the wall edge at 3:1 against
+both grounds.
 _Avoid_: wall outline, shoreline
 
 **Chart notes**:
@@ -183,8 +204,8 @@ the objective, the adventure log, the map marks legend, and the field note.
 _Avoid_: sidebar, intel deck, aside
 
 **Theme Choice**:
-An Explorer setting of light, dark, or system appearance for the Pilot
-Chart identity. It changes no Run, score, or progress.
+An Explorer setting of light, dark, or system appearance for the active
+look. It changes no Run, score, or progress.
 _Avoid_: Palette, Region Theme
 
 **Warden Guild**:
@@ -302,6 +323,16 @@ _Avoid_: Hint, scan, radar
 **Fog**:
 The unrevealed portion of the labyrinth.
 _Avoid_: Hidden cells, darkness, unexplored map
+
+**Chart layer**:
+The board layer that paints every Passage and every Land tile before the Fog layer
+clips the known tiles. It holds no Fog.
+_Avoid_: Background, base map, tile cache
+
+**Fog layer**:
+The board layer that fills the Fog, then shows the chart layer through the known
+tiles and draws the Coastline.
+_Avoid_: Overlay, mask, darkness layer
 
 **Run Record**:
 A terminal Run kept on the player's device with its Quest Level, Labyrinth

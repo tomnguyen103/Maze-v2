@@ -290,7 +290,7 @@ The settled contrast bars are 7:1 for body and title text, 4.5:1 for other text,
 
 At `prefers-contrast: more`, muted ink, soft lines, and board stipple take full ink. Under `forced-colors: active`, system colours replace the palette and each mark keeps its shape.
 
-The fonts are local files. Chewy (`@fontsource/chewy`) draws the wordmark, scene titles, and board Echo digits. Andika (`@fontsource/andika`, weights 400 and 700) draws body text. Geist Mono stays for seed codes and Run ids. The first paint loads the Latin subset only, and the content security policy stays `'self'`.
+The fonts are local files. Chewy (`@fontsource/chewy`) draws the wordmark and scene titles. Andika also draws the board Echo digits. Andika (`@fontsource/andika`, weights 400 and 700) draws body text. Geist Mono stays for seed codes and code text (`--font-code`). Every other readout number uses Andika with tabular figures (`--font-utility` is Andika in Popup). The first paint loads the Latin subset only, and the content security policy stays `'self'`.
 
 Popup keeps the Pilot radius, spacing, and motion tokens, and adds three surface tokens in `tokens.css`. Surface rules live in `src/looks/popup/surface.css`.
 
@@ -315,6 +315,10 @@ Popup adds four paper motions in `src/looks/popup/motion.js`. Each one plays onc
 
 Reduced motion or reduced effects loads no motion chunk.
 
+### Popup Atlas
+
+The Echo Atlas is a pop-up book (`src/looks/popup/atlas.css`). The map view is a stamp sheet. Each Atlas Region is one row with an index tab, four landmark stamps, and a Region Sigil seal. Each of the five Atlas node states has one stamp form: completed, current, ahead, milestone (a sealed envelope), and completed milestone (a pressed wax seal). The open Region sits in a tunnel book of three stacked paper layers. On a phone, the cover is a thin edge, each index tab sits on the top edge of its row, and the list view shows two stamps per row.
+
 ## Invariants
 
 | ID | Rule |
@@ -325,7 +329,7 @@ Reduced motion or reduced effects loads no motion chunk.
 | I4 | Text contrast is at least 4.5:1, and non-text contrast is at least 3:1, in light and Night. |
 | I5 | Split sheets import only from the lazy game entry. |
 | I6 | Touch targets are at least 40px, body text is 16px, and the mobile breakpoint is 768px. |
-| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. The Grid reference is the one board exception. In Popup, the Readout numbers use tabular Andika instead (plan D10). |
+| I7 | Monospace appears for the Readout numbers, seeds, code, and IDs only. In Pilot, the Grid reference is the one board exception. In Popup, the board shows no monospace, every readout number uses tabular Andika (plan D9 and D10), and Geist Mono shows only for seed codes and code text. |
 
 ## Canonical export
 
