@@ -98,7 +98,8 @@ when the fill alone does not. Text reaches 4.5:1.
 | Paused cover | `--color-board-cover` | `--card`, with `--cover-deep` ink | none |
 
 A known tile in Pulse sight shows a peeled flap on its top edge in the Fog fold colour.
-On a Land card, the flap stays inside the Coastline. The
+On a Land card, the flap stays inside the Coastline. A compact Run Replay tile with
+little room inside the Coastline draws its Land flap as a Passage flap. The
 board draws no hatch, no Fog dot, and no Echo halo.
 
 No board mark depends on fill colour alone. Each mark has an ink outline and a shape cue.
