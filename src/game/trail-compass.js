@@ -59,17 +59,15 @@ function revealedTiles(run) {
  * Describe one adjacent direction from what the Explorer can already see.
  *
  * @param {GameRun} run
- * @param {Set<string>} revealed
  * @param {{ name: string, row: number, col: number }} direction
  */
-function describeExit(run, revealed, direction) {
+function describeExit(run, direction) {
   const size = run.labyrinth.length;
   const row = run.explorer.row + direction.row;
   const col = run.explorer.col + direction.col;
   if (row < 0 || col < 0 || row >= size || col >= size) {
     return null;
   }
-  const key = `${row},${col}`;
   // Only the shortcut revisions populate these lists, so this matches the
   // engine revision gate in resolveMove.
   const crossing = openShortcutAcrossWall(
@@ -86,9 +84,6 @@ function describeExit(run, revealed, direction) {
       `${direction.name} open through ${kind} to ` +
       gridReference(crossing.destination)
     );
-  }
-  if (!revealed.has(key)) {
-    return `${direction.name} unexplored`;
   }
   if (run.labyrinth[row][col] !== 1) {
     return null;
@@ -218,7 +213,7 @@ export function describeCompassState(run) {
   sentences.push(`You are at ${gridReference(run.explorer)}.`);
   sentences.push(resources);
   const exits = DIRECTIONS.map((direction) =>
-    describeExit(run, revealed, direction)
+    describeExit(run, direction)
   ).filter((exit) => exit !== null);
   sentences.push(exits.length ? `Exits: ${exits.join("; ")}.` : "No open exits.");
 
@@ -348,11 +343,8 @@ export function describeCompassAction(run, previous) {
     }[run.status];
     return event.trim() || fallback || "";
   }
-  const revealed = revealedTiles(run);
-  const exits = DIRECTIONS.map((direction) =>
-    describeExit(run, revealed, direction)
-  )
-    .filter((exit) => exit !== null && !exit.includes("unexplored"))
+  const exits = DIRECTIONS.map((direction) => describeExit(run, direction))
+    .filter((exit) => exit !== null)
     .map((exit) => String(exit).split(" ")[0]);
   const sentences = [event, `At ${gridReference(run.explorer)}.`];
   if (exits.length) {
@@ -394,6 +386,22 @@ function wardenModeNote(run) {
 const LISTEN_CUE_GAP_MS = 160;
 
 /**
+ * The stereo pan and pitch of a Listen tone: east pans right, north rings higher.
+ *
+ * @param {GameRun} run
+ * @param {{ row: number, col: number }} position
+ * @returns {{ pan: number, detune: number }}
+ */
+export function listenCueVoice(run, position) {
+  const colDelta = position.col - run.explorer.col;
+  const rowDelta = position.row - run.explorer.row;
+  return {
+    pan: Math.max(-1, Math.min(1, colDelta / 4)),
+    detune: Math.max(-400, Math.min(400, -rowDelta * 100))
+  };
+}
+
+/**
  * Self-wiring controller for the Trail Compass panel. Describe and Listen
  * dispatch no Run action and write no log entry; each player action produces
  * exactly one polite status through the shared announce channel.
@@ -401,7 +409,7 @@ const LISTEN_CUE_GAP_MS = 160;
  * @param {{
  *   getRun: () => GameRun | null | undefined,
  *   announce: (message: string) => void,
- *   playCue?: (cue: "compass-echo" | "compass-gate" | "compass-warden") => void,
+ *   playCue?: (cue: "compass-echo" | "compass-gate" | "compass-warden", voice?: { pan?: number, detune?: number }) => void,
  *   root?: Document
  * }} dependencies
  */
@@ -442,7 +450,10 @@ export function createTrailCompass({
     pendingCues = targets
       .slice(0, 6)
       .map((target, index) =>
-        setTimeout(() => playCue(`compass-${target.kind}`), index * LISTEN_CUE_GAP_MS)
+        setTimeout(
+          () => playCue(`compass-${target.kind}`, listenCueVoice(run, target.item)),
+          index * LISTEN_CUE_GAP_MS
+        )
       );
     announce(
       `Listen: ${targets

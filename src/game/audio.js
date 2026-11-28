@@ -56,8 +56,9 @@ export class EchoAudio {
 
   /**
    * @param {"move" | "blocked" | "echo" | "pulse" | "bell" | "challenge" | "correct" | "wrong" | "won" | "lost" | "enabled" | "compass-echo" | "compass-gate" | "compass-warden"} cue
+   * @param {{ pan?: number, detune?: number }} [voice]
    */
-  play(cue) {
+  play(cue, voice) {
     if (!this.#enabled || !this.#context) {
       return;
     }
@@ -98,7 +99,17 @@ export class EchoAudio {
     gain.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     oscillator.connect(gain);
-    gain.connect(this.#context.destination);
+    if (voice && this.#context.createStereoPanner) {
+      const panner = this.#context.createStereoPanner();
+      panner.pan.setValueAtTime(voice.pan ?? 0, now);
+      gain.connect(panner);
+      panner.connect(this.#context.destination);
+    } else {
+      gain.connect(this.#context.destination);
+    }
+    if (voice) {
+      oscillator.detune.setValueAtTime(voice.detune ?? 0, now);
+    }
     oscillator.start(now);
     oscillator.stop(now + duration + 0.03);
   }

@@ -95,3 +95,56 @@ describe("EchoAudio ambient Region layer", () => {
     expect(regionFiveAmbient?.stop).toHaveBeenCalledOnce();
   });
 });
+
+describe("EchoAudio directional Cue voice", () => {
+  it("pans and detunes a voiced Cue, and leaves a plain Cue unpanned (A-15)", async () => {
+    /** @type {any[]} */
+    const oscillators = [];
+    /** @type {any[]} */
+    const panners = [];
+    class FakeAudioContext {
+      state = "running";
+      currentTime = 1;
+      destination = {};
+      createOscillator() {
+        const oscillator = {
+          type: "sine",
+          frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+          detune: { setValueAtTime: vi.fn() },
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn()
+        };
+        oscillators.push(oscillator);
+        return oscillator;
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+          connect: vi.fn(),
+          disconnect: vi.fn()
+        };
+      }
+      createStereoPanner() {
+        const panner = { pan: { setValueAtTime: vi.fn() }, connect: vi.fn() };
+        panners.push(panner);
+        return panner;
+      }
+      resume = vi.fn();
+    }
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const audio = new EchoAudio();
+    await audio.toggle();
+    panners.length = 0;
+
+    audio.play("move");
+    expect(panners).toHaveLength(0);
+
+    audio.play("compass-gate", { pan: 0.5, detune: 200 });
+    expect(panners).toHaveLength(1);
+    expect(panners[0].pan.setValueAtTime).toHaveBeenCalledWith(0.5, 1);
+    expect(panners[0].connect).toHaveBeenCalled();
+    expect(oscillators.at(-1).detune.setValueAtTime).toHaveBeenCalledWith(200, 1);
+  });
+});

@@ -4,6 +4,7 @@ import {
   describeCompassAction,
   describeCompassState,
   describeListenTargets,
+  listenCueVoice,
   createTrailCompass
 } from "../src/game/trail-compass.js";
 import { createRun, applyAction } from "../src/game/game-session.js";
@@ -268,7 +269,7 @@ describe("Trail Compass exits match the engine", () => {
               const context = `${ruleset.revision} size ${size} seed ${seed} step ${step} ${name}: ${exit}`;
               if (exit === null) {
                 expect(blocked, context).toBe(true);
-              } else if (!exit.endsWith("unexplored")) {
+              } else {
                 expect(blocked, context).toBe(false);
               }
               if (
@@ -371,6 +372,31 @@ function compassController(getRun) {
 describe("Trail Compass Listen and Bell status", () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("Listen tones pan east right and ring north higher, clamped (A-15)", () => {
+    const { row, col } = runFixture().explorer;
+    const run = /** @type {any} */ ({ explorer: { row, col } });
+    const at = (/** @type {number} */ dRow, /** @type {number} */ dCol) =>
+      listenCueVoice(run, { row: row + dRow, col: col + dCol });
+    expect(at(0, 2).pan).toBe(0.5);
+    expect(at(0, -2).pan).toBe(-0.5);
+    expect(at(-2, 0).detune).toBe(200);
+    expect(at(2, 0).detune).toBe(-200);
+    expect(at(9, 9)).toEqual({ pan: 1, detune: -400 });
+    expect(at(-9, -9)).toEqual({ pan: -1, detune: 400 });
+  });
+
+  it("Listen passes each target voice as the second Cue argument (A-15)", () => {
+    const small = listenFixture(["4,4", "4,5", "3,4", "4,7"]);
+    vi.useFakeTimers();
+    const { playCue } = compassController(() => small);
+    document.getElementById("compass-listen")?.click();
+    vi.runAllTimers();
+    const targets = describeListenTargets(small);
+    expect(playCue.mock.calls.map(([, voice]) => voice)).toEqual(
+      targets.map((target) => listenCueVoice(small, target.item))
+    );
   });
 
   it("Listen names revealed Wardens first, inside the cap", () => {
