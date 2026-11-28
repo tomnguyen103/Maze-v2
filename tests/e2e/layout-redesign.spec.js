@@ -276,6 +276,24 @@ test.describe("layout redesign & edge viewports", () => {
     expect(after, "a first press moves the Explorer or spends a Pulse").not.toEqual([moves, pulses]);
   });
 
+  test("ignores a second Pulse while a Pulse is active (A-29)", async ({ page }) => {
+    await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
+    await expectGameReady(page);
+    const canvas = page.locator("#maze-canvas");
+    const count = page.locator("#pulse-count");
+    const startCount = Number(await count.textContent());
+    expect(startCount).toBeGreaterThanOrEqual(2);
+    await canvas.focus();
+    await page.keyboard.press("q");
+    await expect(count).toHaveText(String(startCount - 1));
+    await expect(page.locator("#pulse-action")).toBeDisabled();
+    const moves = await page.locator("#moves-value").textContent();
+    await page.keyboard.press("Space");
+    await expect(page.locator("#live-region")).toHaveText("The Pulse is still active.");
+    await expect(count).toHaveText(String(startCount - 1));
+    await expect(page.locator("#moves-value")).toHaveText(moves ?? "");
+  });
+
   // The tile floor reads devicePixelRatio at render time, so a ratio change must repaint the board.
   test("repaints the board when the pixel ratio changes", async ({ page }) => {
     await page.addInitScript(() => {
