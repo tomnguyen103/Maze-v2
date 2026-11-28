@@ -344,5 +344,7 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | R9 | Merged | #324 (Popup is the only look; the Pilot Chart look, the `VITE_LOOK` flag, the `@look` alias and the Pilot landing images are deleted). The gen2 marks land later |
 | Follow-ups | Merged | #325 (B-10, B-02, the 250% zoom check again, the ADR 0064 Retirement note and the SETUP font line) #326 (the B-10 tile floor from the device pixel ratio) and #327 (the B-10 follow-up gaps: the held-key scroll, the tile floor fallback and the pixel ratio repaint) and #328 (e2e coverage of the pixel ratio repaint, its re-arm and the held game keys). The Stitch design system drift stays parked under the `design.md` `stitch-note` |
 | Board paper forms | Merged | #329 (ADR 0067: paper forms for Passage, Land, Fog, Echo, and the Pulse flap; the hatch, the Fog dot, and the Pulse wash removed; the ink edge on the sticky Neatline). #330 holds the deferred review findings |
+| e2e frame fix | Merged | #331 (the layout tests measure `#canvas-frame`; the Playwright web server builds the e2e bundle into `dist-e2e/`, which fixes B-142) |
+| Renderer hardening | In progress | #305 (repaint guard, renderer `destroy()`, the start error log, one paint on a theme change, the game row pin) |
 
 The game row measures 41.23 KB of 42 KB after #329. The motion chunk is 0.83 KB.
