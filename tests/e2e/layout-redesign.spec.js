@@ -243,19 +243,87 @@ test.describe("layout redesign & edge viewports", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
   });
 
-  test("cancels the native scroll of a held arrow key", async ({ page }) => {
+  test("cancels the native scroll of held game keys", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
     await expectGameReady(page);
     const moves = await page.locator("#moves-value").textContent();
-    const prevented = await page.locator("#maze-canvas").evaluate((element) => {
-      const event = new KeyboardEvent("keydown", { key: "ArrowRight", repeat: true, cancelable: true, bubbles: true });
-      element.dispatchEvent(event);
-      return event.defaultPrevented;
+    const pulses = await page.locator("#pulse-count").textContent();
+    const keys = [
+      { key: "ArrowRight", code: "ArrowRight" },
+      { key: "d", code: "KeyD" },
+      { key: "W", code: "KeyW" },
+      { key: " ", code: "Space" }
+    ];
+    for (const { key, code } of keys) {
+      const prevented = await page.locator("#maze-canvas").evaluate((element, init) => {
+        const event = new KeyboardEvent("keydown", { ...init, repeat: true, cancelable: true, bubbles: true });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      }, { key, code });
+      expect(prevented, `repeat of ${code} is prevented`).toBe(true);
+      // A repeat is not a second press: the Explorer does not move and Pulse is not spent.
+      await expect(page.locator("#moves-value")).toHaveText(moves ?? "");
+      await expect(page.locator("#pulse-count")).toHaveText(pulses ?? "");
+    }
+    // The same keys without repeat change the run, so the checks above are not vacuous.
+    for (const { key, code } of keys) {
+      await page.locator("#maze-canvas").evaluate((element, init) => {
+        element.dispatchEvent(new KeyboardEvent("keydown", { ...init, cancelable: true, bubbles: true }));
+      }, { key, code });
+    }
+    const after = [await page.locator("#moves-value").textContent(), await page.locator("#pulse-count").textContent()];
+    expect(after, "a first press moves the Explorer or spends a Pulse").not.toEqual([moves, pulses]);
+  });
+
+  // The tile floor reads devicePixelRatio at render time, so a ratio change must repaint the board.
+  test("repaints the board when the pixel ratio changes", async ({ page }) => {
+    await page.addInitScript(() => {
+      // The page loads at ratio 2, so each later floor value can only come from a repaint.
+      let ratio = 2;
+      /** @type {Array<{ query: string, listener: () => void }>} */
+      const listeners = [];
+      Object.defineProperty(window, "devicePixelRatio", { configurable: true, get: () => ratio });
+      const realMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = (query) => {
+        const list = realMatchMedia(query);
+        if (/resolution:.*dppx/.test(query)) {
+          const add = list.addEventListener.bind(list);
+          list.addEventListener = (/** @type {string} */ type, /** @type {EventListenerOrEventListenerObject} */ listener, /** @type {AddEventListenerOptions} */ options) => {
+            if (type === "change") listeners.push({ query, listener: /** @type {() => void} */ (listener) });
+            return add(type, listener, options);
+          };
+        }
+        return list;
+      };
+      Object.assign(window, {
+        __setRatio: (/** @type {number} */ value) => { ratio = value; },
+        // The app listens with `once`, so a fired listener is gone. The newest query shows the re-arm.
+        __fireRatio: () => {
+          const entry = listeners.pop();
+          if (!entry) throw new Error("no armed pixel ratio listener");
+          entry.listener();
+          return listeners[listeners.length - 1]?.query;
+        }
+      });
     });
-    expect(prevented).toBe(true);
-    // A repeat is not a second press, so the Explorer does not move.
-    await expect(page.locator("#moves-value")).toHaveText(moves ?? "");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?seed=FOLLOW-D&level=maze-master&labyrinth=1");
+    await expectGameReady(page);
+    const floor = () => page.locator("#maze-canvas").evaluate((element) => element.style.getPropertyValue("--tile-floor"));
+    await expect.poll(floor).toBe("24px");
+    // No browser event fires here, so the test calls the newest listener. Each call must re-arm a query for the new ratio.
+    const fire = (/** @type {number} */ value) => page.evaluate((ratio) => {
+      /** @type {any} */ (window).__setRatio(ratio);
+      return /** @type {any} */ (window).__fireRatio();
+    }, value);
+    expect(await fire(1)).toBe("(resolution: 1dppx)");
+    await expect.poll(floor).toBe("48px");
+    expect(await fire(2)).toBe("(resolution: 2dppx)");
+    await expect.poll(floor).toBe("24px");
+    // Two calls in one task leave the value correct.
+    await page.evaluate(() => { /** @type {any} */ (window).__setRatio(1); /** @type {any} */ (window).__fireRatio(); /** @type {any} */ (window).__fireRatio(); });
+    await expect.poll(floor).toBe("48px");
   });
 
   test("provides tactile feedback on interactive buttons and controls", async ({ page }) => {
