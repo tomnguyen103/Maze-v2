@@ -331,7 +331,7 @@ The run merged these slices. Since R9, Popup is the only look in every build, an
 | Game-row headroom | Merged | #309 (lazy shell views free 2.9 KB on the game row) |
 | R1 | Merged | #304 (token read, repaint on a theme change), #316 (R1a renderer findings), #317 (R1b chart layer and Fog layer) |
 | R2, R2b, R2c | Merged | #310 (board marks, Warden Mode legend, paused cover), #311 (Explorer picker), #312 (soft Fangmoor, Lured face) |
-| R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. #325 builds the R4 JS findings: B-10 (a 24 px tile floor on the play board, with a frame follow that keeps a manual scroll) and B-02 (a square Watch Trail canvas). R7c had one gap: the Readout numbers used Geist Mono against D9. The fix in #322 sets them in Andika. The `theme-color` value is correct: the `popup-bar-colors` plugin writes the Popup paper colour into the Popup build |
+| R4, R6a, R6b, R6d, R7c | Merged as CSS under the flag | #306, with fixes in #307. #325 builds the R4 JS findings: B-10 (a tile floor of max(24, ceil(48 / DPR)) px on the play board, fixed in #326, with a frame follow that keeps a manual scroll) and B-02 (a square Watch Trail canvas). R7c had one gap: the Readout numbers used Geist Mono against D9. The fix in #322 sets them in Andika. The `theme-color` value is correct: the `popup-bar-colors` plugin writes the Popup paper colour into the Popup build |
 | R5 | Merged | #313 (Trail Compass text parity, live region in dialogs), with a fix in #315 |
 | R7a | Merged | #314 (landing hero from a real board crop) |
 | R3 | Merged | #318 (motion chunk: flap ripple, Gate pop-up, paper confetti, ceremony pop-up, reduced-motion gate) |

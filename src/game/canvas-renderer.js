@@ -62,6 +62,14 @@ function createDetachedCanvas(width, height) {
 /** @typedef {{ canvas: OffscreenCanvas | HTMLCanvasElement, context: CanvasRenderingContext2D }} Layer */
 
 /**
+ * The tile CSS px that gives each tile at least 48 device px, and never less than 24 px.
+ * @param {number} devicePixelRatio
+ */
+export function tileFloor(devicePixelRatio) {
+  return Math.max(24, Math.ceil(48 / devicePixelRatio));
+}
+
+/**
  * The scroll offset that keeps the span [start, start + length] inside a view of `view` px.
  * @param {number} start @param {number} length @param {number} current @param {number} view
  */
@@ -203,8 +211,9 @@ export function createCanvasRenderer(
       palette = readPalette();
       paletteStale = false;
     }
-    // The play board CSS reads the size for its 24 px tile floor; the Run Replay canvas ignores it.
+    // The play board CSS reads both for its tile floor; the Run Replay canvas ignores them.
     canvas.style.setProperty("--board-size", String(run.labyrinth.length));
+    canvas.style.setProperty("--tile-floor", `${tileFloor(window.devicePixelRatio || 1)}px`);
     resize();
     followExplorer(run);
     // Each frame starts from the default line, text, and fill state, and ends on it even when a mark throws.
@@ -224,7 +233,7 @@ export function createCanvasRenderer(
     const width = canvas.getBoundingClientRect().width;
     const tile = width / run.labyrinth.length;
     const { col, row } = run.explorer;
-    const follow = `${col}:${row}:${width}`;
+    const follow = `${col}:${row}:${width}:${frame.clientWidth}:${frame.clientHeight}`;
     if (follow === lastFollow && run.labyrinth === lastFollowLabyrinth) return;
     lastFollow = follow;
     lastFollowLabyrinth = run.labyrinth;
