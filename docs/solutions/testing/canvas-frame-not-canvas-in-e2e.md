@@ -22,7 +22,7 @@ Reading the failures as a layout regression. The ribbon sits below the visible b
 ## Root cause
 
 Since #326 the renderer sets `--tile-floor` from the device pixel ratio (`src/game/canvas-renderer.js:163`), and the board CSS sets the canvas minimum width from it (`src/daylight.css:563`).
-A size 15 board is then larger than its frame, and the frame scrolls it (`index.html:201`).
+A size 15 board is then larger than its frame, and the frame (`index.html:201`) scrolls it (`src/daylight.css:519`).
 `#maze-canvas` reports the full scrolled canvas box, not the part that the player sees.
 The e2e suite is not part of `npm run check` or the pre-push gate, so the merge of #326 did not run it.
 

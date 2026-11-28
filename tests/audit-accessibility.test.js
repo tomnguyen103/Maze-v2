@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const GENERATED = [
   "node_modules",
   "dist",
+  "dist-e2e",
   ".vercel",
   ".git",
   "graphify-out",

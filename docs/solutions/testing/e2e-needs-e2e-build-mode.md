@@ -29,7 +29,7 @@ that directory (`playwright.config.mjs:51`). A direct `npx playwright test`
 therefore always serves the e2e bundle, and `dist/` keeps the production build
 (B-142). The `test:e2e` scripts (`package.json:17`) no longer build first.
 `PW_REUSE_SERVER=1` reuses a server on port 4173 and skips the build
-(`playwright.config.mjs:60`), so use it only with a preview of `dist-e2e` that you
+(`playwright.config.mjs:61`), so use it only with a preview of `dist-e2e` that you
 started yourself. `npm run test:e2e` runs the Chromium projects;
 `npm run test:e2e:xbrowser` runs Firefox, WebKit, and iPhone 14.
 
