@@ -11,7 +11,7 @@ describe("board tile floor and follow offset (B-10)", () => {
     expect(renderer).toContain('canvas.style.setProperty("--board-size"');
     const board = css.match(/#maze-canvas \{[^}]*touch-action: none;[^}]*\}/)?.[0] ?? "";
     expect(renderer).toContain('canvas.style.setProperty("--tile-floor"');
-    expect(board).toContain("min-width: calc(var(--board-size, 0) * var(--tile-floor, 24px));");
+    expect(board).toContain("min-width: calc(var(--board-size, 0) * var(--tile-floor, 48px));");
     // The Run Replay canvas must fit a 375 px dialog, so it has no floor.
     expect(replayCss).not.toMatch(/--board-size|--tile-floor/);
     // The renderer is shared with the Run Replay canvas, so it never sets a width floor itself.

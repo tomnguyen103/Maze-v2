@@ -906,7 +906,8 @@ describe("Canvas renderer", () => {
     frame.scrollLeft = 5;
     frame.clientWidth = 60;
     renderer.render(moved);
-    expect(frame.scrollLeft).not.toBe(5);
+    // col 1, tile 320: max(320 + (320 + 2 * 18) - 60, min(5, 320)) = 616.
+    expect(frame.scrollLeft).toBe(616);
   });
 
   it("US-03.1 draws the Neatline ticks and the Grid reference on the overlay canvas", () => {

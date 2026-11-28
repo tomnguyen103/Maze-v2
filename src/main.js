@@ -755,12 +755,6 @@ document.addEventListener("keydown", (event) => {
   ) {
     return;
   }
-  // A held key repeats at the OS rate. Each repeat used to move the Explorer
-  // and announce it, so a screen reader was read a wall of movement nobody
-  // asked for. One press, one move.
-  if (event.repeat) {
-    return;
-  }
   const directions = /** @type {Partial<Record<string, Direction>>} */ ({
     ArrowUp: "up",
     w: "up",
@@ -775,6 +769,16 @@ document.addEventListener("keydown", (event) => {
     a: "left",
     A: "left"
   });
+  // A held key repeats at the OS rate. Each repeat used to move the Explorer
+  // and announce it, so a screen reader was read a wall of movement nobody
+  // asked for. One press, one move.
+  if (event.repeat) {
+    // A repeat is still a game key: it must not scroll the board frame natively.
+    if (directions[event.key] || event.key === "q" || event.key === "Q" || event.code === "Space") {
+      event.preventDefault();
+    }
+    return;
+  }
   const direction = directions[event.key];
 
   if (direction) {
@@ -1561,18 +1565,19 @@ canvas.addEventListener("pointerup", (event) => {
 
 // One observer on the board frame covers the window, the layout and the Neatline margin. One frame coalesces the bursts.
 let boardFrameRepaint = 0;
-new ResizeObserver(() => {
+function scheduleBoardRepaint() {
   if (boardFrameRepaint) return;
   boardFrameRepaint = requestAnimationFrame(() => {
     boardFrameRepaint = 0;
     renderer.render(run);
   });
-}).observe(elements.canvasFrame);
+}
+new ResizeObserver(scheduleBoardRepaint).observe(elements.canvasFrame);
 
 // A move to a screen with another pixel ratio changes the tile floor, and the frame size can stay the same.
 function watchPixelRatio() {
   matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener("change", () => {
-    renderer.render(run);
+    scheduleBoardRepaint();
     watchPixelRatio();
   }, { once: true });
 }

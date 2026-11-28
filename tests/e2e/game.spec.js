@@ -2273,7 +2273,7 @@ test("Atlas map and inspector fit every contracted viewport at 200-percent text"
   }
 });
 
-test("keeps the Watch Trail canvas square at desktop viewports", async ({
+test("keeps the Watch Trail canvas square at desktop and mobile viewports", async ({
   page
 }) => {
   const plan = milestoneWinningPlan("TRAIL-VIEW-4");
@@ -2319,6 +2319,7 @@ test("keeps the Watch Trail canvas square at desktop viewports", async ({
   }, { retainedReplay: replay });
 
   for (const viewport of [
+    { width: 375, height: 812 },
     { width: 1280, height: 720 },
     { width: 1920, height: 1080 }
   ]) {
@@ -2337,6 +2338,7 @@ test("keeps the Watch Trail canvas square at desktop viewports", async ({
       throw new Error("Expected a visible Run Replay canvas.");
     }
     expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);
+    expect(box.width, "the canvas fits the viewport").toBeLessThanOrEqual(viewport.width);
   }
 });
 
