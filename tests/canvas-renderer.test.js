@@ -364,7 +364,7 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-light-on-fill", "--color-on-fill", 3]
 ]);
 
-/** ADR 0067: the Land outline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
+/** ADR 0067: the Coastline carries the 3:1 boundary on the Fog in each mode; strong mode keeps it at 3:1, not 4.5:1. */
 const FOG_EDGE_PAIRS = /** @type {const} */ ([["--color-coastline", "--color-fog", 3]]);
 
 /** The on-fill colour that the Windway tests give the Windway source disc. */
@@ -1014,8 +1014,8 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.style === "rgb(9, 9, 9)")).toBe(false);
   });
 
-  it("US-02.1 draws the closed Gate keyhole in the board ink, not the Land or the on-fill white", () => {
-    document.body.style.setProperty("--color-board-ink", "rgb(11, 12, 13)");
+  it("US-02.1 draws the closed Gate keyhole in the Gate ink, not the Land or the on-fill white", () => {
+    document.body.style.setProperty("--color-board-gate-ink", "rgb(11, 12, 13)");
     document.body.style.setProperty("--color-land", "rgb(40, 160, 40)");
     document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
     const { context, renderer } = stubCanvas();
@@ -1413,7 +1413,7 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     ]);
   });
 
-  it("US-02.1 strokes one Land outline path in opaque board ink", () => {
+  it("US-02.1 strokes one Coastline path in opaque board ink", () => {
     document.body.style.setProperty("--color-coastline", "rgb(7, 7, 7)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -1918,6 +1918,215 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     // Forced colours drops a box shadow, so the Neatline opts out and keeps the edge in a system colour.
     expect(neatline).toMatch(/forced-color-adjust:\s*none/);
     expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px CanvasText/);
+  });
+
+  it("US-03.2 hides the classic scrollbar of the canvas frame, so the Neatline keeps the whole scroll area", () => {
+    const ruleOf = (/** @type {string} */ selector) =>
+      [...daylightCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].trim() === selector).map((rule) => rule[2]).join("\n");
+
+    expect(ruleOf(".canvas-frame")).toMatch(/scrollbar-width:\s*none/);
+    expect(ruleOf(".canvas-frame::-webkit-scrollbar")).toMatch(/display:\s*none/);
+  });
+
+  it("US-02.1 strokes the Fog edge after the Fog fold fill, so the fold cannot cover the edge", () => {
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-fog-edge", "rgb(4, 5, 6)");
+    document.body.style.setProperty("--color-fog-soft", "rgb(7, 8, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: [] }));
+
+    const order = paints.map((paint) => `${paint.kind}:${paint.style}`);
+    expect(order.indexOf("fill:rgb(1, 2, 3)")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("fill:rgb(7, 8, 9)")).toBeGreaterThan(order.indexOf("fill:rgb(1, 2, 3)"));
+    expect(order.lastIndexOf("stroke:rgb(4, 5, 6)")).toBeGreaterThan(order.indexOf("fill:rgb(7, 8, 9)"));
+    const edge = paintsOf(paints, "stroke", "rgb(4, 5, 6)");
+    expect(edge).toHaveLength(1);
+    expect(subPaths(edge[0])).toBe(4);
+  });
+
+  it("US-02.1 traces the Fog fold corner on the Fog card corner arc, so the fold never leaves the card", () => {
+    document.body.style.setProperty("--color-fog", "rgb(1, 2, 3)");
+    document.body.style.setProperty("--color-fog-soft", "rgb(7, 8, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    renderer.render(board({ revealed: [] }));
+
+    const arcsOf = (/** @type {{ path: string[] } | undefined} */ paint) => new Set((paint?.path ?? []).filter((step) => step.startsWith("arc(")).map((step) => step.split(",").slice(0, 3).join(",")));
+    const card = arcsOf(paintsOf(paints, "fill", "rgb(1, 2, 3)")[0]);
+    const fold = arcsOf(paintsOf(paints, "fill", "rgb(7, 8, 9)")[0]);
+    expect(fold.size).toBe(4);
+    // Each fold arc shares its centre and radius with a card corner arc.
+    for (const arc of fold) expect(card.has(arc)).toBe(true);
+  });
+
+  it("US-02.1 draws each Pulse flap below the Coastline of a Land tile, so the flap never covers it", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+
+    // Tile 320 px: the Land card sits 13 px in and its Coastline is 19 px wide, so the card interior starts at 32 px.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+    const points = (flap?.path ?? [])
+      .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+      .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+    expect(points).toHaveLength(4);
+    for (const [x, y] of points) {
+      expect(y).toBeGreaterThanOrEqual(32);
+      expect(x).toBeGreaterThanOrEqual(320 + 32);
+      expect(x).toBeLessThanOrEqual(640 - 32);
+    }
+  });
+
+  it("US-02.1 clips a Land flap to the inner edge of the Coastline, so its corners stay off the rounded corners", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas();
+    const paints = recordPaints(context);
+    /** @type {number[][]} */
+    let arcs = [];
+    /** @type {number[][] | null} */
+    let clipped = null;
+    const target = /** @type {Record<string, any>} */ (context);
+    const begin = target.beginPath;
+    const arc = target.arc;
+    target.beginPath = vi.fn(() => {
+      arcs = [];
+      begin();
+    });
+    target.arc = vi.fn((/** @type {number[]} */ ...args) => {
+      arcs.push(args);
+      arc(...args);
+    });
+    target.clip = vi.fn(() => {
+      clipped = [...arcs];
+    });
+
+    // Tile 320 px: the inner edge sits 32 px in, and its corner radius is 5 * 320 / 24 - 19 px.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    expect(paintsOf(paints, "fill", "rgb(9, 9, 9)")).not.toHaveLength(0);
+    const corners = /** @type {number[][]} */ (/** @type {unknown} */ (clipped));
+    expect(corners).toHaveLength(4);
+    const radius = (5 * 320) / 24 - 19;
+    for (const [, , r] of corners) expect(r).toBeCloseTo(radius, 5);
+    expect(corners[0][0]).toBeCloseTo(640 - 32 - radius, 5);
+    expect(corners[3][1]).toBeCloseTo(32 + radius, 5);
+  });
+
+  it("US-02.1 draws a Land flap on a compact Run Replay tile with no room inside the Coastline", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    const { context, renderer } = stubCanvas({ width: 12 });
+    const paints = recordPaints(context);
+    const target = /** @type {Record<string, any>} */ (context);
+    const begin = target.beginPath;
+    const arc = target.arc;
+    let arcs = 0;
+    /** @type {number | null} */
+    let clipArcs = null;
+    target.beginPath = vi.fn(() => {
+      arcs = 0;
+      begin();
+    });
+    target.arc = vi.fn((/** @type {number[]} */ ...args) => {
+      arcs += 1;
+      arc(...args);
+    });
+    target.clip = vi.fn(() => {
+      clipArcs = arcs;
+    });
+
+    // Tile 6 px: the Land card and the Coastline leave 2 px or less inside, so the clip is the whole tile.
+    renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+    expect(clipArcs).toBe(0);
+    const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+    const points = (flap?.path ?? [])
+      .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+      .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+    expect(points).toHaveLength(4);
+    const [near, far] = [points[0][0], points[1][0]];
+    expect(far).toBeGreaterThan(near);
+    expect(near).toBeGreaterThanOrEqual(6);
+    expect(far).toBeLessThanOrEqual(12);
+  });
+
+  it("US-02.1 keeps the lower stroke of a Land flap inside a doubled Coastline at the tile floor", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    // The palette modes paint the Land as the board paper, so the Coastline doubles.
+    document.body.style.setProperty("--color-land", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--board-paper", "rgb(5, 5, 5)");
+    atDeviceRatio(2, () => {
+      const { context, renderer } = stubCanvas({ width: 48 });
+      const paints = recordPaints(context);
+
+      // Tile 48 device px: card inset 2 and Coastline 6, so the clip ends at 40 and a 2 px stroke centres at 39 or above it.
+      renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+      const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+      const ys = (flap?.path ?? [])
+        .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+        .map((step) => Number(step.replace(/^\w+\(|\)$/g, "").split(",")[1]));
+      expect(ys).toHaveLength(4);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(39);
+    });
+  });
+
+  it("US-02.1 keeps the lower Land flap corners in order on a compact tile with a doubled Coastline", () => {
+    document.body.style.setProperty("--color-fog-soft", "rgb(9, 9, 9)");
+    document.body.style.setProperty("--color-land", "rgb(5, 5, 5)");
+    document.body.style.setProperty("--board-paper", "rgb(5, 5, 5)");
+    atDeviceRatio(1, () => {
+      const { context, renderer } = stubCanvas({ width: 24 });
+      const paints = recordPaints(context);
+
+      // Tile 12 device px: the snapped lower corners would sit at 6.5 and 5.5 without the clamp.
+      renderer.render(board({ revealed: [], pulseVisible: ["0,1"] }));
+
+      const flap = paintsOf(paints, "fill", "rgb(9, 9, 9)").at(-1);
+      const points = (flap?.path ?? [])
+        .filter((step) => /^(moveTo|lineTo)\(/.test(step))
+        .map((step) => step.replace(/^\w+\(|\)$/g, "").split(",").map(Number));
+      expect(points).toHaveLength(4);
+      const [[nearTop], [farTop], [farLow], [nearLow]] = points;
+      expect(farTop).toBeGreaterThan(nearTop);
+      expect(farLow).toBeGreaterThanOrEqual(nearLow);
+    });
+  });
+
+  describe("Echo number floor", () => {
+    /** @param {number} ratio @param {number} width The board width in CSS px. */
+    function echoDigit(ratio, width) {
+      /** @type {string[]} */
+      let fonts = [];
+      /** @type {string[]} */
+      let labels = [];
+      atDeviceRatio(ratio, () => {
+        const drawn = stubCanvas({ width });
+        Object.defineProperty(drawn.context, "font", { configurable: true, get: () => fonts.at(-1) ?? "", set: (value) => {
+            fonts.push(value);
+          }
+        });
+        drawn.renderer.render(board({ revealed: ["1,1"], echoes: [{ row: 1, col: 1, collected: false }] }));
+        labels = drawn.labels;
+      });
+      return { fonts, labels };
+    }
+
+    it("US-02.1 draws the Echo number at 12 CSS px or more, at each device ratio", () => {
+      expect(echoDigit(1, 48).fonts.filter((font) => font.startsWith("700 ")).at(-1)).toMatch(/^700 12px /);
+      expect(echoDigit(2, 48).fonts.filter((font) => font.startsWith("700 ")).at(-1)).toMatch(/^700 24px /);
+    });
+
+    it("US-02.1 draws no Echo number on a tile below 24 CSS px, at each device ratio", () => {
+      expect(echoDigit(1, 48).labels).toEqual(["1"]);
+      expect(echoDigit(1, 46).labels).toEqual([]);
+      expect(echoDigit(2, 48).labels).toEqual(["1"]);
+      expect(echoDigit(2, 46).labels).toEqual([]);
+    });
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {
@@ -2439,6 +2648,15 @@ describe("R1a renderer findings", () => {
       expect(value("--color-passage")).not.toBe(value("--color-land"));
     });
 
+    it("US-02.1 inks the Gate keyhole in Canvas on the CanvasText Gate in forced colours", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
+      const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
+      const value = (/** @type {string} */ name) => forced.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+      expect(value("--color-board-gate")).toBe("CanvasText");
+      expect(value("--color-board-gate-ink")).toBe("Canvas");
+      expect(value("--color-board-ink")).toBe("HighlightText");
+    });
+
     it("raises the Popup forced-colors selector above the daylight palette rules", () => {
       const css = readFileSync(resolve(process.cwd(), "src/looks/popup/tokens.css"), "utf8");
       const forced = css.slice(css.indexOf("@media (forced-colors: active)"));
@@ -2574,9 +2792,12 @@ describe("R1b layered renderer", () => {
     renderer.render({ ...run, revealed: ["0,0", "0,1"], pulseVisible: [] });
     renderer.render(run);
 
+    // Each Pulse adds a flap clip on its Land tile; it holds rounded corners only, so it records no rect.
     expect(clips).toEqual([
       ["0,0,320,320", "320,0,320,320"],
+      [],
       ["0,0,320,320", "0,320,320,320"],
+      [],
       ["0,0,320,320", "320,0,320,320"],
       ["0,0,320,320"]
     ]);
