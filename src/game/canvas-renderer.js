@@ -153,7 +153,7 @@ export function createCanvasRenderer(
   /** @param {GameRun} run */
   function render(run) {
     lastRun = run;
-    // Read the tokens before resize() clears the canvas, so a missing token leaves the last board.
+    // Read the tokens before resize() can clear the canvas on a size change, so a missing token leaves the last board.
     if (paletteStale) {
       palette = readPalette();
       paletteStale = false;
@@ -1177,14 +1177,26 @@ export function createCanvasRenderer(
   // A scheme or theme change moves the tokens; the cached chart and Fog layers hold the old colours.
   function repaint() {
     paletteStale = true;
-    if (!lastRun) return;
-    render(lastRun);
+    // A detached canvas or one without a layout box, such as a closed dialog, paints on its next render.
+    if (!lastRun || !canvas.isConnected || !canvas.getClientRects().length) return;
+    try {
+      render(lastRun);
+    } catch (error) {
+      // A listener has no caller to catch this, so the console gets the token name.
+      console.error("Echo Maze board repaint failed.", error);
+    }
   }
-  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", repaint);
-  window.matchMedia?.("(forced-colors: active)")?.addEventListener?.("change", repaint);
-  window.matchMedia?.("(prefers-contrast: more)")?.addEventListener?.("change", repaint);
+  // An explicit data-theme wins over the system scheme, so a scheme change moves no token.
+  const onSchemeChange = () => document.documentElement.hasAttribute("data-theme") || repaint();
+  const mediaListeners = [
+    { media: window.matchMedia?.("(prefers-color-scheme: dark)"), listener: onSchemeChange },
+    { media: window.matchMedia?.("(forced-colors: active)"), listener: repaint },
+    { media: window.matchMedia?.("(prefers-contrast: more)"), listener: repaint }
+  ];
+  for (const { media, listener } of mediaListeners) media?.addEventListener?.("change", listener);
   // Each attribute moves a board token or the mark scale: the theme, the contrast, the large marks and the two palettes.
-  new MutationObserver(repaint).observe(document.documentElement, {
+  const observer = new MutationObserver(repaint);
+  observer.observe(document.documentElement, {
     attributeFilter: [
       "data-theme",
       "data-access-contrast",
@@ -1195,10 +1207,15 @@ export function createCanvasRenderer(
     attributes: true
   });
 
+  function destroy() {
+    observer.disconnect();
+    for (const { media, listener } of mediaListeners) media?.removeEventListener?.("change", listener);
+  }
+
   // The Neatline stays at frame size, so a scroll paints its ticks again from the new offset.
   canvas.parentElement?.addEventListener("scroll", () => lastRun && drawNeatline(lastRun.labyrinth.length), { passive: true });
 
-  return { loadFonts, render, resize };
+  return { destroy, loadFonts, render, resize };
 }
 
 /** @param {{ row: number, col: number }} position @param {number} tile */
