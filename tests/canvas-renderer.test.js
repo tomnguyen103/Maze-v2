@@ -1053,11 +1053,10 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.kind === "stroke" && paint.style === "rgb(7, 7, 2)")).toBe(true);
   });
 
-  it("US-01.2 doubles the Land outline where Land is paper: high contrast and each palette mode", () => {
-    /** @param {"strong" | "twilight" | "sea-glass" | "dusk" | "daylight" | null} mode */
-    const measure = (mode) => {
-      if (mode === "strong") document.documentElement.dataset.accessContrast = "strong";
-      else if (mode) document.documentElement.dataset.playgroundPalette = mode;
+  it("US-01.2 doubles the Coastline where Land is paper: each daylight.css mode that sets Land to paper, and not forced colours", () => {
+    /** @param {string} land */
+    const measure = (land) => {
+      document.body.style.setProperty("--color-land", land);
       const { context, renderer } = stubCanvas();
       /** @type {number[]} */
       const widths = [];
@@ -1067,18 +1066,21 @@ describe("Canvas renderer", () => {
         stroke();
       });
       renderer.render(board({ revealed: ["0,0", "0,1"] }));
-      document.documentElement.removeAttribute("data-access-contrast");
-      document.documentElement.removeAttribute("data-playground-palette");
-      // The chart pass strokes the Land outline first.
-      return { coast: widths[0] };
+      // The chart pass strokes the Coastline first.
+      return widths[0];
     };
+    const paper = resolveBoardToken("--board-paper");
+    const single = measure(resolveBoardToken("--color-land"));
+    expect(single).toBe(19);
 
-    const normal = measure(null);
-    expect(normal.coast).toBe(19);
-    expect(measure("daylight").coast).toBe(normal.coast);
-    for (const mode of /** @type {const} */ (["strong", "twilight", "sea-glass", "dusk"])) {
-      expect(measure(mode).coast).toBe(normal.coast * 2);
-    }
+    // The paper modes come from daylight.css, so a new mode that sets Land to paper is covered without a test edit.
+    const paperModes = Object.entries(MODES).filter(
+      ([, selector]) => selector && daylightScope(selector).get("--color-land") === "var(--board-paper)"
+    );
+    expect(paperModes.map(([name]) => name)).toEqual(expect.arrayContaining(["strong", "twilight", "sea-glass", "dusk"]));
+    for (const [name] of paperModes) expect(measure(paper), name).toBe(single * 2);
+    // Forced colours sets Land to Highlight, which is not paper.
+    expect(measure("Highlight")).toBe(single);
   });
 
   it("US-01.2 snaps Land cards and Passages to the tile edges at a fractional tile size", () => {
@@ -1871,6 +1873,9 @@ describe("US-08 — Labyrinth canvas reads as paper", () => {
     expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px var\(--color-board-ink\)/);
     // The scroll container paints its own shadow under the scrolled board, so the frame carries none.
     expect(ruleOf(".canvas-frame")).not.toMatch(/box-shadow/);
+    // Forced colours drops a box shadow, so the Neatline opts out and keeps the edge in a system colour.
+    expect(neatline).toMatch(/forced-color-adjust:\s*none/);
+    expect(neatline).toMatch(/box-shadow:\s*inset 0 0 0 3px CanvasText/);
   });
 
   it("US-08.2 gives each Warden state its own silhouette: round, pointed, chevron, ringed", () => {

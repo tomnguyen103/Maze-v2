@@ -28,9 +28,6 @@
  * }} SignalBell
  */
 
-/** The palette modes where `--color-land` is paper (src/daylight.css). */
-const PAPER_LAND_PALETTES = new Set(["twilight", "sea-glass", "dusk"]);
-
 /**
  * @param {number} width
  * @param {number} height
@@ -1271,10 +1268,8 @@ function readPalette() {
     markScale: Math.max(0.25, Number.parseFloat(styles.getPropertyValue("--maze-mark-scale")) || 1),
     night: color("--color-night-deep"),
     onFill: color("--color-on-fill"),
-    // Mirrors the daylight.css rule that sets `--color-land` to paper.
-    paperLand:
-      document.documentElement.dataset.accessContrast === "strong" ||
-      PAPER_LAND_PALETTES.has(document.documentElement.dataset.playgroundPalette ?? ""),
+    // The resolved colours decide, so each mode that sets `--color-land` to paper doubles the Coastline, and forced colours does not.
+    paperLand: color("--color-land") === color("--board-paper"),
     passage: color("--color-passage"),
     warden: color("--color-board-warden")
   };

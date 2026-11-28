@@ -8,7 +8,7 @@ export const BOARD_TOKENS = [
   "--color-board-explorer-ring", "--font-body", "--font-utility", "--color-fog", "--color-fog-edge", "--color-fog-soft",
   "--color-board-gate", "--color-land-lip", "--color-land", "--color-board-light",
   "--color-board-light-on-fill", "--color-night-deep", "--color-on-fill", "--color-passage",
-  "--color-board-warden", "--color-board-cover", "--color-board-cover-ink"
+  "--color-board-warden", "--color-board-cover", "--color-board-cover-ink", "--board-paper"
 ];
 
 /** @returns {Map<string, string>} the light-scope rows of the Popup tokens file */
