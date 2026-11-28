@@ -808,8 +808,9 @@ export function createCanvasRenderer(
       context.lineTo(x + tile * 0.1 * scale, y - tile * 0.02 * scale);
       context.stroke();
     } else {
+      // The keyhole is board ink: Land is paper in strong and palette modes, so it would vanish on the sun fill.
       context.arc(x, y - tile * 0.02 * scale, tile * 0.06 * scale, 0, Math.PI * 2);
-      context.fillStyle = palette.land;
+      context.fillStyle = palette.boardInk;
       context.fill();
       context.fillRect(
         x - tile * 0.025 * scale,

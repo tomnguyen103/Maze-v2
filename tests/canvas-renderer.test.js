@@ -341,7 +341,7 @@ const BOARD_PAIRS = /** @type {const} */ ([
   ["--color-board-echo", "--color-passage", 3],
   // The Echo pair number sits on the Echo fill.
   ["--color-board-echo-text", "--color-board-echo", 4.5],
-  // The closed Gate keyhole is board ink on the sun fill: it reads on its own fill.
+  // The sealed Gate X is night ink on the white arch fill.
   ["--color-night-deep", "--color-on-fill", 3],
   // The disc is the board paper, so its ring keeps the text floor in every mode; the clover Explorer sits inside the ring.
   ["--color-board-explorer-ring", DISC, 4.5],
@@ -973,8 +973,9 @@ describe("Canvas renderer", () => {
     expect(paints.some((paint) => paint.style === "rgb(9, 9, 9)")).toBe(false);
   });
 
-  it("US-02.1 draws the closed Gate keyhole in the land colour, not the on-fill white", () => {
-    document.body.style.setProperty("--color-land", "rgb(11, 12, 13)");
+  it("US-02.1 draws the closed Gate keyhole in the board ink, not the Land or the on-fill white", () => {
+    document.body.style.setProperty("--color-board-ink", "rgb(11, 12, 13)");
+    document.body.style.setProperty("--color-land", "rgb(40, 160, 40)");
     document.body.style.setProperty("--color-on-fill", "rgb(250, 250, 250)");
     const { context, renderer } = stubCanvas();
     const paints = recordPaints(context);
@@ -984,6 +985,7 @@ describe("Canvas renderer", () => {
     const fills = paints.filter((paint) => paint.kind === "fill");
     expect(fills.some((paint) => paint.style === "rgb(11, 12, 13)" && paint.path[0].startsWith("arc("))).toBe(true);
     expect(fills.some((paint) => paint.style === "rgb(250, 250, 250)")).toBe(false);
+    expect(fills.some((paint) => paint.style === "rgb(40, 160, 40)" && paint.path[0].startsWith("arc("))).toBe(false);
   });
 
   it("US-02.1 draws the sealed Gate X in the night ink, not the Warden ink", () => {

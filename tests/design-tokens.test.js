@@ -29,6 +29,22 @@ const SHEETS = globSync("**/*.{css,html}", {
     path.replace(/\\/g, "/").startsWith(MOCKUPS)
 });
 
+/**
+ * Returns the body of the first `@media (<query>)` block, matched by braces.
+ * @param {string} css @param {string} query
+ */
+function mediaBlock(css, query) {
+  const start = css.indexOf(`@media (${query})`);
+  if (start < 0) return "";
+  const open = css.indexOf("{", start);
+  let depth = 0;
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === "{") depth += 1;
+    if (css[index] === "}" && --depth === 0) return css.slice(open + 1, index);
+  }
+  return "";
+}
+
 describe("custom properties", () => {
   it("never reads one that is neither defined nor given a fallback", () => {
     /** @type {Set<string>} */
@@ -214,14 +230,26 @@ describe("Popup identity", () => {
     for (const token of ["--color-fog-edge", "--color-fog-soft", "--color-land-lip"]) {
       expect(root, token).toContain(token + ":");
     }
-    // prefers-contrast: more and forced colours override the edge and the lip.
-    const more = popup.slice(popup.indexOf("prefers-contrast: more"));
-    const forced = popup.slice(popup.indexOf("forced-colors: active"));
+    // prefers-contrast: more and forced colours override the edge and the lip, each in its own block.
+    const more = mediaBlock(popup, "prefers-contrast: more");
+    const forced = mediaBlock(popup, "forced-colors: active");
     for (const block of [more, forced]) {
       expect(block).toContain("--color-fog-edge:");
       expect(block).toContain("--color-land-lip:");
     }
     expect(forced).toContain("--color-fog-soft:");
+    // daylight.css loads later, so its palette and strong rules beat tokens.css at equal specificity.
+    // Its own increased-contrast block comes after them and keeps the full-ink edge and lip.
+    const daylightMore = mediaBlock(daylight, "prefers-contrast: more");
+    expect(daylight.indexOf("@media (prefers-contrast: more)")).toBeGreaterThan(
+      daylight.indexOf('data-access-contrast="strong"] {')
+    );
+    for (const selector of ["twilight", "sea-glass", "dusk"].map((p) => `:root[data-playground-palette="${p}"]`)
+      .concat(':root[data-access-contrast="strong"]')) {
+      expect(daylightMore, selector).toContain(selector);
+    }
+    expect(daylightMore).toContain("--color-fog-edge: var(--board-ink)");
+    expect(daylightMore).toContain("--color-land-lip: var(--board-ink)");
     // Palette and strong blocks: edge and lip together, a fold per palette.
     expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-fog-edge: var\(--board-fog-edge\)/);
     expect(daylight).toMatch(/data-access-contrast="strong"\] \{[^}]*--color-land-lip: var\(--board-land-lip\)/);

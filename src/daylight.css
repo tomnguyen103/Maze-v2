@@ -67,6 +67,17 @@ body {
   --color-board-echo-text: var(--board-echo-text);
 }
 
+/* Increased contrast keeps the full-ink lip and Fog edge. This block comes after the rule above, so it wins at equal specificity. */
+@media (prefers-contrast: more) {
+  :root[data-playground-palette="twilight"],
+  :root[data-playground-palette="sea-glass"],
+  :root[data-playground-palette="dusk"],
+  :root[data-access-contrast="strong"] {
+    --color-land-lip: var(--board-ink);
+    --color-fog-edge: var(--board-ink);
+  }
+}
+
 :root[data-playground-palette="twilight"] {
   --color-fog: var(--twilight-fog);
   --color-fog-soft: var(--twilight-fog-soft);
