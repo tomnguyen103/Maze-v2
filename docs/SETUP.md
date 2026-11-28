@@ -78,17 +78,17 @@ Apply migration 0032 before the release that writes Financial Facts. Without
 the table, every Lifetime paid, refund and dispute webhook and every Checkout
 confirmation rolls back, and Stripe retries the webhooks.
 
-Apply migration 0037 before the release that starts `windways-v2` Runs (ADR 0053).
-Run it outside a wrapping transaction, so its VALIDATE does not hold the ACCESS
-EXCLUSIVE lock. Without the migration, each escaped `windways-v2` score insert fails
-the partition check.
-
 Apply migration 0035 before the release that writes partial refunded cents.
 Without the column, every Lifetime paid, refund and dispute webhook and every
 Checkout confirmation rolls back, and Stripe retries the webhooks.
 
 Apply migration 0036 before the release that erases accounts through the
 definer function. Without the function, every account deletion rolls back.
+
+Apply migration 0037 before the release that starts `windways-v2` Runs (ADR 0053).
+Run it outside a wrapping transaction, so its VALIDATE does not hold the ACCESS
+EXCLUSIVE lock. Without the migration, each escaped `windways-v2` score insert fails
+the partition check.
 
 Apply migrations 0033 through 0036 with `DATABASE_ADMIN_URL` too. They change tables
 and definer functions that the application login must not own.
